@@ -1,14 +1,13 @@
 """What a switched-off experimental feature closes, through the real daemon.
 
 Spec experimental-features "Close every surface of a switched-off feature" and
-"Keep what a switched-off feature holds". The routes, kinds and CLI answers are
+"Keep what a switched-off feature holds". The routes, kinds and error hints are
 exercised on the shipped features (``knowledge``, ``memory``, ``sync``, ``models``);
 the built-in tool mechanism, which needs a tool no shipped feature owns, runs
 on a test-only feature registered beside them. Each test boots ``create_app``
 under a throwaway HOME (database, knowledge and memory roots all in
-``tmp_path``). Features are switched the way a person does — over REST or the
-CLI — on the same running process, so "without a restart" is what is being
-exercised.
+``tmp_path``). Features are switched the way a person does — over REST —
+on the same running process, so "without a restart" is what is being exercised.
 """
 
 from __future__ import annotations
@@ -17,20 +16,16 @@ import json
 import pathlib
 import re
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from starlette.testclient import TestClient
-from typer.testing import CliRunner
 
-import coffer.surfaces.cli._client as cli_client
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.domain import features as domain_features
 from coffer.infrastructure.daemon import config as daemon_config
-from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.knowledge import fs
 from coffer.infrastructure.knowledge.paths import knowledge_root
-from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import app as app_module
 from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
@@ -39,8 +34,6 @@ from tests.support.features import FAKE_FEATURE, enable_all_in_config, register_
 
 _TOKEN = "test-token-feature-gates"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
-
-runner = CliRunner()
 
 
 @pytest.fixture
@@ -195,77 +188,30 @@ def test_switching_a_feature_on_opens_its_surfaces_without_a_restart(
 ) -> None:
     daemon_config.write_feature_setting("sync", False)
     with _client() as c:
-        _patch_cli(monkeypatch, c)
         _assert_disabled(c.get("/api/v1/sync/status"), "sync")
 
-        res = runner.invoke(cli_app, ["config", "set", "feature.sync", "on"])
-        assert res.exit_code == 0, res.output
+        _switch(c, "sync", True)
 
         # Same process, same app: no restart between the switch and the answer.
         assert c.get("/api/v1/sync/status").status_code == 200
     assert _daemon_config(home)["features"]["sync"] is True
 
 
-# --- CLI ----------------------------------------------------------------------
-
-
-def _patch_cli(monkeypatch: pytest.MonkeyPatch, c: TestClient) -> None:
-    """Point the CLI's daemon connection at the running app."""
-    info = DaemonInfo(
-        version=1,
-        pid=4242,
-        port=59780,
-        token=_TOKEN,
-        started_at=datetime.now(tz=UTC),
-        binary_path="/test",
-    )
-
-    class _Persistent:
-        def __init__(self, inner: TestClient) -> None:
-            self._inner = inner
-            self.base_url = "http://localhost/api/v1"
-
-        def __enter__(self) -> _Persistent:
-            return self
-
-        def __exit__(self, *exc: object) -> None:
-            return None
-
-        def request(self, method: str, url: str, **kw: Any) -> Any:
-            return self._inner.request(method, "/api/v1" + url, **kw)
-
-        def get(self, url: str, **kw: Any) -> Any:
-            return self.request("GET", url, **kw)
-
-        def post(self, url: str, **kw: Any) -> Any:
-            return self.request("POST", url, **kw)
-
-        def put(self, url: str, **kw: Any) -> Any:
-            return self.request("PUT", url, **kw)
-
-        def delete(self, url: str, **kw: Any) -> Any:
-            return self.request("DELETE", url, **kw)
-
-    monkeypatch.setattr(cli_client, "client_or_exit", lambda: (_Persistent(c), info))
+# --- hint ---------------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="a switched-off feature's command says how to switch it on",
+    scenario="a switched-off feature's refusal says how to switch it on",
 )
-def test_a_switched_off_features_command_says_how_to_switch_it_on(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_switched_off_features_command_says_how_to_switch_it_on(home: pathlib.Path) -> None:
     daemon_config.write_feature_setting("sync", False)
     daemon_config.write_feature_setting("knowledge", False)
     with _client() as c:
-        _patch_cli(monkeypatch, c)
-        for key, argv in (("sync", ["sync", "status"]), ("knowledge", ["path", "knowledge"])):
-            res = runner.invoke(cli_app, argv)
-            assert res.exit_code == 1, res.output
-            lines = [line for line in res.output.splitlines() if line.strip()]
-            assert len(lines) == 1, res.output
-            assert f"coffer config set feature.{key} on" in lines[0]
+        for key, route in (("sync", "/api/v1/sync/status"), ("knowledge", _ROUTE_OF["knowledge"])):
+            error = c.get(route).json()["error"]
+            assert error["code"] == "FEATURE_DISABLED"
+            assert "Settings › Features" in error["message"], key  # noqa: RUF001
 
 
 # --- MCP ----------------------------------------------------------------------
@@ -341,7 +287,7 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(
         names = _tool_names(c, session)
         assert fake_tool not in names
         # Only the feature's tool; the always-on ones stay.
-        assert {"coffer__search_tools", "coffer__write"} <= names
+        assert "coffer__search_tools" in names
 
         called = _mcp(c, session, "tools/call", {"name": fake_tool, "arguments": {}}).json()
         assert _unknown_as(called, unknown, fake_tool)
@@ -351,9 +297,9 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="the gateway advertises exactly two built-in tools"
+    spec="mcp-gateway", scenario="advertise coffer__search_tools as the one built-in tool"
 )
-def test_the_gateway_advertises_exactly_two_built_in_tools(home: pathlib.Path) -> None:
+def test_the_gateway_advertises_only_search_tools_as_a_built_in(home: pathlib.Path) -> None:
     def builtins(c: TestClient, session: str) -> set[str]:
         return {n for n in _tool_names(c, session) if n.startswith("coffer__")}
 
@@ -363,9 +309,10 @@ def test_the_gateway_advertises_exactly_two_built_in_tools(home: pathlib.Path) -
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
 
-        assert builtins(c, session) == {"coffer__search_tools", "coffer__write"}
+        assert builtins(c, session) == {"coffer__search_tools"}
 
         for name, arguments in (
+            ("coffer__write", {"collection": "x", "title": "t", "description": "d"}),
             ("coffer__recall", {"query": "x"}),
             ("coffer__diagnose", {"since_minutes": 5}),
         ):
@@ -384,16 +331,13 @@ def test_switching_a_feature_off_and_on_keeps_what_it_holds(home: pathlib.Path) 
     with _client() as c:
         r = c.post("/api/v1/knowledge/collections", json={"name": "research"})
         assert r.status_code == 201, r.text
-        r = c.post(
-            "/api/v1/knowledge/material",
-            json={
-                "collection": "research",
-                "title": "Lockfiles",
-                "description": "How dependencies are pinned",
-                "body": "Run uv sync --frozen.",
-            },
+        fs.write_file(
+            directory="research",
+            title="Lockfiles",
+            description="How dependencies are pinned",
+            body="Run uv sync --frozen.",
+            curated=True,
         )
-        assert r.status_code == 201, r.text
         before = c.get("/api/v1/knowledge/collections").json()
         tree_before = c.get("/api/v1/knowledge/tree").json()
         files_before = sorted(p.relative_to(home) for p in knowledge_root().rglob("*"))

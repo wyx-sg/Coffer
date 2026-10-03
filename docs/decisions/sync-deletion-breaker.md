@@ -40,7 +40,7 @@ fired in the field, both times on a migration Coffer shipped, never on a loss.
 ### Option A — Hold on losses above a fixed share or floor, in both directions, where a move is not a loss (chosen)
 
 `breaker.py` in `domain/sync` trips when, in any one **area**
-(`resources/<kind>`, `state/<name>`, `knowledge`, `skills`, `memory-triggers`,
+(`resources/<kind>`, `state/<name>`, `knowledge`, `skills`,
 `secret`, as `area_of` in `domain/vault/layout.py` names them), the round would
 lose **more than 20%** of the area's files (`SHARE = 0.2`) **or 20 or more** of
 them (`FLOOR = 20`). The share catches a small vault losing most of itself; the

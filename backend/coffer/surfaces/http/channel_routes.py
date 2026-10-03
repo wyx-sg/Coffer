@@ -169,7 +169,7 @@ class ChannelStatusOut(BaseModel):
     #: operator-supplied directory"). ``None`` in every other state.
     handoff: HandoffOut | None = None
     #: The channel's settings with every default filled in (spec channels
-    #: "Manage channels from the Channels page and the CLI"): the one typed reading
+    #: "Manage channels from the Channels page"): the one typed reading
     #: of its configuration, so a surface never carries a copy of the defaults.
     #: ``null`` only for a stored configuration that no longer validates.
     settings: ChannelConfig | None = None

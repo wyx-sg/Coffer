@@ -32,8 +32,7 @@ __all__ = ["NO_DIRECTORIES", "apply_dir", "cmd_dir", "current_dir_card", "resolv
 #: What `/dir` says for a channel whose allow-list is empty: `/dir` is off.
 NO_DIRECTORIES = (
     "/dir is off for this bot — no directories are allowed for it. In Coffer, open "
-    "Channels, the bot, Settings, and add them under Working directories; or run "
-    "`coffer channel edit <name> --dir PATH`."
+    "Channels, the bot, Settings, and add them under Working directories."
 )
 
 

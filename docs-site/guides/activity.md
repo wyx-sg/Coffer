@@ -80,7 +80,7 @@ The **actor** is one of:
 | `human` | human | A change to a vault file that no Coffer operation made — your editor, a shell, an agent's own file tools, a `git commit` of your own. It is audited as `vault_file_edited`, one entry per file, once the vault has committed it (see [Editing the vault by hand](/guides/vault-files)). |
 | an agent's name | the name | An agent's own action, such as its memory hook delivering a note (`memory_delivery_fired`, whose details name the moment, the session and the notes). |
 
-Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup, restoring an earlier version of a vault file as `vault_file_restored`), or that current state cannot reveal later (a retention window). Every change to the vault is also a commit that names its writer, so `coffer vault history <path>` answers who changed a file even for what the audit log leaves out. Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
+Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup, restoring an earlier version of a vault file as `vault_file_restored`), or that current state cannot reveal later (a retention window). Every change to the vault is also a commit that names its writer, so the vault's git history (`git log -- <path>` in the vault folder) answers who changed a file even for what the audit log leaves out. Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
 
 ## Query the audit log from the CLI
 
@@ -169,23 +169,9 @@ A background worker prunes on daemon start and every six hours after. Each recor
 | `conversations_archive` | 7 days | Archives chats with no new message for this long. |
 | `conversations` | 30 days | Deletes archived chats (with their messages) this long after archival. |
 
-::: code-group
+Set each window in **Settings → Data → History**.
 
-```sh [CLI]
-coffer config list retention.
-coffer config set retention.audit_log 730
-coffer config set retention.mcp_invocations forever   # never prune this table
-coffer log prune                                      # apply every policy now
-coffer log prune --table mcp_invocations
-```
-
-```text [Web UI]
-Settings → Data → History
-```
-
-:::
-
-A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **MCP calls** (`mcp_invocations`) and **Conversations** (`conversations`); the others are set from the CLI. In the web UI, shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
+A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **MCP calls** (`mcp_invocations`) and **Conversations** (`conversations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
 
 The daemon log is a file, not a table, so it has no policy: `daemon.log` rotates at 10 MB and keeps three rotations. Per-process shim logs and rolled-aside upstream logs in `~/.coffer/logs/` are deleted after seven days.
 

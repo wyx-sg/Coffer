@@ -100,7 +100,7 @@ describe("a just created, empty collection", () => {
       screen.getByText(/No documents yet\. Upload one, or drop Markdown files into the folder\./),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
-    // No Add a document: people write through Edit, agents through coffer__write.
+    // No Add a document: people write through Edit, agents write files into .inbox/.
     expect(screen.queryByRole("button", { name: /Add a document/ })).toBeNull();
   });
 });

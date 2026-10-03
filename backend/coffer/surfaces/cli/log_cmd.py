@@ -1,11 +1,9 @@
-"""``coffer log audit|mcp|daemon|prune`` — the records the Activity page shows.
+"""``coffer log audit|mcp|daemon`` — the records the Activity page shows.
 
 Each reader goes through the same route the page reads (spec web-ui "Keep the
 command-line record readers"): the audit log (``GET /audit``), the MCP
 invocation log (``GET /mcp/invocations``, or one server's), and the daemon log
-tail (``GET /daemon/logs``), so a terminal sees what the page shows. ``prune``
-is the on-demand retention pass (spec resource-framework "Prune each registered
-log table on its own retention period").
+tail (``GET /daemon/logs``), so a terminal sees what the page shows.
 
 The audit and MCP readers page by the route's cursor: a page with more after
 it ends with the ``--cursor`` value that reads the next one, and ``--json``
@@ -241,21 +239,3 @@ def _continuation(record: dict[str, Any]) -> list[str]:
     if isinstance(extra, str):
         return extra.splitlines()
     return [str(line) for line in extra]
-
-
-@app.command("prune")
-def prune(
-    ctx: typer.Context,
-    table: str | None = typer.Option(None, "--table", help="Prune only this table"),
-) -> None:
-    """Prune every registered log table now (or only --table), by its retention period."""
-    payload: dict[str, object] = {} if table is None else {"table_name": table}
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/retention/prune", json=payload)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    result = r.json()["tables"]
-    for name, rows in result.items():
-        typer.echo(f"pruned {name}: {rows} rows deleted")
-    if not result:
-        typer.echo("nothing to prune")

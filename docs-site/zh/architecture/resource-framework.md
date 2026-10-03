@@ -164,21 +164,7 @@ sequenceDiagram
 
 属于某个已关闭实验功能的类型，在这些路由上会被拒绝，返回 `404 FEATURE_DISABLED`，也不会出现在列表中；它的数据行不受影响。各类型也会挂载自己的路由器（`/api/v1/skills`、`/api/v1/channels` 等），承载框架不负责的行为。
 
-命令行用名字代替 uid，镜像了通用接口。一个共享的生成器根据每种类型的描述符生成它的生命周期动词，每个命令组都提供 `list`、`show`、`edit` 和 `rm`。其余动词只在适用时出现，类型不支持的动词直接不出现，而不是在运行时被拒绝：`enable` 和 `disable` 只出现在 `toggleable` 类型上（所以 `knowledge` 和 `memory` 都没有），`scope` 只出现在支持范围的类型上（`mcp`、`skill`、`channel`、`provider`），`add` 只出现在类型自己注册了 `add` 的地方，因为每种类型的创建需要的东西都不同（`memory` 没有，因为只有聚合才会创建分区）。有些命令组也会自己写 `list` 或 `show`，因为那些类型的记录由它们自己的路由提供。
-
-```sh
-coffer mcp list
-coffer mcp show github
-coffer mcp edit github --description "Work org"  # the name itself is fixed
-coffer channel edit tg --name telegram           # a channel stays renamable
-coffer channel edit tg --title "Team Telegram"   # and carries a title
-coffer skill disable pdf-tools
-coffer mcp scope github --agents claude-code
-coffer skill scope pdf-tools --none              # dormant
-coffer mcp scope github --all                    # every agent again
-```
-
-REST 和命令行是对等的接口，通过同样的服务作答。每一种修改，以及每一种对非普通文件状态的读取，两边都能做到。对于其所属规格声明为可直接读取或编辑的普通文件——知识文档、记忆笔记、技能的文件夹、智能体自己的配置文件、守护进程日志——命令行通过 `coffer path` 给出文件位置来满足对等性，你再用普通工具去读或编辑它；提供这些文件的 REST 路由仍然保留，因为浏览器页面读不了磁盘。有一个覆盖整个命令行树的测试，按一张经过审阅的表断言这种对等性，表里列出了 `coffer path` 能回答的每一条基于文件的路由。
+命令行只承载确实需要它的东西：由程序来运行、守护进程宕机时也必须能用、Coffer 的交接提示词让智能体去运行，或者 Web 界面做不到。资源类型提供的其余一切（添加、编辑、启用、设置范围和移除）都是 Web 界面上基于上述路由的一个页面；其所属规格声明为可直接读取或编辑的普通文件（知识文档、记忆笔记、技能的文件夹、智能体自己的配置文件、守护进程日志）则用普通工具读取和编辑。一个测试断言命令树等于经过审阅的命令清单及每条命令存在的理由。
 
 ## 身份 {#identity}
 
@@ -190,7 +176,7 @@ REST 和命令行是对等的接口，通过同样的服务作答。每一种修
 | `name` | 在类型内唯一；可变，除非类型的名字固定 | 人输入的、智能体引用的名字。命令行把名字解析为 uid。智能体的名字就是它的类型。 |
 | `title` | 可选，自由文本，只在带它的类型上有 | 设置后，界面用它代替名字显示。智能体、MCP 服务器、技能和知识集没有。 |
 
-新资源总是得到一个随机的 `uid`；从另一台机器来的资源保留那台机器给它的 `uid`，因为 uid 就在文件里。两个文件拥有同一个 uid 时会被拒绝：新来的被标记，原来的继续生效。因为引用和历史数据行存的都是 uid，改名只改变文件的 `name`（并在同一次提交里把它移动到 `<new name>.json`），Coffer 内部不需要重新指向任何东西。uid 保护不了的，是在 Coffer 之外被引用的名字：MCP 服务器的名字是智能体看到的每个工具名的前缀（在 Claude Code 中是 `mcp__coffer__<server>__<tool>`），技能的名字是智能体加载它的目录。这两种类型声明名字固定；要换名字，就删除资源再重新注册，这会重置服务器的能力开关和生效范围，或者技能的绑定。智能体的名字固定则是另一个原因：一台机器上每种类型只有一个智能体，所以类型就是它的名字。MCP 服务器名字限制在 24 个字符以内——在每次注册和改名时，以及对文件的每次改动时，无论是手工还是同步合并——这样工具名才能保持在模型提供商 API 强制的 64 字符限制之内；每条能力数据行都带有 `client_name_length`，**工具**标签页和 `coffer mcp cap list` 会标出超过 64 的行。见 [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md)。
+新资源总是得到一个随机的 `uid`；从另一台机器来的资源保留那台机器给它的 `uid`，因为 uid 就在文件里。两个文件拥有同一个 uid 时会被拒绝：新来的被标记，原来的继续生效。因为引用和历史数据行存的都是 uid，改名只改变文件的 `name`（并在同一次提交里把它移动到 `<new name>.json`），Coffer 内部不需要重新指向任何东西。uid 保护不了的，是在 Coffer 之外被引用的名字：MCP 服务器的名字是智能体看到的每个工具名的前缀（在 Claude Code 中是 `mcp__coffer__<server>__<tool>`），技能的名字是智能体加载它的目录。这两种类型声明名字固定；要换名字，就删除资源再重新注册，这会重置服务器的能力开关和生效范围，或者技能的绑定。智能体的名字固定则是另一个原因：一台机器上每种类型只有一个智能体，所以类型就是它的名字。MCP 服务器名字限制在 24 个字符以内——在每次注册和改名时，以及对文件的每次改动时，无论是手工还是同步合并——这样工具名才能保持在模型提供商 API 强制的 64 字符限制之内；每条能力数据行都带有 `client_name_length`，**工具**标签页会标出超过 64 的行。见 [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md)。
 
 ## 生命周期事件与审计 {#lifecycle-events-and-audit}
 

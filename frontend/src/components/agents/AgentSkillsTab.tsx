@@ -4,8 +4,7 @@
 // delivers into this agent and their first names — linking to the Skills page
 // filtered to this agent; Coffer's skills are not listed one by one. Below it
 // the agent's own skills: folders Coffer does not manage, the only place in the
-// UI that lists or adopts them (spec skill-manager "Expose unmanaged-skill
-// operations on REST, CLI and web"). Adopt opens a dialog (name, reach); a
+// UI that lists or adopts them (spec skill-manager "Expose unmanaged-skill operations on REST and the web"). Adopt opens a dialog (name, reach); a
 // duplicate of a skill Coffer delivers is deleted from here.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";

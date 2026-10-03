@@ -84,55 +84,27 @@ Coffer 还会读取可选的 `license` 字段、实验性的 `allowed-tools` 字
 
 ### 从文件夹 {#from-a-folder}
 
-::: code-group
-
-```sh [CLI]
-coffer skill add ~/src/team-skills/release-checklist
-```
-
-```text [Web UI]
+```text
 Skills → Add skill → From a folder → paste the path, or Choose… → Add skill
 ```
 
-:::
-
-Coffer 从 `SKILL.md` 的 frontmatter 读取技能名称，并把文件夹拷到 `~/.coffer/vault/skills/release-checklist/`。它会记录来源路径，但之后不再跟踪：源文件夹后来的改动，要等你再添加一次才会被读入。在 Web 界面中，如果文件夹顶层没有 `SKILL.md` 而子文件夹里有，会把这些子文件夹列出来供你选择。在命令行上，指定文件夹本身就算确认，所以会立即添加。
+Coffer 从 `SKILL.md` 的 frontmatter 读取技能名称，并把文件夹拷到 `~/.coffer/vault/skills/release-checklist/`。它会记录来源路径，但之后不再跟踪：源文件夹后来的改动，要等你再添加一次才会被读入。在 Web 界面中，如果文件夹顶层没有 `SKILL.md` 而子文件夹里有，会把这些子文件夹列出来供你选择。
 
 ### 从压缩包 {#from-an-archive}
 
-::: code-group
-
-```sh [CLI]
-coffer skill add ~/Downloads/release-notes.skill
-coffer skill add ~/Downloads/team-skills.zip --skill review --skill triage
-coffer skill add ~/Downloads/team-skills.zip --all --yes
-```
-
-```text [Web UI]
+```text
 Skills → Add skill → From an archive → Choose file… (or drop a .zip or .skill file) → Add skill
 ```
 
-:::
-
-一个 `.zip` 或 `.skill` 压缩包，只要 `SKILL.md` 位于压缩包顶层或往下一层文件夹，就算包含一个技能。包含多个技能的压缩包会把它们全部列出，由你挑选要添加哪些——在命令行上用 `--skill <name>`（可重复）或 `--all`。命令会打印找到的内容，并在添加前询问；`--yes` 跳过询问。
+一个 `.zip` 或 `.skill` 压缩包，只要 `SKILL.md` 位于压缩包顶层或往下一层文件夹，就算包含一个技能。包含多个技能的压缩包会把它们全部列出，由你挑选要添加哪些。
 
 只要有条目使用绝对路径或路径中含 `..`、有条目是符号链接、或者解压后会超过 50 MB，Coffer 就会在解压任何内容之前拒绝整个压缩包，并列出这些条目。顶层和往下一层都没有 `SKILL.md` 的压缩包会以相应的提示被拒绝。
 
 ### 从 Git 仓库 {#from-a-git-repository}
 
-::: code-group
-
-```sh [CLI]
-coffer skill add https://github.com/acme/agent-skills --path skills/review
-coffer skill add https://github.com/acme/agent-skills --ref v1.2 --path skills/review --yes
-coffer skill add https://github.com/acme/agent-skills/tree/main/terraform-plan
-```
-
-```text [Web UI]
+```text
 Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder → Add skill
 ```
-
-:::
 
 Coffer 用这台机器自己的 `git` 克隆仓库，把你给出的分支、标签或提交（没给就用默认分支）解析为一个具体的提交，然后按与压缩包相同的规则，在你指定的文件夹里查找技能。像 `https://github.com/acme/agent-skills/tree/main/terraform-plan` 这样的 GitHub 文件夹地址，会被解读为仓库、分支和文件夹。
 
@@ -144,11 +116,7 @@ Git 在不弹提示的情况下运行，Coffer 不给它任何凭据，也不保
 
 ### 名称已被占用时 {#when-the-name-is-taken}
 
-添加一个 `name` 已存在的技能会因冲突被拒绝。要用新内容替换已有技能，请在对话框中该行选择 **替换**，或在命令行上加 `--force`。主文件夹的内容会一步替换完成，技能的生效范围和已投递的链接都保留。
-
-```sh
-coffer skill add --force ~/src/team-skills/release-checklist
-```
+添加一个 `name` 已存在的技能会因冲突被拒绝。要用新内容替换已有技能，请在对话框中该行选择 **替换**。主文件夹的内容会一步替换完成，技能的生效范围和已投递的链接都保留。
 
 新添加的技能默认启用，并对所有已注册的智能体生效，所以会立即链接到每个智能体的技能文件夹里。
 
@@ -156,43 +124,30 @@ coffer skill add --force ~/src/team-skills/release-checklist
 
 从 Git 仓库添加的技能会在它的页面上显示来源：仓库、文件夹、固定的提交，以及是否有更新在等待。Coffer 每六小时检查一次仓库，你也可以随时手动检查。
 
-::: code-group
-
-```sh [CLI]
-coffer skill update terraform-plan --check
-coffer skill update terraform-plan
-```
-
-```text [Web UI]
+```text
 Skills → the skill → Check now, then Review update… on the banner when an update is available
 ```
 
-:::
-
-当分支或标签上有新的提交改动了技能文件夹，技能就会显示 **有可用更新**，附带自固定提交以来的提交。查看更新时会列出这次更新新增、删除和修改的文件，附带 diff，在你确认之前什么都不应用。应用时，会用新提交的内容替换文件夹、移动固定点，并保留技能的生效范围和链接；每个智能体立即就能看到新文件。在命令行上，`coffer skill update <name>` 打印同样的预览并在应用前询问（`--yes` 跳过询问）。
+当分支或标签上有新的提交改动了技能文件夹，技能就会显示 **有可用更新**，附带自固定提交以来的提交。查看更新时会列出这次更新新增、删除和修改的文件，附带 diff，在你确认之前什么都不应用。应用时，会用新提交的内容替换文件夹、移动固定点，并保留技能的生效范围和链接；每个智能体立即就能看到新文件。
 
 如果你在固定提交之后编辑过技能，这次更新就是一个**冲突**：
 
-| 选择 | Web 界面 | 命令行 | 结果 |
-| --- | --- | --- | --- |
-| 保留我的 | **保留我的改动** | `--keep-mine` | 什么都不变。Coffer 不再提示这次更新，有更新的提交到来时再提醒你。 |
-| 采用对方的 | **采用更新** | `--take-theirs` | 应用新提交，你的改动被替换。 |
-| 对比 | **对比** | — | 并排显示每个改动的文件：你的文件夹、固定的提交和新提交。 |
-| 让智能体合并 | **让智能体合并**，然后 **我已合并** | `--prompt`，然后 `--merged <commit>` | 你的智能体把更新合并进你的改动；记录合并后会移动固定点并保留文件。 |
+| 选择 | Web 界面 | 结果 |
+| --- | --- | --- |
+| 保留我的 | **保留我的改动** | 什么都不变。Coffer 不再提示这次更新，有更新的提交到来时再提醒你。 |
+| 采用对方的 | **采用更新** | 应用新提交，你的改动被替换。 |
+| 对比 | **对比** | 并排显示每个改动的文件：你的文件夹、固定的提交和新提交。 |
+| 让智能体合并 | **让智能体合并**，然后 **我已合并** | 你的智能体把更新合并进你的改动；记录合并后会移动固定点并保留文件。 |
 
-Coffer 自己不合并技能的两个版本。**让智能体合并** 给你一段可复制的提示词，或者用 **交给智能体** 开启一个已填好提示词的对话（在你按下发送之前什么都不会发出）。提示词写明：技能的主文件夹是唯一可以编辑的地方、你自固定点以来改过的文件、固定的提交和新提交及其提交信息，以及从哪个仓库读取更新。智能体保留你改动的意图，吸收更新里的修复，并把 diff 给你看；它不会自己记录这次合并。文件看起来没问题后，选择 **我已合并** 并确认，或者运行：
+Coffer 自己不合并技能的两个版本。**让智能体合并** 给你一段可复制的提示词，或者用 **交给智能体** 开启一个已填好提示词的对话（在你按下发送之前什么都不会发出）。提示词写明：技能的主文件夹是唯一可以编辑的地方、你自固定点以来改过的文件、固定的提交和新提交及其提交信息，以及从哪个仓库读取更新。智能体保留你改动的意图，吸收更新里的修复，并把 diff 给你看；它不会自己记录这次合并。文件看起来没问题后，选择 **我已合并** 并确认。
 
-```sh
-coffer skill update <name> --merged <commit>
-```
-
-这会把固定点移到那个提交，并让主文件夹保持合并后的样子。相对于新固定点，你合并进来的改动仍算本地改动，所以下一次更新还是冲突，只列出你带过来的那些改动——绝不会悄悄把它们替换掉。只有正在等待的那次更新可以被记录：固定的提交本身、或不在该分支上的提交，会以 `SKILL_UPDATE_NOT_PENDING` 被拒绝。想手工合并的话，直接编辑主文件夹里的文件（`coffer path skill <name>`），然后用同样的方式记录。
+这会把固定点移到那个提交，并让主文件夹保持合并后的样子。相对于新固定点，你合并进来的改动仍算本地改动，所以下一次更新还是冲突，只列出你带过来的那些改动——绝不会悄悄把它们替换掉。只有正在等待的那次更新可以被记录：固定的提交本身、或不在该分支上的提交，会以 `SKILL_UPDATE_NOT_PENDING` 被拒绝。想手工合并的话，直接编辑主文件夹里的文件（`~/.coffer/vault/skills/<name>/`），然后用同样的方式记录。
 
 如果仓库再也访问不到，技能会继续使用它固定的那份副本工作。它的页面会显示 git 的报错信息和上次检查成功的时间，在检查再次成功之前什么都不会变。
 
 要把一个 Git 技能换到另一个仓库、分支或文件夹，使用其来源区块中的 **更换来源…**。Coffer 会克隆新的来源，显示它与你当前版本的差异；在你采用之前什么都不会被替换，技能也保留原来的名称。
 
-从文件夹或压缩包添加的技能没有可供更新的来源：用 **替换**（`--force`）重新添加即可。
+从文件夹或压缩包添加的技能没有可供更新的来源：用 **替换** 重新添加即可。
 
 ## 把智能体已有的技能纳入托管 {#adopt-skills-an-agent-already-has}
 
@@ -207,37 +162,19 @@ Coffer 扫描：
 
 ### 列出未托管的技能 {#list-unmanaged-skills}
 
-::: code-group
-
-```sh [CLI]
-coffer scan --agent codex
-coffer scan --agent codex --json
-```
-
-```text [Web UI]
+```text
 Agents → choose the agent → Skills tab → the agent's own skills
 ```
 
-:::
-
-在命令行上，`coffer scan` 把未托管的技能和检测到的智能体、Coffer 尚未托管的 MCP 条目列在同一张表里；技能行的类型是 `skill`。每一项显示名称、路径、位置，以及它的 `SKILL.md` 是否有效。无效的条目会显示原因。技能行的 **Ref** 列是文件夹的路径，`coffer adopt skill` 和 `coffer discard skill` 接受的正是它。
+每一项显示名称、路径、位置，以及它的 `SKILL.md` 是否有效。无效的条目会显示原因。
 
 ### 预览一个 {#preview-one}
 
 在决定怎么处理之前，先读一读这个未托管的技能。这里的任何操作都不会改动文件夹。
 
-::: code-group
-
-```sh [CLI]
-coffer scan --agent codex --json   # each skill row's "ref" is the folder's absolute path
-cat <that path>/SKILL.md           # read it with your own tools
-```
-
-```text [Web UI]
+```text
 Agents → choose the agent → Skills tab → click the row
 ```
-
-:::
 
 详情页有一个 **概览** 标签页（`SKILL.md` 中的描述、文件夹的路径和位置）和一个 **文件** 标签页（文件夹的目录树，以及每个文件的只读预览）。无效的文件夹也能打开，顶部会显示原因。页头有 **纳入托管** 和带 **删除…** 的 **⋯** 菜单；标题栏的后退箭头回到智能体的技能标签页。文件显示在和其他地方相同的文件树与查看器里，所以在编辑器中打开或显示文件在查看器上。文件读取仅限于该文件夹内，和托管的技能一样。
 
@@ -245,21 +182,9 @@ Agents → choose the agent → Skills tab → click the row
 
 纳入托管会把文件夹移到 `~/.coffer/vault/skills/<name>/`，将其注册为技能，并在智能体期望的位置放一个托管链接。
 
-::: code-group
-
-```sh [CLI]
-# a folder in ~/.codex/skills/
-coffer adopt skill ~/.codex/skills/pdf-tools
-
-# a folder in ~/.agents/skills/
-coffer adopt skill ~/.agents/skills/pdf-tools
-```
-
-```text [Web UI]
+```text
 Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the skill's page
 ```
-
-:::
 
 纳入托管会打开一个小表单，填**在 Coffer 中的名称**（输入时会对照技能库检查，默认是文件夹自己的名字）和技能一开始的**生效范围**——所有智能体、只有你选的智能体，或关闭。出错会留在表单里。
 
@@ -274,17 +199,9 @@ Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the
 
 要从磁盘删除一个未托管的文件夹而不纳入托管：
 
-::: code-group
-
-```sh [CLI]
-coffer discard skill ~/.codex/skills/old-experiment --force
-```
-
-```text [Web UI]
+```text
 Agents → choose the agent → Skills tab → ⋯ › Delete… on the row, or ⋯ › Delete… on the skill's page
 ```
-
-:::
 
 这只删除那个文件夹，绝不会碰主库。Coffer 从不自行删除未托管的文件夹。
 
@@ -303,32 +220,10 @@ Agents → choose the agent → Skills tab → ⋯ › Delete… on the row, or 
 
 当且仅当技能已启用**并且**其生效范围包含某个智能体时，技能才会投递给该智能体。没有“这个智能体不要任何技能”这种按智能体的开关；想让某个智能体远离某个技能，就把它排除在该技能的生效范围之外。
 
-::: code-group
-
-```sh [CLI]
-# show the current reach
-coffer skill scope release-checklist
-
-# only Claude Code
-coffer skill scope release-checklist --agents claude-code
-
-# nobody, but keep it in the library
-coffer skill scope release-checklist --none
-
-# back to every agent
-coffer skill scope release-checklist --all
-
-# switch it off entirely
-coffer skill disable release-checklist
-coffer skill enable release-checklist
-```
-
-```text [Web UI]
+```text
 Skills → the Reach button on the skill's row (or on its detail page)
        → Off | All agents | Chosen agents
 ```
-
-:::
 
 生效范围按钮上显示的是当前的设置，例如 **所有智能体**、所选智能体的徽标或 **已关闭**。面板里的每次切换和勾选都会立即保存。要同时修改多个技能，选中它们的行，然后使用 **所选项的生效范围**。
 
@@ -355,27 +250,15 @@ Skills → the Reach button on the skill's row (or on its detail page)
 
 ## 查看和编辑技能文件 {#view-and-edit-skill-files}
 
-主文件夹就是一个普通目录，所以编辑技能的方法就是在你的编辑器或 shell 里打开 `~/.coffer/vault/skills/<name>/`。改动在智能体下次读取时生效，不需要导入步骤。`coffer path skill <name>` 打印该文件夹的绝对路径。
+主文件夹就是一个普通目录，所以编辑技能的方法就是在你的编辑器或 shell 里打开 `~/.coffer/vault/skills/<name>/`。改动在智能体下次读取时生效，不需要导入步骤。技能的 **⋯** 菜单里有 **复制主文件夹路径**。
 
-::: code-group
-
-```sh [CLI]
-# where the master folder is
-coffer path skill release-checklist
-
-# then edit it in place with your own tools
-$EDITOR "$(coffer path skill release-checklist)/SKILL.md"
-```
-
-```text [Web UI]
+```text
 Skills → choose the skill → Files tab → pick a file → Edit → Save
 ```
 
-:::
-
 文件标签页还对文本文件提供 **在编辑器中打开**，对二进制文件提供 **用默认应用打开** 和 **在 Finder 中显示**（你系统的文件管理器）；技能的 **⋯** 菜单可以打开或显示整个文件夹。
 
-在文件标签页中保存是有条件的。每次读取都会返回文件字节的指纹，带着指纹的保存如果发现文件在此期间在磁盘上被改过——比如你也在自己的编辑器里改了它——就会被拒绝。你的文字留在编辑器里，标为 **未保存**，有三种处理方式：**重新加载**（采用磁盘上的内容）、**对比**（磁盘内容与你的文字对比）和 **复制我的文字**。编辑时按 `⌘S` 保存。每次保存，以及你在编辑器里做的每次编辑，都会成为 **历史** 标签页上的一个版本；`coffer vault history skills/<name>/` 在终端里列出它们。见[手工编辑保险库](/zh/guides/vault-files)。文件标签页只能编辑已有的文本文件；要给技能添加文件，请用编辑器或 shell 在主文件夹中创建。
+在文件标签页中保存是有条件的。每次读取都会返回文件字节的指纹，带着指纹的保存如果发现文件在此期间在磁盘上被改过——比如你也在自己的编辑器里改了它——就会被拒绝。你的文字留在编辑器里，标为 **未保存**，有三种处理方式：**重新加载**（采用磁盘上的内容）、**对比**（磁盘内容与你的文字对比）和 **复制我的文字**。编辑时按 `⌘S` 保存。每次保存，以及你在编辑器里做的每次编辑，都会成为 **历史** 标签页上的一个版本。见[手工编辑保险库](/zh/guides/vault-files)。文件标签页只能编辑已有的文本文件；要给技能添加文件，请用编辑器或 shell 在主文件夹中创建。
 
 ## 技能需要的命令 {#commands-a-skill-needs}
 
@@ -389,7 +272,7 @@ requires: [jq, "gh>=2.40", uv]
 ---
 ```
 
-每个条目是一个命令名，可选附带最低版本（`gh>=2.40`）；`requires: {commands: [...]}` 以及 `{command: gh, version: "2.40"}` 这样的条目也能读取。技能的 **依赖** 标签页会列出它们，每个都链接到它在命令行工具页面上的位置，`coffer skill show <name> --json` 以 `requires` 字段携带它们。声明依赖不会改变投递：无论命令装没装，技能都会投递。
+每个条目是一个命令名，可选附带最低版本（`gh>=2.40`）；`requires: {commands: [...]}` 以及 `{command: gh, version: "2.40"}` 这样的条目也能读取。技能的 **依赖** 标签页会列出它们，每个都链接到它在命令行工具页面上的位置。声明依赖不会改变投递：无论命令装没装，技能都会投递。
 
 ## 技能需要的密钥 {#secrets-a-skill-needs}
 
@@ -413,13 +296,13 @@ requires:
 coffer run --secret GITHUB_TOKEN -- gh issue list
 ```
 
-技能的 **依赖** 标签页在命令下方列出每个声明的密钥，显示为 **已设置**，或“密钥 GITHUB_TOKEN 未设置”并附 **打开密钥**。Coffer 只按名称向密钥存储查询，从不读取值。有未设置密钥的技能还会在它的列表行和标签页上方的横幅中说明，并出现在总览的 **需要你处理** 列表中，其操作会打开密钥页面。`coffer skill show <name> --json` 以 `requires_secrets` 携带同一份列表，每项带 `name` 和 `is_set`。和命令一样，无论密钥是否已设置，技能都会投递。
+技能的 **依赖** 标签页在命令下方列出每个声明的密钥，显示为 **已设置**，或“密钥 GITHUB_TOKEN 未设置”并附 **打开密钥**。Coffer 只按名称向密钥存储查询，从不读取值。有未设置密钥的技能还会在它的列表行和标签页上方的横幅中说明，并出现在总览的 **需要你处理** 列表中，其操作会打开密钥页面。和命令一样，无论密钥是否已设置，技能都会投递。
 
 ## 技能名称与描述 {#skill-names-and-descriptions}
 
 技能的名称来自其 `SKILL.md` 中的 `name` 行，技能注册后就固定不变。它既是智能体加载技能所用的目录名，也是智能体调用它时的标识，所以引用它的指令、其他技能和权限规则都会因改名而失效。改名请求会以 `NAME_IMMUTABLE` 被拒绝。要换个名字，就移除这个技能，再用新名字重新添加，这会重置它的生效范围和已投递的链接（即它的绑定）。这一决定记录在决策记录（ADR）“names-visible-to-agents-are-fixed”中。
 
-技能没有单独的显示标题：Coffer 的页面和命令行显示的都是它的名称。它的**描述**就是其 `SKILL.md` 的 `description` 行，也就是智能体用来判断何时使用该技能的文字，所以 Coffer 显示它，自己不另存描述。技能记录上没有任何可编辑的内容。要修改描述或技能的其他任何东西，请编辑 `coffer path skill <name>` 打印出的主文件夹里的 `SKILL.md`，或在技能的 **文件** 标签页中编辑。
+技能没有单独的显示标题：Coffer 的页面显示的都是它的名称。它的**描述**就是其 `SKILL.md` 的 `description` 行，也就是智能体用来判断何时使用该技能的文字，所以 Coffer 显示它，自己不另存描述。技能记录上没有任何可编辑的内容。要修改描述或技能的其他任何东西，请编辑主文件夹（`~/.coffer/vault/skills/<name>/`）里的 `SKILL.md`，或在技能的 **文件** 标签页中编辑。
 
 ## 检查偏移并修复 {#check-for-drift-and-repair-it}
 
@@ -439,32 +322,9 @@ coffer run --secret GITHUB_TOKEN -- gh issue list
 
 ### 手动检查 {#check-by-hand}
 
-```sh
-coffer skill verify
-```
+技能页面上的 **检查副本** 运行检查报告，列出每项发现，包括技能、智能体（或技能库）、哪里不一致，以及是否需要你处理。缺失或被改指向的链接有 **修复**，可以把它放回去（被篡改的链接会先被挪到 `~/.coffer/content/backup/skills/<agent>/<name>.coffer-backup-<timestamp>`，在智能体的技能目录之外，智能体不会加载它）；有文件夹挡住、主文件夹缺失和不在技能库中的文件夹则有 **查看…**，打开处理它的地方。技能的 **投递** 标签页有 **重新检查**，只针对该技能的副本做同样的事。
 
-```text
-                                   Skill drift
-┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
-┃ Skill             ┃ Agent       ┃ Kind         ┃ Target                                          ┃ Remedy          ┃
-┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
-│ release-checklist │ claude-code │ missing_link │ /Users/you/.claude/skills/release-checklist     │ Run `coffer ... │
-└───────────────────┴─────────────┴──────────────┴─────────────────────────────────────────────────┴─────────────────┘
-```
-
-`verify` 只报告，从不改动任何东西。一切一致时它打印 `no drift` 并以 0 退出，发现偏移时以 2 退出。加 `--json` 得到机器可读的输出。
-
-要立即修复可修复的类型，而不是等下次启动：
-
-```sh
-coffer skill verify --fix
-```
-
-`--fix` 会重建缺失的链接。对被篡改的链接，它先把现有链接挪到 `~/.coffer/content/backup/skills/<agent>/<name>.coffer-backup-<timestamp>`（在智能体的技能目录之外，智能体不会加载它），然后重建。它打印修复了什么、还有什么需要你处理，如果还有剩余就以 2 退出。
-
-在 Web 界面中，技能页面上的 **检查副本** 运行同样的报告，列出每项发现，包括技能、智能体（或技能库）、哪里不一致，以及是否需要你处理。缺失或被改指向的链接有 **修复**，可以把它放回去；有文件夹挡住、主文件夹缺失和不在技能库中的文件夹则有 **查看…**，打开处理它的地方。技能的 **投递** 标签页有 **重新检查**，只针对该技能的副本做同样的事。
-
-后三种需要一个 Coffer 不替你做的判断——两个文件夹留哪个、一个来路不明的文件夹是什么、丢失的主副本能在哪里找到——所以每一种还提供一段给智能体的提示词，在发现旁、对比对话框中、文件夹窗格上和文件标签页上都有 **交给智能体**（菜单里有 **复制提示词**）。智能体负责查看并告诉你该按哪个按钮；它自己不移动、不删除、不编辑任何东西。同样的提示词也出现在总览的“需要你处理”列表中，`coffer skill verify --prompt` 也会打印它们。
+后三种需要一个 Coffer 不替你做的判断——两个文件夹留哪个、一个来路不明的文件夹是什么、丢失的主副本能在哪里找到——所以每一种还提供一段给智能体的提示词，在发现旁、对比对话框中、文件夹窗格上和文件标签页上都有 **交给智能体**（菜单里有 **复制提示词**）。智能体负责查看并告诉你该按哪个按钮；它自己不移动、不删除、不编辑任何东西。同样的提示词也出现在总览的“需要你处理”列表中。
 
 ### 处理挡路的文件夹 {#resolve-a-folder-in-the-way}
 
@@ -483,7 +343,7 @@ diff 显示你没保留的那一边会发生什么。Coffer 从不自己做这�
 
 ### 主文件夹不见了 {#when-the-master-folder-is-gone}
 
-如果某个技能的主文件夹在 Coffer 之外被删除，技能会显示 **主文件夹不见了**。它的文件标签页提供两条出路。**从历史中恢复** 会把 `skills/<name>/` 最近一个仍有文件的版本放回来，作为保险库的一个新版本；保险库中没有这样的版本时无法选择。**移除这个技能** 会删除它的记录和设置。在终端里，`coffer vault history skills/<name>/` 列出该文件夹的版本，`coffer vault restore skills/<name>/ <version>` 放回其中一个。该标签页的提示词会让你的智能体去找一份副本——在 `~/.coffer/content/backup/skills/` 中、在某个智能体的技能文件夹中、或在技能的来源处（`coffer skill show <name> --json`）——并在你同意后把它拷回 `~/.coffer/vault/skills/<name>/`；Coffer 在下一轮会再把它链接到你的智能体。
+如果某个技能的主文件夹在 Coffer 之外被删除，技能会显示 **主文件夹不见了**。它的文件标签页提供两条出路。**从历史中恢复** 会把 `skills/<name>/` 最近一个仍有文件的版本放回来，作为保险库的一个新版本；保险库中没有这样的版本时无法选择。**移除这个技能** 会删除它的记录和设置。该标签页的提示词会让你的智能体去找一份副本——在 `~/.coffer/content/backup/skills/` 中、在某个智能体的技能文件夹中、或在技能的来源处（显示在它的文件标签页上）——并在你同意后把它拷回 `~/.coffer/vault/skills/<name>/`；Coffer 在下一轮会再把它链接到你的智能体。
 
 ## 内置技能 `coffer-guide` {#the-built-in-coffer-guide-skill}
 
@@ -491,7 +351,7 @@ Coffer 自带一个技能 `coffer-guide`。它是智能体用好 Coffer 要读�
 
 - Coffer 自己的 MCP 工具，以及各自在什么时候用。
 - 没出现在智能体工具列表里的工具，仍然可以通过 `coffer__search_tools` 调用。
-- [知识](/zh/guides/knowledge)：知识根目录在哪里、如何用智能体自己的文件工具读取、如何用 `coffer__write` 往里添加，以及每个知识集中每篇文档的目录，附带路径、标题和描述。
+- [知识](/zh/guides/knowledge)：知识根目录在哪里、如何用智能体自己的文件工具读取、如何把文件写进知识集的 `.inbox/` 往里添加，以及每个知识集中每篇文档的目录，附带路径、标题和描述。
 - [记忆](/zh/guides/memory)：Coffer 读取智能体的记忆但从不写入；Coffer 的笔记是记忆根目录下的 Markdown，智能体用自己的文件工具 grep 它们。
 - 没有任何 Coffer 工具会等待人工批准。
 
@@ -512,26 +372,13 @@ Coffer 在每次守护进程启动时、以及知识目录发生变化时（一�
 
 在任何入口删除 `coffer-guide` 都会以 `RESOURCE_PROTECTED` 被拒绝，因为下次启动时它又会被写回来。你能改的是谁拿到它：禁用它，或者收窄它的生效范围，和其他技能完全一样。
 
-```sh
-coffer skill scope coffer-guide --agents claude-code
-coffer skill disable coffer-guide
-```
-
 ## 移除技能 {#remove-a-skill}
 
 移除技能会删除所有已投递的链接，然后删除主文件夹和技能的记录。这次移除会连同技能配置的快照一起记入审计。
 
-::: code-group
-
-```sh [CLI]
-coffer skill rm release-checklist --force
-```
-
-```text [Web UI]
+```text
 Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist?"
 ```
-
-:::
 
 ::: danger 主文件夹是唯一的副本
 移除技能会删除 `~/.coffer/vault/skills/<name>/`。Coffer 不保留你当初导入时的源文件夹。如果你想保留技能但停止投递，请改为禁用它，或把它的生效范围设为不给任何智能体。
@@ -545,7 +392,7 @@ Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist
 
 每个技能都是 Coffer 注册表中的一个 `skill` 资源，由一个不可变的 uid 标识。它的名称注册后就固定，描述就是其 `SKILL.md` 的描述（见[技能名称与描述](#skill-names-and-descriptions)）。
 
-Coffer 在内部记录中登记每个已投递的链接（链接路径、链接方式、链接时间）。磁盘上的链接是实时的真实状态；记录是 `verify` 拿来比对的依据。每次导入、投递、移除链接、移除技能和修复都会写入审计日志，你可以在[活动](/zh/guides/activity)页面查看。
+Coffer 在内部记录中登记每个已投递的链接（链接路径、链接方式、链接时间）。磁盘上的链接是实时的真实状态；记录是 **检查副本** 拿来比对的依据。每次导入、投递、移除链接、移除技能和修复都会写入审计日志，你可以在[活动](/zh/guides/activity)页面查看。
 
 Coffer 不通过 MCP 暴露任何技能工具。两个受支持的智能体都从磁盘读取技能，再加一条基于工具的路径会绕过每个技能的生效范围。
 
@@ -553,9 +400,9 @@ Coffer 不通过 MCP 暴露任何技能工具。两个受支持的智能体都�
 
 ## 故障排查 {#troubleshooting}
 
-**智能体看不到某个技能。** 检查技能是否已启用、其生效范围是否包含该智能体：`coffer skill scope <name>`。检查智能体本身是否已启用。然后运行 `coffer skill verify`，看它的链接是否缺失或被一个外来的文件夹挡住。
+**智能体看不到某个技能。** 检查技能是否已启用、其生效范围是否包含该智能体（技能的 **生效范围** 按钮）。检查智能体本身是否已启用。然后用 **检查副本**，看它的链接是否缺失或被一个外来的文件夹挡住。
 
-**从 Git 添加技能失败。** 对话框和命令会显示 git 自己的报错信息。`could not read Username` 或 `Permission denied (publickey)` 表示这台机器的 git 没有该仓库的凭据：先在终端里确认 `git clone <url>` 能成功。不存在的 ref 或文件夹也会在信息中指出。
+**从 Git 添加技能失败。** 对话框会显示 git 自己的报错信息。`could not read Username` 或 `Permission denied (publickey)` 表示这台机器的 git 没有该仓库的凭据：先在终端里确认 `git clone <url>` 能成功。不存在的 ref 或文件夹也会在信息中指出。
 
 **压缩包被拒绝。** 信息会列出可能写到压缩包之外的条目、符号链接，或它会超出的大小上限。直接从技能的文件夹重新打一个压缩包。
 
@@ -563,7 +410,7 @@ Coffer 不通过 MCP 暴露任何技能工具。两个受支持的智能体都�
 
 **技能显示“已复制”标记。** 智能体所在的文件系统不支持链接（只在 Windows 上会发生）。副本不会跟随主副本的编辑。编辑之后，触发一次新的投递，比如先禁用再重新启用该技能。
 
-**`verify` 报告 `replaced_with_regular`。** 有 Coffer 以外的东西在链接路径上放了一个真实的文件夹。自己把它挪开（想保留的话先纳入托管），然后运行 `coffer skill verify --fix`。
+**检查副本报告 `replaced_with_regular`。** 有 Coffer 以外的东西在链接路径上放了一个真实的文件夹。自己把它挪开（想保留的话先纳入托管），然后在技能的 **投递** 标签页选择 **重新检查**。
 
 ## 相关 {#related}
 

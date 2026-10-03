@@ -5,7 +5,7 @@ description: How Coffer reads the command-line tools a skill declares, checks th
 
 # Skill requirements
 
-A skill that drives a command-line tool fails at the step that calls it when the tool is missing, too old or not logged in. Skill requirements give that failure a place to be seen before an agent trips over it: each skill declares its commands in `SKILL.md`, Coffer checks each command once on this machine, and the CLIs page, the skill's Requires tab, the attention list and `coffer cli` report what they found. The user-facing side is the [CLIs guide](/guides/clis).
+A skill that drives a command-line tool fails at the step that calls it when the tool is missing, too old or not logged in. Skill requirements give that failure a place to be seen before an agent trips over it: each skill declares its commands in `SKILL.md`, Coffer checks each command once on this machine, and the CLIs page, the skill's Requires tab and the attention list report what they found. The user-facing side is the [CLIs guide](/guides/clis).
 
 ## Principles
 
@@ -29,16 +29,16 @@ A skill that drives a command-line tool fails at the step that calls it when the
 | Hand-off | The prompt for a missing, outdated or not-logged-in command, carried as `handoff.prompt` on every command the routes return. |
 | Machine | The OS and CPU architecture the prompt names, e.g. `macOS 15.6, arm64`, read once per daemon. |
 | Attention | Kind `cli`, the command as the uid: `cli_missing`, `cli_outdated`, `cli_logged_out`, each offering `check`. A command only MCP servers need raises none: the server's `mcp_missing_launcher` item already names it. |
-| Surfaces | `/api/v1/clis…` and `coffer cli list|show|check|prompt`. |
+| Surfaces | `/api/v1/clis…`. |
 
 ## The agent hand-off
 
 Coffer is AI-native: a chore that depends on the machine — installing, setting up, troubleshooting — is handed to the person's agent rather than scripted by the daemon. The hand-off is a building block any feature can use:
 
 - **A hand-off is a task, some facts and some steps**, and one shared renderer, in the domain layer, turns it into the prompt. A feature supplies what it knows; the renderer writes one task sentence, the facts as `-` lines, the steps one per line, and then the rules every hand-off ends with — check with the person before anything that needs `sudo` or changes system settings, and leave any login to the person without handling their credentials.
-- **The prompt is built on the daemon** and served on the feature's own REST response as `handoff: {prompt}` (one schema shared by every feature) and by its command line, so a copied prompt and a printed one are the same words.
+- **The prompt is built on the daemon** and served on the feature's own REST response as `handoff: {prompt}` (one schema shared by every feature) so the prompt a person copies is the one the page offers.
 - **The web UI shows it with one shared component**: **Ask an agent**, which opens a new conversation with a Coffer-managed agent with the prompt in the composer, and its menu's **Copy prompt**. The person presses Send; nothing is sent for them, because a managed agent runs with full permissions. With no managed agent available — the agent that is missing is the one that would be asked, or none is added yet — only Copy prompt is offered.
-- **The attention list carries it too.** An attention item whose fix is a chore has an optional `handoff`, the same prompt its kind's page offers, and a reason sentence that names no command. The Overview's Needs you row offers it in the row's ⋯ menu, and `coffer attention --prompt <key>` prints it.
+- **The attention list carries it too.** An attention item whose fix is a chore has an optional `handoff`, the same prompt its kind's page offers, and a reason sentence that names no command. The Overview's Needs you row offers it in the row's ⋯ menu.
 
 For a required command the facts are:
 

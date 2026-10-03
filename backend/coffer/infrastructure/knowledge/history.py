@@ -191,6 +191,23 @@ class KnowledgeHistory:
         except _RECORDING_ERRORS:
             logger.warning("knowledge.history.settle_failed", exc_info=True)
 
+    def new_files(self) -> list[str]:
+        """Knowledge-root-relative paths that exist on disk, have never been
+        committed, and no open operation owns: files written outside Coffer."""
+        if not self.available():
+            return []
+        prefix = f"{paths.VAULT_PREFIX}/"
+        writer = self._writer()
+        try:
+            return [
+                p[len(prefix) :]
+                for p, digest in writer.pending().items()
+                if p.startswith(prefix) and digest is not None and not writer.repo.log(p, limit=1)
+            ]
+        except _RECORDING_ERRORS:
+            logger.warning("knowledge.history.new_files_failed", exc_info=True)
+            return []
+
     # --- reading -------------------------------------------------------------
 
     def log(

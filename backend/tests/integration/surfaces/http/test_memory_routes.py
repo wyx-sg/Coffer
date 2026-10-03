@@ -408,8 +408,7 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
 
 def test_there_is_no_per_partition_distil_route(client, tmp_path) -> None:
     """Update memory distils every partition that gained entries, so the family
-    has no route that distils one ("Cover memory management on REST and the
-    CLI")."""
+    has no route that distils one ("Manage memory in the web UI")."""
     partition = _distilled(client, tmp_path)
     r = client.post(f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/distil")
     assert r.status_code in (404, 405), r.text
@@ -732,9 +731,6 @@ def test_the_delivery_management_routes_are_gone(client) -> None:
 # ----- the partition's own files -------------------------------------------
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="a partition's own directory is browsable as a file tree"
-)
 def test_partition_files_walk_the_directory(client, tmp_path) -> None:
     partition = _distilled(client, tmp_path)
     memory_store.write_retired(

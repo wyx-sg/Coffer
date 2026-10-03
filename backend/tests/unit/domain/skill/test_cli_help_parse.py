@@ -1,5 +1,5 @@
 """Help text of the formats in common use, read into a node (spec
-skill-manager "Serve required commands on REST, the command line and the web")."""
+skill-manager "Serve required commands on REST and the web")."""
 
 from __future__ import annotations
 

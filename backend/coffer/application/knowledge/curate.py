@@ -2,8 +2,8 @@
 
 A collection is one tree of documents a person and Coffer write together (spec knowledge
 "Store each collection as one tree of Markdown files"). New knowledge arrives as
-**material** in the collection's hidden inbox — an upload's extracted text, an agent's
-``coffer__write`` — and this pass is what folds it into the documents, so the collection
+**material** in the collection's hidden inbox — an upload's extracted text, or a Markdown
+file an agent writes there — and this pass is what folds it into the documents, so the collection
 grows by integration rather than by accumulating a file per arrival (see "Curate through
 a fenced four-tool pass").
 
@@ -211,7 +211,7 @@ async def _pass(
         summary=f"Curate {found.title}",
         item=label,
         # Whose item this was: for material, the author its submission's
-        # ``knowledge_written`` event names; an edited document is a person's.
+        # ``knowledge_written`` event names; an edited document has no recorded author.
         agent=await item_author(service, row, item.material, found.actor)
         if item.material
         else None,

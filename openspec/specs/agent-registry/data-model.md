@@ -262,7 +262,7 @@ The workspace amendment adds:
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
 | `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI               |
 
-The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer agent disable|enable <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
+The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 
@@ -287,7 +287,7 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 | Method | Purpose |
 | --- | --- |
 | `types() -> list[AgentTypeDetection]` | Read-only, one row per type in the bound catalogue: ask its dependency probe for the program and version, and look at its standard config directory plus the directory its environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment. A registered type reports its agent's directory; any other reports the standard one unless only the environment's exists, with the other existing directory as `other_config_dir`. Registers nothing and writes nothing. Served by `GET /api/v1/agents/types`. |
-| `discover() -> list[AgentTypeDetection]` | The rows of `types()` with no agent registered and either signal present — at most one candidate per type. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer scan`. |
+| `discover() -> list[AgentTypeDetection]` | The rows of `types()` with no agent registered and either signal present — at most one candidate per type. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates`. |
 | `detect(agent_type, config_dir) -> AgentDetection` | The detection state and version of one agent at one directory — what the agent read model carries. |
 
 `AgentTypeDetection` is a derived value object (not a stored entity, never
@@ -477,8 +477,8 @@ in spec "List the MCP entries in the agent's own config files") because
 claude_code's format has no such flag and codex's duplicates a switch its own UI
 owns. Removal and adoption stay, because each is a write Coffer alone has a
 reason to make. Both are exposed as `DELETE
-/api/v1/agents/{uid}/mcp-entries/{entry}` and `coffer discard mcp <agent>:<entry>`
-(adoption: `coffer adopt mcp <agent>:<entry>`).
+/api/v1/agents/{uid}/mcp-entries/{entry}` and (adoption) `POST
+/api/v1/agents/{uid}/mcp-entries/{entry}/adopt`, and from the agent's page.
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 
@@ -492,8 +492,8 @@ The listing writes nothing; the two writes above are the whole of what this
 service changes, and each goes through a documented surface. `PluginCliRunner`
 and `PluginDetailReader` are application-layer ports (`plugin_views.py`)
 satisfied at the composition root. The surfaces are
-`PATCH`/`DELETE /api/v1/agents/{uid}/plugins/{plugin_id}` and
-`coffer agent plugin enable|disable|uninstall`.
+`PATCH`/`DELETE /api/v1/agents/{uid}/plugins/{plugin_id}` and the
+agent's Plugins tab.
 
 ### `AgentModel` + `AgentModelCatalogueService` (`domain/agent/model_catalogue.py`, `application/agent/model_catalogue.py`)
 

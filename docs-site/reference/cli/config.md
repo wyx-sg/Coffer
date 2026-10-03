@@ -1,12 +1,12 @@
 ---
 title: coffer config
-description: "Read and change Coffer's settings (coffer config list shows every key)"
+description: "Read and change Coffer's settings (the keys read before the daemon starts)"
 pageClass: cli-ref
 ---
 
 # coffer config
 
-Read and change Coffer's settings (coffer config list shows every key)
+Read and change Coffer's settings (the keys read before the daemon starts)
 
 ```sh
 coffer config [OPTIONS] COMMAND [ARGS]...
@@ -37,7 +37,7 @@ coffer config list [OPTIONS] [PREFIX]
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `PREFIX` <span class="cli-chip">argument</span> | text | `""` | Only keys starting with this, e.g. engine. |
+| `PREFIX` <span class="cli-chip">argument</span> | text | `""` | Only keys starting with this, e.g. daemon. |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 
 ## config get

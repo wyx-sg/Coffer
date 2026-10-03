@@ -31,44 +31,6 @@ WAIT_OPTION = typer.Option(
 )
 
 
-def pending_for(
-    c: httpx.Client, uid: str, *, verbose: bool, refs: list[str] | tuple[str, ...] = ()
-) -> list[dict[str, Any]]:
-    """The approvals a destination waits on right now, and the refusals that
-    still stand against it (``status == "rejected"``: nothing waits, but the
-    secret stays withheld until it is asked for again).
-
-    That is every pending binding of a secret to ``uid``, and — for each of
-    ``refs``, the secrets the destination cites — a pending replacement of the
-    value: a new key for a secret in use is held against the secret, not
-    against any one destination, so it is found by its ref.
-    """
-    r = c.get("/secrets/approvals", params={"destination_uid": uid})
-    _cli_client.check(r, verbose=verbose)
-    rows = [a for a in r.json().get("approvals", []) if a.get("status") in ("pending", "rejected")]
-    if not refs:
-        return rows
-    wanted = set(refs)
-    r = c.get("/secrets/approvals", params={"status": "pending"})
-    _cli_client.check(r, verbose=verbose)
-    return rows + [
-        a
-        for a in r.json().get("approvals", [])
-        if a.get("op") == "replace_value" and a.get("ref") in wanted
-    ]
-
-
-def pending_ids(r: httpx.Response) -> list[str]:
-    """The approval ids a ``SECRET_BINDING_PENDING`` refusal names, else []."""
-    try:
-        error = r.json().get("error") or {}
-    except ValueError:
-        return []
-    if error.get("code") != "SECRET_BINDING_PENDING":
-        return []
-    return list((error.get("details") or {}).get("approval_ids") or [])
-
-
 def settle(
     c: httpx.Client,
     approvals: list[dict[str, Any]],
@@ -110,12 +72,3 @@ def settle(
                 typer.echo(f"approval {approval_id} was {status}", err=True)
                 raise typer.Exit(int(ExitCode.CONFLICT))
     typer.echo("approved in the Coffer app", err=True)
-
-
-def settle_ids(c: httpx.Client, ids: list[str], *, wait: bool, verbose: bool) -> None:
-    approvals = []
-    for approval_id in ids:
-        r = c.get(f"/secrets/approvals/{approval_id}")
-        _cli_client.check(r, verbose=verbose)
-        approvals.append(r.json())
-    settle(c, approvals, wait=wait, verbose=verbose)

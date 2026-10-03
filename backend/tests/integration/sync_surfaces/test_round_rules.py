@@ -183,13 +183,13 @@ def test_the_routes_cover_every_sync_operation() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an arriving memory trigger is written into the vault"
+    spec="vault-sync", scenario="an arriving file is written and a deleted one removed"
 )
-def test_a_memory_trigger_reaches_the_other_machine(tmp_path: Path) -> None:
+def test_an_arriving_knowledge_document_reaches_the_other_machine(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
-    trigger = "memory-triggers/standup.md"
+    doc = "knowledge/team/standup.md"
     body = "---\nwhen: every weekday\n---\nSummarise yesterday.\n"
-    mac.put(trigger, body)
+    mac.put(doc, body)
     mac.round()
     mini.round()
-    assert mini.disk(trigger) == body.encode()
+    assert mini.disk(doc) == body.encode()

@@ -1,6 +1,6 @@
 // frontend/src/pages/SkillsPage.test.tsx
 // The Skills page as a library beside a reading pane (spec skill-manager
-// "Cover skill management on REST, the CLI and the web", "Report skill drift
+// "Cover skill management on REST and the web", "Report skill drift
 // on request"): what the library lists and marks, the first-run state, the
 // selection bar and Check copies.
 // Only the network boundary is mocked — the skills, agents and generic
@@ -104,7 +104,7 @@ test("the library's reach filter keeps only the skills in the chosen reach state
   expect(await libraryRows()).toHaveLength(1);
 });
 
-acceptance("skill-manager", "desktop and CLI cover every operation", async () => {
+acceptance("skill-manager", "the web UI and REST cover every operation", async () => {
   renderSkillsPage("/skills");
   expect(screen.getByRole("heading", { name: /^skills$/i })).toBeInTheDocument();
   expect(await screen.findByRole("link", { name: /hello/ })).toBeInTheDocument();

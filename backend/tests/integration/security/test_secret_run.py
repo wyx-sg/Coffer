@@ -1,0 +1,141 @@
+"""`coffer run`, against a real in-process
+daemon over a throwaway HOME (spec secret)."""
+
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import sys
+from collections.abc import Iterator
+
+import pytest
+from typer.testing import CliRunner
+
+from coffer.surfaces.cli.main import app as cli_app
+from tests.support.boundary_daemon import (
+    BoundaryDaemon,
+    point_cli_at,
+    prepare_home,
+    running_daemon,
+)
+
+_runner = CliRunner()
+
+
+@pytest.fixture
+def cli(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[BoundaryDaemon]:
+    db = prepare_home(tmp_path, monkeypatch)
+    with running_daemon(tmp_path, db) as d:
+        point_cli_at(d, monkeypatch)
+        yield d
+
+
+def _run(*argv: str) -> object:
+    return _runner.invoke(cli_app, ["run", *argv])
+
+
+# --- coffer run -----------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="secret", scenario="coffer run sets a secret only in the child")
+def test_coffer_run_sets_a_secret_only_in_the_child(cli: BoundaryDaemon) -> None:
+    d = cli
+    d.store("secret/db-password", "correct-horse-battery")
+    probe = (
+        "import os; print('child-sees', os.environ.get('DB_PASSWORD') == 'correct-horse-battery')"
+    )
+
+    result = _runner.invoke(
+        cli_app, ["run", "--secret", "db-password", "--", sys.executable, "-c", probe]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "child-sees True" in result.output
+    assert "DB_PASSWORD" not in os.environ
+    [entry] = d.audit("secret_resolved")
+    assert entry["details"]["name"] == "db-password"
+    assert entry["details"]["argv0"] == sys.executable
+    assert "correct-horse-battery" not in json.dumps(entry)
+
+
+def test_coffer_run_resolves_env_file_references_and_named_variables(
+    cli: BoundaryDaemon, tmp_path: pathlib.Path
+) -> None:
+    d = cli
+    d.store("secret/api-token", "tok-0123456789")
+    env_file = tmp_path / "app.env"
+    env_file.write_text("MODE=test\nAPI=coffer://secret/api-token\n")
+    probe = (
+        "import os; v = 'tok-0123456789'; "
+        "print(os.environ['MODE'], os.environ['API'] == v, os.environ['T2'] == v)"
+    )
+
+    result = _runner.invoke(
+        cli_app,
+        [
+            "run",
+            "--env-file",
+            str(env_file),
+            "--secret",
+            "T2=api-token",
+            "--",
+            sys.executable,
+            "-c",
+            probe,
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "test True True" in result.output
+
+
+@pytest.mark.acceptance(spec="secret", scenario="coffer run masks the value in the child's output")
+def test_coffer_run_masks_a_value_split_across_writes(cli: BoundaryDaemon) -> None:
+    d = cli
+    d.store("secret/db-password", "correct-horse-battery")
+    probe = (
+        "import os, sys, time; v = os.environ['DB_PASSWORD']; "
+        "sys.stdout.write('pw=' + v[:7]); sys.stdout.flush(); time.sleep(0.2); "
+        "sys.stdout.write(v[7:] + ' end\\n'); sys.stdout.flush(); "
+        "sys.stderr.write('err ' + v + '\\n')"
+    )
+
+    result = _runner.invoke(
+        cli_app, ["run", "--secret", "db-password", "--", sys.executable, "-c", probe]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "pw=*** end" in result.output and "err ***" in result.output
+    assert "correct-horse-battery" not in result.output
+
+
+def test_coffer_run_passes_the_exit_status_through(cli: BoundaryDaemon) -> None:
+    cli.store("secret/x-token", "value-long-enough")
+    result = _runner.invoke(
+        cli_app,
+        ["run", "--secret", "x-token", "--", sys.executable, "-c", "raise SystemExit(7)"],
+    )
+    assert result.exit_code == 7
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a resource's secret cannot be resolved by coffer run"
+)
+def test_a_resources_secret_cannot_be_resolved_by_coffer_run(cli: BoundaryDaemon) -> None:
+    d = cli
+    d.store("mcp_server/gh/TOKEN", "ghp_resource_token")
+    d.register_stdio("gh", "server", {"TOKEN": "mcp_server/gh/TOKEN"})
+
+    minted = d.client.post(
+        "/api/v1/secrets/resolve",
+        json={"names": ["mcp_server/gh/TOKEN"], "argv0": "env"},
+    )
+    unknown = d.client.post("/api/v1/secrets/resolve", json={"names": ["TOKEN"], "argv0": "env"})
+    via_cli = _runner.invoke(cli_app, ["run", "--secret", "mcp_server/gh/TOKEN", "--", "env"])
+
+    assert minted.status_code == 422 and unknown.status_code == 404
+    assert via_cli.exit_code != 0
+    for body in (minted.text, unknown.text, via_cli.output):
+        assert "ghp_resource_token" not in body
+    assert d.audit("secret_resolved") == []

@@ -965,8 +965,7 @@ machine only is a setting shown on the tab it belongs to:
   conversations — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action behind a confirmation, which reports what it
-  removed, and a muted line naming `coffer config` for the
-  other retention settings; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
+  removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
   MUST say how many records the shorter window deletes at the next cleanup and
   how many the table holds now and would hold after, counted by the daemon
@@ -1559,8 +1558,7 @@ show an install command.
 Settings › Security MUST be the one place in the web UI that shows the daemon's access token. It
 MUST be hidden until **Show** is chosen, offer **Copy**, and offer **Rotate**, which asks for
 confirmation — saying that clients configured with the old token stop working — then calls
-`POST /api/v1/daemon/rotate-token` (spec [daemon](../daemon/spec.md) "Rotate the token from REST or
-the command line"). The page MUST install the token the call returns and carry on without a
+`POST /api/v1/daemon/rotate-token` (spec [daemon](../daemon/spec.md) "Rotate the token over REST"). The page MUST install the token the call returns and carry on without a
 reload; the confirmation MUST close only on success, and a failed rotation MUST leave the dialog
 open with the error and the old token in use. While the daemon cannot be reached, the controls are
 disabled.
@@ -1640,7 +1638,7 @@ word a user navigates by:
   `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
   agent in that agent's Change model dialog (spec
-  [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
+  [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST and the web").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
   Conversations is where a person reads and continues every conversation, a
   channel is an IM bot set up once and revisited rarely, and the conversations a
@@ -1713,7 +1711,7 @@ sidebar already switches language) and no installed-resource-kind list
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
 login** switch. It MUST read and write it through
-[daemon](../daemon/spec.md) "Change residency from the settings page or the command line".
+[daemon](../daemon/spec.md) "Change residency from the settings page".
 A clicked switch MUST move to the clicked value at once and then settle on what the daemon reports:
 the switch is disabled until the daemon has first answered, a successful write shows the value the
 daemon answers with, the switch is shown unavailable rather than off on a host with no login

@@ -117,8 +117,8 @@ export interface SettingsTab {
 /** The Settings modal's six tabs, in order (spec web-ui "Organise Settings
  *  into six tabs"), the same in every build. Each is addressable at
  *  `/settings/<id>`; Features is where the experimental features are switched
- *  (spec experimental-features "Switch a feature from the settings page or the
- *  command line"), and About, last, says what is installed. */
+ *  (spec experimental-features "Switch a feature from the settings page or over
+ *  REST"), and About, last, says what is installed. */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: SlidersHorizontal },
   { id: "security", labelKey: "settings.tabs.security", icon: ShieldCheck },

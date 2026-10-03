@@ -61,7 +61,7 @@ def _unknown_call(c: object, name: str) -> bool:
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="knowledge off hides the write tool",
+    scenario="knowledge off leaves coffer__search_tools the only built-in tool",
 )
 @pytest.mark.acceptance(
     spec="experimental-features",
@@ -69,26 +69,29 @@ def _unknown_call(c: object, name: str) -> bool:
 )
 def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
     with _client() as c:
-        on_tools = kind_gates._listed_tools(c)
-        assert {"coffer__write", "coffer__search_tools"} <= on_tools
+        on_tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
+        assert on_tools == {"coffer__search_tools"}
+        assert "Its knowledge is markdown" in kind_gates._instructions(c)
+        # There is no write tool to hide: it is unknown with the feature on, too.
+        assert _unknown_call(c, "coffer__write")
 
         _switch(c, "knowledge", False)
         # Memory and conversations carry on.
         assert c.get("/api/v1/memory/partitions").status_code == 200
         assert c.get("/api/v1/chat/conversations").status_code == 200
-        tools = kind_gates._listed_tools(c)
+        tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
         text = kind_gates._instructions(c)
-        assert "coffer__write" not in tools
-        assert "coffer__search_tools" in tools
-        # The handshake names exactly the tools the list carries; the memory
-        # root is still there, memory being on.
+        assert tools == {"coffer__search_tools"}
+        # The handshake names exactly the tools the list carries and says nothing
+        # of knowledge; the memory root is still there, memory being on.
         assert kind_gates._named_tools(text) <= tools
+        assert "Its knowledge is markdown" not in text
         assert kind_gates._names_memory(text)
-        # A call to the hidden tool answers as an unknown tool.
+        # A call to the withdrawn tool answers as an unknown tool.
         assert _unknown_call(c, "coffer__write")
 
         _switch(c, "knowledge", True)
-        assert "coffer__write" in kind_gates._listed_tools(c)
+        assert "Its knowledge is markdown" in kind_gates._instructions(c)
 
 
 @pytest.mark.acceptance(
@@ -109,8 +112,8 @@ def test_memory_off_hides_the_memory_root(home: pathlib.Path) -> None:
         assert c.get("/api/v1/chat/conversations").status_code == 200
         text = kind_gates._instructions(c)
         assert not kind_gates._names_memory(text)
-        # The write tool is knowledge's, and stays.
-        assert "coffer__write" in kind_gates._listed_tools(c)
+        # Knowledge is its own feature and stays in the handshake.
+        assert "Its knowledge is markdown" in text
 
         _switch(c, "memory", True)
         assert kind_gates._names_memory(kind_gates._instructions(c))
@@ -125,12 +128,12 @@ def test_knowledge_off_re_renders_the_guide_without_its_knowledge_sections(
 ) -> None:
     with _client() as c:
         before = kind_gates._guide(home)
-        assert "coffer__write" in before
         assert "Knowledge is a directory of files" in before
+        assert "/.inbox/" in before
 
         _switch(c, "knowledge", False)
         off = kind_gates._guide(home)
-        assert "coffer__write" not in off
+        assert "/.inbox/" not in off
         assert "Knowledge is a directory of files" not in off
         assert kind_gates._names_memory(off)
         assert "coffer__search_tools" in off

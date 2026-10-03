@@ -26,27 +26,14 @@ Coffer 只管理它自己托管的消息渠道。智能体自己的官方集成�
 
 ## 登记消息渠道 {#register-a-channel}
 
-两种方式都是先保存密钥，再用一个指向它的引用登记消息渠道。
+登记会先保存密钥，再用一个指向它的引用登记消息渠道。
 
-::: code-group
-
-```sh [CLI]
-# Store the secret (read from stdin, so it stays out of your shell history)
-coffer secret set channel/tg/bot-token
-
-# Register the channel; --agent is the agent's type (claude-code or codex)
-coffer channel add my-telegram --type telegram \
-  --bot-token-ref channel/tg/bot-token --agent claude-code
-```
-
-```text [Web UI]
+```text
 Channels → Add channel
   1 Platform:  SeaTalk | Telegram
   2 Connect:   Name, Default agent, Bot token (or App ID + App secret)
   3 Pair:      the code to send the bot, then "Paired with …"
 ```
-
-:::
 
 在 Web 界面里，**添加消息渠道**分三步。**平台**一步列出每个平台的标志、连接需要什么（**需要 App ID + Secret**、**需要 Bot token**）以及它在聊天里支持什么。**连接**一步（**添加 Telegram 消息渠道**、**添加 SeaTalk 消息渠道**）要你填名称、默认智能体和凭据，然后把密钥写进密钥存储并登记消息渠道，一步完成。**连接**按钮从不置灰：有字段为空时点它，提示会出现在那个字段下面。粘贴 Telegram token 时会即时检查——**找到 @your_bot**，并告诉你消息渠道将在哪台机器上运行——所以错的 token 在连接前就能发现；对 SeaTalk，表单会提醒你在连接*之后*去 SeaTalk 开放平台把事件推送方式设为 WebSocket，因为门户会检查是否已有连接。**配对**一步（**配对 Telegram · Personal**）立刻签发一个配对码，等你给机器人发消息（见[配对你的账号](#pair-your-account)）；配对成功后这一步会说明与谁配对以及怎么试用，点**完成**打开消息渠道。**稍后配对**会关掉对话框，消息渠道保持未配对。还没有任何消息渠道时，页面把各平台列成一个列表，选一个就在**连接**一步打开**添加消息渠道**。名称由字母、数字、短横线和下划线组成，最长 64 个字符。
 
@@ -58,18 +45,7 @@ Channels → Add channel
 
 配对让你成为消息渠道的所有者。在配对之前，消息渠道不回复任何人。
 
-1. 生成一个配对码：在消息渠道的**总览**里点**生成配对码**（已配对的消息渠道则在**谁可以使用**下点**添加主人**），它会打开**添加主人**对话框，或者：
-
-   ```sh
-   coffer channel pair my-telegram
-   ```
-
-   ```text
-   pairing code: K7QM3XPA
-   expires at:   2026-09-24T15:04:05Z
-   pair link:    https://t.me/my_coffer_bot?start=K7QM3XPA
-   Send this code to the bot from the account that should own the channel.
-   ```
+1. 生成一个配对码：在消息渠道的**总览**里点**生成配对码**（已配对的消息渠道则在**谁可以使用**下点**添加主人**），它会打开**添加主人**对话框。
 
 2. 用你自己的账号把这八个字符作为一条消息发给机器人。在 Telegram 上也可以选**在 Telegram 中打开**，它会打开聊天并填好配对码。对话框会显示配对码和**复制**按钮、该发到哪里、剩余时间（*58 分钟后过期 · 仅限一次*）以及**等待你的消息…**，直到配对完成，然后显示新的所有者。**新配对码**会换掉当前的码。已过期的码会被划掉并标为**已过期**，并说明原因；点**生成新的配对码**再签发一个。
 3. 机器人确认配对，并接着发一次[帮助](/zh/reference/channel-commands#status-and-help-cards)。现在你是这个消息渠道唯一的所有者。
@@ -123,14 +99,14 @@ Coffer 会告诉智能体它在哪个平台、哪种聊天里，以及那里能�
 
 一个轮次运行超过消息渠道设定的阈值（默认 90 秒）时，如果它的回答本身不会通知你，结束时会补一行短消息：`✅ Done · 4m 12s — <the answer's first line>`，或者 `⚠️ Failed · …`、`⏹ Stopped · …`。轮次在等待问题的回答时，会在卡片之前先发一行 `❓ Needs you · 4m 05s — <问题>`。在 SeaTalk 上，回答就是轮次开始时打开的那条消息，所以它写完不会提醒任何人，提醒你的是这行完成消息：发在同一个话题里，在群组中还会 @ 你。在 Telegram 上回答总是一条新消息，所以不需要额外这一行。
 
-有两个按消息渠道设置的选项影响这一点，在消息渠道的**设置**标签页**回复**下（**长任务完成提醒**，默认 90 秒；以及**显示步骤行**），或者用 CLI：
+有两个按消息渠道设置的选项影响这一点，在消息渠道的**设置**标签页**回复**下：
 
-- `coffer channel edit <name> --hide-steps`（或 `--show-steps`）：只保留状态头和 💬 那一行，不显示步骤列表。在热闹的群里很有用。
-- `coffer channel edit <name> --notify-after <seconds>`：长轮次阈值，0 到 3600；0 表示关闭完成提醒。
+- **显示步骤行**：关掉后只保留状态头和 💬 那一行，不显示步骤列表。在热闹的群里很有用。
+- **长任务完成提醒**：长轮次阈值，单位秒，0 到 3600；0 表示关闭完成提醒。
 
 快速连发的几条消息算作一个问题。消息渠道在每条消息之后等一小段停顿再开始轮次：文字之后 1.5 秒，转发的聊天记录或不带文字的文件之后 5 秒。停顿期间发来的任何内容都并入同一个轮次。所以你可以先转发一段聊天记录，再输入「看看这个」，智能体看过两者后只回答一次。每条消息到达时仍会立即得到确认。
 
-两个停顿时长都按消息渠道设置：在消息渠道的**设置**标签页**消息合并**下，或者用 `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`。取值 0 到 60 秒；设为 0 表示每条这类消息都单独回答。
+两个停顿时长都按消息渠道设置：在消息渠道的**设置**标签页**消息合并**下（**文字消息后等待**和**转发记录或附件后等待**）。取值 0 到 60 秒；设为 0 表示每条这类消息都单独回答。
 
 轮次运行期间你发的消息会在对话的队列里等待，按顺序运行，和对话页面显示的是同一个队列。轮次期间连发的一串消息作为一项进入队列。每条等待的消息都会收到「⏳ Queued (n)」的回复，n 是当前等待的数量。最多可以有 10 条在等；已有 10 条等待时再发的消息会被丢弃，机器人会说明这一点和原因。
 
@@ -138,7 +114,7 @@ Coffer 会告诉智能体它在哪个平台、哪种聊天里，以及那里能�
 
 一天没人碰过的对话，往往不是你想接着聊的那个。你的下一条消息到达一个聊天，而它的对话闲置超过了消息渠道设定的闲置时长（默认 24 小时）时，Coffer 会新开一个对话，而不是接着旧的，并在回答之前用一行说明：`🆕 Started a new conversation after 24 h idle.`。旧对话原样保留在对话列表里。聊天的智能体、模型、推理强度和目录会沿用，和 `/new` 之后一样。这条规则适用于消息渠道保存的每一个对话：私聊的对话，以及群里每个话题、每个并行话题各自的对话。
 
-在消息渠道的**设置**标签页的**对话**下设置时长（**闲置多久后开新对话**，单位小时；0 表示不自动开新对话），或者用 CLI：`coffer channel add`、`coffer channel edit <name> --new-conversation-after-idle-hours <hours>`。`coffer channel show` 会以 `idle:` 一行显示它。
+在消息渠道的**设置**标签页的**对话**下设置时长（**闲置多久后开新对话**，单位小时；0 表示不自动开新对话）。
 
 你在对话页面归档的对话，不会被聊天里的消息接着用：下一条消息会新开一个对话，不会多说一行，被归档的那个仍然是归档状态。
 
@@ -174,14 +150,7 @@ Coffer 会告诉智能体它在哪个平台、哪种聊天里，以及那里能�
 
 **默认智能体**是新对话开始时用的智能体。登记消息渠道时设置它；之后在消息渠道**总览**的**智能体** → **默认智能体**里修改。
 
-**生效范围**是消息渠道的覆盖面，即它**可以驱动**的智能体列表。对其他所有资源类型，生效范围指的是资源被投递*给*哪些智能体；而消息渠道不被任何智能体使用，所以它的生效范围要反过来读。在消息渠道**总览**的**可驱动的智能体**里设置，或者：
-
-```sh
-coffer channel scope my-telegram                        # show the current scope
-coffer channel scope my-telegram --agents claude-code   # may drive only Claude Code
-coffer channel scope my-telegram --all                  # may drive every agent
-coffer channel scope my-telegram --none                 # dormant: drives nothing
-```
+**生效范围**是消息渠道的覆盖面，即它**可以驱动**的智能体列表。对其他所有资源类型，生效范围指的是资源被投递*给*哪些智能体；而消息渠道不被任何智能体使用，所以它的生效范围要反过来读。在消息渠道**总览**的**可驱动的智能体**里设置：所有智能体、你选的几个，或者一个都不选。
 
 - 不受限的生效范围表示所有已登记的智能体。
 - 受限的生效范围会在所有地方收窄 `/new <agent>`：你输入未知名字时给出的候选，以及对你输入名字的检查。
@@ -203,12 +172,7 @@ coffer channel scope my-telegram --none                 # dormant: drives nothin
 - 只有指定的机器会启动适配器。绑定在另一台机器上的消息渠道会显示为在别处运行，而不是已停止。
 - 没有绑定，或绑定到注册表不认识的机器的消息渠道，哪里都不运行，并在它的页面上说明这一点。
 
-要迁移消息渠道，在它的**设置**标签页修改**运行在**；对由另一台机器运行的消息渠道，也可以选**在本机运行…**（它会先询问，因为在另一台机器同步之前两台机器可能都会应答）；或者：
-
-```sh
-coffer channel bind my-telegram              # bind to this machine
-coffer channel bind my-telegram <machine_id> # bind to another machine
-```
+要迁移消息渠道，在它的**设置**标签页修改**运行在**；对由另一台机器运行的消息渠道，也可以选**在本机运行…**（它会先询问，因为在另一台机器同步之前两台机器可能都会应答）。
 
 重新绑定不需要重启。失去消息渠道的机器会在一个调和周期内停掉适配器；得到它的机器会在下一轮同步带来这个变化后启动适配器。要干净地交接，就在当前运行这个消息渠道的机器上重新绑定。如果在另一台机器仍在运行时把消息渠道绑定到你所在的机器，两台机器可能都会应答，直到那台机器的下一轮同步。
 
@@ -235,16 +199,6 @@ coffer channel bind my-telegram <machine_id> # bind to another machine
 
 **Web 界面：**在消息渠道的**设置**标签页，使用**群聊中**下的开关：**仅在被 @ 时回复**（仅 Telegram 消息渠道）和**忽略同时 @ 了其他人的消息**。拨动即保存。
 
-**CLI：**把开关传给 `coffer channel add`，或之后用 `coffer channel edit` 修改。没写的选项保持当前值。
-
-```sh
-coffer channel edit my-telegram --no-require-mention --ignore-other-mentions
-```
-
-```text
-require_mention: off
-ignore_other_mentions: on
-```
 
 如果机器人被移出群组，这个群的会话就会停止。如果一个 SeaTalk 群变成外部群，机器人会在群里发一次警告。
 
@@ -278,14 +232,7 @@ MEDIA:/Users/you/reports/q3-chart.png | Q3 revenue by region
 
 ## 通知 {#notifications}
 
-Coffer 可以在没有收到消息的情况下，主动给已配对的所有者推送一条消息：
-
-```sh
-coffer channel notify my-telegram "build finished"
-coffer channel notify my-telegram "deploy done" --chat -1001234567890
-```
-
-不带 `--chat` 时，消息发到所有者的私聊。`--chat` 指定另一个已配对的聊天，比如一个群组；消息渠道没有配对过的聊天会被拒绝。在消息渠道页面上，**发送测试**会向所有者的私聊发一条测试消息，内容可编辑，默认是**来自 Coffer 的测试消息**；它不会开始轮次。给没有已配对所有者的消息渠道发通知会失败，什么也不发。对应的 REST 接口是 `POST /api/v1/channels/{uid}/notify`。
+Coffer 可以在没有收到消息的情况下，通过 `POST /api/v1/channels/{uid}/notify` 主动给已配对的所有者推送一条消息。请求默认发到所有者的私聊，也可以指定另一个已配对的聊天，比如一个群组；消息渠道没有配对过的聊天会被拒绝。在消息渠道页面上，**发送测试**会向所有者的私聊发一条测试消息，内容可编辑，默认是**来自 Coffer 的测试消息**；它不会开始轮次。给没有已配对所有者的消息渠道发通知会失败，什么也不发。
 
 ## 管理消息渠道 {#manage-channels}
 
@@ -293,7 +240,7 @@ coffer channel notify my-telegram "deploy done" --chat -1001234567890
 
 消息渠道列表在打开的消息渠道旁边。它按需要你做什么来分组：**需要处理**（正在重连、被踢下线、无法启动、未配对、没绑定机器或绑定到 Coffer 不认识的机器）、**已连接**、**在其他机器**（由另一台机器运行），以及有的话还有**已关闭**。**筛选**按名称或平台缩小列表。消息渠道按 uid 寻址：`/channels/<uid>` 是它的**总览**，`/channels/<uid>/settings` 是它的**设置**，所以改名不会让链接失效。
 
-页头写着消息渠道名、状态和运行位置（`SeaTalk app 8231 · WebSocket · 运行在这台 Mac 上`），在任何状态下都长得一样：一个**发送测试**按钮和一个装着**重新连接**的 **⋯** 菜单。暂时不能用的按钮会置灰，悬停**发送测试**会告诉你原因。只要有问题，页头下方就有一条横幅说明原因，并带着唯一的修复按钮——**立即重新连接**、**更换 token** 或**更换密钥**、**拿回连接**、**重试**、**打开密钥**、**在本机运行**、**生成配对码**：连接断开正在重连、另一个进程抢走了 SeaTalk 连接、缺少 SeaTalk SDK（可点**交给智能体**把剩下的交给智能体）、平台拒绝了 token 或连接、消息渠道的密钥正等你批准（或被拒绝）、状态读取失败、消息渠道被设置在同步组之外的 Mac 上运行，或者还没配对。已关闭、或按设计由另一台 Mac 运行的消息渠道不算问题，所以只显示一个安静的灰框——**开启**，或**在本机运行…**（会先确认）。更换机器、更换密钥和删除消息渠道都在**设置**里。**重新连接**会重启消息渠道的适配器：守护进程停掉它和它的连接，按已保存的配置重新启动，并读取此刻的密钥；正在等待失败重试的消息渠道会立刻重试。在 CLI 里是 `coffer channel restart <name>`；对应的 REST 接口是 `POST /api/v1/channels/{uid}/restart`。
+页头写着消息渠道名、状态和运行位置（`SeaTalk app 8231 · WebSocket · 运行在这台 Mac 上`），在任何状态下都长得一样：一个**发送测试**按钮和一个装着**重新连接**的 **⋯** 菜单。暂时不能用的按钮会置灰，悬停**发送测试**会告诉你原因。只要有问题，页头下方就有一条横幅说明原因，并带着唯一的修复按钮——**立即重新连接**、**更换 token** 或**更换密钥**、**拿回连接**、**重试**、**打开密钥**、**在本机运行**、**生成配对码**：连接断开正在重连、另一个进程抢走了 SeaTalk 连接、缺少 SeaTalk SDK（可点**交给智能体**把剩下的交给智能体）、平台拒绝了 token 或连接、消息渠道的密钥正等你批准（或被拒绝）、状态读取失败、消息渠道被设置在同步组之外的 Mac 上运行，或者还没配对。已关闭、或按设计由另一台 Mac 运行的消息渠道不算问题，所以只显示一个安静的灰框——**开启**，或**在本机运行…**（会先确认）。更换机器、更换密钥和删除消息渠道都在**设置**里。**重新连接**会重启消息渠道的适配器：守护进程停掉它和它的连接，按已保存的配置重新启动，并读取此刻的密钥；正在等待失败重试的消息渠道会立刻重试。对应的 REST 接口是 `POST /api/v1/channels/{uid}/restart`。
 
 **总览**是单栏，依次包含：
 
@@ -303,33 +250,7 @@ coffer channel notify my-telegram "deploy done" --chat -1001234567890
 
 **设置**是单栏分区：**连接**、**接收消息**、**回复与会话**、**工作目录**，每个设置项下方都有一行说明，底部是**删除消息渠道**一行。它每改一处就保存一处：数字或路径在你停止输入且合法时保存，开关立即保存；顶部会显示**保存中…**、**已保存**或**保存失败**。它包含消息渠道的标题、**群聊中**、**消息合并**、**回复**、**对话**、**Directories for /dir**、**密钥**（SeaTalk 的 App ID，以及打码显示的密钥或令牌，带**更换**）、**运行在**和**删除…**。每个字段都从守护进程报告的该消息渠道设置（含默认值）开始。更换的密钥写在消息渠道已经在用的那个引用下，守护进程会发现新值并自行用它重启适配器（用 `coffer secret set` 更换时同样如此），所以轮换密钥不会影响配对和绑定。删除消息渠道会停掉机器人并移除配对；它的对话仍保留在对话页面上。
 
-用 CLI：
-
-```sh
-coffer channel list
-coffer channel show my-telegram
-coffer channel disable my-telegram   # stop the adapter
-coffer channel enable my-telegram    # start it again
-coffer channel restart my-telegram   # stop the adapter and start it afresh
-coffer channel rm my-telegram        # stop it and remove the pairing
-printf %s "$NEW_TOKEN" | coffer secret set channel/tg/bot-token   # rotate
-```
-
-```text
-channel:  my-telegram (telegram)
-uid:      9b2e…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-idle:     new conversation after 24 h idle
-secret:   bot_token_ref = channel/tg/bot-token
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     Ada (chat 123456789)
-conv:     01J8Z…
-```
-
-如果平台上的某项设置会让消息渠道的配置失效，比如 Telegram 的隐私模式，`coffer channel show` 还会打印一行 `warning:`。
+如果平台上的某项设置会让消息渠道的配置失效，比如 Telegram 的隐私模式，消息渠道页面也会给出警告。要轮换密钥，用**设置**标签页**密钥**下的**更换**。
 
 ### 等待批准的消息渠道 {#a-channel-that-waits-for-approval}
 

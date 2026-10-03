@@ -1,5 +1,5 @@
 """DeliveryService — install / status / remove Coffer's own memory hook (its
-four entries: session start, each prompt, before and after a shell command)
+two entries: session start and each prompt)
 for an agent the developer drives themselves (spec memory "Install
 delivery hooks explicitly and removably", "Audit every delivery fire").
 
@@ -354,9 +354,9 @@ class DeliveryService:
         and the row is what ties the fire to the agent's history.
 
         The actor is the agent, by the name it answers to now: nobody clicked
-        anything, the hook ran because that agent started a session, sent a
-        prompt or ran a command. ``details`` says which moment it was and which
-        notes it carried (``moment``, ``notes``, ``trigger``, ``session_id``),
+        anything, the hook ran because that agent started a session, or sent a
+        prompt. ``details`` says which moment it was and which
+        notes it carried (``moment``, ``notes``, ``session_id``),
         never their text. Returns the agent row.
         """
         agent = await self._agents.get(agent_uid)

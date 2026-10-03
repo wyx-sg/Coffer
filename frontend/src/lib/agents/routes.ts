@@ -2,7 +2,7 @@
 //
 // An agent is one per type and named by it, so its pages are addressed by the
 // TYPE (`/agents/claude_code`), never by its uid (spec agent-registry "Expose
-// every agent operation through REST, CLI and the Agents page"). The detail
+// every agent operation through REST and the Agents page"). The detail
 // page's tab is a path segment (`/agents/<type>/<tab>`, Overview at the bare
 // path), and every page reached from a tab is nested under that tab, so its
 // back link is the tab's address. REST routes are still keyed by uid; the

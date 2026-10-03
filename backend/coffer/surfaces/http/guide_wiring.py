@@ -64,7 +64,7 @@ class BuiltinGuide:
 
 
 #: The features whose switch changes what the guide documents: ``knowledge``
-#: carries the catalogue and ``coffer__write``, ``memory`` the memory root.
+#: carries the catalogue, ``memory`` the memory root.
 GUIDE_FEATURES = frozenset({KNOWLEDGE, MEMORY})
 
 

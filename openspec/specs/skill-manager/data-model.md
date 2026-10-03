@@ -147,8 +147,7 @@ Derived, never stored: every view of a command that is `missing`, `outdated` or
 `logged_out` carries the prompt text for the person's agent, rendered by
 `domain/handoff.py` from the row, the probe result and the machine's
 `machine_label()` (read once per daemon); a `ready` command carries none. On
-the wire it is `CliOut.handoff` (`HandoffOut {prompt}`), and `coffer cli prompt`
-prints it.
+the wire it is `CliOut.handoff` (`HandoffOut {prompt}`), and the CLIs page copies it.
 
 ### `BindingState` (`domain/skill/binding.py`)
 
@@ -168,8 +167,7 @@ that this agent currently holds a delivered copy — not a user-facing axis.
 ### `DriftKind` (`domain/skill/drift.py`)
 
 String-valued enum. A drift entry carries the kind, never remedy text: each
-surface says what to do in its own words (the CLI's `DRIFT_REMEDIES` names its
-commands; the web UI translates the kind). The three kinds no pass settles also
+surface says what to do in its own words (the web UI translates the kind). The three kinds no pass settles also
 carry a `handoff` prompt (`application/skill/drift_handoff.py`).
 
 | Value                   | Meaning                                       | What to do                            |

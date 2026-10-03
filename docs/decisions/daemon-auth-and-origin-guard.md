@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token from REST or the command line", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token over REST", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
 
 ## Context
 
@@ -155,7 +155,7 @@ Rules a future change must respect:
 
 - The injected value and the accepted value come from the same variable
   (`auth.get_active_token`), read per request, so a rotation
-  (`POST /api/v1/daemon/rotate-token` or `coffer daemon rotate-token`) cannot
+  (`POST /api/v1/daemon/rotate-token`) cannot
   make them disagree.
 - Any document carrying the token is `no-store` with no validators. A cached or
   revalidated copy would hand a restarted daemon's browser the previous
@@ -176,9 +176,8 @@ Rules a future change must respect:
 ## Consequences
 
 - Restart the daemon and reload the page, even on a deep link, and it is
-  authenticated against the new daemon. `coffer open` carries no credential; it
-  reads the port from `daemon.json` (spawning a daemon if needed) and opens the
-  browser at that origin.
+  authenticated against the new daemon. The address you open
+  carries no credential; the token arrives only in the page body.
 - The fixed port ([Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md))
   and the injected token together make a bookmark a complete way in: the
   address does not move and the page does not need anything stored.

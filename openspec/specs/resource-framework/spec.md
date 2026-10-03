@@ -5,9 +5,9 @@
 The resource framework is the kind-agnostic half of Coffer's resource model: the kind
 registry and the immutable `uid` identity, the lifecycle surface every kind is managed
 through, per-agent reach, the audit log, per-table retention and its background prune,
-the cross-kind read of the passes in flight, and the test that every mutation and
-every read of state that is not a plain file is reachable from both REST and the CLI,
-with a plain file answered on the CLI by naming it with `coffer path`. A user relies on it for one place
+the cross-kind read of the passes in flight, and the test that the CLI holds only the
+commands that need it, each recorded with its reason, while everything else is managed in
+the web UI over REST. A user relies on it for one place
 that lists everything Coffer holds, one way to turn a thing on or off, one way to say
 which agents it reaches where that question applies to the kind at all, one way to
 delete it, and one record of what happened — instead of a near-identical surface per
@@ -33,9 +33,9 @@ invocation log is mcp-gateway's; it registers here as a prunable table and nothi
 Whether the passes this spec reports run on a timer is internal-engine's, and what each
 pass does is memory's and knowledge's. `GET /api/v1/upkeep/runs`, the read of the passes
 in flight, is a live, read-only status the web UI polls so a Knowledge or Memory page's
-run-now button shows a pass the timer or the CLI started as already running; a terminal
+run-now button shows a pass the timer or another page started as already running; a terminal
 reads the same list in `coffer daemon status`. The passes' switches and timers are
-changed from the CLI through the `engine.upkeep.*` keys of `coffer config`.
+changed on the Settings page, not by command.
 
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 Resource files (`vault/resources/<kind>/<name>.json`, agents under `local/`),
@@ -53,10 +53,9 @@ fences the core off from every kind; and it has ADRs of its own
 [Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)). It is one
 behaviour — what happens to a managed thing between the moment a kind creates it and the
 moment it is deleted, recorded while it happens — and it is independently operable:
-each kind's lifecycle verbs (`coffer <kind> list|show|edit|rm|enable|disable|scope`),
-`coffer log audit`, `coffer log prune`, the `retention.*` keys of `coffer config` and
-`coffer path` against a running daemon, with the Activity page's audit tab and the Data settings section's
-retention table (web-ui's pages) over the same records. An earlier audit rejected it
+the kind-agnostic `/api/v1/resources*`, `/api/v1/audit` and `/api/v1/retention/*` routes
+against a running daemon, `coffer log audit` for a terminal, and the Activity page's audit
+tab and the Data settings section's retention table (web-ui's pages) over the same records. An earlier audit rejected it
 when it owned only a dispatch seam; that the kind-agnostic surface has no create verb and
 that an empty registry answers every lifecycle route with a refusal are still true (see
 "Keep creation a per-kind seam"). The daemon it is mounted in — port, discovery file,
@@ -78,18 +77,12 @@ once and never reused, and MUST be the same value on every machine that holds th
 that two machines can tell "the same thing" from "a different thing with the same name" without
 asking each other.
 
-On the command line, every kind's group MUST offer the same lifecycle verbs, generated from the
-kind registry and served by the kind-agnostic routes: `list`, `show`, `edit`, `rm`,
-`enable`, `disable` and `scope`. `add` is not one of them: a group offers `add` only when its
-kind supplies one of its own (see "Keep creation a per-kind seam"). A verb the kind does not support MUST be absent from its group
-rather than refused when run (see "Keep creation a per-kind seam" and "Carry a per-agent reach
-on every resource"); a kind that cannot be disabled offers no `enable` or `disable`, and a kind
-with nothing on its record a person may edit — `skill`, whose name is fixed and whose description
-is its SKILL.md's — offers no `edit`. `show` MUST resolve either a name or a uid. `edit` MUST take
-`--description`, and `--title` on a kind that carries one ("Carry an optional editable title on
-the kinds that have one"), plus the kind's own flags. Every `list` and `show` MUST support
-`--json`. A group MAY add commands that are unique to its kind, and MUST NOT add a second
-spelling of a lifecycle verb.
+The lifecycle controls of the web UI are exactly these routes: list, read, update — the
+description, `title` on a kind that carries one ("Carry an optional editable title on the kinds that
+have one"), and the kind's own fields — enable, disable and delete, plus the reach pair ("Carry a
+per-agent reach on every resource"). Creating is not one of them: a kind registers through its own
+seam (see "Keep creation a per-kind seam"). A request a kind does not support MUST be refused rather
+than ignored (see "Keep creation a per-kind seam" and "Carry a per-agent reach on every resource").
 
 A kind MAY declare that its resources cannot be disabled — `knowledge` and `memory` do.
 Every resource of such a kind MUST be enabled, and enabling or disabling one through the
@@ -106,17 +99,17 @@ unregistered kind MUST be refused rather than bringing one into being.
 - **THEN** every kind's resources appear in the one list, each carrying its uid, kind, name, title, config, reach and enabled flag,
 - **AND** the enable/disable round trip is served by the same route for every kind, and each step is audited.
 
-#### Scenario: every kind's group offers the same lifecycle verbs
-- **GIVEN** the CLI's command tree
-- **WHEN** each registered kind's group is read
-- **THEN** each offers `list`, `show` and `rm`, offers `edit` only where the kind has something to edit and `--title` only where it carries a title, offers `enable` and `disable` only where the kind can be disabled, offers `add` only where the kind can be created from that group, and offers `scope` only where the kind supports reach
-- **AND** `coffer <kind> disable <name>` and `coffer <kind> disable <uid>` disable the same resource through the kind-agnostic route, and the change is audited
+#### Scenario: every kind answers the same lifecycle routes
+- **GIVEN** one registered kind that can be disabled, supports reach and carries a title, and one that does none of these
+- **WHEN** each resource is read with `GET /api/v1/resources/{uid}`, given a new description with `PATCH /api/v1/resources/{uid}`, and sent a non-null scope with `PUT /api/v1/resources/{uid}/scope`, a title and `POST /api/v1/resources/{uid}/disable`
+- **THEN** both kinds answer the read and the description update through the same routes, and the kind that supports no reach, carries no title or cannot be disabled refuses that request and changes nothing
+- **AND** the first kind's disable changes it through the kind-agnostic route and is audited
 
 #### Scenario: a non-toggleable kind refuses to be disabled
 - **GIVEN** a `knowledge` collection and a `memory` partition
 - **WHEN** each is disabled through `/api/v1/resources` and read back
 - **THEN** both requests are refused with 409 `RESOURCE_NOT_TOGGLEABLE`
-- **AND** both still read back enabled, with `toggleable` false, and neither `coffer knowledge` nor `coffer memory` offers `enable` or `disable`
+- **AND** both still read back enabled, with `toggleable` false
 
 ### Requirement: Validate every registration and persist nothing on failure
 The system MUST validate every registration against its kind's schema and the kind's own
@@ -138,17 +131,15 @@ Creation is a per-kind seam and MUST stay one. The kind-agnostic create route MU
 accept only kinds that declare themselves creatable through it, and MUST refuse a kind
 that owns a creation invariant beyond config validation — a skill's master folder, an
 agent's on-disk detection — so that such a kind is registered through its own surface,
-which can hold that invariant. On the command line a kind's group MUST offer `add` only when
-the kind supplies an `add` of its own that holds its invariant. A kind that is created only by the system, such as a memory
-partition, MUST offer no `add`. There is no kind-agnostic create command, because a generic
-create would have to guess a config shape it cannot know. What this spec owns is everything that
+which can hold that invariant. A kind that is created only by the system, such as a memory partition, MUST offer no creation
+at all. A generic create would have to guess a config shape it cannot know, which is why creation stays the kind's own. What this spec owns is everything that
 happens to a resource once a kind has made one.
 
 #### Scenario: refuse a generic create for a kind that owns its creation
 - **GIVEN** a registered kind that declares it is not creatable through the kind-agnostic surface,
 - **WHEN** a registration for that kind arrives on the kind-agnostic create route,
 - **THEN** it is refused as a conflict with the code `GENERIC_CREATE_NOT_ALLOWED`, and no resource file and no audit entry is written,
-- **AND** that kind's command group offers `add` only if the kind supplies its own, and the memory group offers no `add` at all.
+- **AND** that kind is created only through a surface of its own that holds its invariant.
 
 ### Requirement: Carry a per-agent reach on every resource
 The system MUST carry a framework-level per-agent reach on every resource — one
@@ -161,11 +152,6 @@ resource's `enabled` flag, in this machine's reach record `~/.coffer/local/reach
 by the resource's uid, and never in the resource's own file, so a reach write makes no vault
 commit; a resource with no record there takes its kind's default
 ([vault-sync](../vault-sync/spec.md) "Keep reach machine-local").
-
-On the command line the reach MUST be read and written with
-`coffer <kind> scope <name> [--agents a,b | --all | --none]`, offered only on a kind that
-supports reach. With no option it MUST print the current reach. `--agents` MUST set the
-allow-list, `--all` MUST set every agent and `--none` MUST set none.
 
 A non-null reach on a kind that declares none, and a payload carrying a property the
 schema does not define, MUST both be refused rather than stored or silently widened — a
@@ -181,11 +167,11 @@ write path.
 - **THEN** each write is persisted, audited as a scope update, and followed by the kind's own post-write reaction,
 - **AND** a kind that supports no reach rejects a non-null scope, as does a payload carrying a property the scope schema does not define.
 
-#### Scenario: the command line sets a resource's reach
+#### Scenario: a resource's reach is written and read through the scope routes
 - **GIVEN** a resource of a kind that supports reach, and a registered agent
-- **WHEN** the user runs `coffer <kind> scope <name> --agents <agent>`, then `coffer <kind> scope <name>`, then `coffer <kind> scope <name> --all`
-- **THEN** the second command prints the one agent, and after the third the reach is every agent again
-- **AND** each write is audited as a scope update, and a kind that supports no reach offers no `scope` command
+- **WHEN** a client sends `PUT /api/v1/resources/{uid}/scope` naming that one agent, then reads `GET /api/v1/resources/{uid}/scope`, then sends `PUT` again naming every agent
+- **THEN** the read returns the one agent, and after the second `PUT` the reach is every agent again
+- **AND** each write is audited as a scope update, and a kind that supports no reach refuses a non-null scope
 
 #### Scenario: reach is kept on this machine, not in the resource's file
 - **GIVEN** a registered resource
@@ -248,8 +234,7 @@ only one today is a builtin skill, whose master folder the next boot writes back
 ### Requirement: Treat a resource's name as a mutable label
 A resource's `name` is a **label**, unique within its kind and nothing more. For every kind
 except those that declare their name fixed, renaming MUST be an ordinary field of the
-kind-agnostic update — at the same level as editing a description, and reached on the command
-line as `coffer <kind> edit <name> --name <new>` — and MUST NOT require any other record to be
+kind-agnostic update — at the same level as editing a description — and MUST NOT require any other record to be
 rewritten, because nothing else holds the name: the resource keeps its identity, its config,
 its reach, its enabled state and its audit trail, with the entries written before the change
 still saying what it was called then. The same name rules MUST apply to a rename as to a
@@ -301,8 +286,8 @@ editable title on the kinds that have one"): the fixed name is what every surfac
 
 #### Scenario: a fixed name refuses a rename
 - **GIVEN** a registered MCP server and a registered skill
-- **WHEN** the user submits a different name for each through the kind-agnostic update, and through `coffer <kind> edit <name> --name <new>`
-- **THEN** every attempt is refused as a conflict with the code `NAME_IMMUTABLE`, and the command line exits non-zero with a message saying to delete and register the resource again and naming what that resets
+- **WHEN** the user submits a different name for each through the kind-agnostic update
+- **THEN** every attempt is refused as a conflict with the code `NAME_IMMUTABLE`, with a message saying to delete and register the resource again and naming what that resets
 - **AND** each resource keeps its name, its on-disk artifact and its audit trail, and no audit entry is written
 
 #### Scenario: a rename moves the resource's file in one commit
@@ -319,7 +304,7 @@ such as `system:memory-aggregate-worker`, or a domain actor a kind names itself,
 `channel`, an agent's name, or `agent` for a knowledge write whose session reported no agent. Every lifecycle change made
 through any surface — REST, CLI, or a kind's own command — MUST appear in the audit log
 with the originating actor, and no surface can mutate a resource without one. Entries
-MUST be readable through both surfaces, filterable by kind, resource, event type and
+MUST be readable through the REST route, the Activity page and `coffer log audit`, filterable by kind, resource, event type and
 time, and MUST carry both the resource's stable identity and the label it carried at
 that moment, so a trail survives a rename while each row keeps saying what the resource
 was called then. Filtering one resource's history MUST key on that identity and not on
@@ -331,7 +316,7 @@ whole vault rather than each kind growing a private log.
 
 #### Scenario: audit lifecycle changes
 - **GIVEN** the user performs any add / enable / disable / update / delete on a server or capability,
-- **WHEN** they open the audit view (CLI or UI),
+- **WHEN** they open the Activity page's audit tab or run `coffer log audit`,
 - **THEN** they see one row per change with actor, timestamp, and a payload describing what changed.
 
 ### Requirement: Prune each registered log table on its own retention period
@@ -347,28 +332,26 @@ existing leaves a policy that prunes nothing rather than a prune aimed at an unk
 table. Changing a policy MUST itself be audited. This is the retention contract every
 log-writing kind inherits.
 
-On the command line each table's period MUST be the setting `retention.<table>`, read and
-changed with `coffer config get|set|unset retention.<table>` (see "Change every setting through
-one key-value command"), taking a whole number of days or `forever`, with `unset` returning the
-table to its registered default. The on-demand prune MUST be `coffer log prune [--table
-<table>]`, which prunes every registered table, or only the one named, and prints how many
-entries each lost.
+On the Data settings section each table's period MUST be a control over
+`PATCH /api/v1/retention/policies/{table}`, taking a whole number of days or `forever` and returning the
+table to its registered default when cleared. The prune-now action MUST be
+`POST /api/v1/retention/prune`, which prunes every registered table, or only the one named, and
+answers how many entries each lost.
 
 Before a shorter period is saved, the web UI MUST be able to ask how many entries it would delete:
 `GET /api/v1/retention/policies/{table}/preview?days=<n>` answers the entries the table holds now
 and how many of them are older than `n` days, counts them against the same timestamp column the
-prune uses, and deletes and changes nothing. It is a read that serves a confirmation, so it has no
-command of its own: `coffer config set retention.<table>` saves a period directly.
+prune uses, and deletes and changes nothing. It is a read that serves a confirmation and changes nothing.
 
 #### Scenario: configure retention per log
 - **GIVEN** the audit and invocation logs grow over time,
 - **WHEN** the user sets a retention period for a log (in days, or "keep forever"),
 - **THEN** entries older than that period are removed by the next periodic cleanup, and the change itself is audited.
 
-#### Scenario: the command line sets a retention period and prunes now
+#### Scenario: set a retention period and prune now over REST
 - **GIVEN** the invocation log holds entries older and newer than 7 days
-- **WHEN** the user runs `coffer config set retention.mcp_invocations 7` and then `coffer log prune --table mcp_invocations`
-- **THEN** `coffer config get retention.mcp_invocations` prints 7, the policy change is audited, and the prune reports how many entries it removed
+- **WHEN** a client sends `PATCH /api/v1/retention/policies/mcp_invocations` setting 7 days and then `POST /api/v1/retention/prune` naming that table
+- **THEN** `GET /api/v1/retention/policies` reports 7 days for it, the policy change is audited, and the prune answers how many entries it removed
 - **AND** only entries older than 7 days are gone
 
 #### Scenario: a shorter period is previewed before it is saved
@@ -401,42 +384,55 @@ carries the list under `--json`.
 - **THEN** the first lists both passes with their kind, target and start time, oldest first,
 - **AND** the second lists none, and the table form of `coffer daemon status` says that no pass is running.
 
-### Requirement: Reach every management operation from both REST and the CLI
-Users MUST be able to perform every mutation, and every read of state that is not a plain file,
-through both (a) a REST API and (b) a `coffer` command-line interface, sharing the same
-underlying daemon and a consistent error model. For a plain file that its owning spec declares
-directly readable or editable, the CLI MUST satisfy parity by naming the file with `coffer path`
-(see "Locate file-backed state with coffer path"), while the REST route that serves the file to
-the web UI stays, because a browser page cannot read the disk. A setting changed through
-`coffer config` counts as the CLI counterpart of the route that stores it (see "Change every
-setting through one key-value command"). The reviewed CLI command tree
-and the management API MUST stay in step in both directions, so neither can gain an operation
-the other lacks without the parity test failing, and every REST route answered by `coffer path`
-MUST be listed by name in the reviewed table, so that a REST read with no CLI command is a
-reviewed decision rather than a gap. The rule is policy over every spec and is stated as such in
-[`.agents/openspec.md`](../../../.agents/openspec.md); this requirement is where it becomes
-testable, because the assertion runs over the entire command tree across every spec and
-so has no narrower home. A spec that cannot honour it records the gap in its own
-`## Purpose` rather than leaving the omission to be discovered.
+### Requirement: Keep the command line to what needs it
+A `coffer` command MUST exist only for one of four reasons, and the web UI is where everything
+else is managed:
 
-#### Scenario: command line covers every visual operation
-- **GIVEN** the daemon is running,
-- **WHEN** the CLI's live command tree is read,
-- **THEN** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `config`, `log`, `path`, `scan`, `adopt`, `discard`, `mcp`, `secrets`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
-- **AND** every `coffer config` key is paired in the table with the settings route that stores it, or with the pre-bind settings file for a key read before the daemon binds, so a settings route with no key fails the test,
-- **AND** the groups whose surface is options rather than subcommands are claimed by those options instead, since an empty subcommand set would assert nothing about them,
-- **AND** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it,
-- **AND** machine-readable JSON output is available for scripting.
+- **program** — a program Coffer installs or writes runs it (the memory hook entry point, an agent's
+  key helper);
+- **offline** — it must work when the daemon is down or cannot start (the daemon's start, stop,
+  restart and status, the one-time migration, locating the log files, the daemon's own pre-bind
+  settings);
+- **hand-off** — a prompt Coffer gives an agent tells it to run the command, because what it reads or
+  writes is not a file (running a command with secrets in its environment, naming and storing a
+  secret, reading the audit, MCP and daemon logs, testing an MCP server after installing it);
+- **no-ui** — the web UI cannot do it (listing the hand edits the vault refused).
 
-#### Scenario: file-backed reads are answered by coffer path
-- **GIVEN** the reviewed parity table
-- **WHEN** its list of file-backed REST routes is compared with the management API
-- **THEN** it names every route that serves or writes a plain file for the web UI — the knowledge tree, file read, file write and file delete; the memory partition's file tree, file content, notes, one note and retired notes; the skill master folder's file tree, file read and file write; an agent's config-file list and config-file reads; an agent's native-memory list, file tree and file content — each paired with the `coffer path` target that names the same files
-- **AND** a file-backed route missing from that list fails the parity test, as does a listed route the API no longer serves
+Each command MUST be recorded with its reason in one place in the CLI package. A test MUST walk the
+live command tree and assert that it equals the recorded list in both directions, that every entry
+names one of the four reasons, and that every group's `--help` renders. A web UI operation owes no
+command line counterpart: the REST routes that serve only the web UI are its interface, and a
+mutation or a read of state that is not a file needs no command to be shippable. The rule is policy
+over every spec and is stated as such in [`.agents/openspec.md`](../../../.agents/openspec.md); this
+requirement is where it becomes testable, because the assertion runs over the entire command tree
+across every spec and so has no narrower home.
 
-#### Scenario: command line surfaces same errors
+#### Scenario: the command tree holds only commands the web UI does not replace
+- **GIVEN** the CLI's live command tree
+- **WHEN** it is read
+- **THEN** every command it holds is one a web UI page does not replace: the recorded list names the memory hook, the proxy key helper, the daemon lifecycle verbs, the migration, `path logs`, `config`, `run`, `secret list` and `secret set`, the three `log` commands, `mcp test` and `vault problems`, and no group exists for a kind the web UI manages
+- **AND** a web UI operation with no command line counterpart ships without a reviewer being asked for one
+
+#### Scenario: every command has a recorded reason
+- **GIVEN** the recorded list of commands
+- **WHEN** it is read beside the live command tree
+- **THEN** every command carries one of `program`, `offline`, `hand-off` or `no-ui` and a one-line why
+- **AND** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it
+
+#### Scenario: a command missing from the list fails the test
+- **GIVEN** a command in the live tree that the recorded list does not name, and a recorded entry whose command is gone
+- **WHEN** the test compares the tree with the list
+- **THEN** it fails in both directions, naming the unrecorded command and the stale entry
+
+#### Scenario: a plain file is read with the reader's own tools
+- **GIVEN** a plain file that its owning spec declares directly readable or editable
+- **WHEN** a person or an agent needs it
+- **THEN** it is read and edited with their own tools at the path the web UI, the spec or the hand-off prompt names, and no command is added for it
+- **AND** `coffer path logs` is the one exception, because the log files are what is left to read when the daemon will not start
+
+#### Scenario: a kept command surfaces the daemon's errors
 - **GIVEN** any failure surfaced by the management API,
-- **WHEN** triggered through the command line,
+- **WHEN** it reaches a kept command that calls the daemon,
 - **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
 
 ### Requirement: Carry an optional editable title on the kinds that have one
@@ -448,10 +444,9 @@ name — a knowledge collection by its folder, with an editable description inst
 ([knowledge](../knowledge/spec.md) "Name a collection by its folder and edit its description in place")
 — and a non-empty title for one MUST be refused as a validation error (422) on registration
 and on update, with nothing changed. On a kind that carries one, the title MUST be editable
-through the kind-agnostic update (`PATCH /api/v1/resources/{uid}`) and through
-`coffer <kind> edit <name> --title <text>`. An empty title MUST clear it. A title longer than 80
+through the kind-agnostic update (`PATCH /api/v1/resources/{uid}`). An empty title MUST clear it. A title longer than 80
 characters MUST be refused as a validation error with nothing changed. A title change MUST be
-audited like any other update. The web UI and the CLI MUST show the title in place of the name
+audited like any other update. The web UI MUST show the title in place of the name
 wherever a resource is listed or shown when a title is set, and the name when it is not. The
 title MUST be a key of the resource's own file, left out while it is empty, so it travels with
 the resource to the user's other machines through vault-sync, and a
@@ -459,8 +454,8 @@ resource that arrives without one MUST keep its title empty.
 
 #### Scenario: a title is shown in place of the name
 - **GIVEN** a resource of a kind that carries a title, with no title
-- **WHEN** the user runs `coffer <kind> edit <name> --title "Team search"` and then lists that kind
-- **THEN** the list and `coffer <kind> show` print "Team search" where the name was shown, and `--json` carries both `name` and `title`
+- **WHEN** a client sends `PATCH /api/v1/resources/{uid}` with the title "Team search" and then lists that kind
+- **THEN** the list and the resource read carry "Team search" as the `title` beside the unchanged `name`, and the web UI shows the title where the name was shown
 - **AND** the change is audited as an update, and the resource's name, uid, reach and enabled state are unchanged
 
 #### Scenario: an over-long title is refused
@@ -473,7 +468,7 @@ resource that arrives without one MUST keep its title empty.
 - **GIVEN** a registered MCP server, a registered skill and a registered agent
 - **WHEN** the user submits a title for each through the kind-agnostic update, and registers an MCP server with a title
 - **THEN** each is refused as a validation error (422) and nothing is stored
-- **AND** `coffer mcp edit` and `coffer mcp add` offer no `--title`, and `coffer skill` offers no `edit`
+- **AND** each of those resources is still shown by its fixed name
 
 ### Requirement: Read the audit log from the command line
 The system MUST let a terminal read the audit log with `coffer log audit`, over the same route
@@ -496,15 +491,14 @@ with no human-readable framing.
 - **WHEN** the user runs `coffer log audit --limit 2 --json` and then `coffer log audit --limit 2 --cursor <next_cursor> --json` with the cursor the first printed
 - **THEN** the first prints the two newest entries and a `next_cursor`, and the second prints the oldest entry and a `null` `next_cursor`
 
-### Requirement: Change every setting through one key-value command
-The system MUST expose Coffer's own settings on the command line through one command,
-`coffer config`, over a single registry of keys; a setting that belongs to one resource is
-changed with that kind's `edit` instead. Each key MUST name its type, its default if it has one,
-and a one-line help. A key MUST be stored where its owning spec already stores the setting:
-through the REST route that owns it, or, for a setting that must be readable before the daemon
-binds, in the pre-bind settings file, which `coffer config` reads and writes with no daemon
-running. Keys MUST be namespaced by the setting's owner (for example `retention.<table>`), and
-the spec that owns a setting names its keys.
+### Requirement: Change the daemon's pre-bind settings through one key-value command
+The system MUST expose the settings the daemon reads before it binds on the command line through one
+command, `coffer config`, over a single registry of keys, so a setting that decides whether the
+daemon can start is changeable when it cannot. Today that is `daemon.port`. Every other setting MUST
+be changed on the Settings page, through the REST route that stores it, and MUST NOT be a key. Each
+key MUST name its type, its default if it has one, and a one-line help. A key MUST be stored in the
+pre-bind settings file, which `coffer config` reads and writes with no daemon running. Keys MUST be
+namespaced by the setting's owner, and the spec that owns a setting names its keys.
 
 - `coffer config list [<prefix>]` MUST print every key, or every key under the prefix, with its
   current value, its default, its type and its help.
@@ -521,56 +515,29 @@ the spec that owns a setting names its keys.
 #### Scenario: a setting is read, changed and returned to its default
 - **GIVEN** a registered key that has a default, and whose value is that default
 - **WHEN** the user runs `coffer config set <key> <valid value>`, then `coffer config get <key>`, then `coffer config unset <key>`
-- **THEN** `get` prints the new value, and the place that owns the setting reports the same value
+- **THEN** `get` prints the new value, and the pre-bind settings file holds the same value
 - **AND** after `unset` the key reads its default again, and `coffer config list` shows its value, default, type and help
 
 #### Scenario: an invalid setting is refused before any write
-- **GIVEN** a key whose type is a whole number of days or `forever`, and a key that has no default
-- **WHEN** the user runs `coffer config set <key> soon`, then `coffer config set no.such.key 1`, then `coffer config unset` on the key with no default
-- **THEN** all three exit non-zero: the first naming the expected type, the second naming the unknown key, and the third naming how to change that key instead
+- **GIVEN** the `daemon.port` key, whose type is a port number
+- **WHEN** the user runs `coffer config set daemon.port soon`, then `coffer config set no.such.key 1`, then `coffer config set` with the name of a setting that is a control on the Settings page
+- **THEN** all three exit non-zero: the first naming the expected type and the other two naming the unknown key
 - **AND** no setting changed
 
-### Requirement: Locate file-backed state with coffer path
-The system MUST print the absolute path of every piece of state that its owning spec declares
-directly readable or editable as plain files, with `coffer path`, so that a person or an agent
-reads and edits those files with their own tools. The targets MUST be `knowledge
-[<collection>]`, `memory [<partition>]`, `skill <name>`, `agent <name> config|memory|transcripts`,
-`logs` and `vault`. With no target it MUST print every root it knows. With `--json` it MUST print
-the paths as one JSON object keyed by what each path is. The paths MUST be composed from reads
-the daemon already serves. The command MUST create nothing and change nothing, and a name that
-resolves to no resource MUST exit non-zero with a not-found message.
+### Requirement: Locate the log files with coffer path
+The system MUST print the absolute path of the daemon's log directory and of the `daemon.log` in it
+with `coffer path logs`, so that a person or an agent can read the log files when the daemon will not
+start. `logs` MUST be the only target: every other file Coffer keeps as a plain file is named by the
+web UI, by its owning spec or by a hand-off prompt, and is read and edited with the reader's own
+tools. With `--json` the command MUST print the paths as one JSON object keyed by what each path is.
+The command MUST need no daemon, MUST create nothing and change nothing, and a target other than
+`logs` MUST exit non-zero as an unknown target.
 
-#### Scenario: the command line names the files behind a resource
-- **GIVEN** a knowledge collection and a skill are registered
-- **WHEN** the user runs `coffer path knowledge <collection>`, `coffer path skill <name> --json`, and `coffer path skill no-such-skill`
-- **THEN** the first prints the absolute path of the collection's directory and the second prints a JSON object holding the skill's master folder path, both of which exist on disk
-- **AND** the third exits non-zero with a not-found message, and nothing on disk was created or changed
-
-### Requirement: Scan, adopt and discard what Coffer does not manage
-The system MUST list, in one command, everything an agent holds that Coffer could manage but does
-not: `coffer scan [--agent <name>] [--json]` prints one table with a `kind` column, and each row
-carries the agent it was found in and a `ref` that names it. Which kinds a scan reports, and what
-adopting or discarding each one does, belong to the spec that owns that kind.
-
-`coffer adopt <kind> <ref>` MUST bring the one row the ref names under management, and
-`coffer discard <kind> <ref>` MUST remove it from the agent, each acting through the owning
-kind's REST route. The `ref` MUST be the value the scan printed for that row. A ref that names
-no row in a fresh scan MUST be refused with nothing changed. `adopt` and `discard` MUST offer a
-command only for a kind that supports that act; a kind whose rows are brought under management
-by a command of its own offers neither, and its scan row MUST name that command. Adopting or
-discarding MUST be audited by the owning kind.
-
-#### Scenario: a scan row is adopted by its ref
-- **GIVEN** an agent holds an item of a kind Coffer can adopt, and Coffer does not manage it
-- **WHEN** the user runs `coffer scan --json`, then `coffer adopt <kind> <ref>` with the ref that row printed, then `coffer scan` again
-- **THEN** the first scan lists the row with its kind, agent and ref, and the adopt exits successfully and is audited
-- **AND** the second scan no longer lists that row
-
-#### Scenario: an unknown or undiscardable row is refused
-- **GIVEN** a scan that lists a detected agent which is not registered, and names `coffer agent add <type>` on that row
-- **WHEN** the user runs `coffer discard agent <ref>` for that row, and `coffer adopt skill no-such-ref`
-- **THEN** both exit non-zero, the first because `discard` offers no `agent` command and the second saying the ref names no row
-- **AND** nothing on disk or in the vault changed
+#### Scenario: path logs names the log files and refuses other targets
+- **GIVEN** a Coffer home with its log directory
+- **WHEN** the user runs `coffer path logs`, `coffer path logs --json`, and `coffer path` with any other target
+- **THEN** the first prints the absolute path of the log directory and of `daemon.log`, and the second prints a JSON object holding both
+- **AND** the third exits non-zero as an unknown target, and nothing on disk was created or changed
 
 ### Requirement: Converge what Coffer writes outside its database with one reconciler
 Everything Coffer keeps true outside its own files — its MCP entry in each
@@ -633,7 +600,7 @@ database is claimed.
 - **WHEN** the pass runs
 - **THEN** the item is reported failed and the agent's file holds exactly what it held before the pass
 
-### Requirement: Serve the drift plan and apply chosen items on REST and the CLI
+### Requirement: Serve the drift plan and apply chosen items over REST
 `GET /api/v1/reconcile/plan` MUST return a dry-run plan — optionally for one
 target (`target`), or only the items about one kind or one resource (`kind`,
 `uid`), and for the periodic policy or for what a person's request would do
@@ -645,22 +612,21 @@ each target's error and a summary of the last pass. The text MUST be the
 target's safe rendering and MUST NOT carry a secret value. `POST
 /api/v1/reconcile/apply` MUST apply the named items as the caller asking for
 them: an item the policy still will not repair comes back unwritten with its
-reason, and one that names no current difference is absent. `coffer drift list`
-and `coffer drift repair <id>... | --all` MUST reach the same routes; `repair`
-exits non-zero when any item failed.
+reason, and one that names no current difference is absent. The web UI's drift views are these two routes' interface, and no command reaches
+them: the reconciler repairs what its policy allows on its own every minute.
 
 #### Scenario: list drift with its file and before and after text
 - **GIVEN** a registered agent whose Coffer MCP entry names a shim path this build no longer installs
-- **WHEN** the user reads the plan (`GET /api/v1/reconcile/plan`, or `coffer drift list --json`)
+- **WHEN** the user reads the plan (`GET /api/v1/reconcile/plan`)
 - **THEN** the MCP entry item reads `modify`, `repair`, the agent's config file, `command` among the changed parameters and the entry before and after, and nothing is written
 
 #### Scenario: apply one drift item as the caller
 - **GIVEN** the same drift
-- **WHEN** the user applies its id (`POST /api/v1/reconcile/apply`, or `coffer drift repair <id>`)
+- **WHEN** the user applies its id (`POST /api/v1/reconcile/apply`)
 - **THEN** the entry is rewritten, the item comes back `applied`, and the audit log records the install with the user as actor
 
 ### Requirement: Report what needs a person across every kind
-`GET /api/v1/attention` and `coffer attention` MUST list what needs a person
+`GET /api/v1/attention` MUST list what needs a person
 now, from every source whose experimental feature is on: the reconciler's
 drift that a pass could not fix, MCP servers whose last test failed (a server
 whose key the upstream refused reads `mcp_key_rejected` and offers
@@ -679,9 +645,7 @@ for an agent — and its reason sentence MUST then name no command to run —
 otherwise a prompt the daemon writes from the item's title, reason and action,
 carrying no secret. Any item MAY be ignored on this machine by its stable key
 ([web-ui](../web-ui/spec.md) "Let the user ignore any item on Overview").
-`coffer attention` MUST point at each item's prompt, and
-`coffer attention --prompt <key>` MUST print that item's prompt exactly as the
-route serves it. A source that fails MUST be reported beside the others'
+The route MUST serve each item's prompt as `handoff.prompt`, the text the web UI copies. A source that fails MUST be reported beside the others'
 items, and the answer MUST count the items per kind.
 
 #### Scenario: each item carries one action from its kind's own page
@@ -696,8 +660,8 @@ items, and the answer MUST count the items per kind.
 
 #### Scenario: every item carries a hand-off prompt
 - **GIVEN** an attention item whose kind writes its own hand-off, and another whose source gives none
-- **WHEN** the attention list is read, and `coffer attention --prompt <key>` is run for each
-- **THEN** the first carries its kind's `handoff.prompt` and the second a prompt written from its title, reason and action, and the command prints exactly each text
+- **WHEN** the attention list is read
+- **THEN** the first carries its kind's `handoff.prompt` and the second a prompt written from its title, reason and action, and the web UI copies exactly each text
 
 #### Scenario: a failing source does not hide the others
 - **GIVEN** one source that raises and one that has an item
@@ -860,9 +824,10 @@ the record has one.
 - **AND** the daemon log read with `trace_id=req-a1` returns the lines that request wrote
 
 #### Scenario: an MCP call's records carry its session and trace id
-- **GIVEN** an MCP session that calls `coffer__write` on a `/mcp` request sent with `X-Coffer-Trace: mcp-call-7`
+- **GIVEN** an MCP session that calls `coffer__search_tools` on a `/mcp` request sent with `X-Coffer-Trace: mcp-call-7`
 - **WHEN** the invocation log, the audit log and the daemon log are each read with `trace_id=mcp-call-7`
-- **THEN** the invocation carries the session id and `mcp-call-7`, the audit rows the write made carry `mcp-call-7`, and the log lines carry both the trace id and the session id
+- **THEN** the invocation carries the session id and `mcp-call-7`, and the log lines carry both the trace id and the session id
+- **AND** an audit row a call writes, when it writes one, carries the call's trace id
 
 #### Scenario: a turn's records carry its conversation and turn
 - **GIVEN** a chat turn that records an audit event while it runs, with no HTTP request behind it
@@ -871,7 +836,7 @@ the record has one.
 - **AND** a second turn of the same conversation carries a different turn id, and a turn a request started keeps that request's trace id
 
 #### Scenario: the command line filters each log by trace id
-- **GIVEN** an MCP call made with trace id `cli-trace-3` that wrote to the audit log
+- **GIVEN** a request sent with trace id `cli-trace-3` that created a resource, and an MCP call made with the same trace id
 - **WHEN** the user runs `coffer log audit --trace cli-trace-3`, `coffer log mcp --trace cli-trace-3 --json` and `coffer log daemon --trace cli-trace-3 --json`
 - **THEN** each prints only the records carrying `cli-trace-3`, the audit table showing the id on each row
 

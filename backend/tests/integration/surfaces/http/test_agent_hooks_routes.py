@@ -51,10 +51,8 @@ def test_the_hooks_route_lists_hooks_and_writes_nothing(
         second = body["items"][1]
         assert (second["timeout"], second["group_index"], second["hook_index"]) == (7, 0, 1)
         assert body["coffer_hook"]["health"] == "missing"
-        # Missing: the events it would be installed on, all four.
-        assert body["coffer_hook"]["event"] == (
-            "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit"
-        )
+        # Missing: the events it would be installed on, both.
+        assert body["coffer_hook"]["event"] == "SessionStart,UserPromptSubmit"
         assert body["parse_errors"] == []
         assert _audit_count(c) == before
         assert c.get("/api/v1/agents/nope/hooks").status_code == 404

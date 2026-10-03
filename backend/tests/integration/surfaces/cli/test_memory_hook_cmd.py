@@ -1,7 +1,7 @@
-"""``coffer memory hook``, ``coffer memory trigger …`` and ``coffer memory
-delivered`` (spec memory "Fail open when Coffer cannot answer", "Install
-delivery hooks explicitly and removably", "Count what memory delivered and
-what was read", "Show what each agent is given at session start").
+"""``coffer memory hook`` and ``coffer memory delivered`` (spec memory "Fail
+open when Coffer cannot answer", "Install delivery hooks explicitly and
+removably", "Count what memory delivered and what was read", "Show what each
+agent is given at session start").
 
 ``hook`` is run the way an agent's hook runner runs it: through the CLI with
 the agent's own hook JSON on stdin. Its only ways out of the process are
@@ -26,16 +26,12 @@ from typer.testing import CliRunner
 import coffer.surfaces.cli.memory_hook_cmd as memory_hook_cmd
 from coffer.domain.channel_turn import CHANNEL_TURN_ENV
 from coffer.domain.memory.delivery import MARKER
-from coffer.domain.memory.trigger import KIND_BLOCK, Trigger
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.infrastructure.memory import trigger_store
 from coffer.surfaces.cli.main import app as cli_app
 from tests.integration.memory._hook_app import (
     HookApp,
     boot,
     distilled,
-    extract_json,
-    partitions,
     register,
 )
 
@@ -56,29 +52,10 @@ def _events(cwd: str) -> list[dict[str, Any]]:
     return [
         {"hook_event_name": "SessionStart", "source": "startup", **common},
         {"hook_event_name": "UserPromptSubmit", "prompt": _PROMPT, **common},
-        {
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Bash",
-            "tool_input": {"command": "make verify"},
-            **common,
-        },
     ]
 
 
 # --- fail open ------------------------------------------------------------------------
-
-
-@pytest.fixture
-def armed_trigger(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Trigger:
-    t = Trigger(
-        id="node-20",
-        note="coffer/node-20-for-make-verify",
-        kind=KIND_BLOCK,
-        command=r"^make\s+verify\b",
-        armed_by="user",
-    )
-    trigger_store.write_trigger(t)
-    return t
 
 
 def _info() -> DaemonInfo:
@@ -98,7 +75,7 @@ def _info() -> DaemonInfo:
     spec="memory", scenario="the hook prints nothing and exits 0 with no daemon"
 )
 def test_no_daemon_prints_nothing_and_exits_0(
-    armed_trigger: Trigger, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     looked: list[bool] = []
 
@@ -115,8 +92,8 @@ def test_no_daemon_prints_nothing_and_exits_0(
         result = _hook(ev)
         assert result.exit_code == 0, result.output
         assert result.output == ""
-    # Each of the three needed the daemon, so each looked for one.
-    assert len(looked) == 3
+    # Each of the two needed the daemon, so each looked for one.
+    assert len(looked) == 2
 
 
 @pytest.mark.acceptance(
@@ -124,7 +101,7 @@ def test_no_daemon_prints_nothing_and_exits_0(
 )
 @pytest.mark.parametrize("failure", ["raises", "timeout", "500", "not-json"])
 def test_a_failing_daemon_prints_nothing_and_exits_0(
-    failure: str, armed_trigger: Trigger, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    failure: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def _post(*_a: Any, **_k: Any) -> Any:
         if failure == "raises":
@@ -156,28 +133,11 @@ def test_malformed_stdin_prints_nothing_and_exits_0(monkeypatch: pytest.MonkeyPa
         {"hook_event_name": "UserPromptSubmit", "prompt": "继续"},
         {"hook_event_name": "UserPromptSubmit", "prompt": "ok"},
         {"hook_event_name": "UserPromptSubmit", "prompt": "fix it"},
-        {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}},
-        {
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Bash",
-            "tool_input": {"command": "cat Makefile"},
-        },
-        {
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Read",
-            "tool_input": {"command": "make verify"},
-        },
-        {
-            "hook_event_name": "PostToolUse",
-            "tool_name": "Bash",
-            "tool_input": {"command": "make verify"},
-            "tool_response": "ok",
-        },
         {"hook_event_name": "Stop"},
     ],
 )
 def test_a_fire_that_can_deliver_nothing_never_contacts_the_daemon(
-    event: dict[str, Any], armed_trigger: Trigger, monkeypatch: pytest.MonkeyPatch
+    event: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def _never(*_a: Any, **_k: Any) -> Any:
         raise AssertionError("answered locally: no daemon lookup, no request")
@@ -192,12 +152,12 @@ def test_a_fire_that_can_deliver_nothing_never_contacts_the_daemon(
     spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
 )
 def test_a_channel_turn_hook_leaves_the_index_and_the_notes_to_the_turn(
-    armed_trigger: Trigger, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """In a process Coffer spawned for a channel turn, the turn already carries
     the index and the notes its prompt names; the hook firing there answers
     neither, and records neither, so each arrives and is counted once. The
-    guard is the hook's alone, so it still reaches the daemon."""
+    hook reaches the daemon only in a session the developer drives."""
     posted: list[str] = []
 
     def _post(_url: str, **kw: Any) -> Any:
@@ -210,36 +170,14 @@ def test_a_channel_turn_hook_leaves_the_index_and_the_notes_to_the_turn(
     for ev in _events(str(tmp_path)):
         result = _hook(ev)
         assert result.exit_code == 0 and result.output == ""
-    assert posted == ["PreToolUse"]
+    assert posted == []
 
     # Unmarked — a session the developer drives — every one reaches the daemon.
     monkeypatch.delenv(CHANNEL_TURN_ENV)
     posted.clear()
     for ev in _events(str(tmp_path)):
         _hook(ev)
-    assert posted == ["SessionStart", "UserPromptSubmit", "PreToolUse"]
-
-
-def test_an_unarmed_trigger_does_not_send_its_command(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    trigger_store.write_trigger(
-        Trigger(id="p", note="coffer/x", kind=KIND_BLOCK, command="^make", proposed_by="distil")
-    )
-    posted: list[Any] = []
-    monkeypatch.setattr(memory_hook_cmd, "live_daemon", _info)
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: posted.append(k))
-    ev = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "make"}}
-    assert _hook(ev).output == ""
-    assert posted == []
-
-
-def test_tool_output_of_both_shapes_reaches_the_daemon_as_text() -> None:
-    claude = {"stdout": "out", "stderr": "zsh: timeout: command not found", "interrupted": False}
-    assert memory_hook_cmd._output_text(claude) == "out\nzsh: timeout: command not found"
-    assert memory_hook_cmd._output_text("plain codex output") == "plain codex output"
-    assert memory_hook_cmd._output_text(None) == ""
-    assert len(memory_hook_cmd._output_text("x" * 50_000)) == 20_000
+    assert posted == ["SessionStart", "UserPromptSubmit"]
 
 
 # --- with the daemon: both agents' installed commands ----------------------------------------
@@ -278,18 +216,16 @@ def _run(argv: list[str], stdin: dict[str, Any]) -> dict[str, Any]:
 @pytest.mark.acceptance(
     spec="memory", scenario="both agents' hook fires answer in the JSON each reads"
 )
-def test_both_agents_installed_commands_answer_prompt_and_guard(app: HookApp) -> None:
+@pytest.mark.acceptance(
+    spec="memory", scenario="a Codex hook fire prints the session-start JSON Codex reads"
+)
+def test_both_agents_installed_commands_answer_session_start_and_prompt(app: HookApp) -> None:
     cc = register(app.client, "claude_code")
     cx = register(app.client, "codex")
     repo, name = distilled(app)
     for uid in (cc, cx):
         r = app.client.post(f"/agents/{uid}/coffer-connection")
         assert r.status_code == 200, r.text
-    r = app.client.post(
-        "/memory/triggers",
-        json={"note": f"{name}/node-20-for-make-verify", "command": r"^make\s+verify\b"},
-    )
-    assert r.status_code == 201, r.text
     note_file = str(
         app.home / ".coffer" / "derived" / "memory" / name / "notes" / "node-20-for-make-verify.md"
     )
@@ -310,6 +246,19 @@ def test_both_agents_installed_commands_answer_prompt_and_guard(app: HookApp) ->
     for agent_type, (settings, extra) in shapes.items():
         argv = _installed_args(settings, repo)
         session = f"{agent_type}-session"
+        start = _run(
+            argv,
+            {
+                "hook_event_name": "SessionStart",
+                "session_id": session,
+                "cwd": str(repo),
+                "source": "startup",
+                **extra,
+            },
+        )
+        out = start["hookSpecificOutput"]
+        assert out["hookEventName"] == "SessionStart"
+        assert out["additionalContext"]
         prompt = _run(
             argv,
             {
@@ -323,50 +272,11 @@ def test_both_agents_installed_commands_answer_prompt_and_guard(app: HookApp) ->
         out = prompt["hookSpecificOutput"]
         assert out["hookEventName"] == "UserPromptSubmit"
         assert note_file in out["additionalContext"]
+        # Neither agent is ever handed a permission decision.
+        assert "permissionDecision" not in json.dumps([start, prompt])
 
-        response: Any = (
-            {"stdout": "", "stderr": "", "interrupted": False, "isImage": False}
-            if agent_type == "claude_code"
-            else ""
-        )
-        pre = _run(
-            argv,
-            {
-                "hook_event_name": "PreToolUse",
-                "session_id": session,
-                "cwd": str(repo),
-                "tool_name": "Bash",
-                "tool_input": {"command": "make verify"},
-                "tool_use_id": "call-1",
-                **extra,
-            },
-        )
-        out = pre["hookSpecificOutput"]
-        assert out["hookEventName"] == "PreToolUse"
-        assert out["permissionDecision"] == "deny"
-        assert note_file in out["permissionDecisionReason"]
-
-        post = _runner.invoke(
-            cli_app,
-            argv,
-            input=json.dumps(
-                {
-                    "hook_event_name": "PostToolUse",
-                    "session_id": session,
-                    "cwd": str(repo),
-                    "tool_name": "Bash",
-                    "tool_input": {"command": "make verify"},
-                    "tool_response": response,
-                    **extra,
-                }
-            ),
-        )
-        assert post.exit_code == 0 and '"hookSpecificOutput"' not in post.output
-
-    # What reached the daemon: the agent named by uid, the command and the cwd.
-    guards = [p for p in app.posts if p["event"] == "PreToolUse"]
-    assert {p["agent_uid"] for p in guards} == {cc, cx}
-    assert {p["command"] for p in guards} == {"make verify"}
+    # What reached the daemon: the agent named by uid and the cwd.
+    assert {p["agent_uid"] for p in app.posts} == {cc, cx}
     assert {p["cwd"] for p in app.posts} == {str(repo)}
 
 
@@ -381,50 +291,3 @@ def test_the_cwd_option_is_the_fallback_when_the_event_carries_none(app: HookApp
     assert result.exit_code == 0
     assert "node-20-for-make-verify.md" in result.output
     assert app.posts[-1]["cwd"] == str(repo)
-
-
-# --- delivered ------------------------------------------------------------------------------
-
-
-def test_delivered_prints_the_overview_and_one_partitions_session_start_text(
-    app: HookApp,
-) -> None:
-    uid = register(app.client, "claude_code")
-    repo, name = distilled(app)
-    _hook({"hook_event_name": "SessionStart", "session_id": "s", "cwd": str(repo)}, uid=uid)
-    _hook(
-        {
-            "hook_event_name": "UserPromptSubmit",
-            "session_id": "s",
-            "cwd": str(repo),
-            "prompt": _PROMPT,
-        },
-        uid=uid,
-    )
-
-    overview = _runner.invoke(cli_app, ["memory", "delivered"])
-    assert overview.exit_code == 0, overview.output
-    assert "claude-code: 2 deliveries in 7 days" in overview.output
-
-    as_json = extract_json(_runner.invoke(cli_app, ["memory", "delivered", "--json"]).output)
-    (agent,) = as_json["agents"]
-    assert agent["deliveries"] == 2
-    assert agent["by_moment"] == {"prompt": 1, "session_start": 1}
-
-    view = _runner.invoke(cli_app, ["memory", "delivered", name])
-    assert view.exit_code == 0, view.output
-    assert "== claude-code (SessionStart) ==" in view.output
-    body = extract_json(
-        _runner.invoke(
-            cli_app, ["memory", "delivered", name, "--agent", "claude-code", "--json"]
-        ).output
-    )
-    assert body["partition"] == name
-    uid_of = partitions(app.client)[name]["uid"]
-    direct = app.client.get(f"/memory/partitions/{uid_of}/delivered").json()
-    assert body == direct
-    assert body["agents"][0]["text"] in view.output
-    none = extract_json(
-        _runner.invoke(cli_app, ["memory", "delivered", name, "--agent", "nobody", "--json"]).output
-    )
-    assert none["agents"] == []

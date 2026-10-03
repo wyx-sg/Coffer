@@ -36,26 +36,9 @@ Each operation becomes a tool named from its `operationId` — `listInvoices` be
 
 A spec URL is fetched only from a public address: Coffer refuses to fetch from loopback, private or link-local hosts on your behalf (see [Security → Outbound requests](/architecture/security#outbound-requests)). For a spec on an internal host, download it and import it as a file.
 
-On the command line:
-
-```sh
-coffer tool add billing --openapi https://billing.example/openapi.json \
-  --secret billing-token                      # the GET operations
-coffer tool add billing --openapi ./billing.yaml --all-operations \
-  --base-url https://billing.example/v2 --secret billing-token
-coffer tool add billing --openapi ./billing.yaml \
-  --operation "GET /invoices" --operation "POST /refunds"
-```
-
 ### Re-import when the spec changes
 
 A group made by an import shows its spec and when it was fetched, with **Re-import** (also in the group's **⋯** menu). Re-import reads the spec again and lists every change first: operations to **add** — a read becomes a tool, switched on; an operation that changes data is listed but not added — tools the spec **changed** (a new required argument, a moved path), and tools it would **remove** because their operation is gone. Nothing changes until **Apply N changes**. Unchanged tools keep their on/off switch, their changes-data flag and their reach override; tools you added by hand are never removed. A group imported from a file asks for the file again.
-
-```sh
-coffer tool reimport billing                    # preview, then confirm
-coffer tool reimport billing --add-all --yes    # take every new operation
-coffer tool reimport billing --file ./billing.yaml --add "GET /charges"
-```
 
 ## Add a request by hand
 
@@ -76,15 +59,9 @@ The request form asks for:
 
 Nothing is saved until **Add to `<group>`**. A saved tool opens in a drawer on the group's page, where the same fields (except the name) are edited, with its **Available to**, an **On** switch and **Delete tool**; nothing changes until **Save**.
 
-```sh
-coffer tool op add deploy rollback --method POST \
-  --path "/services/{service}/rollback" \
-  --arg service:string:required:"Service name, e.g. web"
-```
-
 ## Test before you save
 
-Every request form ends with **Test**: fill in a sample value for each argument and press **Run**. It runs the request once as the form holds it and shows the status, time, size and body — or the API's error body, a timeout (the group's), a connection that failed, or a response cut short at 1 MiB, which is what an agent would get too. A 401 or 403 says the API rejected the secret. Nothing is saved and nothing is recorded as an agent's call. `coffer tool op test <group> <tool> --arg-value key=value` does the same from a terminal.
+Every request form ends with **Test**: fill in a sample value for each argument and press **Run**. It runs the request once as the form holds it and shows the status, time, size and body — or the API's error body, a timeout (the group's), a connection that failed, or a response cut short at 1 MiB, which is what an agent would get too. A 401 or 403 says the API rejected the secret. Nothing is saved and nothing is recorded as an agent's call.
 
 A request of a group that is **not saved yet** is tested without its secret: a stored secret goes only to a saved group, after you approve it (see below). Its base URL is typed into the form, so Coffer tests it only on a public address it can resolve; a loopback, private or unresolvable host is reported as not tested — add the tool, then test it from the group.
 
@@ -92,7 +69,7 @@ A request of a group that is **not saved yet** is tested without its secret: a s
 
 The auth header's value is the secret you chose; Coffer adds it to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
 
-Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or its auth header asks again. `coffer tool add` and `coffer tool edit` print "waiting for approval in the Coffer app" and exit `9`, or wait with `--wait`.
+Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or its auth header asks again.
 
 ## Tools that change data
 
@@ -100,7 +77,7 @@ Every tool carries a **changes data** flag, on by default for every method but G
 
 ## Choose which agents reach each tool
 
-A group has a reach, like any MCP server: **Available to** on its page, or `coffer tool scope <group> --agents claude-code`. Each tool follows it unless you **override** it in the tool's editor (or with `coffer tool op scope <group> <tool> --agents …`). An override narrows the group's reach for that one tool — useful for the one dangerous operation among many harmless ones — and, like every reach, stays on this machine.
+A group has a reach, like any MCP server: **Available to** on its page. Each tool follows it unless you **override** it in the tool's editor. An override narrows the group's reach for that one tool — useful for the one dangerous operation among many harmless ones — and, like every reach, stays on this machine.
 
 Each tool also has an on/off switch (**All on · All off** switches every tool of the group). A tool that is off, or outside an agent's reach, is not listed to that agent and a call to it is refused.
 
@@ -117,24 +94,9 @@ With no group yet, the page shows only how custom tools work and the two ways in
 
 When an agent calls a tool, the gateway renders the request from the arguments, sends it with the group's timeout (30 seconds unless you change it, up to 300), **does not follow redirects** — a redirect is returned to the agent with its location, so the secret never travels to a host you did not configure — and reads at most 1 MiB of the response. The agent receives `HTTP <status> <reason>` followed by the body; a status of 400 or more is returned as a tool error. Every call is recorded in Activity with its tool, time, duration and outcome, never its arguments or response.
 
-## Command reference
+## Command line
 
-| Command | Does |
-| --- | --- |
-| `coffer tool list [--json]` | Every group, failing ones first |
-| `coffer tool show <group> [--json]` | One group with its tools and last 24 hours |
-| `coffer tool add <group> …` | Create a group, empty or with `--openapi` |
-| `coffer tool edit <group> …` | Change its description, base URL, headers, auth or timeout |
-| `coffer tool rm <group>` | Remove a group and its tools (the secret stays) |
-| `coffer tool enable\|disable <group>` | Switch a group on or off |
-| `coffer tool scope <group>` | Show or set the group's reach |
-| `coffer tool reimport <group>` | Preview and apply a re-import |
-| `coffer tool op add\|edit\|rm <group> <tool>` | Manage one tool |
-| `coffer tool op enable\|disable <group> <tool>…` | Switch tools on or off |
-| `coffer tool op scope <group> <tool>` | Show, narrow or clear one tool's reach |
-| `coffer tool op test <group> <tool>` | Call a tool once with sample arguments |
-
-Every option is in the [CLI reference](/reference/cli/tool).
+The command line carries only what a program, an offline daemon or an agent hand-off needs; managing custom tools is the web UI, on the **Custom tools** page.
 
 ## Related
 

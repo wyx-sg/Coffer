@@ -161,13 +161,11 @@ def _entry(matcher: str | None, timeout: int) -> dict[str, Any]:
     return {"matcher": matcher, "hooks": [leaf]} if matcher else {"hooks": [leaf]}
 
 
-#: Both agents carry the same four entries, in this order.
+#: Both agents carry the same two entries, in this order.
 _FROZEN_HOOKS = {
     "hooks": {
         "SessionStart": [_entry("startup|resume|clear|compact", 10)],
         "UserPromptSubmit": [_entry(None, 5)],
-        "PreToolUse": [_entry("Bash", 5)],
-        "PostToolUse": [_entry("Bash", 5)],
     }
 }
 

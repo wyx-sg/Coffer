@@ -14,21 +14,16 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 
 | 工具 | 用途 | 何时存在 |
 | --- | --- | --- |
-| [`coffer__write`](#coffer-write) | 把一条长期有效的事实记入 Coffer 的知识。 | `knowledge` 功能开启时。 |
 | [`coffer__search_tools`](#coffer-search-tools) | 按意图对上游工具目录排序。 | 始终存在。 |
 | [`coffer__ask`](#coffer-ask) | 向所有者提问并等待回答。 | 仅在 Coffer 运行的对话轮次内。 |
 
-完整列表就这三个。Coffer 的记忆笔记和它自己的记录没有对应工具：
-它们用智能体自己的文件工具和 `coffer` 命令行来读。见
-[不用工具读取记忆和日志](#memory-and-logs-without-a-tool)。
-
-`coffer__write` 属于 `knowledge` [实验功能](/zh/guides/experimental-features)。
-在该功能关闭期间，该工具不会出现在 `tools/list` 中，握手说明里也不会提到它，调用它得到的回应和调用一个不存在的工具完全一样。
-切换功能开关在下一次列出或调用时生效，无需重启。
+完整列表就这两个。Coffer 的知识、记忆笔记和它自己的记录都没有对应工具：
+智能体用自己的文件工具修改和读取知识与记忆，用 `coffer` 命令行读记录。见
+[不用工具处理知识、记忆和日志](#memory-and-logs-without-a-tool)。
 
 ::: tip 智能体里的名称
 Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大多数客户端会在这些工具前面加上
-自己的前缀。比如在 Claude Code 里，`coffer__write` 显示为 `mcp__coffer__coffer__write`。
+自己的前缀。比如在 Claude Code 里，`coffer__search_tools` 显示为 `mcp__coffer__coffer__search_tools`。
 :::
 
 ## 内置工具如何应答 {#how-built-in-tools-answer}
@@ -52,74 +47,6 @@ Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大�
 | `agent` | 总是由网关设为打开该会话的智能体名称（来自 shim 的 `--agent-uid`）。客户端发来的值会被丢弃。仅用于标注审计条目。 |
 | `cwd` | 对 schema 中声明了 `cwd` 属性的工具，如果客户端没有发送，就用会话的启动目录填上。 |
 
-## coffer\_\_write {#coffer-write}
-
-把用户工作环境中长期有效的信息记入一个知识集：某个服务的事实、一条约定、一个决定及其理由、
-一个坑以及怎么避开。你写的是新材料；Coffer 的整理任务会把它整理进知识集的文档，并与已有内容去重。
-它不用于记录智能体眼前仓库里的东西、临时性的内容或密钥。没有对应的读取工具：
-智能体用自己的文件工具，在 `coffer-guide` 技能列出的路径下读取知识。
-
-指南：[知识](/zh/guides/knowledge)。
-
-### 输入 {#input}
-
-| 属性 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `collection` | string | 是 | 记到哪个知识集。`coffer-guide` 技能列出了全部知识集。 |
-| `title` | string | 是 | 给人看的标题，点明主题。 |
-| `description` | string | 是 | 一行话，说明它回答什么问题。整理时决定材料归属，会先读这一行。 |
-| `body` | string | 否 | Markdown 正文。 |
-
-每个知识集都允许每个智能体写入。必填属性为空或只有空白时，会报
-`ValueError: 'title' must be a non-empty string`（其他属性同理）。
-知识集不存在时报错，错误信息会列出你可以写入的知识集。
-
-### 结果 {#result}
-
-配置了内部模型时，材料会排队等待整理：
-
-```json
-{
-  "collection": "global",
-  "title": "Staging DB is read-only on Fridays",
-  "status": "pending",
-  "note": "Queued as an item. Coffer's curation folds it into this collection's documents shortly."
-}
-```
-
-没有配置内部模型时，材料会单独存成一篇文档，结果里给出它的名字：
-
-```json
-{
-  "path": "staging-db-read-only-on-fridays.md",
-  "title": "Staging DB is read-only on Fridays",
-  "description": "When staging writes fail at the end of the week",
-  "file_path": "/Users/you/.coffer/vault/knowledge/global/staging-db-read-only-on-fridays.md",
-  "folder_path": "/Users/you/.coffer/vault/knowledge/global",
-  "status": "written",
-  "note": "Filed as a document of its own: Coffer's model is not set to curate it."
-}
-```
-
-### 调用示例 {#example-call}
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 7,
-  "method": "tools/call",
-  "params": {
-    "name": "coffer__write",
-    "arguments": {
-      "collection": "global",
-      "title": "Staging DB is read-only on Fridays",
-      "description": "When staging writes fail at the end of the week",
-      "body": "A freeze job flips the staging primary to read-only every Friday at 18:00 UTC."
-    }
-  }
-}
-```
-
 ## coffer\_\_search\_tools {#coffer-search-tools}
 
 按意图搜索聚合后的上游 MCP 工具目录，返回最相关的工具定义。受预算限制的 `tools/list`
@@ -129,14 +56,14 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
 
 始终存在。背景：[MCP 网关](/zh/architecture/mcp-gateway)。
 
-### 输入 {#input-1}
+### 输入 {#input}
 
 | 属性 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `query` | string | 是 | | 你想做什么，用自然语言或关键词。 |
 | `top_k` | integer | 否 | `5` | 返回多少个工具。限制在 1–20 之间。 |
 
-### 结果 {#result-1}
+### 结果 {#result}
 
 ```json
 {
@@ -152,7 +79,7 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
 }
 ```
 
-### 调用示例 {#example-call-1}
+### 调用示例 {#example-call}
 
 ```json
 {
@@ -179,7 +106,7 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
 （`isError: true`）。因此握手说明和内置服务器页面都不提这个工具。Coffer 写进 Codex `config.toml` 的
 `coffer` 条目会透传该变量（`env_vars`），并允许一次工具调用运行一整天（`tool_timeout_sec = 86400`）。
 
-### 输入 {#input-2}
+### 输入 {#input-1}
 
 | 属性 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -197,7 +124,7 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
 
 所有者始终可以输入自己的回答，而不选选项。
 
-### 结果 {#result-2}
+### 结果 {#result-1}
 
 ```json
 {
@@ -235,14 +162,13 @@ Coffer 把会话生效范围内每个已启用的 [MCP 服务器](/zh/guides/mcp
 
 客户端会加上自己的前缀，所以智能体看到的是 `mcp__coffer__<server>__<tool>`。模型提供商的 API
 拒绝超过 64 个字符的工具名，Cursor 会丢掉超过 60 个字符的工具。Coffer 为每个发现的能力记录这个长度，
-即 `client_name_length`；服务器的**工具**标签页和 `coffer mcp cap list <server>`
+即 `client_name_length`；服务器的**工具**标签页
 会标出每个超过 64 的工具。`mcp__coffer__`（13）加上 24 个字符的服务器名，再加 `__`
 （2），留给上游工具自身名称的只剩 25 个字符。
 
 以下情况调用会被拒绝，返回 JSON-RPC 错误码 `-32000`，并附带说明原因的信息：
 
-- 该能力在其服务器上被关闭（在 **MCP 服务器** 下该服务器页面的**工具**标签页，
-  或 `coffer mcp cap disable <server> tool:<name>`），或者
+- 该能力在其服务器上被关闭（在 **MCP 服务器** 下该服务器页面的**工具**标签页），或者
 - 服务器的[生效范围](/zh/architecture/resource-framework#reach)不包含打开该会话的智能体。
 
 Coffer 内部的其他失败是 JSON-RPC 错误 `-32603`。上游工具失败时，它自己的 `isError: true`
@@ -264,14 +190,13 @@ Coffer 内部的其他失败是 JSON-RPC 错误 `-32603`。上游工具失败时
 
 Coffer 的 `initialize` 结果声明协议版本 `2025-06-18`、服务器名称 `coffer`，以及能力
 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`（resources 不带 `subscribe`）。
-其中的 `instructions` 字段会被客户端放进智能体的系统提示词，最多 800 个字符，只提及本会话列表中
-实际携带的内置工具。内容如下（记忆根目录是 `~/.coffer/derived/memory`，在保险库之外，这里是 `/Users/you/.coffer/derived/memory`）：
+其中的 `instructions` 字段会被客户端放进智能体的系统提示词，最多 800 个字符。内容如下（记忆根目录是 `~/.coffer/derived/memory`，在保险库之外，这里是 `/Users/you/.coffer/derived/memory`）：
 
 ```text
 Coffer is this machine's local vault: it aggregates the user's MCP servers behind one
-endpoint, holds what this developer wrote down, and adds its own tools: coffer__write
-(file a durable fact), coffer__search_tools (describe an upstream tool you need; results
-are callable by name). Its knowledge is markdown you read with your own file tools. Its
+endpoint, holds what this developer wrote down, and adds its own tool:
+coffer__search_tools (describe an upstream tool you need; results are callable by name).
+Its knowledge is markdown you read with your own file tools. Its
 memory notes are Markdown under /Users/you/.coffer/derived/memory/*/notes/; grep them with your
 own tools. Its own logs: coffer log audit|mcp|daemon (files: coffer path logs). The
 coffer-guide skill is the manual: load it for the catalogue, with paths, before asking
@@ -279,20 +204,23 @@ the developer something they may have written down.
 ```
 
 （这里的换行是为了排版，实际文本是一段。）如果记忆根目录太长、放不进 800 个字符的上限，
-那句话会改为指明 `coffer path memory` 打印的目录，而不是路径本身。如果本会话上一次 `tools/list`
+那句话会缩短到放得下为止。如果本会话上一次 `tools/list`
 因分层隐藏了工具，还会追加一句：
 
 ```text
 Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all callable.
 ```
 
-## 不用工具读取记忆和日志 {#memory-and-logs-without-a-tool}
+## 不用工具处理知识、记忆和日志 {#memory-and-logs-without-a-tool}
 
-Coffer 没有用来读取记忆笔记或自身记录的工具，因为智能体用已有的能力就能做到：
+Coffer 没有用于知识、记忆笔记或自身记录的工具，因为智能体用已有的能力就都能做到。
+要新增知识，就往某个知识集的 `.inbox/` 文件夹里写一个 Markdown 文件，Coffer 的清扫会补全缺失的 frontmatter 并加以整理。
+要修改文档或记忆笔记，直接就地编辑文件。
 
 | 要找 | 做法 |
 | --- | --- |
-| 一条记忆笔记 | 在握手说明和会话开始时投递内容所指明的记忆根目录里 grep（每个分区的笔记都在 `<root>/<partition>/notes/*.md`），再读文件。`coffer path memory [<partition>]` 打印根目录或某个分区的目录。 |
+| 一篇知识文档 | 读 `coffer-guide` 技能列出的知识集文件夹下的文件。 |
+| 一条记忆笔记 | 在握手说明、会话开始时的投递内容和 `coffer-guide` 技能所指明的记忆根目录里 grep（每个分区的笔记都在 `<root>/<partition>/notes/*.md`），再读文件。 |
 | Coffer 里改了什么（注册、删除、密钥读取、配置写入） | `coffer log audit --since 1h` |
 | 哪些 MCP 调用失败了 | `coffer log mcp --status error --since 1h`，或用 `--server <name>` 只看一个服务器 |
 | 守护进程记录了什么，包括 traceback | `coffer log daemon --errors --since 1h`，或 grep `coffer path logs` 指明的文件 |

@@ -34,29 +34,12 @@ coffer [OPTIONS] COMMAND [ARGS]...
 
 | 命令组 | 说明 |
 | --- | --- |
-| [`coffer scan`](/zh/reference/cli/scan) | List what agents hold that Coffer does not manage: agents, skills, MCP entries. |
 | [`coffer run`](/zh/reference/cli/run) | Run a command with secrets set only in its environment. |
-| [`coffer attention`](/zh/reference/cli/attention) | What needs you now, across every kind, with the route that acts on each. |
 | [`coffer migrate`](/zh/reference/cli/migrate) | Move this home out of coffer.db into the vault layout (once, daemon stopped). |
 | [`coffer daemon`](/zh/reference/cli/daemon) | Daemon lifecycle |
-| [`coffer open`](/zh/reference/cli/open) | Open Coffer's web UI in your browser. |
-| [`coffer config`](/zh/reference/cli/config) | Read and change Coffer's settings (coffer config list shows every key) |
+| [`coffer config`](/zh/reference/cli/config) | Read and change Coffer's settings (the keys read before the daemon starts) |
 | [`coffer log`](/zh/reference/cli/log) | Read Coffer's records: the audit log, MCP calls and the daemon log |
-| [`coffer path`](/zh/reference/cli/path) | Print where Coffer's files live (knowledge, memory, skills, agents, logs, vault) |
-| [`coffer adopt`](/zh/reference/cli/adopt) | Bring one scanned item under Coffer's management |
-| [`coffer discard`](/zh/reference/cli/discard) | Remove one scanned item from the agent that holds it |
-| [`coffer mcp`](/zh/reference/cli/mcp) | Manage MCP servers and their capabilities |
-| [`coffer tool`](/zh/reference/cli/tool) | Manage custom tools: HTTP API requests your agents call as tools |
+| [`coffer path`](/zh/reference/cli/path) | Where Coffer's log files live |
+| [`coffer mcp`](/zh/reference/cli/mcp) | Check an MCP server |
 | [`coffer secret`](/zh/reference/cli/secret) | Manage encrypted secrets. |
-| [`coffer agent`](/zh/reference/cli/agent) | Manage registered AI agents |
-| [`coffer channel`](/zh/reference/cli/channel) | Manage messaging channels (Telegram, SeaTalk) |
-| [`coffer skill`](/zh/reference/cli/skill) | Manage skills (AgentSkills standard) |
-| [`coffer cli`](/zh/reference/cli/cli) | Add and check command-line tools, and read their interface |
-| [`coffer knowledge`](/zh/reference/cli/knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/vault/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
-| [`coffer memory`](/zh/reference/cli/memory) | Browse and manage Coffer's memory layer |
-| [`coffer provider`](/zh/reference/cli/provider) | Manage LLM connections and switch agents onto them |
-| [`coffer proxy`](/zh/reference/cli/proxy) | Inspect the local model proxy and its per-agent tokens |
-| [`coffer usage`](/zh/reference/cli/usage) | Model usage through Coffer's proxy |
-| [`coffer sync`](/zh/reference/cli/sync) | Keep this vault in step with a git remote you own |
-| [`coffer vault`](/zh/reference/cli/vault) | The vault's history: versions, diffs, restore, and hand edits that were refused. |
-| [`coffer drift`](/zh/reference/cli/drift) | See and repair drift between Coffer and the agents' own files |
+| [`coffer vault`](/zh/reference/cli/vault) | Hand edits the vault refused |

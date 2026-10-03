@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useAgentConnectionDraft.ts — the draft behind the agent's Change model dialog
-// (spec provider-switching "Offer every connection operation on REST, CLI and web").
+// (spec provider-switching "Offer every connection operation on REST and the web").
 //
 // Picking a provider, model, effort or tier is a DRAFT: nothing is written
 // until the user has reviewed the change (`useModelSwitch`). The hook holds the

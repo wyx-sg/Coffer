@@ -202,7 +202,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`knowledge-curation`](knowledge-curation.md) | Knowledge Curation Merges New Material Into the Documents |
 | [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the Agents' Memory; Never Write It |
-| [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap |
+| [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names |
 
 ### Sync & secrets
 

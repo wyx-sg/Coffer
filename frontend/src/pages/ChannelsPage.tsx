@@ -1,4 +1,4 @@
-// frontend/src/pages/ChannelsPage.tsx — spec channels "Manage channels from the Channels page and the CLI".
+// frontend/src/pages/ChannelsPage.tsx — spec channels "Manage channels from the Channels page".
 // The Channels page is the channel list beside the open channel: `/channels`,
 // `/channels/<uid>` and `/channels/<uid>/settings` all render it — the list on
 // the left (grouped by state), the open channel on the right with its

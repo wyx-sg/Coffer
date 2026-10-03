@@ -5,7 +5,7 @@ description: Coffer 读取的每个环境变量、daemon-config.json 键、实�
 
 # 配置 {#configuration}
 
-本页列出所有会改变 Coffer 行为的配置项：环境变量、`~/.coffer/daemon-config.json` 的键、实验功能开关，以及你在 **设置** 或命令行中修改的运行时设置。它写给需要准确了解某个设置的名称、默认值和作用的运维人员和贡献者。
+本页列出所有会改变 Coffer 行为的配置项：环境变量、`~/.coffer/daemon-config.json` 的键、实验功能开关，以及你在 **设置** 中修改的运行时设置。它写给需要准确了解某个设置的名称、默认值和作用的运维人员和贡献者。
 
 Coffer 把配置放在五个地方，每个地方都有其理由：
 
@@ -57,7 +57,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 
 ### 存储位置 {#storage-locations}
 
-保险库、本地状态、内容和派生状态都没有单独的覆盖变量：它们都在需要时从 `$HOME` 解析，`coffer path` 会打印各个根目录。下面的变量只移动历史数据库、模型代理的暂存目录和日志。它们主要是为了让测试和开发环境永远不碰真实的 home；要让守护进程使用另一个 home，请设置 `HOME`。
+保险库、本地状态、内容和派生状态都没有单独的覆盖变量：它们都在需要时从 `$HOME` 解析。下面的变量只移动历史数据库、模型代理的暂存目录和日志。它们主要是为了让测试和开发环境永远不碰真实的 home；要让守护进程使用另一个 home，请设置 `HOME`。
 
 | 名称 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -122,12 +122,12 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 
 | 键 | 类型 | 默认值 | 作用 | 修改方式 |
 | --- | --- | --- | --- | --- |
-| `port` | 1024–65535 的整数，或 `null` | `8000` | 守护进程绑定的唯一端口。守护进程宁可拒绝启动也不会换到别的端口。下次启动时生效。 | `coffer config set daemon.port <port>`、`coffer config unset daemon.port` |
+| `port` | 1024–65535 的整数，或 `null` | `8000` | 守护进程绑定的唯一端口。守护进程宁可拒绝启动也不会换到别的端口。下次启动时生效。 | **设置 › 守护进程 → 端口**；守护进程起不来时用 `coffer config set daemon.port <port>` 和 `coffer config unset daemon.port` |
 | `proxy_port` | 1024–65535 的整数，或 `null` | `8001` | [本地模型代理](/zh/architecture/model-proxy)在 `127.0.0.1` 上绑定的端口，也是投射到智能体配置中的端口。无效值会被忽略并记警告，改用默认值。代理下次启动时生效。 | 编辑文件 |
-| `machine_name` | 字符串 | 去掉 `.local` 的主机名 | 本机在保险库同步中的显示名称。可随意修改；没有任何东西引用它。 | **同步** 页面、`coffer sync machine rename` |
+| `machine_name` | 字符串 | 去掉 `.local` 的主机名 | 本机在保险库同步中的显示名称。可随意修改；没有任何东西引用它。 | **同步** 页面 |
 | `machine_id` | 字符串 | 由主机派生 | 由主机派生的机器 id 的缓存，在同步的保险库中用来指代本机。删除后会重新算出同一个值。 | 由守护进程写入 |
-| `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能**、`coffer config set feature.<key> on\|off` |
-| `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格**、`coffer config set prices.refresh on\|off` |
+| `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能** |
+| `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格** |
 
 守护进程的运行时状态——它的 pid、端口和 API 令牌——在另一个文件 `~/.coffer/daemon.json` 中，启动时创建、退出时删除。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 
@@ -144,15 +144,15 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `sync` | 保险库同步 | `/api/v1/sync` |
 | `models` | 模型提供商（含它的用量 tab）和本地模型代理 | `/api/v1/providers`、`/api/v1/models`、`/api/v1/proxy`、`/api/v1/usage` |
 
-其余一切始终开启，包括对话和消息渠道。其他任何键都不是功能：`coffer config set feature.<key>` 会报告未知设置，`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
+其余一切始终开启，包括对话和消息渠道。其他任何键都不是功能：`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
 
-功能关闭期间，它的路由返回 `404`，错误码为 `FEATURE_DISABLED`，命令行会打印开启它的命令。注册表位于 [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)。
+功能关闭期间，它的路由返回 `404`，错误码为 `FEATURE_DISABLED`；在**设置 → 功能**里开启它。注册表位于 [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)。
 
 ### 功能状态如何决定 {#how-a-feature-s-state-is-decided}
 
 优先级从高到低：
 
-1. **固定值** — 守护进程所在进程的 `COFFER_FEATURES` 中的条目。被固定的功能无法从界面或命令行修改（`409 FEATURE_PINNED`）。
+1. **固定值** — 守护进程所在进程的 `COFFER_FEATURES` 中的条目。被固定的功能无法从界面修改（`409 FEATURE_PINNED`）。
 2. **设置** — `daemon-config.json` 中 `features` 下本机的值。
 3. **默认值** — 每个构建中的每个功能都是关。
 
@@ -166,58 +166,49 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 ```
 
-### 命令 {#commands}
-
-```sh
-coffer config list feature.             # every feature, its state, and what decided it (feature.knowledge, feature.memory, feature.sync, feature.models)
-coffer config set feature.<key> on      # switch on, at once; <key> is knowledge, memory, sync or models
-coffer config set feature.<key> off
-coffer config unset feature.<key>       # back to off
-```
-
 面向任务的指南见[实验功能](/zh/guides/experimental-features)。
 
 ## 运行时设置 {#runtime-settings}
 
-这些设置保存在保险库或 `~/.coffer/local/` 中（注明的除外），在 Web 界面或桌面应用的 **设置** 中修改，或者用命令行修改。标注为*同步*的设置会通过[保险库同步](/zh/guides/vault-sync)带到其他机器。
+这些设置保存在保险库或 `~/.coffer/local/` 中（注明的除外），在 Web 界面或桌面应用的 **设置** 中修改。标注为*同步*的设置会通过[保险库同步](/zh/guides/vault-sync)带到其他机器。
 
 ### 设置 → 通用 {#settings-→-general}
 
-| 设置 | 默认值 | 作用 | 命令行 | 存储位置 |
-| --- | --- | --- | --- | --- |
-| **每页行数** | `20`（可选 10、20、50、100） | 每个表格的初始每页行数。 | — | 浏览器 `localStorage`（`coffer.pageSize`） |
-| **首选编辑器** | 系统默认 | Coffer 打开托管文件时使用的应用或命令。 | — | 浏览器 `localStorage`（`coffer.preferredEditor`） |
-| **开机自启动** | 关 | 安装一个 launchd agent（`~/Library/LaunchAgents/dev.coffer.daemon.plist`），在登录时启动守护进程并在崩溃后重启它。仅限 macOS。 | `coffer daemon service install`、`uninstall`、`status` | plist 文件 |
-| **实验功能**（设置 → 功能） | 关 | 见[实验功能](#experimental-features)。 | `coffer config set feature.<key>` | `daemon-config.json` |
+| 设置 | 默认值 | 作用 | 存储位置 |
+| --- | --- | --- | --- |
+| **每页行数** | `20`（可选 10、20、50、100） | 每个表格的初始每页行数。 | 浏览器 `localStorage`（`coffer.pageSize`） |
+| **首选编辑器** | 系统默认 | Coffer 打开托管文件时使用的应用或命令。 | 浏览器 `localStorage`（`coffer.preferredEditor`） |
+| **开机自启动** | 关 | 安装一个 launchd agent（`~/Library/LaunchAgents/dev.coffer.daemon.plist`），在登录时启动守护进程并在崩溃后重启它。仅限 macOS。 | plist 文件 |
+| **实验功能**（设置 → 功能） | 关 | 见[实验功能](#experimental-features)。 | `daemon-config.json` |
 
 ### 设置 › 通用 → Coffer 自用模型 {#settings-›-general-→-coffer-s-model}
 
-内部引擎的设置是保险库中的一个文档 `state/settings/internal-engine.json`，全部都是*同步*的。你也可以手动编辑这个文件；文件不存在表示全部使用默认值。每项都对应一个 `coffer config` 键；`coffer config list engine.` 会打印它们及其当前值和默认值。
+内部引擎的设置是保险库中的一个文档 `state/settings/internal-engine.json`，全部都是*同步*的。你也可以手动编辑这个文件；文件不存在表示全部使用默认值。
 
-| 设置 | 默认值 | 作用 | 命令行 |
-| --- | --- | --- | --- |
-| **使用的模型提供商** / **模型** | 无 | Coffer 自己的任务（记忆提炼、知识整理、生成描述）所用的连接和模型。没有模型时，这些任务不调用模型。 | `coffer config set engine.provider <connection>`、`coffer config set engine.model <model>`、`coffer config unset engine.model` |
-| **单次调用的时间上限** | `60` 秒 | 对 Coffer 自用模型的一次调用最长可以用多久。 | `coffer config set engine.timeout <s>`、`coffer config unset engine.timeout` |
-| **转写用的模型提供商** / **转写模型** | 关 | 语音消息在交给智能体之前用于转写的连接和模型。其中任一项未设置时，Coffer 不做任何转写。 | `coffer config set transcribe.provider <connection>`、`coffer config set transcribe.model <model>`、`coffer config unset transcribe.model` |
-| **维护任务** — aggregate | 开，每 1 小时 | 把智能体自己的记忆文件读入派生的记忆树。 | `coffer config set engine.upkeep.aggregate.enabled on\|off`、`coffer config set engine.upkeep.aggregate.interval <s>` |
-| **维护任务** — distil | 开，每 6 小时 | 按自己的间隔运行，而不是在每次 aggregate 之后：用 Coffer 自用模型把每个分区的新原始条目提炼成笔记，并重写它的 `MEMORY.md`。没有新内容的分区不产生任何调用。 | `coffer config set engine.upkeep.distil.…` |
-| **维护任务** — curate | 开，每 1 小时 | 把每个知识集收件箱中的新材料整理进它的文档。 | `coffer config set engine.upkeep.curate.…` |
-| **刷新模型价格** | 开 | 每天一次从 genai-prices 获取最新的模型价格表；关闭时使用构建中附带的价格表。这一项是**本机**的（`daemon-config.json` 中的 `price_refresh`），不同步。 | `coffer config set prices.refresh on\|off`、`coffer config unset prices.refresh` |
-| 整理的归属机器（**Runs on:**） | 每台机器 | 在同步的保险库中唯一允许运行整理的那台机器。 | `coffer config set engine.curate_owner this\|<machine id>`、`coffer config unset engine.curate_owner` |
+| 设置 | 默认值 | 作用 |
+| --- | --- | --- |
+| **使用的模型提供商** / **模型** | 无 | Coffer 自己的任务（记忆提炼、知识整理、生成描述）所用的连接和模型。没有模型时，这些任务不调用模型。 |
+| **单次调用的时间上限** | `60` 秒 | 对 Coffer 自用模型的一次调用最长可以用多久。 |
+| **转写用的模型提供商** / **转写模型** | 关 | 语音消息在交给智能体之前用于转写的连接和模型。其中任一项未设置时，Coffer 不做任何转写。 |
+| **维护任务** — aggregate | 开，每 1 小时 | 把智能体自己的记忆文件读入派生的记忆树。 |
+| **维护任务** — distil | 开，每 6 小时 | 按自己的间隔运行，而不是在每次 aggregate 之后：用 Coffer 自用模型把每个分区的新原始条目提炼成笔记，并重写它的 `MEMORY.md`。没有新内容的分区不产生任何调用。 |
+| **维护任务** — curate | 开，每 1 小时 | 把每个知识集收件箱中的新材料整理进它的文档。 |
+| **刷新模型价格** | 开 | 每天一次从 genai-prices 获取最新的模型价格表；关闭时使用构建中附带的价格表。这一项是**本机**的（`daemon-config.json` 中的 `price_refresh`），不同步。 |
+| 整理的归属机器（**Runs on:**） | 每台机器 | 在同步的保险库中唯一允许运行整理的那台机器。 |
 
-维护任务的间隔最小为 60 秒；`coffer config unset engine.upkeep.<pass>.interval` 会把某个任务恢复为默认值。`coffer daemon status` 显示正在进行的任务。
+维护任务的间隔最小为 60 秒。`coffer daemon status` 显示正在进行的任务。
 
 ### 同步远端 {#sync-remote}
 
-同步远端是一个本机文件 `~/.coffer/local/sync/remote.json`，在 **同步** 页面（**配置**）或用 `coffer sync remote set` 设置。见[保险库同步](/zh/guides/vault-sync)。
+同步远端是一个本机文件 `~/.coffer/local/sync/remote.json`，在 **同步** 页面（**配置**）设置。见[保险库同步](/zh/guides/vault-sync)。
 
-| 设置 | 默认值 | 作用 | 命令行 |
-| --- | --- | --- | --- |
-| **间隔（秒）** | `3600` | 两次自动同步轮次之间的秒数。至少为 `60`：更小的值会被拒绝。 | `coffer sync remote set --interval <s>` |
-| **推送密钥** | 无 | 保存推送令牌的密钥。 | `coffer sync remote set --secret-ref <ref>` |
-| 用户名 | `coffer` | 与 HTTPS 令牌一起发送的用户名。GitHub 和 GitLab 会忽略它；Bitbucket 和 Azure DevOps 需要真实的用户名。 | `coffer sync remote set --username <name>` |
-| **包含加密密钥** | 关 | 提交并推送 `vault/secret/`（只有密文，绝不含主密钥）。 | `coffer sync remote set --with-secret`、`--without-secret` |
-| **自动同步** | 开 | 关闭会暂停定时器；远端及其历史保留，**立即同步** 仍能执行一轮。 | `coffer sync remote pause`、`resume` |
+| 设置 | 默认值 | 作用 |
+| --- | --- | --- |
+| **间隔（秒）** | `3600` | 两次自动同步轮次之间的秒数。至少为 `60`：更小的值会被拒绝。 |
+| **推送密钥** | 无 | 保存推送令牌的密钥。 |
+| 用户名 | `coffer` | 与 HTTPS 令牌一起发送的用户名。GitHub 和 GitLab 会忽略它；Bitbucket 和 Azure DevOps 需要真实的用户名。 |
+| **包含加密密钥** | 关 | 提交并推送 `vault/secret/`（只有密文，绝不含主密钥）。 |
+| **自动同步** | 开 | 关闭会暂停定时器；远端及其历史保留，**立即同步** 仍能执行一轮。 |
 
 ### 设置 → 数据 {#settings-→-data}
 
@@ -231,21 +222,14 @@ coffer config unset feature.<key>       # back to off
 | **自动归档闲置对话** | `conversations_archive` | 7 天 | 归档这么久没有新消息的对话。 |
 | **删除已归档对话** | `conversations` | 30 天 | 在归档后这么久删除已归档的对话及其消息。 |
 
-键是 `coffer config` 键 `retention.<key>` 的后缀；两条聊天策略都作用于 `conversations` 表。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中超过 30 天的文件，以及超过 7 天的旧 shim 日志和上游日志。
-
-```sh
-coffer config list retention.
-coffer config set retention.audit_log 90
-coffer config set retention.mcp_invocations forever
-coffer log prune
-```
+两条聊天策略都作用于 `conversations` 表。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中超过 30 天的文件，以及超过 7 天的旧 shim 日志和上游日志。
 
 ### 设置 → 安全 {#settings-→-security}
 
-| 设置 | 默认值 | 作用 | 命令行 |
-| --- | --- | --- | --- |
-| **将主密钥存入系统钥匙串** | 关（文件） | 在 `~/.coffer/master.key` 和系统钥匙串（服务 `coffer`，条目 `master-key`）之间移动密钥的主密钥。主密钥本身不变，所以已存的密钥仍然可读。这次移动会被审计。仅限开发构建：签名的发布版把主密钥保存在自己的钥匙串访问组中，拒绝移动。 | `coffer config set secrets.storage file\|keychain` |
-| 新密钥去处需审批（`secrets.require_approval`） | 开 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批；正在使用的密钥换新值也一样。关闭时，两者都无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 | `coffer config set secrets.require_approval on\|off` |
+| 设置 | 默认值 | 作用 |
+| --- | --- | --- |
+| **将主密钥存入系统钥匙串** | 关（文件） | 在 `~/.coffer/master.key` 和系统钥匙串（服务 `coffer`，条目 `master-key`）之间移动密钥的主密钥。主密钥本身不变，所以已存的密钥仍然可读。这次移动会被审计。仅限开发构建：签名的发布版把主密钥保存在自己的钥匙串访问组中，拒绝移动。 |
+| 新密钥去处需审批（`secrets.require_approval`） | 开 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批；正在使用的密钥换新值也一样。关闭时，两者都无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
 
 ## 相关内容 {#related}
 

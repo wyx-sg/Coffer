@@ -5,7 +5,7 @@ agent as a directory link ``<agent skill dir>/<skill name>`` to the skill's
 master folder, recorded by a ``skill_agent_bindings`` row. This target is the
 one place that decides and performs that delivery; every trigger — daemon
 boot, the period, a skill's ``enabled`` / ``scope`` edit, an agent registered,
-switched or moved, an import, the builtin seed, ``coffer skill verify --fix``
+switched or moved, an import, the builtin seed, a repair request
 — asks the reconciler for a pass over it.
 
 **What is wanted.** One rule, and nothing else decides it::

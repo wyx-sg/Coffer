@@ -11,14 +11,10 @@ from __future__ import annotations
 import json
 import pathlib
 from collections.abc import Iterator
-from typing import Any
 
 import pytest
 from starlette.testclient import TestClient
-from typer.testing import CliRunner
 
-import coffer.surfaces.cli._client as _cli_client
-from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.secret_composition import get_secret_store
@@ -30,9 +26,6 @@ TOKEN = "test-token-secrets-contract"
 def _value(ref: str) -> str | None:
     """Read a value straight from the daemon's own store: no route returns one."""
     return get_secret_store().get(ref)
-
-
-_runner = CliRunner()
 
 
 class _Daemon:
@@ -64,45 +57,6 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     with TestClient(app, headers={"X-Coffer-Token": TOKEN}) as c:
         yield _Daemon(c, keyring, tmp_path)
     set_active_token(None)
-
-
-class _CliTransport:
-    """What ``client_or_exit`` hands a command: the daemon's own client, prefixed.
-
-    The commands open it with ``with c:``. Entering a ``TestClient`` runs the
-    app's lifespan, and leaving it runs shutdown — which would tear the daemon
-    down under the test after every command — so entering and leaving here are
-    no-ops and the one lifespan stays the fixture's.
-    """
-
-    def __init__(self, client: TestClient) -> None:
-        self._client = client
-
-    def __enter__(self) -> _CliTransport:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        return None
-
-    def get(self, path: str, **kw: Any) -> Any:
-        return self._client.get(f"/api/v1{path}", **kw)
-
-    def post(self, path: str, **kw: Any) -> Any:
-        return self._client.post(f"/api/v1{path}", **kw)
-
-    def put(self, path: str, **kw: Any) -> Any:
-        return self._client.put(f"/api/v1{path}", **kw)
-
-    def delete(self, path: str, **kw: Any) -> Any:
-        return self._client.delete(f"/api/v1{path}", **kw)
-
-
-@pytest.fixture
-def cli(daemon: _Daemon, monkeypatch: pytest.MonkeyPatch) -> _Daemon:
-    """Point every ``coffer`` command at the in-process daemon above."""
-    transport = _CliTransport(daemon.client)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (transport, object()))
-    return daemon
 
 
 @pytest.mark.acceptance(
@@ -150,17 +104,13 @@ def test_secret_audit_events_carry_the_ref_only(daemon: _Daemon) -> None:
 
 @pytest.mark.acceptance(
     spec="secret",
-    scenario="read and change the master key location from the API and the command line",
+    scenario="read and change the master key location from the API and the Settings card",
 )
-def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
-    daemon = cli
+def test_read_and_change_the_master_key_location(daemon: _Daemon) -> None:
     daemon.client.post("/api/v1/secrets", json={"ref": "kept/key", "value": "v-survives"})
 
     r = daemon.client.get("/api/v1/settings/secrets")
     assert r.status_code == 200 and r.json()["master_key_storage"] == "file"
-    shown = _runner.invoke(cli_app, ["config", "get", "secrets.storage"])
-    assert shown.exit_code == 0, shown.output
-    assert "file" in shown.output
 
     moved = daemon.client.put("/api/v1/settings/secrets", json={"master_key_storage": "keychain"})
     assert moved.status_code == 200, moved.text
@@ -168,26 +118,8 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
     assert daemon.client.get("/api/v1/settings/secrets").json()["master_key_storage"] == (
         "keychain"
     )
-    shown = _runner.invoke(cli_app, ["config", "get", "secrets.storage"])
-    assert shown.exit_code == 0, shown.output
-    assert "keychain" in shown.output
     # The key really moved: out of the file, into the (in-memory) keychain.
     assert not (daemon.home / "master.key").exists()
     assert any(daemon.keyring._data.values())
 
     assert _value("kept/key") == "v-survives"
-
-
-@pytest.mark.acceptance(spec="secret", scenario="the command line confirms a delete unless forced")
-def test_the_command_line_confirms_a_delete_unless_forced(cli: _Daemon) -> None:
-    daemon = cli
-    daemon.client.post("/api/v1/secrets", json={"ref": "to/delete", "value": "v"})
-
-    declined = _runner.invoke(cli_app, ["secret", "rm", "to/delete"], input="n\n")
-    assert declined.exit_code != 0
-    assert daemon.client.get("/api/v1/secrets/to/delete/exists").json()["present"] is True
-
-    forced = _runner.invoke(cli_app, ["secret", "rm", "to/delete", "--force"])
-    assert forced.exit_code == 0, forced.output
-    assert "Delete secret" not in forced.output
-    assert daemon.client.get("/api/v1/secrets/to/delete/exists").json()["present"] is False

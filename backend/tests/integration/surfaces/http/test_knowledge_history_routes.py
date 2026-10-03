@@ -18,7 +18,7 @@ from coffer.infrastructure.knowledge import fs, inbox
 from coffer.surfaces.http.event_dependencies import get_event_broker
 from coffer.surfaces.http.knowledge import curation_state
 
-from .conftest import _create_collection, _hold_material, _submit
+from .conftest import _create_collection, _hold_material, _submit, _submit_material
 
 
 def _uid(client, name: str) -> str:  # type: ignore[no-untyped-def]
@@ -84,11 +84,7 @@ def test_the_feed_filters_to_one_collection_and_lists_waiting_items(  # type: ig
     _create_collection(client, "personal")
     _submit(client, collection="personal", title="Mine", description="d", body="b")
     _hold_material(monkeypatch)
-    client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "d", "body": "b"},
-        headers={"X-Coffer-Actor": "user"},
-    )
+    _submit_material(client, collection="shopee", title="Waiting", description="d", body="b")
 
     shopee = client.get("/api/v1/knowledge/changes", params={"collection": "shopee"}).json()
     assert [w["title"] for w in shopee["waiting"]] == ["Waiting"]
@@ -160,10 +156,7 @@ def test_curate_now_reports_progress_on_the_in_flight_list_and_the_stream(  # ty
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
     for title in ("One", "Two", "Three"):
-        client.post(
-            "/api/v1/knowledge/material",
-            json={"collection": "shopee", "title": title, "description": "d", "body": "b"},
-        )
+        _submit_material(client, collection="shopee", title=title, description="d", body="b")
     uid = _uid(client, "shopee")
     fake = _SettlingPass(uid)
     monkeypatch.setattr(curation_state, "_curation_runner", fake)

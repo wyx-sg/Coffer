@@ -1,8 +1,7 @@
 """``POST /api/v1/memory/hook`` — one fire of Coffer's memory hook.
 
-The route an installed hook reaches on every event it sits on: session start,
-each prompt, and before and after each shell command (ADR
-memory-reaches-a-session-at-prompt-time-and-before-a-known-trap). It answers
+The route an installed hook reaches on each event it sits on: session start
+and each prompt. It answers
 with the JSON the agent should read, or ``output: null`` for nothing. The
 caller — ``coffer memory hook`` — prints ``output`` verbatim and fails open:
 when this route cannot be reached in time, the agent gets nothing and nothing
@@ -38,9 +37,6 @@ async def hook_fire(
             session_id=body.session_id,
             cwd=body.cwd,
             prompt=body.prompt,
-            tool_name=body.tool_name,
-            command=body.command,
-            output=body.output,
         ),
     )
     return HookFireOut(output=output)

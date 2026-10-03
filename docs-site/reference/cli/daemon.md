@@ -22,11 +22,6 @@ This page matches what `coffer daemon --help` prints. Add `--help` to any comman
 | [`daemon stop`](#daemon-stop) | Send SIGTERM to the running daemon and wait for it to exit. |
 | [`daemon restart`](#daemon-restart) | Stop the running daemon (if any) and start a fresh one. |
 | [`daemon status`](#daemon-status) | Show whether the daemon is running, and the passes it is running right now. |
-| [`daemon rotate-token`](#daemon-rotate-token) | Rotate the daemon API token and update daemon.json. |
-| [`daemon service`](#daemon-service) | Run the daemon as a login service |
-| [`daemon service install`](#daemon-service-install) | Start the daemon at login, and restart it if it crashes. |
-| [`daemon service uninstall`](#daemon-service-uninstall) | Stop starting the daemon at login. |
-| [`daemon service status`](#daemon-service-status) | Whether the login service is installed, and where. |
 
 ## daemon start
 
@@ -79,55 +74,3 @@ coffer daemon status [OPTIONS]
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
-
-## daemon rotate-token
-
-Rotate the daemon API token and update daemon.json.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer daemon rotate-token [OPTIONS]
-```
-
-## daemon service
-
-Run the daemon as a login service
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer daemon service [OPTIONS] COMMAND [ARGS]...
-```
-
-Subcommands: `install`, `uninstall`, `status`.
-
-## daemon service install
-
-Start the daemon at login, and restart it if it crashes.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer daemon service install [OPTIONS]
-```
-
-## daemon service uninstall
-
-Stop starting the daemon at login. Leaves a running daemon running.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer daemon service uninstall [OPTIONS]
-```
-
-## daemon service status
-
-Whether the login service is installed, and where.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer daemon service status [OPTIONS]
-```

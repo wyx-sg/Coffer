@@ -5,7 +5,7 @@ description: How a page learns that something changed — one daemon-wide stream
 
 # The event stream
 
-The web UI shows state that changes behind its back: a command run in the terminal disables a server, a reconcile pass repairs an agent's config, a sync round imports a skill from another machine, an MCP server starts failing. The page has to find out. This page explains the mechanism Coffer uses for that: one stream for the whole daemon that says *what* changed, never *how*. The decision and the options weighed are in the ADR [The Wire Contract Is Generated From the Pydantic Models](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) (the event-stream section).
+The web UI shows state that changes behind its back: an agent edits a server's file, a reconcile pass repairs an agent's config, a sync round imports a skill from another machine, an MCP server starts failing. The page has to find out. This page explains the mechanism Coffer uses for that: one stream for the whole daemon that says *what* changed, never *how*. The decision and the options weighed are in the ADR [The Wire Contract Is Generated From the Pydantic Models](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) (the event-stream section).
 
 ## Hints, not state
 
@@ -17,7 +17,7 @@ The same property makes lost events harmless in the worst case. A client that mi
 
 ## Where the hints come from
 
-Every write to a resource — whether it came from the web UI, the command line, an agent's MCP call or a sync import — passes through the resource framework, which already announces it to the [reconciler](/architecture/reconciler) so the next pass can come sooner. The event stream listens at the same place. No kind has to remember to announce its own writes, so no kind can forget to.
+Every write to a resource — whether it came from the web UI, an agent's MCP call or a sync import — passes through the resource framework, which already announces it to the [reconciler](/architecture/reconciler) so the next pass can come sooner. The event stream listens at the same place. No kind has to remember to announce its own writes, so no kind can forget to.
 
 The one thing that is not a resource write is the "needs you" list on the Overview page. It is computed on demand from each kind's own signals — a server whose test failed, an agent that is not connected, a sync stopped on a conflict — and nothing records the moment it changes. So the daemon watches it: after resource writes, after each reconcile pass and on a slow timer it recomputes a fingerprint of the list, and announces an `attention` change only when the fingerprint moves. The fingerprint covers which items there are and how severe, not their wording, so rewording a message does not wake every page.
 

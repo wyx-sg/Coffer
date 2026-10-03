@@ -68,7 +68,7 @@ Every move is recorded in `local/migration.json` as it happens, so a rollback ca
 - **Your sync remote must be rebuilt**, if you had one (below).
 - **Secrets waiting for approval.** When the home holds secrets, the report counts them and says that each one's first use at each destination waits once for your approval in the Coffer app.
 
-Then start Coffer as usual. `coffer path` prints the new roots.
+Then start Coffer as usual. **Settings → Data** shows the new roots.
 
 ## Roll it back
 
@@ -93,18 +93,13 @@ If an upgrade stops half-way, `coffer migrate` refuses to run again and names `-
 
 A remote written by an earlier Coffer is in the old layout, and the new build refuses it: rounds end as `remote too old`. It is never converted in place, because other machines may still be pushing the old layout into it. Rebuild it instead, one machine at a time:
 
-1. **Upgrade the first machine** and point it at an **empty** branch or an empty repository, then join it. Joining an empty remote pushes this machine's whole vault:
+1. **Upgrade the first machine** and point it at an **empty** branch or an empty repository, then join it: on the **Sync** page's **Remote** tab enter the **Repository URL** and **Branch**, press **Check repository**, then **Join and pull**. Joining an empty remote pushes this machine's whole vault.
 
-   ```sh
-   coffer sync remote set https://github.com/you/coffer-vault.git --branch vault
-   coffer sync join
-   ```
+   Your old remote setting was carried into `local/sync/remote.json`, so only the **Repository URL** or **Branch** needs changing. Keep **Secret** as it was.
 
-   Your old remote setting was carried into `local/sync/remote.json`, so only the URL or branch needs changing. Keep `--secret-ref` as it was.
+2. **Upgrade each other machine**, point it at the same branch or repository, and join it. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (**Choose versions** on the **Status** tab of the **Sync** page).
 
-2. **Upgrade each other machine**, point it at the same branch or repository, and join it. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (`coffer sync choose`).
-
-Secret ciphertext is committed to the new remote only if your old remote carried secrets; otherwise pass `--with-secret` when you want it. The old branch or repository is left untouched; delete it when every machine has moved.
+Secret ciphertext is committed to the new remote only if your old remote carried secrets; otherwise switch on **Include encrypted secrets** when you want it. The old branch or repository is left untouched; delete it when every machine has moved.
 
 ## Related
 

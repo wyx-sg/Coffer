@@ -139,14 +139,13 @@ def test_agents_are_told_only_about_the_tools_they_have(home: pathlib.Path, fake
             assert _named_tools(_instructions(c)) <= listed
 
 
-def test_agents_are_told_about_both_tools_and_both_roots(home: pathlib.Path) -> None:
+def test_agents_are_told_about_the_tool_and_both_roots(home: pathlib.Path) -> None:
     with _client() as c:
         text = _instructions(c)
         guide = _guide(home)
     for told in (text, guide):
-        for tool in ("coffer__write", "coffer__search_tools"):
-            assert tool in told
-        for retired in ("coffer__recall", "coffer__diagnose"):
+        assert "coffer__search_tools" in told
+        for retired in ("coffer__write", "coffer__recall", "coffer__diagnose"):
             assert retired not in told
         assert _names_memory(told)
         assert "coffer log" in told

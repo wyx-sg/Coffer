@@ -85,13 +85,11 @@ describe("MemoryPage", () => {
     >);
   });
 
-  test("says what memory is, read-only, with one Update memory button", async () => {
+  test("says what memory is, with one Update memory button", async () => {
     stub([GLOBAL, COFFER]);
     renderPage();
     await screen.findByRole("table");
-    expect(
-      screen.getByText(/distilled into one memory per subject\. Read-only\./i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/distilled into one memory per subject\./i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
   });

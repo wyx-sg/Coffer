@@ -132,8 +132,7 @@ and the knowledge catalogue is one section of it.**
   is files read with the agent's own tools, that Coffer never writes an agent's
   memory, that nothing waits on an approval — followed by the catalogue.
 - **The tool count is what the session lists.** `coffer__search_tools` is
-  always present; `coffer__write` belongs to the `knowledge` experimental
-  feature and leaves the list while it is off, and the handshake and the skill
+  the only built-in tool and is always present, and the handshake and the skill
   body name only the tools actually listed, never one the gateway would answer
   as unknown.
 - **The handshake narrows to what only it can say.** What Coffer is, the listed

@@ -29,8 +29,8 @@ The modules, and which pass owns which:
     The per-source digest cache that lets an unchanged source be skipped without
     re-parsing (see "Skip unchanged sources").
 ``files``
-    The read-only file tree the REST file routes and the CLI read (see
-    "Cover memory management on REST and the CLI").
+    The read-only file tree the REST file routes read (see
+    "Manage memory in the web UI").
 ``readers``
     The two native-memory adapters, satisfying ``domain.memory.reader``.
 ``delivery``

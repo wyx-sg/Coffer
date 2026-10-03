@@ -56,14 +56,12 @@ describe("counts", () => {
     expect(hookCounts(hooks)).toEqual({ total: 3, coffer: 1, files: 2, cofferState: null });
   });
 
-  test("Coffer's memory hook on four events is one hook", () => {
+  test("Coffer's memory hook on two events is one hook", () => {
     const coffer = (event: string) => ({ coffer: true, path: "/s.json", event });
     const hooks = {
       items: [
         coffer("SessionStart"),
         coffer("UserPromptSubmit"),
-        coffer("PreToolUse"),
-        coffer("PostToolUse"),
         { coffer: false, path: "/s.json", event: "Stop" },
       ],
       coffer_hook: { health: "current", trust: "untrusted" },

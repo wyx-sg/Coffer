@@ -35,8 +35,7 @@ Out of scope:
 - **Local export and import.** Deleted with this spec. Writing a bundle to a
   directory and reading one back is a wholesale overwrite with no base — the
   operation that caused the 2026-07-10 incident — and it has no place beside the
-  diff-based apply. The needs it served are met without it: a new machine runs
-  `coffer sync join`, an offline medium is a `file://` remote on a USB drive,
+  diff-based apply. The needs it served are met without it: a new machine joins from the Sync page, an offline medium is a `file://` remote on a USB drive,
   and handing a copy to someone else is `git clone ~/.coffer/vault`.
 - **More than one sync remote.** One rendezvous is what "one vault" means.
 - **A hosted sync endpoint.** Would need a further exception to the principles'
@@ -243,7 +242,7 @@ reach git only through the credential helper's environment.
 The URL and the branch become arguments to `git`, so neither MAY begin with `-`
 (git would read it as an option, and `--receive-pack=<cmd>` is a command) and
 the branch MUST pass the rules of `git check-ref-format --branch`. Both MUST be
-refused at the API, at the CLI and again by the domain object. The git adapter
+refused at the API and again by the domain object. The git adapter
 MUST fence every positional argument git lets it fence with `--` and MUST push
 an explicit `refs/heads/` refspec.
 
@@ -515,19 +514,18 @@ what would be pulled and pushed by area, how many files are the same, which
 differ, and — for a returning machine — what the merge would delete or stop on;
 a remote at the wrong layout is refused in the preview. `GET
 /api/v1/sync/join/preview` applies nothing; `POST /api/v1/sync/join` joins as the
-preview said; `coffer sync join` prints the preview and asks before joining
-(`--yes` skips the question); the Sync page shows the preview and joins on the
+preview said; the Sync page shows the preview and joins on the
 person's click.
 
 #### Scenario: a join states its case and its counts before applying
 - **GIVEN** a machine that has not joined its remote
-- **WHEN** `coffer sync join` runs and the person declines, then runs it again with `--yes`
-- **THEN** the first prints which case the join is and applies nothing, and the second joins
+- **WHEN** the preview is requested (`GET /api/v1/sync/join/preview`) and the person then confirms the join (`POST /api/v1/sync/join`)
+- **THEN** the preview states which case the join is and applies nothing, and the confirmed join applies it
 
 ### Requirement: Detect joining on every round without a pointer
 A round on a machine that has not joined its remote — never joined, or set to
 another URL or branch since — MUST apply and push nothing and end
-`join_required`, so no timer round, `coffer sync now` or `POST
+`join_required`, so no timer round or `POST
 /api/v1/sync/run` ever joins on its own.
 
 #### Scenario: an ordinary round on a machine without a pointer still detects the join
@@ -535,25 +533,6 @@ another URL or branch since — MUST apply and push nothing and end
 - **WHEN** an ordinary round runs on each
 - **THEN** each ends `join_required` and nothing is applied or pushed
 - **AND** a remote that shares history with the vault (a mirror, a renamed repository) is no different: sharing history is not consent, and the machine joins only through the join
-
-### Requirement: Apply knowledge, skill and memory-trigger file changes
-What a round applies MUST be a checkout of the merged tree: an added or modified file
-under `knowledge/`, `skills/`, `memory-triggers/`, `resources/`, `state/`,
-`secret/` or `machines/` is written, and a deleted one removed, in the one
-compare-and-swap step that refuses to overwrite a person's unsettled edit (see
-"Never overwrite a person's unsettled edit"). Stores that read the vault reload
-from the new `HEAD`, so an arriving resource file is a resource and an arriving
-state document is in effect without any per-kind import step.
-
-#### Scenario: an arriving file is written and a deleted one removed
-- **GIVEN** two machines that each wrote a knowledge document
-- **WHEN** both run rounds
-- **THEN** each machine holds the other's document with the same bytes
-
-#### Scenario: an arriving memory trigger is written into the vault
-- **GIVEN** a memory trigger written on one machine
-- **WHEN** it runs a round and the other machine runs one
-- **THEN** the other machine's vault holds the trigger's file under `memory-triggers/` with the same bytes
 
 ### Requirement: Never apply the registry or the manifest
 `machines/*.json` and `manifest.json` MUST NOT be projected into anything local —
@@ -608,8 +587,7 @@ remove them here) — and which files, grouped by folder with the share of each
 folder they are. The person answers: **delete** them (the round continues and
 applies or pushes the deletions) or **restore** them (the round continues and
 the files are kept, pushed back if the remote had lost them). Both answers are
-on REST (`POST /api/v1/sync/hold/confirm`, `POST /api/v1/sync/hold/restore`), the
-command line (`coffer sync hold --confirm|--restore`) and the Sync page.
+on REST (`POST /api/v1/sync/hold/confirm`, `POST /api/v1/sync/hold/restore`) and the Sync page.
 
 #### Scenario: an oversized deletion is held for confirmation
 - **GIVEN** a machine that removed 22 documents of one folder, and the machine that receives that deletion
@@ -665,11 +643,16 @@ A vault whose round needs a human — stopped on conflicts, held by the breaker,
 waiting on an edit, waiting for a join or for a join's differing files, unable
 to sign in, paused in a synchronised folder, or refused for its layout — MUST
 say so where the user already is, not only on the page built for it.
-`coffer sync status` MUST exit non-zero, the web UI MUST mark its **navigation
+`GET /api/v1/sync/status` MUST report the problem, the web UI MUST mark its **navigation
 entry** for the sync page, the attention list MUST carry an item naming what to
 do, and the desktop shell MUST raise it as a notification and mark its icon. A
 vault that needs a human converges no further, so a question nobody sees is an
 outage that looks like silence.
+
+`GET /api/v1/sync/status` MUST also report the configured remote with every one of its settings
+beside this machine, the last round, what waits to push and anything waiting for the person. The
+settings are the URL, the branch, the interval, whether secret ciphertext travels, the push
+secret's ref, the username and whether the remote is on.
 
 The web UI's mark MUST be cleared by **visiting the page**, not by the situation
 changing, and MUST NOT return for the same situation. The rounds are
@@ -694,14 +677,14 @@ The status MUST also say how far this vault and the remote (as last fetched) hav
 
 #### Scenario: a held vault says so where the user already is
 - **GIVEN** a round held at the deletion guard, so nothing converges and nothing is backed up until someone answers it,
-- **WHEN** the user is anywhere other than the sync page — at a terminal, on another page of the web UI, or with only the desktop shell in front of them,
-- **THEN** `coffer sync status` exits non-zero, the web UI's navigation entry for sync is marked, and the shell has marked its icon and raised one notification — once for that condition, not once per poll,
+- **WHEN** the user is anywhere other than the sync page — on another page of the web UI, or with only the desktop shell in front of them,
+- **THEN** the sync status reports the problem, the web UI's navigation entry for sync is marked, and the shell has marked its icon and raised one notification — once for that condition, not once per poll,
 - **AND** opening the sync page clears the web UI's mark, which does not return while the same thing is wrong, however many rounds re-raise it.
 
 #### Scenario: a machine that has not joined says so everywhere
 - **GIVEN** a machine with a remote configured that it has not joined, so its round ends `join_required` and converges nothing
 - **WHEN** the user is anywhere other than the sync page
-- **THEN** `coffer sync status` points at `coffer sync join`, the web UI's navigation entry for sync is marked, and the desktop shell marks its icon and raises one notification
+- **THEN** the sync status names the join, the web UI's navigation entry for sync is marked, and the desktop shell marks its icon and raises one notification
 
 #### Scenario: the attention list names what a round waits for
 - **GIVEN** a round stopped on a conflict
@@ -854,7 +837,7 @@ credential store or `~/.coffer/master.key`, outside the repository. It is
 bootstrapped onto another machine out-of-band: a backup is written only by the
 desktop app, behind a presence check ([secret](../secret/spec.md)
 "Release plaintext only to a present human in the desktop app"), and installed
-on the other machine with `coffer sync key import`.
+on the other machine from Settings › Security (see "Import a master key after showing whose key it is").
 
 #### Scenario: the master key never enters the repository
 - **GIVEN** a remote configured to carry secret ciphertext, and a key file beside the vault
@@ -885,7 +868,7 @@ away on purpose, so there is nothing left to fall back on when it stops.
 ### Requirement: Restore to a revision without discarding later work
 Going back to an earlier version of a vault file or folder MUST NOT discard
 anything the vault gained since: restoring writes that version back as a new
-commit through the vault's one write path (`coffer vault restore`, `POST
+commit through the vault's one write path (`POST
 /api/v1/vault/restore`, the Skills History tab — [vault-storage](../vault-storage/spec.md)
 "Show, compare and restore any version of a vault file"), touching only the
 paths restored, and the next round publishes it like any other change.
@@ -896,53 +879,6 @@ and roll a round back from it").
 - **GIVEN** a file with two versions in the vault's history
 - **WHEN** the person restores the first
 - **THEN** the file holds the first version's bytes as a new commit, and no earlier commit is rewritten
-
-### Requirement: Cover the sync lifecycle on the command line
-The CLI MUST cover the round and the vault's lifecycle:
-
-- `coffer sync now`, `status [--json] [--prompt]`, `history [--limit]` and
-  `rollback <round> [--yes]`;
-- `join [--yes]`;
-- `conflicts [--prompt]`, `resolve <path> --mine|--theirs|--edited`,
-  `edit <path> [--join]` and `continue`;
-- `hold [--confirm|--restore]` and `choose [<path> --mine|--theirs|--edited]`;
-- `push-anyway [--yes]`.
-
-It MUST cover the administration too:
-
-- `remote set <url> [--branch] [--interval <seconds>] [--with-secret|--without-secret] [--secret-ref] [--username] [--wait]`;
-- `remote clear`, `remote pause`, `remote resume` and `remote check`;
-- `machine list`, `machine rename <name>` and `machine rm <id>`;
-- `key import <file>` and `key fingerprint`.
-
-There is no `key export`: a key backup leaves a machine only through the desktop app. An option
-`remote set` is not given keeps the stored remote's value. `remote pause` and `remote resume` switch
-the remote's `enabled` switch off and on (see "Pause a configured remote without forgetting it") and
-change nothing else. `--prompt` prints the hand-off prompt for the person's agent: on `status` the
-current problem's, on `conflicts` the stopped round's merge, which also records the hand-off. It exits `5` when there
-is none.
-`push-anyway` lists the places the last round found and asks before pushing, unless given `--yes`.
-
-`status` MUST report the configured remote and every one of its settings beside this machine, the
-last round, what waits to push and anything waiting for the person, in plain and `--json` output.
-The settings are the URL, the branch, the interval, whether secret ciphertext travels, the push
-secret's ref, the username and whether the remote is on. With no remote configured, `status` says so
-and names `remote set`.
-
-#### Scenario: the command line covers every sync operation
-- **GIVEN** the `coffer sync` command group
-- **WHEN** its commands and options are listed
-- **THEN** it offers every command the requirement names, and no `key export`
-
-#### Scenario: pause and resume a remote from the command line
-- **GIVEN** a configured, enabled sync remote
-- **WHEN** the user runs `coffer sync remote pause`, and then `coffer sync remote resume`
-- **THEN** after the first the remote is paused and `coffer sync status` exits zero, and after the second it is enabled again
-
-#### Scenario: the status command reports the remote's settings
-- **GIVEN** a joined machine with a change waiting to push
-- **WHEN** the user runs `coffer sync status`, and then `coffer sync status --json`
-- **THEN** it prints the remote's settings, this machine and what waits to push, and the JSON says the remote is configured
 
 ### Requirement: Cover the same operations over HTTP
 The HTTP API MUST cover the same operations under `/api/v1/sync`:
@@ -1024,33 +960,34 @@ vault is in now and the only round that may carry Undo or a hold's answers.
 ### Requirement: Pause a configured remote without forgetting it
 A configured remote MUST carry an `enabled` switch, and switching it off MUST
 pause sync without forgetting anything: the worker runs no timer round, and no
-surface raises attention for it — `coffer sync status` exits zero, the web UI
+surface raises attention for it — the sync status reports no problem, the web UI
 does not mark its sync entry and the desktop shell marks nothing — even over a
 round the vault was waiting on, because a user who met a question by switching
 sync off has answered it too. A round the person asks for by name ("Sync now")
 still runs. The remote and the history MUST be kept, so switching it back on
-resumes where the vault left off. Re-running `coffer sync remote set` MUST keep
-a paused remote paused — it changes what it names and nothing else: every option
-it is not given keeps its stored value — and a remote configured for the first
-time is stored enabled, with the defaults for every option it is not given.
+resumes where the vault left off. Saving the remote again from the Sync page's
+form (`PUT /api/v1/sync/remote`) MUST keep a paused remote paused — the form starts from the
+stored remote and changes what the person edited and nothing else: every setting the
+person did not touch keeps its stored value — and a remote configured for the first
+time is stored enabled, with the defaults for every setting it is not given.
 
 #### Scenario: a paused remote runs no round and asks for nothing
 - **GIVEN** a joined vault whose remote is then switched off
 - **WHEN** the worker ticks
 - **THEN** no round is recorded and no next round is scheduled
-- **AND** `coffer sync status` exits zero, the web UI does not mark its sync entry and the desktop shell marks nothing
+- **AND** the sync status reports no problem, the web UI does not mark its sync entry and the desktop shell marks nothing
 
 #### Scenario: reconfiguring a paused remote keeps it paused
 - **GIVEN** a configured remote that has been switched off
-- **WHEN** `coffer sync remote set` is run again with a different interval
+- **WHEN** the remote is saved again from the form with a different interval
 - **THEN** the remote it sends carries the new interval and is still switched off
 - **AND** a remote set for the first time is sent switched on with the defaults
 
 #### Scenario: reconfiguring a remote changes only what it names
 - **GIVEN** a configured remote with a non-default branch, interval, push credential and username, carrying secret ciphertext
-- **WHEN** `coffer sync remote set` is run again naming only a new interval
+- **WHEN** the remote is saved again changing only its interval
 - **THEN** every other setting is sent exactly as it was
-- **AND** running it with `--without-secret` switches secret sync off and changes nothing else
+- **AND** saving it with secret sync switched off changes that setting and nothing else
 
 ### Requirement: Hold a push token pointed at a new URL until approved
 Setting the remote MUST resolve its push token for the remote's URL through the
@@ -1058,9 +995,8 @@ secret boundary ([secret](../secret/spec.md) "Hold a secret for a new
 destination until a person approves it"). An existing token pointed at a URL it
 was not approved for MUST NOT be sent: the remote is saved without the
 reachability probe, so the approval has a destination to name; the answer is
-`SECRET_BINDING_PENDING` naming the approval, and `coffer sync remote set`
-prints "waiting for approval in the Coffer app" and exits `9`, or with
-`--wait` sets (and probes) the remote once the approval is applied. A round
+`SECRET_BINDING_PENDING` naming the approval, and the remote is set (and probed) once the approval
+is applied. A round
 MUST send the token only to the URL it is approved for, and fails with the same
 refusal until then.
 
@@ -1095,8 +1031,7 @@ Settings › Security MUST offer the import as one dialog: choose the key file,
 see "Current key" beside "Key in the file" marked same or different, type the
 passphrase when the file needs one, and confirm with Replace key; afterwards it
 says how many secrets are readable now and names those still locked, with a
-way to the Secrets page. `coffer sync key import <file>` MUST ask for a
-protected file's passphrase without echoing it.
+way to the Secrets page.
 
 #### Scenario: an import shows whose key the file holds before replacing
 - **GIVEN** a machine with its own master key, and a passphrase-protected backup of another machine's key
@@ -1117,7 +1052,7 @@ protected file's passphrase without echoing it.
 - **AND** afterwards it names the key now in use, how many secrets are readable, and the names of those still locked, with Open Secrets
 
 ### Requirement: Record every round
-Every round — timer, `coffer sync now`, `POST /api/v1/sync/run`, a join, a
+Every round — timer, `POST /api/v1/sync/run` (Sync now), a join, a
 continue, an answered hold, a rollback — SHALL be recorded in `runs.db` with its
 status, its trigger, when it started and finished, the commit range it moved the
 vault across, the snapshot it took, the commits it pulled (with the machine that
@@ -1126,8 +1061,7 @@ it stopped or failed, why in words a person can act on. A round that ends in a
 problem — the remote unreachable, sign-in failed, a token waiting for approval —
 MUST be recorded as a round of that status, never raised as an error the caller
 has to catch. The history SHALL be readable newest first, paged, on REST
-(`GET /api/v1/sync/runs`, `GET /api/v1/sync/runs/{id}`) and on the command line
-(`coffer sync history`).
+(`GET /api/v1/sync/runs`, `GET /api/v1/sync/runs/{id}`) and on the Sync page's Status tab.
 
 #### Scenario: every round is recorded with what it moved
 - **GIVEN** a joined machine with one new knowledge document waiting to push
@@ -1165,9 +1099,7 @@ marker is left in the file, naming the line. The answers SHALL stand only while
 neither side moves: when this vault or the remote has a new commit, the round is
 asked again. Answering SHALL be reachable on REST (`GET /api/v1/sync/stop`,
 `POST /api/v1/sync/stop/files/answer`, `POST /api/v1/sync/stop/files/editor`,
-`GET /api/v1/sync/stop/files/versions`, `POST /api/v1/sync/continue`), on the
-command line (`coffer sync conflicts`, `resolve <path> --mine|--theirs|--edited`,
-`edit <path>`, `continue`) and on the Sync page.
+`GET /api/v1/sync/stop/files/versions`, `POST /api/v1/sync/continue`) and on the Sync page.
 
 #### Scenario: keeping this machine's version continues the round
 - **GIVEN** a round stopped because both machines changed the same lines of one document
@@ -1262,10 +1194,10 @@ upgrades and joins it as a new machine.
 ### Requirement: Check a remote before it is saved
 A person SHALL be able to ask what a remote holds before saving it — empty, a
 Coffer vault (with its layout), some other repository, unreachable or refused
-sign-in — through `POST /api/v1/sync/remote/check`, `coffer sync remote check`
-and the set-up form's "Check repository". Each MUST send the user name the token
-goes with, as saving does: the form's User name field, and on the command line
-`--username`, else the stored remote's, else the default. Checking MUST keep
+sign-in — through `POST /api/v1/sync/remote/check`
+and the set-up form's "Check repository". The check MUST send the user name the token
+goes with, as saving does: the form's User name field, else the stored remote's,
+else the default. Checking MUST keep
 nothing: no remote is stored and the vault is not touched.
 
 #### Scenario: a remote is checked before it is saved
@@ -1274,9 +1206,9 @@ nothing: no remote is stored and the vault is not touched.
 - **THEN** they read as empty, as a vault at the current layout, and as unreachable or refused with git's message
 - **AND** nothing about the stored remote changed
 
-#### Scenario: the command line checks a remote with the user name it is given
+#### Scenario: a remote check sends the user name it is given
 - **GIVEN** a stored remote
-- **WHEN** `coffer sync remote check --username oauth2` runs, and then `coffer sync remote check`
+- **WHEN** `POST /api/v1/sync/remote/check` is called with the user name `oauth2`, and then with none
 - **THEN** the first check sends the user name `oauth2` with the token, and the second sends the stored remote's
 
 ### Requirement: Run the reconciler once after a round that applied changes
@@ -1341,9 +1273,8 @@ that: a file edited after the round keeps the edit. The next round publishes the
 rollback like any other local change. A round that applied nothing, or that was
 itself a rollback, MUST be refused with nothing to roll back. A rollback shows
 what it will reverse and what it keeps before it runs (`GET
-/api/v1/sync/runs/{id}/rollback-plan`, `coffer sync rollback <round>` without
-`--yes`), and runs through `POST /api/v1/sync/runs/{id}/rollback`, `coffer sync
-rollback <round> --yes` and the Status tab's rounds.
+/api/v1/sync/runs/{id}/rollback-plan`), and runs through `POST /api/v1/sync/runs/{id}/rollback`
+and the Status tab's rounds.
 
 #### Scenario: a round can be rolled back
 - **GIVEN** a round that applied two files here, one of which was edited afterwards
@@ -1357,8 +1288,8 @@ rollback <round> --yes` and the Status tab's rounds.
 
 #### Scenario: a rollback shows its plan first
 - **GIVEN** a round that pulled a change
-- **WHEN** `coffer sync rollback <round>` runs and the person declines
-- **THEN** it has printed what it would reverse and changed nothing, and `--yes` rolls the round back
+- **WHEN** the rollback plan is requested (`GET /api/v1/sync/runs/{id}/rollback-plan`) and the person does not confirm
+- **THEN** it has shown what it would reverse and changed nothing, and confirming rolls the round back
 
 ### Requirement: Report the refs a key cannot open as locked
 A machine holding ciphertext its master key cannot open MUST report those refs
@@ -1376,7 +1307,7 @@ A round the remote refused, whether a rejected push (`push_failed`), a refused s
 (`auth_failed`) or a remote that cannot be reached (`unreachable`), MUST carry a hand-off. The fix is
 on the remote's side or on this machine's network, not in Coffer. The hand-off is served as
 `problem.handoff` on `GET /api/v1/sync/status` and on the attention list's item. A rejected push is
-the `sync_push_failed` item. `coffer sync status --prompt` prints the hand-off.
+the `sync_push_failed` item.
 
 The prompt MUST carry the remote URL without any user name or password in it, the branch, the name
 of the secret Coffer signs in with, git's message with URL credentials and token-shaped strings
@@ -1389,7 +1320,7 @@ the same hand-off in `details.handoff`.
 
 #### Scenario: a refused push carries a hand-off without a secret
 - **GIVEN** a remote reached with an HTTPS URL that has a user and token in it, whose push a branch rule declines
-- **WHEN** a round runs and the status, the attention list and `coffer sync status --prompt` are read
+- **WHEN** a round runs and the status and the attention list are read
 - **THEN** each carries the same prompt, naming the URL without its credentials, the branch, the secret's name and git's message
 - **AND** the prompt contains no part of the token
 
@@ -1442,7 +1373,7 @@ imported and exported in Settings › Security, not on the Sync page.
 Before a round pushes — a round that merged, a push with nothing to pull, or a join — it MUST read
 every file version the push would publish: each blob reachable from the commit being pushed and
 not from the remote's head, from every commit in between. It reads them with the detection
-`coffer secret scan` uses (an assignment whose name says secret, and the well-known token shapes).
+the Secrets scan uses (an assignment whose name says secret, and the well-known token shapes).
 An encrypted `secret/<ref>.enc` file is ciphertext and MUST NOT be read; a binary file or one over
 1 MB is not read either.
 
@@ -1453,14 +1384,14 @@ round records, reports or hands off carries the value. The status's `problem` is
 `plaintext_found`, with the places and an agent hand-off. The hand-off asks for each value to be
 moved into a Coffer secret and the file pointed at it, without printing the value, and it leaves
 Retry to the person. The attention list carries the `sync_plaintext_found` item with the same
-hand-off, and `coffer sync status --prompt` prints it.
+hand-off.
 
 When only an earlier, unpushed commit holds a value, because the file was fixed since, the round
 MUST NOT publish that commit. It folds the unpushed commits into one commit on the remote's head,
 with the same files, checks it out in their place, and pushes that. It records how many commits it
 folded as `folded`. No file on disk changes.
 
-"Push anyway" (`POST /api/v1/sync/plaintext/push-anyway`, `coffer sync push-anyway`) MUST allow
+"Push anyway" (`POST /api/v1/sync/plaintext/push-anyway`) MUST allow
 exactly the file versions the last round found, record the audit event `sync_plaintext_pushed`
 with the files and lines, and run a round. A file changed since is a new version and is read
 again. When the last round is not `plaintext_found`, it MUST be refused with
@@ -1468,7 +1399,7 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 
 #### Scenario: a plaintext secret stops the round before anything is pushed
 - **GIVEN** a joined machine whose knowledge document gains the line `DB_PASSWORD=<a value>`
-- **WHEN** a round runs, and the status, the attention list, `coffer sync status` and `coffer sync status --prompt` are read
+- **WHEN** a round runs, and the status and the attention list are read
 - **THEN** the round is `plaintext_found`, the remote's head has not moved and holds no copy of the value, and the other machine never receives the file
 - **AND** each surface names the document, line 4 and `DB_PASSWORD`, the prompt asks for the value to be moved with `coffer secret set`, and none carries the value
 
@@ -1611,3 +1542,17 @@ one side and deleted on the other are decisions, not merges, and are not handed 
 - **WHEN** the person asks for an editor copy of it, hands it to an agent, or answers it "edited"
 - **THEN** each is refused, the file is marked a secret that an agent may not merge, and the prompt carries none of its contents
 - **AND** keeping this machine's or taking the other's version answers it
+
+### Requirement: Apply knowledge and skill file changes
+What a round applies MUST be a checkout of the merged tree: an added or modified file
+under `knowledge/`, `skills/`, `resources/`, `state/`,
+`secret/` or `machines/` is written, and a deleted one removed, in the one
+compare-and-swap step that refuses to overwrite a person's unsettled edit (see
+"Never overwrite a person's unsettled edit"). Stores that read the vault reload
+from the new `HEAD`, so an arriving resource file is a resource and an arriving
+state document is in effect without any per-kind import step.
+
+#### Scenario: an arriving file is written and a deleted one removed
+- **GIVEN** two machines that each wrote a knowledge document
+- **WHEN** both run rounds
+- **THEN** each machine holds the other's document with the same bytes

@@ -11,26 +11,18 @@ from __future__ import annotations
 import base64
 import json
 import pathlib
-import time
 from collections.abc import Iterator
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
 
 from coffer.domain.secret_errors import SecretBindingPending
 from coffer.infrastructure.secret import key_backup
-from coffer.surfaces.cli import _approvals
-from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
-    point_cli_at,
     prepare_home,
     running_daemon,
 )
-
-_runner = CliRunner()
 
 
 def _master_key() -> str:
@@ -46,32 +38,6 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
         yield d
 
 
-@pytest.fixture
-def cli(daemon: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch) -> BoundaryDaemon:
-    point_cli_at(daemon, monkeypatch)
-    return daemon
-
-
-def _approve_while_waiting(d: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Approve every pending request each time ``--wait`` pauses between polls.
-
-    Only the CLI's own wait loop sees the stand-in clock. Patching
-    ``time.sleep`` on the shared ``time`` module hands it to every thread in
-    the process: a daemon thread committing to the vault waits on its git
-    subprocess with ``Popen.wait``, whose poll sleeps, so it approved from
-    inside the vault writer's lock, and the approval, which writes the vault
-    too, waited on that lock for ever. It hung a whole xdist worker now and
-    then, more often the busier the machine.
-    """
-
-    def the_person_approves(_seconds: float) -> None:
-        for approval in d.pending():
-            d.approve(approval["id"])
-
-    fake = SimpleNamespace(monotonic=time.monotonic, sleep=the_person_approves)
-    monkeypatch.setattr(_approvals, "time", fake)
-
-
 def _two_servers(d: BoundaryDaemon) -> tuple[dict[str, Any], dict[str, Any]]:
     d.store("gh/token", "ghp_boundary_value_1")
     first = d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
@@ -84,20 +50,17 @@ def _two_servers(d: BoundaryDaemon) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 @pytest.mark.acceptance(spec="secret", scenario="no route or command hands out a stored value")
-def test_no_route_or_command_hands_out_a_stored_value(cli: BoundaryDaemon) -> None:
-    d = cli
+def test_no_route_or_command_hands_out_a_stored_value(daemon: BoundaryDaemon) -> None:
+    d = daemon
     d.store("gh/token", "ghp_never_printed_42")
 
     read = d.client.get("/api/v1/secrets/gh/token")
     export = d.client.post("/api/v1/sync/key/export", json={})
-    shown = _runner.invoke(cli_app, ["secret", "get", "gh/token", "--show"])
-    exported = _runner.invoke(cli_app, ["sync", "key", "export", str(d.home / "k")])
 
     assert read.status_code in (404, 405)
     assert export.status_code in (404, 405)
-    assert shown.exit_code == 2 and exported.exit_code == 2
     key = _master_key()
-    for body in (read.text, export.text, shown.output, exported.output):
+    for body in (read.text, export.text):
         assert "ghp_never_printed_42" not in body and key not in body
     assert not (d.home / "k").exists()
 
@@ -386,58 +349,12 @@ def test_a_stdio_server_with_a_secret_is_marked(daemon: BoundaryDaemon) -> None:
     assert flags == {"with-secret": True, "without": False, "remote": False}
 
 
-# --- the command line --------------------------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="secret", scenario="the command line reports a pending approval and exits 9"
-)
-def test_the_command_line_reports_a_pending_approval_and_exits_9(cli: BoundaryDaemon) -> None:
-    d = cli
-    d.store("gh/token", "ghp_cli_value_1")
-    d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
-    d.pending()
-
-    added = _runner.invoke(
-        cli_app, ["mcp", "add", "second", "--stdio", "evil.sh", "--secret", "TOKEN=gh/token"]
-    )
-
-    assert added.exit_code == 9, added.output
-    assert "registered: mcp_server second" in added.output
-    assert "waiting for approval in the Coffer app" in added.output
-    listed = _runner.invoke(cli_app, ["secret", "approvals", "--json"])
-    assert listed.exit_code == 0
-    [row] = json.loads(listed.output)["approvals"]
-    assert row["destination_label"] == "second" and row["id"] in added.output
-
-
-@pytest.mark.acceptance(
-    spec="secret", scenario="the command line waits for the approval with --wait"
-)
-def test_the_command_line_waits_for_the_approval(
-    cli: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    d = cli
-    d.store("gh/token", "ghp_cli_value_2")
-    d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
-    d.pending()
-
-    _approve_while_waiting(d, monkeypatch)
-    added = _runner.invoke(
-        cli_app,
-        ["mcp", "add", "second", "--stdio", "b.sh", "--secret", "TOKEN=gh/token", "--wait"],
-    )
-
-    assert added.exit_code == 0, added.output
-    assert "approved in the Coffer app" in added.output
-
-
-def test_rejecting_needs_no_presence(cli: BoundaryDaemon) -> None:
-    d = cli
+def test_rejecting_needs_no_presence(daemon: BoundaryDaemon) -> None:
+    d = daemon
     _first, second = _two_servers(d)
     [waiting] = d.pending(destination_uid=second["uid"])
-    r = _runner.invoke(cli_app, ["secret", "reject", waiting["id"]])
-    assert r.exit_code == 0, r.output
+    r = d.client.post(f"/api/v1/secrets/approvals/{waiting['id']}/reject")
+    assert r.status_code == 200, r.text
     # Refused stays refused for this target: not asked again, still withheld.
     assert d.pending() == []
     with pytest.raises(SecretBindingPending):
@@ -470,11 +387,11 @@ def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
 @pytest.mark.acceptance(
     spec="secret", scenario="switching the protection off waits for the desktop app"
 )
-def test_switching_the_protection_off_waits(cli: BoundaryDaemon) -> None:
-    d = cli
-    off = _runner.invoke(cli_app, ["config", "set", "secrets.require_approval", "off"])
-    assert off.exit_code == 9, off.output
-    assert "waiting for approval in the Coffer app" in off.output
+def test_switching_the_protection_off_waits(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    off = d.client.put("/api/v1/settings/secret-boundary", json={"require_approval": False})
+    assert off.status_code == 202, off.text
+    assert off.json()["pending_approval_id"]
     status = d.client.get("/api/v1/settings/secret-boundary").json()
     assert status["require_approval"] is True
 
@@ -483,8 +400,8 @@ def test_switching_the_protection_off_waits(cli: BoundaryDaemon) -> None:
     _first, second = _two_servers(d)
     assert d.resolve_for(second) == {"TOKEN": "ghp_boundary_value_1"}
 
-    on = _runner.invoke(cli_app, ["config", "set", "secrets.require_approval", "on"])
-    assert on.exit_code == 0, on.output
+    on = d.client.put("/api/v1/settings/secret-boundary", json={"require_approval": True})
+    assert on.status_code == 200, on.text
 
 
 # --- the listing ---------------------------------------------------------------------
@@ -599,70 +516,3 @@ def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
     [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
     d.approve(replace["id"])
     assert d.value(ref) == "sk-replaced-2" and key_now() == "sk-replaced-2"
-
-
-def _provider(d: BoundaryDaemon, name: str, base_url: str, **body: Any) -> dict[str, Any]:
-    r = d.client.post(
-        "/api/v1/providers",
-        json={"name": name, "protocol": "anthropic", "base_url": base_url, **body},
-    )
-    assert r.status_code == 201, r.text
-    return dict(r.json())
-
-
-@pytest.mark.acceptance(
-    spec="secret", scenario="the command line reports a pending provider key and exits 9"
-)
-def test_the_command_line_reports_a_pending_provider_key(cli: BoundaryDaemon) -> None:
-    d = cli
-    gw = _provider(d, "gw", "https://gw.example.com/anthropic", secret_value="sk-cli-key-1")
-    d.pending()  # the first key, just typed for this connection, is approved on sight
-    ref = d.client.get(f"/api/v1/providers/{gw['uid']}").json()["secret_ref"]
-
-    rotated = _runner.invoke(cli_app, ["provider", "edit", "gw", "--secret", "sk-cli-key-2"])
-    assert rotated.exit_code == 9, rotated.output
-    assert "updated provider gw" in rotated.output
-    assert "waiting for approval in the Coffer app" in rotated.output
-    [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
-    assert replace["id"] in rotated.output and d.value(ref) == "sk-cli-key-1"
-
-    moved = _runner.invoke(
-        cli_app, ["provider", "edit", "gw", "--base-url", "https://elsewhere.example.net/v1"]
-    )
-    assert moved.exit_code == 9, moved.output
-    [bind] = d.pending(destination_uid=gw["uid"])
-    assert bind["id"] in moved.output and "waiting for approval" in moved.output
-
-    added = _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "second",
-            "--protocol",
-            "anthropic",
-            "--base-url",
-            "https://second.example.org/v1",
-            "--secret-ref",
-            ref,
-        ],
-    )
-    assert added.exit_code == 9, added.output
-    assert "added provider second" in added.output
-    assert "waiting for approval in the Coffer app" in added.output
-
-    described = _runner.invoke(cli_app, ["provider", "edit", "gw", "--description", "gateway"])
-    assert described.exit_code == 0, described.output
-
-
-def test_provider_edit_waits_for_the_approval_with_wait(
-    cli: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    d = cli
-    _provider(d, "gw", "https://gw.example.com/anthropic", secret_value="sk-wait-key-1")
-    d.pending()
-
-    _approve_while_waiting(d, monkeypatch)
-    r = _runner.invoke(cli_app, ["provider", "edit", "gw", "--secret", "sk-wait-key-2", "--wait"])
-    assert r.exit_code == 0, r.output
-    assert "approved in the Coffer app" in r.output

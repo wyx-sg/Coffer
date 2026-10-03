@@ -68,7 +68,6 @@ from coffer.application.memory.ledger_restore import restore_from_audit
 from coffer.application.memory.retrieval import RetrievalService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.application.memory.session_ledger import SessionLedger
-from coffer.application.memory.triggers import TriggerService
 from coffer.application.memory.turn_retrieval import TurnRetrieval
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn_restarting
@@ -87,7 +86,6 @@ from coffer.surfaces.http.memory.dependencies import (
     set_memory_hook_service,
     set_memory_service,
     set_memory_stats_service,
-    set_memory_trigger_service,
 )
 from coffer.surfaces.http.memory.distil_state import DistilRunner
 
@@ -227,8 +225,7 @@ def wire_memory_kind(
         agent_service=agent_service, audit=audit, store=ConfigFileStore(), catalog=agent_catalog
     )
 
-    # Prompt-time retrieval, the once-per-session guard and the delivery views.
-    triggers = TriggerService(audit=audit)
+    # Prompt-time retrieval and the delivery views.
     # Rebuilt from the delivery fires in the audit log after a restart.
     ledger = SessionLedger(restore=lambda led: restore_from_audit(led, audit))
     retrieval = RetrievalService(service, ledger)
@@ -237,16 +234,11 @@ def wire_memory_kind(
             memory=service,
             delivery=delivery_service,
             retrieval=retrieval,
-            triggers=triggers,
-            ledger=ledger,
         )
     )
-    set_memory_trigger_service(triggers)
     set_memory_stats_service(
         DeliveryStatsService(memory=service, delivery=delivery_service, audit=audit)
     )
-    # Distil proposes triggers unarmed; only a person arms one.
-    service.set_trigger_proposer(triggers.propose)
 
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
     return MemoryWiring(
@@ -295,7 +287,7 @@ def start_aggregate_worker(
 
     On by default: a pass reads the agents' own memory files and writes only
     the derived tree, and "Skip unchanged sources" makes a pass over unchanged
-    sources nearly free. The Update memory button and ``coffer memory sync`` stay: this makes the
+    sources nearly free. The Update memory button stays: this makes the
     layer current without being asked, it does not replace asking.
 
     Both halves of "on a timer" are the operator's (spec internal-engine "Apply a

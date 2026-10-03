@@ -50,7 +50,7 @@ A few behaviours worth knowing:
 - `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger.
 - `restart` is how a setting read before the daemon binds (the port) takes effect.
 
-To open the UI the daemon serves, run `coffer open`. It reads the daemon's port from `~/.coffer/daemon.json` and opens your browser at that address; `--no-browser` prints the URL instead.
+To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port is in `~/.coffer/daemon.json` (8000 by default). The [desktop app](/guides/desktop-app) opens it for you.
 
 ## Choose the port
 
@@ -87,19 +87,7 @@ When the holder is itself a Coffer daemon, the message says so: most often it is
 
 Started on demand, the daemon is down exactly when an agent makes its first call of the day or a chat message arrives with no Coffer window open, and whoever asks first waits for a cold start. On macOS you can install it as a per-user launchd agent instead:
 
-::: code-group
-
-```sh [CLI]
-coffer daemon service install     # start at login, restart after a crash
-coffer daemon service status      # installed or not, and where
-coffer daemon service uninstall   # stop starting it at login
-```
-
-```text [Web UI]
-Settings → Daemon → Start at login
-```
-
-:::
+Turn on **Settings → Daemon → Start at login**: the daemon starts at login and restarts after a crash.
 
 The service is the plist `~/Library/LaunchAgents/dev.coffer.daemon.plist` (label `dev.coffer.daemon`). It:
 
@@ -109,10 +97,10 @@ The service is the plist `~/Library/LaunchAgents/dev.coffer.daemon.plist` (label
 - runs `~/.coffer/bin/coffer-daemon`, the symlink that always points at the current build, so it keeps working across upgrades (a source install falls back to the Python module command);
 - writes to the same `~/.coffer/logs/daemon.log` as every other start.
 
-`uninstall` deletes the plist and leaves a running daemon running. Neither command needs a daemon. The web toggle does the same through the daemon and records a `daemon_residency_updated` audit entry; the CLI records none, because it must work when no daemon, and so no database, is available.
+Turning the toggle off deletes the plist and leaves a running daemon running. Each change is recorded as a `daemon_residency_updated` audit entry.
 
 ::: info
-The login service is macOS only. On any other host, `service install` and `service uninstall` exit non-zero with a message, and `service status` reports that it is not supported.
+The login service is macOS only. On any other host the **Start at login** toggle reports that it is not supported.
 :::
 
 ## Files the daemon reads and writes
@@ -147,13 +135,7 @@ You rarely need to open the file: the **Activity → Daemon** tab reads it with 
 
 The daemon mints a new random token on every start and writes it into `daemon.json`. Clients read it from there; the page the daemon serves to your browser carries it too, so a plain reload after a restart is authenticated again with no action from you.
 
-To rotate it without restarting:
-
-```sh
-coffer daemon rotate-token
-```
-
-Clients that read `daemon.json` pick up the new value; an open browser tab needs a reload.
+To rotate it without restarting, press **Rotate…** under **Settings → Security → Daemon access token** and confirm. Clients that read `daemon.json` pick up the new value; an open browser tab needs a reload.
 
 ## Upgrades and rollback
 
@@ -221,7 +203,7 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 
 | Path | Why it matters |
 | --- | --- |
-| `vault/` | Every resource definition, shared setting, knowledge collection, skill folder, memory trigger and encrypted secret, with their full history in `vault/.git`. |
+| `vault/` | Every resource definition, shared setting, knowledge collection, skill folder and encrypted secret, with their full history in `vault/.git`. |
 | `local/` | This machine's agents, reach, retention, sync remote and secret approvals. |
 | `content/` | Attachments and the chat workspace. |
 | `runs.db` (+ `-wal`, `-shm`) | Conversations, the audit log, invocation logs, sync rounds, usage. |

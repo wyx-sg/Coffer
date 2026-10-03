@@ -1,5 +1,5 @@
 """``coffer migrate`` on a pre-vault home: every resource, secret, document,
-skill file, memory file, trigger and history row survives, in the class
+skill file, memory file and history row survives, in the class
 directory it belongs to, in the bytes its store would write (plan q9 §3)."""
 
 from __future__ import annotations
@@ -204,7 +204,7 @@ def test_history_rows_are_in_runs_db_keyed_to_uids(legacy: LegacyHome) -> None:
     _migrate(legacy)
     assert not legacy.db.exists()
     with sqlite3.connect(legacy.coffer / "runs.db") as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0141",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0142",)
         assert conn.execute("SELECT id, resource_uid FROM audit_log ORDER BY id").fetchall() == [
             (1, UIDS["github"]),
             (2, UIDS["tg"]),

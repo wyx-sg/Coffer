@@ -17,12 +17,11 @@ Everything Coffer keeps that you would want on another machine — MCP servers, 
 ├── state/settings/internal-engine.json Coffer's model and upkeep settings
 ├── knowledge/<collection>/…            knowledge documents (Markdown)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
-├── memory-triggers/<id>.md             memory triggers
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
 └── machines/<id>.json                  one descriptor per machine that syncs
 ```
 
-`coffer path vault` prints the location. Agents are not here: an agent's configuration is a fact about one machine, so it lives in `~/.coffer/local/resources/agent/`. Neither is reach (which agents may use a resource on this machine), which is in `~/.coffer/local/reach.json`. See [Files and directories](/reference/filesystem).
+Agents are not here: an agent's configuration is a fact about one machine, so it lives in `~/.coffer/local/resources/agent/`. Neither is reach (which agents may use a resource on this machine), which is in `~/.coffer/local/reach.json`. See [Files and directories](/reference/filesystem).
 
 ## Edit a file
 
@@ -52,7 +51,7 @@ Some rules to know:
 - **Unknown top-level fields are kept.** A field beside `uid`, `kind`, `name` and `config` that this build does not know is reported as a warning, never dropped, so a field a newer Coffer added survives your edit.
 - **`config` holds only the settings the kind has.** A key the kind does not declare (a typo, or a setting Coffer has retired) is refused: the edit is not committed, the problem names the key, and the last valid version stays in effect. The same goes for a name the kind does not allow (an MCP server's name is at most 24 characters and has no `__`; a skill's name uses lowercase letters, digits and hyphens), and for a `title` on an MCP server, agent or skill, which have none.
 - **`${HOME}`** stands for your home directory, so the same file works on every machine.
-- **Never edit `secret/`.** The files are ciphertext; use `coffer secret set`.
+- **Never edit `secret/`.** The files are ciphertext; use the Secrets page (**Add secret**).
 
 Knowledge documents and skill folders are ordinary files: edit, add, move and delete them as you would any Markdown.
 
@@ -75,21 +74,20 @@ While you are editing a file, Coffer does not overwrite it: a save through the w
 
 ## History and restore
 
-Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer, curation or sync) and on which machine. Any file or folder has a history:
-
-```sh
-coffer vault history resources/mcp_server/jira.json
-coffer vault history skills/pdf/                 # a folder ends in /
-coffer vault diff resources/mcp_server/jira.json <version>
-coffer vault show resources/mcp_server/jira.json <version>
-coffer vault restore skills/pdf/ <version>
-```
-
-Paths are relative to the vault. `<version>` comes from `history`. A restore puts that version's content back as a **new** version, marked as restored from the old one, through the same checks as any other write: nothing is rewritten in place, so you can restore the restore. Restoring a folder puts it back whole, removing files the version did not have. It asks first; `--yes` skips the question. Secrets have no readable history and cannot be restored this way.
+Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer, curation or sync) and on which machine. Any file or folder has a history. Secrets have no readable history and cannot be restored.
 
 In the web UI, a skill's **History** tab lists its versions with who wrote each, shows each version's changes file by file, and restores a version after asking. Knowledge documents have the same history on the **Knowledge** page.
 
-You can also read the history with git itself (`git -C ~/.coffer/vault log`). Make changes by editing files and let Coffer commit them: its commits carry the trailers that name the writer, and it validates what it commits.
+For any other file, read the history with git itself and put an old version back by saving its content into the file:
+
+```sh
+cd ~/.coffer/vault
+git log --oneline -- resources/mcp_server/jira.json
+git diff <version> -- resources/mcp_server/jira.json
+git show <version>:resources/mcp_server/jira.json > resources/mcp_server/jira.json
+```
+
+Coffer validates the saved file and records it as a **new** version, so nothing is rewritten in place and you can restore the restore. Make changes by editing files and let Coffer commit them: its commits carry the trailers that name the writer, and it validates what it commits.
 
 ## Related
 

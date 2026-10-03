@@ -46,7 +46,7 @@ A change that would widen where a secret goes, held until a person answers it in
 app: a secret cited from a new [destination](#destination) or sent to a new
 [target](#target), a replaced value that something already receives, or switching the
 protection off. Approving takes a [presence grant](#presence-grant); rejecting does not, and
-works from any surface (`coffer secret reject`). A command whose change waits prints
+works from any surface. A command whose change waits prints
 "waiting for approval in the Coffer app" and exits `9`. See
 [Secrets](/guides/secrets#approvals).
 
@@ -63,18 +63,18 @@ secrets revealed or resolved, approvals, config writes, provider switches, pairi
 
 The link between a [skill](#skill) and an agent it is delivered to. Coffer delivers a skill
 by placing a symlink to its folder in the [master store](#master-store) into the agent's
-skills directory, and `coffer skill verify` reports any drift. See [Skills](/guides/skills).
+skills directory, and the **Skills** page reports any drift. See [Skills](/guides/skills).
 
 ### Built-in login
 
 An agent's own authentication, as it was before Coffer [projected](#projection) a
-[connection](#connection) into it. `coffer provider builtin <agent_type>` returns an agent to
+[connection](#connection) into it. **Change model** on the agent's page returns an agent to
 it. See [Model providers](/guides/providers).
 
 ### Built-in tool
 
 An MCP tool Coffer itself provides, listed with the reserved `coffer__` prefix alongside
-upstream tools: `coffer__search_tools` and `coffer__write`. See [MCP tools](/reference/mcp-tools).
+upstream tools. There is one: `coffer__search_tools`. See [MCP tools](/reference/mcp-tools).
 
 ## C
 
@@ -117,14 +117,14 @@ is a [resource](#resource) of kind `provider`. See [Model providers](/guides/pro
 
 The one machine allowed to run the [curation pass](#curation-pass) automatically, so two
 synced machines never rewrite the same collection at once. Set with
-`coffer config set engine.curate_owner`. See [Knowledge](/architecture/knowledge#the-owner-machine).
+**Runs on** in **Settings › General**. See [Knowledge](/architecture/knowledge#the-owner-machine).
 
 ### Curation pass
 
 A bounded rewrite of one [collection](#collection) by the [internal engine](#internal-engine):
 it takes one pending item (new [material](#material) from the [inbox](#inbox), or a document
 edited since it was last curated), folds it into the collection's documents, and writes at
-most eight files. It runs on a timer and on demand (`coffer knowledge curate`). See
+most eight files. It runs on a timer and on demand. See
 [Knowledge](/architecture/knowledge#the-curation-pass).
 
 ## D
@@ -147,7 +147,7 @@ name and the experimental-feature switches. See [Files and directories](/referen
 
 The [vault sync](#vault-sync) safeguard that holds a [sync round](#sync-round) that would
 lose 20 or more files, or more than 20% of an area, in either direction, until you answer
-it with `coffer sync hold --confirm` (delete the files) or `coffer sync hold --restore`
+it on the **Sync** page: **Delete n files** or **Restore n files**
 (keep them). Moves and renames are not losses. See
 [Vault sync](/architecture/vault-sync#the-deletion-breaker).
 
@@ -155,8 +155,7 @@ it with `coffer sync hold --confirm` (delete the files) or `coffer sync hold --r
 
 Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding), and
 [memory](#partition) by a hook Coffer installs in the agent's settings, which hands over the
-index at session start, the notes a prompt names, and a [trigger's](#memory-trigger) note
-before a known trap. See [Memory](/guides/memory).
+index at session start and the notes a prompt names. See [Memory](/guides/memory).
 
 ### Destination
 
@@ -215,7 +214,7 @@ results. See [Observability](/architecture/observability#the-mcp-invocation-log)
 How a machine starts syncing with a remote it has never synced with, always previewed and
 never automatic: against an empty remote it pushes its vault; as a new machine it takes the
 union, deleting nothing and leaving files that differ for you to choose; as a returning
-machine it resumes from the commit its descriptor names. Run with `coffer sync join`. See
+machine it resumes from the commit its descriptor names. Run from the **Sync** page. See
 [Vault sync](/architecture/vault-sync#joining).
 
 ## K
@@ -241,7 +240,7 @@ The key that decrypts every stored secret. A signed release keeps it in a Keycha
 only Coffer's signed binaries can read; a development build keeps it in `master.key` beside the
 database (mode `0600`), or in the OS keychain if you move it there. It never syncs. Back it up
 in the desktop app, which writes a key file behind a presence check, and install it on another
-machine with `coffer sync key import`. See [Secret store](/guides/secret-store#where-the-master-key-lives).
+machine from **Settings › Security › Import a master key**. See [Secret store](/guides/secret-store#where-the-master-key-lives).
 
 ### Master store
 
@@ -250,8 +249,8 @@ machine with `coffer sync key import`. See [Secret store](/guides/secret-store#w
 
 ### Material
 
-New knowledge submitted to a collection, from `coffer__write`, `coffer knowledge write`,
-an upload or a channel. Material waits in the [inbox](#inbox) until the
+New knowledge submitted to a collection: a Markdown file an agent writes into the
+[inbox](#inbox), an upload or a channel. Material waits in the [inbox](#inbox) until the
 [curation pass](#curation-pass) folds it into the documents. See
 [Knowledge](/guides/knowledge).
 
@@ -268,14 +267,6 @@ An upstream Model Context Protocol server you register with Coffer, over stdio o
 is a [resource](#resource) of kind `mcp_server`, and its tools reach agents as
 `<server>__<tool>`. See [MCP servers](/guides/mcp-servers).
 
-### Memory trigger
-
-A person's mark that one memory [note](#note) is a known trap tied to a command: a file in
-`~/.coffer/vault/memory-triggers/` naming the note and a pattern. A `block` trigger holds the
-first matching shell command of a session once, with the note as the reason; a `context`
-trigger adds the note after a command whose output shows a known error. The distil pass may
-propose one; only a person arms it. See [Memory](/guides/memory#guard-a-known-trap-with-a-trigger).
-
 ## N
 
 ### Native memory
@@ -288,14 +279,14 @@ on the agent's page. See [Memory](/guides/memory).
 
 One topic in Coffer's memory, written by the [distil pass](#distil-pass) as a Markdown file
 in a [partition's](#partition) `notes/` directory. An agent finds notes by searching the
-memory root, which `coffer path memory` names, with its own file tools. See
+memory root, which the session-start delivery and the `coffer-guide` skill name, with its own file tools. See
 [Memory](/guides/memory).
 
 ## O
 
 ### Owner pairing
 
-Binding a [channel](#channel) to the one person allowed to use it. `coffer channel pair`
+Binding a [channel](#channel) to the one person allowed to use it. The channel's page
 issues an eight-character, single-use code valid for an hour; the sender who messages the bot
 with it becomes the channel's owner, and every other sender is ignored silently. See
 [Channels](/guides/channels).
@@ -312,8 +303,8 @@ under `~/.coffer/derived/memory/` holding its [notes](#note), its `MEMORY.md` in
 ### Pre-apply snapshot
 
 A git tag (`refs/tags/coffer/pre-apply/<time>`, the ten newest kept) Coffer places before a
-[sync round](#sync-round) checks anything out, so the round can be rolled back with
-`coffer sync rollback <round>`. See [Vault sync](/architecture/vault-sync#rollback).
+[sync round](#sync-round) checks anything out, so the round can be rolled back from the
+round's drawer. See [Vault sync](/architecture/vault-sync#rollback).
 
 ### Presence grant
 
@@ -356,14 +347,14 @@ memory partition or provider connection. Every resource has a [kind](#kind), an 
 ### Retention
 
 Per-table limits on how long Coffer keeps log-like rows, such as the audit log and the
-[invocation log](#invocation-log), enforced by a background pruner. Manage it with
-`coffer config set retention.<table>`. See [Observability](/architecture/observability#retention).
+[invocation log](#invocation-log), enforced by a background pruner. Manage it in
+**Settings → Data**. See [Observability](/architecture/observability#retention).
 
 ### `runs_on`
 
 The [machine id](#machine-id) of the one machine whose daemon runs a [channel's](#channel)
 adapter. The channel's settings sync to every machine; only that machine connects to the
-messaging platform. Set with `coffer channel bind`. See [Channels](/guides/channels).
+messaging platform. Set on the channel's page. See [Channels](/guides/channels).
 
 ## S
 
@@ -372,7 +363,7 @@ messaging platform. Set with `coffer channel bind`. See [Channels](/guides/chann
 A resource's optional list of the agents it applies to; no list means every agent. Together
 with `enabled` it forms the resource's [reach](#reach). For a [channel](#channel) the scope is
 read the other way round: it names the agents the channel may drive. Set with
-the kind's `scope` command, such as `coffer skill scope <name> --agents a,b`. See [Resource framework](/architecture/resource-framework#reach).
+the kind's scope control. See [Resource framework](/architecture/resource-framework#reach).
 
 ### Secret boundary
 
@@ -420,7 +411,7 @@ the rest). The class decides whether something syncs and whether it is safe to d
 One pass of [vault sync](#vault-sync): fetch the remote, merge it with this vault outside the
 working tree, stop on any conflict, run the [deletion breaker](#deletion-breaker), take a
 [pre-apply snapshot](#pre-apply-snapshot), check the merge out and push. A round that stops
-waits for an answer per file (`coffer sync resolve`, then `coffer sync continue`). See
+waits for an answer per file on the **Sync** page. See
 [Vault sync](/architecture/vault-sync#the-round).
 
 ## T
@@ -441,8 +432,8 @@ findable with `coffer__search_tools`. See [MCP tools](/reference/mcp-tools#tieri
 ### Title
 
 An optional display label, at most 80 characters, carried by the kinds that have one —
-model providers, channels, knowledge collections and memory partitions. The web UI and the
-CLI show it in place of the name, and `edit --title` changes it. Agents, MCP servers and
+model providers, channels, knowledge collections and memory partitions. The web UI shows
+it in place of the name. Agents, MCP servers and
 skills have no title: an agent is named by its type, and an MCP server's or skill's fixed
 name is shown beside its description. See
 [Resource framework](/architecture/resource-framework#identity).
@@ -470,12 +461,12 @@ reused, and the same on every synced machine. Most names can change; the uid can
 ### Unmanaged skill
 
 A skill folder an agent has in its own skills directory that Coffer did not put there. The
-agent's page and `coffer scan` list them so you can [adopt](#adopt) or discard them. See [Skills](/guides/skills).
+agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills](/guides/skills).
 
 ### Upkeep pass
 
 Work Coffer does on a timer, without being asked: `aggregate` and `distil` for memory,
-`curate` for knowledge. Each can be switched off or retimed with `coffer config set engine.upkeep.<pass>.enabled` or `.interval`.
+`curate` for knowledge. Each can be switched off or retimed from the **Automatic** control on the Knowledge and Memory pages.
 See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/architecture/knowledge#the-sweep).
 
 ## V
@@ -483,8 +474,7 @@ See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/archi
 ### Vault
 
 The git repository at `~/.coffer/vault/` that holds your configuration and authored
-content: resource files, state documents, knowledge collections, skill folders, memory
-triggers, secret ciphertext and machine descriptors. It is a repository from the first use,
+content: resource files, state documents, knowledge collections, skill folders, secret ciphertext and machine descriptors. It is a repository from the first use,
 and every accepted change is a commit naming its [writer](#writer). More loosely, everything
 Coffer keeps under `~/.coffer/`, in its five [storage classes](#storage-class). See
 [Editing the vault by hand](/guides/vault-files) and [Files and directories](/reference/filesystem).
@@ -507,5 +497,5 @@ The API protocol a [connection](#connection) speaks: `anthropic`, `openai`, `oll
 
 Who made a commit in the [vault](#vault), named in its `Coffer-Writer` trailer: `user` (you,
 through a Coffer surface), `disk` (a file edited in an editor, a shell or an agent's own file
-tools), `agent`, `daemon`, `curation` or `sync`. `coffer vault history` and a skill's
-**History** tab show it. See [Editing the vault by hand](/guides/vault-files).
+tools), `agent`, `daemon`, `curation` or `sync`. A skill's
+**History** tab shows it. See [Editing the vault by hand](/guides/vault-files).

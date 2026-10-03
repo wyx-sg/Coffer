@@ -26,7 +26,7 @@ Coffer is a **daemon plus a vault**:
 - **The vault** is `~/.coffer/vault`, a git repository of plain files: one JSON file per resource, the skill folders, the knowledge collections and the encrypted secrets. Beside it in `~/.coffer` are machine-local settings, a history database and state Coffer can rebuild, such as the memory tree.
 - **`coffer-mcp-shim`** is a small stdio program that each agent starts as an ordinary MCP server. It finds the running daemon, starting one if none is running, and forwards the session to it.
 
-When you run `coffer agent connect claude-code`, Coffer writes one `coffer` entry into Claude Code's MCP config. From then on, Claude Code reaches every MCP server you register in Coffer through that one entry.
+When you connect Claude Code on the **Agents** page, Coffer writes one `coffer` entry into Claude Code's MCP config. From then on, Claude Code reaches every MCP server you register in Coffer through that one entry.
 
 ## What it manages
 
@@ -50,8 +50,8 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 
 | Surface | What it is for |
 | --- | --- |
-| **CLI** (`coffer …`) | Scripting and terminal work. Any command that needs the daemon starts it if it is not already running. See the [CLI reference](/reference/cli). |
-| **Web UI** | Browsing and editing everything. The daemon serves it at its own address, and `coffer open` opens it with you already signed in. See [Web UI](/guides/web-ui). |
+| **CLI** (`coffer …`) | A short command list: start, stop and check the daemon, run a command with secrets in its environment, read Coffer's logs. See the [CLI reference](/reference/cli). |
+| **Web UI** | Browsing and editing everything. The daemon serves it at its own address (`http://127.0.0.1:8000/`), already signed in. See [Web UI](/guides/web-ui). |
 | **Desktop app** | The same UI in a native macOS window, with a Dock icon and a menu-bar icon. It starts the daemon for you. See [Desktop app](/guides/desktop-app). |
 | **MCP endpoint** | Where agents connect, through `coffer-mcp-shim`. Agents see upstream tools plus Coffer's own `coffer__*` tools. See [Connect a client](/guides/connect-a-client). |
 | **Channels** | Telegram and SeaTalk bots that let you drive your agents and receive notifications from your phone. See [Channels](/guides/channels). |

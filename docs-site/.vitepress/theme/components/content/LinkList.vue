@@ -5,7 +5,7 @@
 //     - [Agents](/guides/agents) Register Claude Code and Codex…
 //     The leading link is the row's title, and the whole row is clickable.
 //   variant "cards": a grid of small bordered cards. Write each item as
-//     - **Add Codex.** Run `coffer agent add codex`… See [Agents](/guides/agents).
+//     - **Add Codex.** Connect Codex on the Agents page… See [Agents](/guides/agents).
 withDefaults(defineProps<{ variant?: "list" | "cards" }>(), { variant: "list" });
 </script>
 

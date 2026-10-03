@@ -1,6 +1,5 @@
 // frontend/src/components/skills/SkillDetailPane.tsx
-// The open skill in the Skills page's reading pane (spec skill-manager "Cover
-// skill management on REST, the CLI and the web"): the header, the banners of
+// The open skill in the Skills page's reading pane (spec skill-manager "Cover skill management on REST and the web"): the header, the banners of
 // what needs the reader (SkillBanners), and four tabs in this order — Files
 // (the default), Delivery, Requires, History (the master folder's
 // versions, from the vault's history). The Files tab carries the

@@ -27,7 +27,7 @@ Coffer 支持两种智能体类型：
 
 ### 每种类型一个智能体 {#one-agent-per-type}
 
-一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code` 或 `codex`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——`coffer agent …`、`coffer path agent`、`coffer scan --agent`、技能或 MCP 服务器的 `--agents` 范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
+一台机器上每种类型最多注册一个智能体，智能体的名字**就是**它的类型：`claude-code` 或 `codex`。你不用起名，智能体也没有标题或描述。凡是 Coffer 问你指哪个智能体的地方——技能或 MCP 服务器的生效范围，以及所有 `/api/v1/agents/{uid}/…` 路由——都可以填类型（`claude-code`；`claude_code` 也能识别）或智能体的 uid。
 
 除了类型，智能体唯一的设置就是**配置目录**，外加[模型绑定](#models)。注册时默认使用该类型的标准目录（`~/.claude`、`~/.codex`），除非你另行指定。把 Coffer 指向别的目录，是把这唯一的智能体挪过去，绝不会新增第二个。注册一个已注册过的类型会被拒绝，返回 `409 AGENT_TYPE_REGISTERED`。
 
@@ -73,34 +73,9 @@ Coffer 不负责安装智能体，而安装又依赖具体机器，所以找不�
 
 对新发现的智能体点**连接**，会在标准目录注册它并连接它。它会先打开**审阅改动**——列出将写入的每个文件和新增的行——在你应用之前什么都不写。首次运行时，如果两个智能体都已安装且都没连接，**全部连接**会在一次确认里审阅并连接两者。已注册的行还会显示它的模型，以及有多少技能、MCP 服务器和插件对它生效，并可打开智能体页面。
 
-**CLI：**
-
-```sh
-coffer scan
-# lists the types seen here that are not registered (kind "agent"), one row per type,
-# with its state and version and — when it can be added — the command that registers it
-
-coffer agent add codex            # register the codex agent at ~/.codex
-# registered: agent codex
-```
-
-`coffer scan` 打印的命令是 `coffer agent add <type>`，只有当找到的目录不是该类型的标准目录时才会加上 `--config-dir`。
-
-在该类型的程序找不到时，`coffer agent prompt <type>` 会打印智能体页面复制的那段安装或重装提示词（`--json` 把它放在 `handoff` 下）；程序找得到时，它会说没有需要交接的内容，并以退出码 5 结束。对于程序已经不在的已注册智能体，`coffer agent show <name>` 会提示你用它。
-
 ### 使用其他配置目录 {#use-a-different-config-directory}
 
-Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex 则是 `CODEX_HOME`。如果你就是这样运行智能体的，把这个目录告诉 Coffer。注册时：
-
-```sh
-coffer agent add claude-code --config-dir ~/work/.claude
-```
-
-对已注册的智能体，把它挪过去：
-
-```sh
-coffer agent edit claude-code --config-dir ~/work/.claude
-```
+Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex 则是 `CODEX_HOME`。如果你就是这样运行智能体的，把这个目录告诉 Coffer，注册时或之后都可以。已注册的智能体用同一个菜单项挪过去。
 
 **Web 界面：** 在该行（或智能体页面）的 **⋯** 菜单里选**使用其他配置目录…**。用系统原生的文件夹对话框选择文件夹（只有宿主没有原生对话框时才用应用内浏览器）；对话框会列出该类型的常见文件哪些存在。对尚未添加的智能体，**使用此目录**会直接在该目录注册它，但不连接。对已连接的智能体，按钮写的是**审阅改动**：智能体在它的目录里带着 Coffer 的 `coffer` 条目和记忆 Hook，所以换目录会把这两样从旧目录取出、写进新目录，你会在任何东西挪动之前先看到这些行。
 
@@ -108,23 +83,12 @@ coffer agent edit claude-code --config-dir ~/work/.claude
 
 当 Coffer 自己启动一个注册在非标准目录上的智能体时——一次[对话](/zh/guides/chat)或[消息渠道](/zh/guides/channels)轮次、一次模型列表探测、一次插件卸载——它会把 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME` 设为那个目录，让智能体读到 Coffer 放在那里的技能、MCP 条目和设置。
 
-### 编辑、停用和移除 {#edit-disable-and-remove}
+### 编辑、关闭和断开连接 {#edit-turn-off-and-disconnect}
 
-```sh
-coffer agent edit claude-code --config-dir ~/work2/.claude
-coffer agent disable claude-code
-coffer agent rm claude-code
-```
-
-在 Web 界面里，智能体行和智能体页面上的 **⋯** 菜单包含**使用其他配置目录…**、**在访达中显示配置目录**、**复制 uid**、**断开连接…**（只要有任何部分已安装）和**关闭**——对已关闭的智能体则是**开启**，它本身就是那一行的按钮。没有**移除**：列表里始终有两个受支持智能体各一行，想让 Coffer 不再碰某个智能体，就断开它或关闭它。
+智能体行和智能体页面上的 **⋯** 菜单包含**使用其他配置目录…**、**在访达中显示配置目录**、**复制 uid**、**断开连接…**（只要有任何部分已安装）和**关闭**——对已关闭的智能体则是**开启**，它本身就是那一行的按钮。没有**移除**：列表里始终有两个受支持智能体各一行，想让 Coffer 不再碰某个智能体，就断开它或关闭它。
 
 - **编辑**修改配置目录或[模型绑定](#models)。名字就是类型，不能改。所有引用智能体的地方——生效范围列表、消息渠道的默认智能体、已安装的 MCP 条目——保存的都是智能体不可变的 `uid`。
-- **停用**（Web 界面里叫**关闭**）让 Coffer 不再往智能体里写、也不再从中读：已投递的技能会被移除，它的原生记忆不再被聚合，它的配置也不再进入模型目录。重新启用（**开启**）会恢复技能授予的内容。关闭的智能体显示**已关闭**，图标变淡。
-- **移除**（仅命令行和 REST）删除注册，并移除 Coffer 投递的技能。智能体本身仍保持安装状态，只要它的程序或配置目录还在，`coffer scan` 就会再次提供它。
-
-::: warning 移除智能体会留下 Coffer 的条目
-在命令行和 REST API 上，移除智能体并不会断开它。`coffer` MCP 条目会继续上报一个没有任何已注册智能体对应的 `uid`，于是它的会话只能看到对所有智能体生效的服务器。请在移除前运行 `coffer agent disconnect <type>`，或在重新注册后再接入一次。
-:::
+- **关闭**让 Coffer 不再往智能体里写、也不再从中读：已投递的技能会被移除，它的原生记忆不再被聚合，它的配置也不再进入模型目录。重新启用（**开启**）会恢复技能授予的内容。关闭的智能体显示**已关闭**，图标变淡。
 
 ## 把智能体接入 Coffer {#connect-an-agent-to-coffer}
 
@@ -133,27 +97,11 @@ coffer agent rm claude-code
 | 部分 | 作用 | 何时 |
 | --- | --- | --- |
 | 网关 MCP 条目 | 一个指向 `coffer-mcp-shim` 的 `coffer` stdio MCP 服务器条目。智能体通过它访问所有启用的上游服务器、Coffer 自己的工具，以及投递给它的知识。 | 总是 |
-| 记忆投递 Hook | 四个 Hook 条目——会话开始、每次提问、每条 shell 命令执行前后——Coffer 通过它们把记忆交给智能体。见[记忆](/zh/guides/memory#install-the-hook)。 | 总是 |
+| 记忆投递 Hook | 两个 Hook 条目——会话开始、每次提问——Coffer 通过它们把记忆交给智能体。见[记忆](/zh/guides/memory#install-the-hook)。 | 总是 |
 
 断开连接会移除这两部分，而且只移除 Coffer 自己的条目；这些文件里的其他内容保持原样。
 
 **Web 界面：** 概览 tab 的**连接**区展示每个部分——MCP 条目和记忆 Hook，各自所在的文件，以及是否为最新——并在区块标题处放着当前状态所需的那一个修复按钮：未连接时是**连接**，需要修复时是**修复**，已关闭时是**开启**，Codex 还没批准 Coffer 的 Hook 时是**重新检查**。已连接的智能体这里没有按钮；**断开连接…**在 ⋯ 菜单里。页面头部永远不会变成修复按钮：它只有智能体的图标、名字、一个状态标签（**已连接**、**未连接**、**需要修复**、**Hook 未获批准**、**已关闭**或**配置残留**）、**新建对话**和 ⋯ 菜单。在**智能体**列表里，行上是同样的状态和同样的操作。每次连接、修复和断开都会先打开同一个**审阅改动**预览：修复只列出缺失的部分，断开只列出它要删的行。如果写入中途失败，预览会指出哪一项失败，保留已经生效的改动，并只对失败的那项提供重试。
-
-**CLI：**
-
-```sh
-coffer agent connect claude-code
-# connected agent claude-code to Coffer
-#   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
-#   memory delivery hook: installed (: coffer-memory; coffer memory hook --agent-uid …)
-
-coffer agent show claude-code                # the connection, beside the agent's record (--json for the raw answer)
-# ...
-# coffer_connection: connected
-#   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
-
-coffer agent disconnect claude-code
-```
 
 接入后重启智能体（或重新加载它的 MCP 服务器），让它启动 shim。
 
@@ -188,7 +136,7 @@ command = "/Users/you/.coffer/bin/coffer-mcp-shim"
 args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 ```
 
-记忆 Hook 的四个条目见[文件系统](/zh/reference/filesystem)。
+记忆 Hook 的两个条目见[文件系统](/zh/reference/filesystem)。
 
 接入是幂等的：再接入一次会原地重写每个条目，绝不会加第二个。什么都没装时断开连接也会成功，且不做任何改动。每次写入都会备份，并按部分记入审计（`agent_mcp_installed` / `agent_mcp_uninstalled`、`memory_delivery_installed` / `memory_delivery_removed`）。连接状态每次都从文件读取，Coffer 不存储它。
 
@@ -201,7 +149,7 @@ args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 3. 运行守护进程的 Python 解释器的 scripts 目录（`pip` 和 `uv` 放置控制台脚本的地方）；
 4. 与正在运行的可执行文件打包在一起的二进制。
 
-当结果是安装版时，Coffer 写入稳定的 `~/.coffer/bin/coffer-mcp-shim` 链接，而不是带版本号的目录，这样条目在升级后依然有效。如果找不到任何 shim，安装会以 `SHIM_NOT_FOUND` 失败，指出缺失的二进制，且不写入任何东西。这个拒绝会附带一段交接提示词：列出 Coffer 查找过的每个位置，并请一个智能体找到或重装 shim，使其能在 `~/.coffer/bin/coffer-mcp-shim` 解析到。接入的审阅界面会在**重试**旁提供**复制提示词**，`coffer agent connect` 则在错误下方打印它。
+当结果是安装版时，Coffer 写入稳定的 `~/.coffer/bin/coffer-mcp-shim` 链接，而不是带版本号的目录，这样条目在升级后依然有效。如果找不到任何 shim，安装会以 `SHIM_NOT_FOUND` 失败，指出缺失的二进制，且不写入任何东西。这个拒绝会附带一段交接提示词：列出 Coffer 查找过的每个位置，并请一个智能体找到或重装 shim，使其能在 `~/.coffer/bin/coffer-mcp-shim` 解析到。接入的审阅界面会在**重试**旁提供**复制提示词**。
 
 ### 智能体 uid 与生效范围 {#the-agent-uid-and-reach}
 
@@ -215,7 +163,7 @@ Coffer 只通过一小组有文档说明的面接触智能体的文件：
 
 | 面 | Coffer 读 | Coffer 写 |
 | --- | --- | --- |
-| 白名单内的配置文件 | 是 | 是，当你在编辑器或 CLI 中保存时 |
+| 白名单内的配置文件 | 是 | 是，当你在编辑器中保存时 |
 | 智能体配置里的 MCP 条目 | 是 | 安装/卸载 `coffer`、移除、纳入托管 |
 | 插件 | 清单和启用状态 | 启用开关；按该类型自己的方式卸载 |
 | 模型提供商 key | 是（每轮调和都会检查） | 当你切换[提供商](/zh/guides/providers)时，以及把值已过时的投射重新对齐时 |
@@ -251,22 +199,10 @@ Coffer 只通过一小组有文档说明的面接触智能体的文件：
 
 **Web 界面：** 打开智能体，选择**配置文件**。选中一个文件即可查看；点**编辑**后查看器变为可编辑。内容旁边可以用外部编辑器打开文件，或在文件管理器中显示它。有未保存的草稿时，切换文件、tab 或页面前会先询问，使用的是所有编辑器共用的**不保存就离开？**对话框。
 
-**CLI：**
-
-```sh
-coffer path agent claude-code config                        # where each allowlisted file is
-coffer agent config edit claude-code instructions          # opens $EDITOR
-coffer agent config edit codex config --from-file ./config.toml
-
-# Directory entries (Claude Code subagents)
-coffer agent config edit claude-code subagents/reviewer.md --from-file ./reviewer.md
-coffer agent config rm claude-code subagents/reviewer.md
-```
-
-要读文件，用你自己的工具打开 `coffer path agent <type> config` 打印的路径。读取不存在的文件会返回空内容，不会创建它。目录条目里的文件必须留在该目录内，并以 `.md` 结尾。
+读取不存在的文件会返回空内容，不会创建它。目录条目里的文件必须留在该目录内，并以 `.md` 结尾。
 
 ::: tip 并发编辑会被拒绝，而不是覆盖
-每次读取都会返回内容指纹。编辑器和 `coffer agent config edit` 保存时会把它带回来；如果文件在此期间在磁盘上变了——智能体自己改写了它，或者你在别处保存过——写入会以 `CONFIG_FILE_STALE` 被拒绝（CLI 退出码 5），文件保持原样。重新打开后再保存即可。
+每次读取都会返回内容指纹。编辑器保存时会把它带回来；如果文件在此期间在磁盘上变了——智能体自己改写了它，或者你在别处保存过——写入会以 `CONFIG_FILE_STALE` 被拒绝，文件保持原样。重新打开后再保存即可。
 :::
 
 ## 管理智能体自己的 MCP 条目 {#manage-the-agent-s-own-mcp-entries}
@@ -285,16 +221,7 @@ coffer agent config rm claude-code subagents/reviewer.md
 - 从源文件中**移除**它（原子写入、保留 `.bak`，审计为 `agent_mcp_entry_removed`）。
 - **纳入 Coffer 托管**：Coffer 把条目注册为一个 `mcp_server` 资源，确认能读回，然后才删除直接条目。任何失败都会回滚新资源，并让智能体的文件保持逐字节不变。之后该服务器通过网关提供给每个智能体。
 
-```sh
-coffer scan --agent claude-code                       # direct MCP entries have kind "mcp"
-coffer scan --ref claude-code:github --source global  # one entry in full, secrets withheld
-coffer discard mcp claude-code:old-server --source settings
-coffer adopt mcp claude-code:github --secret GITHUB_TOKEN=github/token
-```
-
-ref 的格式是 `<agent>:<entry>`，与 scan 打印的一致。
-
-当条目的环境变量或请求头在一个看起来像密钥的键下（包含 `TOKEN`、`SECRET`、`PASSWORD`、`PASSWD`、`API_KEY`、`APIKEY`、`CREDENTIAL` 或 `AUTHORIZATION`）带有非空值时，纳入托管要求为每一个都提供 `--secret KEY=REF` 映射。Coffer 把当前值存进它的[加密密钥存储](/zh/guides/secret-store)中你指定的 ref 下，新资源的配置里只带 ref。名字冲突会被拒绝，并给出建议的替代名（用 `--name` 自选）。对同时出现在两个文件里的 Claude Code 名字，用 `--source` 传入文件的键（`global` 或 `settings`）。`coffer` 条目本身永远不能用这种方式移除或纳入托管。
+当条目的环境变量或请求头在一个看起来像密钥的键下（包含 `TOKEN`、`SECRET`、`PASSWORD`、`PASSWD`、`API_KEY`、`APIKEY`、`CREDENTIAL` 或 `AUTHORIZATION`）带有非空值时，纳入托管对话框会在**存储为**下逐个列出它们，默认选**密钥**。Coffer 把当前值存进它的[加密密钥存储](/zh/guides/secret-store)，新资源的配置里只带引用。名字冲突会被拒绝：换一个**在 Coffer 中的名称**。对同时出现在两个文件里的 Claude Code 名字，纳入的是你打开的那一条。`coffer` 条目本身永远不能用这种方式移除或纳入托管。
 
 ## 插件 {#plugins}
 
@@ -312,14 +239,6 @@ ref 的格式是 `<agent>:<entry>`，与 scan 打印的一致。
 
 对话框只读取插件文件，不改动任何东西。启用和卸载在 tab 上。
 
-```sh
-coffer agent plugin list claude-code
-coffer agent plugin show claude-code formatter@acme
-coffer agent plugin disable claude-code formatter@acme
-coffer agent plugin enable claude-code formatter@acme
-coffer agent plugin rm codex formatter@acme
-```
-
 | | Claude Code | Codex |
 | --- | --- | --- |
 | 清单读取自 | `plugins/installed_plugins.json`、`known_marketplaces.json` | `config.toml` 里的 `[plugins."…"]` 和 `[marketplaces.*]` |
@@ -336,32 +255,19 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 | --- | --- | --- |
 | 智能体自己的文件 | `settings.json`、`settings.local.json` | `hooks.json` |
 | 插件 | 每个已启用插件的 `hooks/hooks.json` | 每个已启用插件的 `hooks/hooks.json`（如果有） |
-| Coffer 自己的 Hook | `settings.json` 里的 `SessionStart`、`UserPromptSubmit`、`PreToolUse` 和 `PostToolUse` | `hooks.json` 里同样的四个事件 |
+| Coffer 自己的 Hook | `settings.json` 里的 `SessionStart` 和 `UserPromptSubmit` | `hooks.json` 里同样的两个事件 |
 
-**Coffer 的记忆 Hook**——[记忆投递 Hook](/zh/guides/memory#install-the-hook)——在它的四个条目上各有标记，并作为一个 Hook 上报，放在最上面的一块属性里：它的状态和最近触发的时间、命令、所在的事件，以及声明它的文件。修复按钮在这一块的标题处（**修复**，或**重新检查**），状态为什么有问题写在这一块里。状态说明它的情况：
+**Coffer 的记忆 Hook**——[记忆投递 Hook](/zh/guides/memory#install-the-hook)——在它的两个条目上各有标记，并作为一个 Hook 上报，放在最上面的一块属性里：它的状态和最近触发的时间、命令、所在的事件，以及声明它的文件。修复按钮在这一块的标题处（**修复**，或**重新检查**），状态为什么有问题写在这一块里。状态说明它的情况：
 
-- **最新**——恰好装在四个事件上，每个都恰好是当前版本 Coffer 写入的命令。
+- **最新**——恰好装在两个事件上，每个都恰好是当前版本 Coffer 写入的命令。
 - **已过期**——Coffer 的 Hook 在，但命令与 Coffer 现在写的不同，或所在事件集合不同。守护进程会在下一轮调和时重写它；**修复**会立即重写。
 - **缺失**——没有 Coffer 的 Hook。**修复**会重新把智能体接入 Coffer，从而装上它。
 
-对 Codex，它还会说明 Codex 是否会运行这个 Hook。Codex 会跳过你没批准的条目，而 Coffer 的 Hook 只有四个条目都被批准才算已批准，所以**未批准**（或 Coffer 更新改了命令之后的**批准后已变更**）意味着至少有一个条目已安装但不会运行。智能体页面会显示 **Hook 未获批准**，侧边栏的**智能体**条目也会计入它。打开 Codex，运行 `/hooks`，信任 Coffer 的四个条目。Coffer 不会替你批准，之后用**重新检查**重新读取 Codex 的批准情况。
+对 Codex，它还会说明 Codex 是否会运行这个 Hook。Codex 会跳过你没批准的条目，而 Coffer 的 Hook 只有两个条目都被批准才算已批准，所以**未批准**（或 Coffer 更新改了命令之后的**批准后已变更**）意味着至少有一个条目已安装但不会运行。智能体页面会显示 **Hook 未获批准**，侧边栏的**智能体**条目也会计入它。打开 Codex，运行 `/hooks`，信任 Coffer 的两个条目。Coffer 不会替你批准，之后用**重新检查**重新读取 Codex 的批准情况。
 
 它还会根据[审计日志](/zh/guides/activity)显示 Hook 最近一次触发的时间。一个你每天都在用的智能体显示**从未触发**，就说明这个智能体没有在运行该 Hook；这一块会写出最可能的原因并链接到**活动**，侧边栏也会计入它。
 
 **智能体自己的 Hook** 是一张表，列为**事件**、**命令**、**匹配器**和**文件**，不含 Coffer 的 Hook，带一个对命令和文件的搜索，以及一个显示每个事件有多少 Hook 的**事件**筛选；一旦其中之一缩小了表格，它会说明显示了多少个、共多少个。点一行查看详情：完整的命令、事件及其何时运行、匹配器、类型、超时、文件，以及条目在文件里的位置（`hooks.<event>[group].hooks[hook]`），并有**复制命令**和**在配置文件中打开**。这个 tab 上的一切都是只读的：Coffer 从不编辑其他工具的 Hook，所以 Hook 要在它自己的文件里改，点文件名会在**配置文件**里打开那个文件。
-
-```sh
-coffer agent hooks claude-code
-# * SessionStart [startup|resume|clear|compact]  (user)  : coffer-memory; coffer memory hook …
-# * UserPromptSubmit  (user)  : coffer-memory; coffer memory hook …
-# * PreToolUse [Bash]  (user)  : coffer-memory; coffer memory hook …
-#   PreToolUse [Bash]  (user)  ./lint.sh
-# * PostToolUse [Bash]  (user)  : coffer-memory; coffer memory hook …
-#   SessionStart  (plugin formatter@acme)  ./plug.sh
-# coffer hook: current on PostToolUse,PreToolUse,SessionStart,UserPromptSubmit, last fired 2026-09-29T08:12:03Z
-
-coffer agent hooks claude-code --json   # the full answer, with each hook's file and its position in it
-```
 
 ## 模型 {#models}
 
@@ -372,23 +278,9 @@ coffer agent hooks claude-code --json   # the full answer, with each hook's file
 
 每个来源独立失败：未登录的 Codex 或变了布局的二进制，只会让那个来源的模型缺失。
 
-```sh
-coffer agent models claude_code
-# opus  Opus 5.5  efforts: low, medium, high, xhigh, max
-# sonnet  Sonnet 5  efforts: low, medium, high, xhigh, max
-```
+当智能体所在的[模型提供商](/zh/guides/providers)整理了模型列表时，选择器会改为提供那份列表。
 
-`coffer agent models` 接受智能体的类型。当智能体所在的[模型提供商](/zh/guides/providers)整理了模型列表时，选择器会改为提供那份列表。
-
-智能体记录保存着提供商投射写入智能体配置的模型绑定：
-
-```sh
-coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
-coffer agent edit claude-code --clear-tiers
-coffer agent edit codex --model gpt-5.5
-```
-
-改动会在下次切换该智能体的提供商时写到磁盘上。在 Web 界面里，同一个绑定在智能体的总览里修改：**模型**下的**更改…**会在写入之前先展示将要写的行（见[智能体页面](#the-agent-page-in-the-web-ui)）。
+智能体记录保存着提供商投射写入智能体配置的模型绑定。它在智能体的总览里修改：**模型**下的**更改…**会在写入之前先展示将要写的行（见[智能体页面](#the-agent-page-in-the-web-ui)）。
 
 ## Web 界面中的智能体页面 {#the-agent-page-in-the-web-ui}
 
@@ -424,14 +316,7 @@ coffer agent edit codex --model gpt-5.5
 
 **会话** tab 列出智能体自己的 CLI 会话——它的本地对话记录（Claude Code 是 `<config_dir>/projects/**/*.jsonl`，Codex 是 `<config_dir>/sessions/**/*.jsonl`），带标题、项目、消息数和活动时间，可搜索、可排序。选中一个会在列表旁以只读对话的形式打开；harness 自己注入的块折叠在**运行环境上下文**下，所以每一轮都以你的话开头。加载不出的会话会在阅读区里说明，并带**重试**。
 
-```sh
-coffer path agent claude-code memory                   # the native memory stores
-coffer path agent claude-code transcripts              # the transcript folders
-coffer agent transcript claude-code -q "release" --sort message_count
-coffer agent transcript claude-code <session_id> --limit 50
-```
-
-原生记忆库是普通文件；用你自己的工具读取 `coffer path` 打印的路径即可。
+原生记忆库是普通文件；**记忆** tab 会显示每个库所在的文件夹，你可以用自己的工具读取其中的文件。
 
 对话记录文本在展示前会清除密钥，过长的轮次会被截断并标记，会话按轮次窗口分段读取。Coffer 从不写入、存储或向任何地方发送对话记录或原生记忆。
 
@@ -448,7 +333,7 @@ coffer agent transcript claude-code <session_id> --limit 50
 | 智能体显示**找不到** | 它注册过，但它的 CLI（`claude` 或 `codex`）不在守护进程的 `PATH` 上，目录也没了 | 安装 CLI，或让守护进程能看到它。 |
 | 智能体显示**配置残留** | 它的程序不在你登录 shell 的 `PATH` 上；只剩配置目录 | 重装智能体（它 **⋯** 菜单里的**复制提示词**），或把它的程序放到 `PATH` 上。 |
 | 检测为**已安装，未运行过** | 程序已安装，但从没创建过配置目录 | 照样连接：在标准目录注册会创建它。 |
-| 注册被拒绝，返回 `AGENT_TYPE_REGISTERED` | 该类型已有注册的智能体；每种类型只有一个 | 要换目录，改用 `coffer agent edit <name> --config-dir <dir>`。 |
+| 注册被拒绝，返回 `AGENT_TYPE_REGISTERED` | 该类型已有注册的智能体；每种类型只有一个 | 要换目录，改用该行 **⋯** 菜单里的**使用其他配置目录…**。 |
 | 保存失败，返回 `CONFIG_FILE_STALE` | 打开之后文件变了 | 重新打开文件再保存。 |
 | 插件卸载不见了 | `claude` 不在 `PATH` 上 | 自己运行 `claude plugin uninstall <id>`。 |
 

@@ -93,10 +93,11 @@ function entryLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines:
 function hookLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines: string[] } {
   const uid = agent.uid || opts.placeholders.uid;
   const command = detailOf(agent, "memory_hook") ?? `coffer memory hook --agent-uid ${uid} …`;
-  return {
-    hunk: "hooks.SessionStart",
-    lines: [`{ "hooks": [{ "type": "command",`, `    "command": "${command}" }] },`],
-  };
+  // Two entries, one command: the index at session start, and the notes a
+  // prompt names.
+  const entry = (event: string) =>
+    `"${event}": [{ "hooks": [{ "type": "command", "command": "${command}" }] }],`;
+  return { hunk: "hooks", lines: [entry("SessionStart"), entry("UserPromptSubmit")] };
 }
 
 function partItem(

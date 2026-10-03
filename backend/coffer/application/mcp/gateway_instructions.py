@@ -54,16 +54,12 @@ PROTOCOL_VERSION = "2025-06-18"
 # hold it against the tools actually registered — the instructions are the one
 # thing no caller ever validates, so a tool renamed or retired here goes
 # unnoticed until an agent calls a name that no longer exists.
-NAMED_TOOLS: frozenset[str] = frozenset({"write", "search_tools"})
+NAMED_TOOLS: frozenset[str] = frozenset({"search_tools"})
 
 #: Each built-in tool's name as the handshake gives it, with its gloss, in the
-#: order the text names them. A tool is named only while it is in the tool list
-#: — ``coffer__write`` leaves with the ``knowledge`` feature (spec
-#: experimental-features "Close every surface of a switched-off feature") —
-#: and a text naming a tool the gateway then answers as unknown is the one
-#: thing this text must never do.
+#: order the text names them. A text naming a tool the gateway then answers as
+#: unknown is the one thing this text must never do.
 _TOOL_GLOSSES: tuple[tuple[str, str], ...] = (
-    ("write", "file a durable fact"),
     ("search_tools", "describe an upstream tool you need; results are callable by name"),
 )
 
@@ -77,8 +73,9 @@ _PLAIN_INTRO = (
     "behind one endpoint and adds "
 )
 
-#: Said only while the knowledge layer is there (its tool ``coffer__write`` is
-#: listed).
+#: Said only while the knowledge feature is on. There is no knowledge tool:
+#: an agent reads and writes the files with its own tools (spec knowledge
+#: "Expose no knowledge tool").
 _KNOWLEDGE = " Its knowledge is markdown you read with your own file tools."
 
 #: Said only while the memory feature is on: there is no memory tool, so the
@@ -102,18 +99,18 @@ _TIERED = " Your tool list is a budgeted slice: {n} more upstream tools are unli
 #: is printed instead of the root itself, so the cap is met by a shorter
 #: sentence rather than by truncating the tail of the text.
 _MEMORY_BY_COMMAND = (
-    " Its memory notes are Markdown under the directory coffer path memory prints; "
-    "grep it with your own tools."
+    " Its memory notes are Markdown under the memory root the coffer-guide skill names; "
+    "grep them with your own tools."
 )
 
 
-def _base(tools: Collection[str], memory_line: str) -> str:
+def _base(tools: Collection[str], memory_line: str, *, knowledge: bool) -> str:
     """The unconditional part, naming exactly ``tools`` (bare names), with
-    ``memory_line`` (empty while the memory feature is off)."""
+    ``memory_line`` (empty while the memory feature is off) and the knowledge
+    line only while ``knowledge`` is on."""
     glosses = [(name, gloss) for name, gloss in _TOOL_GLOSSES if name in tools]
     named = ", ".join(f"coffer__{name} ({gloss})" for name, gloss in glosses)
     own = "its own tools" if len(glosses) > 1 else "its own tool"
-    knowledge = "write" in tools
     text = f"{_INTRO if knowledge else _PLAIN_INTRO}{own}: {named}."
     if knowledge:
         text += _KNOWLEDGE
@@ -127,6 +124,7 @@ def build_instructions(
     hidden_count: int,
     tools: Collection[str] | None = None,
     memory_root: str | None = None,
+    knowledge: bool = True,
 ) -> str:
     """Build the per-session instructions text.
 
@@ -136,6 +134,8 @@ def build_instructions(
     so a tool whose experimental feature is switched off is never advertised.
     ``memory_root`` is the absolute memory root while the memory feature is
     on, and ``None`` while it is off — when the text does not name it.
+    ``knowledge`` is whether the knowledge feature is on; while it is off the
+    text says nothing of knowledge.
 
     ``hidden_count`` is the number of upstream tools the last ``tools/list``
     left unlisted. At 0 nothing is hidden, so the tiering paragraph is omitted
@@ -152,9 +152,9 @@ def build_instructions(
     named = NAMED_TOOLS if tools is None else {*tools, "search_tools"}
     tiered = _TIERED.format(n=hidden_count) if hidden_count > 0 else ""
     memory_line = _MEMORY.format(root=memory_root) if memory_root else ""
-    text = _base(named, memory_line) + tiered
+    text = _base(named, memory_line, knowledge=knowledge) + tiered
     if memory_root and len(text) > MAX_INSTRUCTIONS_CHARS:
-        text = _base(named, _MEMORY_BY_COMMAND) + tiered
+        text = _base(named, _MEMORY_BY_COMMAND, knowledge=knowledge) + tiered
     return text[:MAX_INSTRUCTIONS_CHARS]
 
 
@@ -163,6 +163,7 @@ def build_initialize_result(
     hidden_count: int,
     tools: Collection[str] | None = None,
     memory_root: str | None = None,
+    knowledge: bool = True,
 ) -> dict[str, Any]:
     """The ``initialize`` response body. Arguments as for :func:`build_instructions`."""
     return {
@@ -170,7 +171,10 @@ def build_initialize_result(
         "capabilities": SERVER_CAPABILITIES,
         "serverInfo": {"name": "coffer", "version": __version__},
         "instructions": build_instructions(
-            hidden_count=hidden_count, tools=tools, memory_root=memory_root
+            hidden_count=hidden_count,
+            tools=tools,
+            memory_root=memory_root,
+            knowledge=knowledge,
         ),
     }
 

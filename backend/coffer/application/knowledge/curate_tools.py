@@ -16,7 +16,7 @@ prompt (spec knowledge "Curate through a fenced four-tool pass"):
 * **A write must not overwrite what it did not read.** A document the pass read
   (or was shown) is written only while its bytes are still the ones the pass saw: a
   person's edit that landed mid-pass is refused rather than silently reverted
-  (see "Let newer statements win and a person's edit stand").
+  (see "Let the newer or better-evidenced statement win").
 * **A retire must follow the write that kept its content.** A document may be
   retired only after this pass has seen it — in the brief or through
   ``read_document`` — and has since written a *different* document. Code

@@ -1,29 +1,30 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
 Create a collection, list them, walk one level of a collection, read a
-document, save an edited document's body, submit material, upload a document,
-delete a document, trigger curation (spec knowledge "Cover knowledge
-management on REST and the CLI"). Deleting a collection goes through the
-kind-agnostic Resource route, since collection lifecycle is a Resource concern.
+document, save an edited document's body, upload a document, delete a document,
+trigger curation (spec knowledge "Manage knowledge in the web UI"). These routes
+are the web UI's own: one the page does not call does not exist. Deleting a
+collection goes through the kind-agnostic Resource route, since collection
+lifecycle is a Resource concern.
 
 Three properties shape every handler below.
 
 **Nothing here retrieves.** There is no ``search`` and no ``grep``: the layer
 keeps no index and exposes no retrieval anywhere, so the person reads through
 ``tree``/``file`` and an agent reads the files itself at the paths its
-delivered skill carries ("Expose exactly one knowledge tool", invariant 4).
+delivered skill carries ("Expose no knowledge tool", invariant 4).
 ``tree`` and ``file`` also show a collection's ``.inbox`` — read-only — so a
 person can see what waits to be merged ("Hide dot-prefixed entries except the
 inbox").
 
 **New knowledge arrives as material; a person's edit arrives as a body.**
-``POST /material`` and ``/upload`` both submit to the collection's inbox, and a
-pass merges what is new into the documents ("Submit every entrance's input as
-material"). ``PUT /file`` is the one route that writes a document, and only
-the body of one a person already has open: it keeps the frontmatter and
-refuses a stale fingerprint ("Save a document edited in the web UI"). Editing
-in their own editor, from the page's open-in-editor action, remains the other
-way, live on the very next read.
+``/upload`` submits to the collection's inbox, as an agent's inbox file does, and
+a pass merges what is new into the documents ("Submit every entrance's input as
+material"). There is no route that creates a document at a path. ``PUT /file``
+is the one route that writes a document, and only the body of one a person
+already has open: it keeps the frontmatter and refuses a stale fingerprint
+("Save a document edited in the web UI"). Editing in their own editor, from the
+page's open-in-editor action, remains the other way, live on the very next read.
 
 **No handler here takes an agent, and neither does the service.** A collection
 carries no per-agent reach and no enabled switch: every one is served to every
@@ -87,8 +88,6 @@ from coffer.surfaces.http.knowledge.schemas import (
     FileSave,
     FileSummaryOut,
     IngestedDocumentOut,
-    MaterialIn,
-    SubmissionOut,
     TreeOut,
 )
 
@@ -181,28 +180,6 @@ async def save_file(
         body.path, body.body, expected_fingerprint=body.expected_fingerprint, actor=actor
     )
     return _file_out(saved)
-
-
-@router.post("/material", response_model=SubmissionOut, status_code=status.HTTP_201_CREATED)
-async def submit_material(
-    body: MaterialIn,
-    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-    actor: str = Depends(_actor_kind),
-) -> SubmissionOut:
-    submitted = await svc.submit(
-        collection=body.collection,
-        title=body.title,
-        description=body.description,
-        body=body.body,
-        actor_kind=actor,
-        actor=actor,
-    )
-    return SubmissionOut(
-        status="written" if submitted.document is not None else "pending",
-        collection=submitted.collection,
-        title=submitted.title,
-        path=submitted.document.path if submitted.document is not None else None,
-    )
 
 
 @router.delete("/file", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

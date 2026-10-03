@@ -10,7 +10,6 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
-from typer.main import get_command
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -22,7 +21,6 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
-from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
@@ -94,17 +92,6 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
         assert own.name == "x"
     finally:
         await engine.dispose()
-
-    # The command line has no kind-agnostic create either: `add` exists only
-    # on a kind group whose kind supplies its own, and memory — whose
-    # partitions only aggregation provisions — has none at all.
-    tree = get_command(cli_app).commands  # type: ignore[attr-defined]
-    memory = set(tree["memory"].commands)
-    assert "add" not in memory
-    # Nor a switch: a partition cannot be disabled (every one reaches every agent).
-    assert {"list", "show", "edit", "rm"} <= memory
-    assert not {"enable", "disable"} & memory
-    assert "add" in set(tree["mcp"].commands)
 
 
 class _FailingReleaseStore:

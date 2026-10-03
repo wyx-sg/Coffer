@@ -68,7 +68,7 @@ def _skill_uid_by_name(c: TestClient, name: str) -> str:
     return matches[0]["uid"]
 
 
-@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
+@pytest.mark.acceptance(spec="skill-manager", scenario="the web UI and REST cover every operation")
 def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
     """End-to-end HTTP coverage — the surface both desktop and CLI consume."""
     app = _app(tmp_path, monkeypatch, 59600)

@@ -571,18 +571,22 @@ def test_only_this_corpus_s_file_names_are_refused() -> None:
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="the pass is instructed that newer material wins and a person's edit stands",
+    scenario="instruct the pass that the newer or better-evidenced statement wins and no writer is exempt",  # noqa: E501
 )
 def test_the_system_prompt_states_the_contradiction_and_edit_rules() -> None:
-    # No code can adjudicate a contradiction or tell a deliberate edit from a
-    # mistake, so the instructions are the whole of "Let newer statements win
-    # and a person's edit stand", and this pins them.
-    lowered = CURATION_SYSTEM.lower()
-    assert "the newer statement wins" in lowered
+    # No code can adjudicate a contradiction, so the instructions are the whole
+    # of "Let the newer or better-evidenced statement win", and this pins them.
+    lowered = " ".join(CURATION_SYSTEM.lower().split())
+    assert "the newer one wins unless the older one is shown to be right" in lowered
+    assert "a source, a date, a command's output or the code" in lowered
+    assert "legible with the date it changed" in lowered
     assert "previously recorded" in lowered
-    assert "corrected" in lowered
-    assert "a person's edit is deliberate" in lowered
-    assert "never revert" in lowered
+    assert "no writer is exempt" in lowered
+    assert "never by who wrote it" in lowered
+    assert "a newer statement, not an untouchable one" in lowered
+    # The old protection of a person's edit is gone from the instructions.
+    assert "deliberate" not in lowered
+    assert "never revert" not in lowered
     # And the bound the model is told about matches the one enforced.
     assert str(MAX_WRITES_PER_PASS) in CURATION_SYSTEM
 
@@ -629,7 +633,7 @@ async def test_retire_is_bounded_like_a_write(knowledge_root) -> None:  # type: 
 )
 @pytest.mark.anyio
 async def test_a_write_over_a_document_a_person_edited_mid_pass_is_refused(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    # "Let newer statements win and a person's edit stand": the pass read the
+    # "Let the newer or better-evidenced statement win": the pass read the
     # document, then a person saved it; writing the pass's version would revert
     # their edit without a word.
     relpath = _document("Login state", body="the old wording")

@@ -187,7 +187,7 @@ No secret event carries a secret value; each records the ref, the standalone sec
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
 - `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` — a secret waited to be sent somewhere new (or a value in use waited to be replaced, or the protection waited to be switched off), and a person answered. See [Secrets](/guides/secrets#approvals).
-- `secret_imported` — `coffer secret import` moved a plaintext secret from a file into the store.
+- `secret_imported` — a plaintext secret was moved from a file into the store.
 - `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
 
 Decrypting a secret to spawn an upstream is not an audit event.
@@ -257,7 +257,7 @@ flowchart LR
 - A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
 - A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.
 
-You manage policies with `coffer config list retention.`, `coffer config set retention.<table> <days|forever>` and `coffer log prune`, or through `/api/v1/retention/policies` and `POST /api/v1/retention/prune`.
+You manage policies from **Settings → Data**, or through `/api/v1/retention/policies` and `POST /api/v1/retention/prune`.
 
 ## Reading the records: `coffer log` and `coffer path logs`
 

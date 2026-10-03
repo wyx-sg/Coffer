@@ -257,23 +257,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/knowledge/material": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Submit Material */
-        post: operations["submit_material_api_v1_knowledge_material_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/knowledge/tree": {
         parameters: {
             query?: never;
@@ -713,46 +696,6 @@ export interface components {
             path: string | null;
             /** Pending */
             pending: boolean;
-            /** Title */
-            title: string;
-        };
-        /**
-         * MaterialIn
-         * @description New knowledge for a collection ("Submit every entrance's input as
-         *     material").
-         */
-        MaterialIn: {
-            /**
-             * Body
-             * @default
-             */
-            body?: string;
-            /** Collection */
-            collection: string;
-            /** Description */
-            description: string;
-            /** Title */
-            title: string;
-        };
-        /**
-         * SubmissionOut
-         * @description What became of submitted material.
-         *
-         *     ``status`` is ``pending`` when it waits in the inbox for a pass to merge,
-         *     and ``written`` when it was promoted to a document on the spot because no
-         *     internal model is configured ("Promote material directly when no model is
-         *     configured") — ``path`` is that document.
-         */
-        SubmissionOut: {
-            /** Collection */
-            collection: string;
-            /** Path */
-            path: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "pending" | "written";
             /** Title */
             title: string;
         };
@@ -1475,51 +1418,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionBodyOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    submit_material_api_v1_knowledge_material_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaterialIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmissionOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

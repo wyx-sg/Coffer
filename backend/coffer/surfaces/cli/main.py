@@ -10,27 +10,15 @@ import typer
 from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
-    agent_cmd,
-    channel_cmd,
-    cli_cmd,
     config_cmd,
     daemon_cmd,
-    drift_cmd,
-    knowledge_cmd,
     log_cmd,
     memory_cmd,
     migrate_cmd,
-    open_cmd,
     path_cmd,
-    provider_cmd,
     proxy_cmd,
     run_cmd,
-    scan_cmd,
     secret_cmd,
-    skill_cmd,
-    sync_cmd,
-    tool_cmd,
-    usage_cmd,
     vault_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
@@ -69,34 +57,19 @@ def root(
 
 
 app.add_typer(daemon_cmd.app, name="daemon")
-app.add_typer(open_cmd.app, name="open")
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(log_cmd.app, name="log")
 app.add_typer(path_cmd.app, name="path")
-app.command("scan")(scan_cmd.scan)
-app.add_typer(scan_cmd.adopt_app, name="adopt")
-app.add_typer(scan_cmd.discard_app, name="discard")
 app.add_typer(mcp_cmd.app, name="mcp")
-app.add_typer(tool_cmd.app, name="tool")
 app.add_typer(secret_cmd.app, name="secret")
 # `coffer run [--secret …] -- cmd`: everything after `--` is the child's argv.
 app.command(
     "run",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )(run_cmd.run)
-app.add_typer(agent_cmd.app, name="agent")
-app.add_typer(channel_cmd.app, name="channel")
-app.add_typer(skill_cmd.app, name="skill")
-app.add_typer(cli_cmd.app, name="cli")
-app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(memory_cmd.app, name="memory")
-app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(proxy_cmd.app, name="proxy")
-app.add_typer(usage_cmd.app, name="usage")
-app.add_typer(sync_cmd.app, name="sync")
 app.add_typer(vault_cmd.app, name="vault")
-app.add_typer(drift_cmd.app, name="drift")
-app.command("attention")(drift_cmd.attention)
 app.command("migrate")(migrate_cmd.migrate_command)
 
 

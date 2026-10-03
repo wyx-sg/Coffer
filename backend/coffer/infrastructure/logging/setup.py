@@ -281,7 +281,7 @@ def _attach_stderr_handler(formatter: logging.Formatter) -> None:
     whoever swapped it, and the daemon's log stream is not theirs to collect.
     ``CliRunner`` and ``contextlib.redirect_stderr`` both do exactly that, and
     following them put ``{"event": "HTTP Request: GET …"}`` into the output a
-    ``coffer mcp list --json`` caller was parsing. A redirect made at the
+    ``coffer log mcp --json`` caller was parsing. A redirect made at the
     file-descriptor level — ``2>&1`` in a shell — is a different thing and
     still applies, because it moves the file behind the stream rather than the
     stream.

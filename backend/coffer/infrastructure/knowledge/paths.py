@@ -12,7 +12,7 @@ the collection README out of the corpus").
 
 There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, where
 new material waits to be merged into the documents — an upload's extracted
-text, an agent's ``coffer__write``, a migrated file. It is hidden because it is
+text, a file an agent wrote there, a migrated file. It is hidden because it is
 not knowledge yet: no count or catalogue names it, and each item is deleted the
 moment a pass has folded it in (see "Hide dot-prefixed entries except the
 inbox"). A person may still *look* at it — the tree lists a collection's inbox

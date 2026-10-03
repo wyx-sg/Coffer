@@ -84,8 +84,10 @@ describe("AgentConnectionChangeDialog", () => {
     );
     expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("~/.codex/hooks.json").length).toBeGreaterThan(0);
-    // Before registration the uid is not known, and both previews say so.
-    expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(2);
+    // Before registration the uid is not known, and the previews say so: the
+    // MCP entry once, and the memory hook's two entries (SessionStart,
+    // UserPromptSubmit).
+    expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(3);
   });
 
   acceptance(

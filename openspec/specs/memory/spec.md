@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Every agent the developer runs keeps its own memory, and none of them can see any of the others'. Claude Code accrues per-fact notes per project; Codex distils its rollouts into task groups and a profile. Both work well and neither leaves its own directory, so the developer re-teaches each agent what the other already knows. Coffer **reads those native memories, without ever writing to them**, distils them into **notes of its own** — one file per topic, in Coffer's own format, filed by repository and by `global` — and hands each agent the **index** of that set at session start, with the absolute path to read the rest the same way it reads its own memory: as files. After the start it hands over two more things (ADR [Memory Reaches a Session at Three Moments](../../../docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)): the few notes a prompt names, and — before a shell command a person has marked as a known trap — that trap's note, holding the command once. What Claude Code learns in the morning, Codex opening the same repository in the afternoon already knows — not because Coffer wrote into Codex's memory, but because Coffer handed it that note's index line.
+Every agent the developer runs keeps its own memory, and none of them can see any of the others'. Claude Code accrues per-fact notes per project; Codex distils its rollouts into task groups and a profile. Both work well and neither leaves its own directory, so the developer re-teaches each agent what the other already knows. Coffer **reads those native memories, without ever writing to them**, distils them into **notes of its own** — one file per topic, in Coffer's own format, filed by repository and by `global` — and hands each agent the **index** of that set at session start, with the absolute path to read the rest the same way it reads its own memory: as files. After the start it hands over the few notes a prompt names. What Claude Code learns in the morning, Codex opening the same repository in the afternoon already knows — not because Coffer wrote into Codex's memory, but because Coffer handed it that note's index line.
 
 **Coffer aggregates memory; it does not own it.** Coffer never writes an agent's native memory files, so no agent's own loop is disturbed and nothing has to be reconciled. Everything under `~/.coffer/derived/memory/` is **derived** and may be deleted and rebuilt at any time, which is what makes it safe to rewrite aggressively. It is not a second copy of the agents' words: an agent's raw memory is an input, and the distillation into Coffer's own notes is the layer's value. Reproducing it after a delete gives back an **equivalent** set of notes, not a byte-identical one.
 
@@ -12,8 +12,8 @@ Every agent the developer runs keeps its own memory, and none of them can see an
 | --- | --- | --- |
 | Where it comes from | agents' native memories, read-only | the human uploads it, or writes it with an agent |
 | Partitioned by | project (and `global`) | collection |
-| Who authors the stored text | **Coffer**, distilling | the human or an agent, directly |
-| Delivered by | **push** — the index at session start, the notes a prompt names, and a known trap's note before the command that walks into it | **pull** — the agent reaches for it |
+| Who authors the stored text | **Coffer**, distilling; a person or an agent may edit a note | the human or an agent, directly |
+| Delivered by | **push** — the index at session start and the notes a prompt names | **pull** — the agent reaches for it |
 | Can an entry be retired | yes, and must be | no; it is updated |
 | If the store is lost | rebuilt, equivalently, from the agents' own copies | gone |
 
@@ -328,7 +328,7 @@ When the index does not fit, the trim MUST drop the oldest lines, MUST state how
 ### Requirement: Deliver to channel turns through the system prompt
 A **channel-driven turn** MUST receive the same payload through the system-prompt append the turn platform already composes ([channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself, and the delivery MUST be audited as a `session_start` fire of the answering agent with the conversation as the session (see "Audit every delivery fire").
 
-The agent process Coffer spawns for a channel turn still loads the agent's own settings, so an installed delivery hook fires inside it as well. Coffer MUST mark that process's environment, and in a marked process the hook MUST answer nothing, and record nothing, on `SessionStart` and `UserPromptSubmit`: those two moments belong to the turn, so the index and the prompt's notes each arrive once and are counted once. The hook's `PreToolUse` and `PostToolUse` entries MUST still answer in a marked process, because the turn delivers neither. A turn the developer drives MUST NOT be marked.
+The agent process Coffer spawns for a channel turn still loads the agent's own settings, so an installed delivery hook fires inside it as well. Coffer MUST mark that process's environment, and in a marked process the hook MUST answer nothing, and record nothing, on `SessionStart` and `UserPromptSubmit`: those two moments belong to the turn, so the index and the prompt's notes each arrive once and are counted once. A turn the developer drives MUST NOT be marked.
 
 #### Scenario: a channel turn carries the index without a hook
 - **GIVEN** a channel-driven conversation on a registered agent with a working directory, and no delivery hook installed anywhere
@@ -338,22 +338,27 @@ The agent process Coffer spawns for a channel turn still loads the agent's own s
 
 #### Scenario: a channel turn's own hook leaves the index and the notes to the turn
 - **GIVEN** a connected agent whose delivery hook is installed and trusted, a channel-driven conversation on it, and a conversation the developer drives on the same agent
-- **WHEN** the channel turn's agent process fires the hook on `SessionStart`, `UserPromptSubmit` and a `PreToolUse` that an armed trigger matches
-- **THEN** the hook answers the `PreToolUse` only, and the index and the prompt's notes reach the agent once, from the turn, each audited as one fire with event `ChannelTurn` (`session_start` and `prompt`)
-- **AND** the developer-driven conversation's process is not marked, and its hook answers all three
+- **WHEN** the channel turn's agent process fires the hook on `SessionStart` and `UserPromptSubmit`
+- **THEN** the hook answers nothing and records nothing, and the index and the prompt's notes reach the agent once, from the turn, each audited as one fire with event `ChannelTurn` (`session_start` and `prompt`)
+- **AND** the developer-driven conversation's process is not marked, and its hook answers both
 
 ### Requirement: Install delivery hooks explicitly and removably
 For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI **by absolute path**. An agent runs its hooks under a shell that need not have `~/.coffer/bin` on its `PATH`: Codex runs them under `/bin/zsh` without the user's rc files, and Claude Code started from the Dock does not inherit the login shell's `PATH`. The bare name is used only when the build cannot locate its own CLI.
 
-Coffer's hook is **four entries**, one on each moment memory reaches a session, for both supported agents: `SessionStart` (matched on `startup|resume|clear|compact`), `UserPromptSubmit`, and `PreToolUse` and `PostToolUse` matched on the `Bash` tool. Every entry runs the same command, `coffer memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event the agent hands its hook on stdin and prints that event's JSON `hookSpecificOutput` — `additionalContext` to add context, `permissionDecision: "deny"` with a reason to hold a command — which both agents read on every event. Nothing once-per-session MAY be keyed on a process id: every session of one Codex app-server shares a parent pid, so it is keyed on the hook's `session_id`.
+Coffer's hook is **two entries**, one on each moment memory reaches a session, for both supported agents: `SessionStart` (matched on `startup|resume|clear|compact`), which adds the bounded index, and `UserPromptSubmit`, which adds the notes the prompt names. Both entries run the same command, `coffer memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event the agent hands its hook on stdin and prints that event's JSON `hookSpecificOutput` with `additionalContext`, which both agents read on every event. Nothing once-per-session MAY be keyed on a process id: every session of one Codex app-server shares a parent pid, so it is keyed on the hook's `session_id`. The command is an internal entry point, hidden from help and from the CLI reference (see "Manage memory in the web UI").
 
-Installation MUST be an **explicit act** on Coffer's surface: connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or a person applying the missing hook's reconcile item. It MUST be marker-scoped, idempotent, and removable without disturbing entries Coffer did not write. An install or a remove MUST take out Coffer's marked entries on **every** event first, so a marked entry on any other event is never left behind beside the new ones. Coffer MUST NOT install the hook silently, and MUST NOT write into any file that is an agent's *memory*: a hook lives in the agent's settings, which is a different thing.
+Installation MUST be an **explicit act** on Coffer's surface: connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or a person applying the missing hook's reconcile item. It MUST be marker-scoped, idempotent, and removable without disturbing entries Coffer did not write. An install or a remove MUST take out Coffer's marked entries on **every** event first, so a marked entry on any other event — a `PreToolUse` or `PostToolUse` entry an earlier version wrote, for one — is never left behind beside the new ones. Coffer MUST NOT install the hook silently, and MUST NOT write into any file that is an agent's *memory*: a hook lives in the agent's settings, which is a different thing.
 
 #### Scenario: hook installation is marker-scoped and removable
 - **GIVEN** an agent whose settings file already carries a foreign hook on the same lifecycle events, other events' hooks, and unrelated top-level keys
 - **WHEN** delivery is installed, installed a second time, and then removed
-- **THEN** install adds exactly **one** entry carrying Coffer's marker on each of `SessionStart`, `UserPromptSubmit`, `PreToolUse` and `PostToolUse`, all running `coffer memory hook` by absolute path, a second install leaves one on each, and every foreign hook, every other event and every unrelated key is untouched
+- **THEN** install adds exactly **one** entry carrying Coffer's marker on each of `SessionStart` and `UserPromptSubmit`, both running `coffer memory hook` by absolute path, a second install leaves one on each, and every foreign hook, every other event and every unrelated key is untouched
 - **AND** remove takes out only the marked entries — dropping an event array and the top-level hooks key once they are empty — and with nothing installed it is a clean no-op that writes no file and records no audit event (see "Install delivery hooks explicitly and removably")
+
+#### Scenario: an install clears marked entries on events it no longer uses
+- **GIVEN** an agent whose settings carry Coffer's marked entries on `SessionStart`, `UserPromptSubmit`, `PreToolUse` and `PostToolUse`, and a foreign `PreToolUse` hook
+- **WHEN** delivery is installed
+- **THEN** the marked `PreToolUse` and `PostToolUse` entries are gone, the foreign `PreToolUse` hook is untouched, and exactly one marked entry sits on each of `SessionStart` and `UserPromptSubmit`
 
 #### Scenario: a Codex hook fire prints the session-start JSON Codex reads
 - **GIVEN** a partition with notes and a registered agent
@@ -362,16 +367,17 @@ Installation MUST be an **explicit act** on Coffer's surface: connecting the age
 - **AND** the fire is recorded
 
 #### Scenario: both agents' hook fires answer in the JSON each reads
-- **GIVEN** a Claude Code agent and a Codex agent connected on a fake home, a distilled partition, and an armed `block` trigger
-- **WHEN** each agent's installed command is run with that agent's own `UserPromptSubmit` and `PreToolUse` input on stdin
-- **THEN** each prints `hookSpecificOutput` with `additionalContext` for the prompt and `permissionDecision: "deny"` with the note as `permissionDecisionReason` for the command
+- **GIVEN** a Claude Code agent and a Codex agent connected on a fake home, and a distilled partition
+- **WHEN** each agent's installed command is run with that agent's own `SessionStart` and `UserPromptSubmit` input on stdin
+- **THEN** each prints `hookSpecificOutput` with `additionalContext` for the session start and for the prompt
+- **AND** neither prints a `permissionDecision` for any input
 
 ### Requirement: Repair stale delivery hooks
 An installed hook MUST be repaired when what Coffer would write is no longer what is installed, without waiting for a user to notice. This is the delivery-hook target of the unified reconciler ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), and it runs on every pass, not only at daemon start.
 
 A hook is a string left in somebody else's settings file, and the CLI it invokes ships in a binary that keeps moving. When the command a hook runs stops taking an option, every hook already on disk keeps passing it. The agent prints a usage error at the start of every session, and this layer never reaches it again. Nothing reports the failure, because detection is marker-scoped and never reads the arguments. That same marker scoping is what lets a reinstall replace an entry in place, and it is why a stale entry reads as installed.
 
-The target therefore judges a hook by the **set of events** its entries sit on and their **whole commands**, both against what would be installed now, and rewrites a hook that differs into the four current entries. One unreadable settings file MUST be reported as blocked without stranding the others.
+The target therefore judges a hook by the **set of events** its entries sit on and their **whole commands**, both against what would be installed now, and rewrites a hook that differs into the two current entries — which includes a hook an earlier version installed on four events, whose `PreToolUse` and `PostToolUse` entries are removed. The two kept entries keep their command and their position, so the approval Codex recorded for each still holds. One unreadable settings file MUST be reported as blocked without stranding the others.
 
 For an agent that runs a hook only after the user has approved it (Codex), the target MUST also read whether the agent will run **every** installed entry. A current hook the agent will not run MUST be **reported, never written**, with the reason and the remedy (approve it with `/hooks` in Codex). Coffer MUST NOT write the agent's approval record: approving a hook is the user's act in the agent (spec agent-registry/codex "Leave Codex's internal-state tables untouched").
 
@@ -383,6 +389,12 @@ The hooks wanted are those of every connected agent and of every agent that alre
 - **THEN** the entries are rewritten in place to the ones this build would install, so the next session is served rather than shown a usage error,
 - **AND** an agent whose hook is already current is left untouched, and an agent with no hook is not given one.
 
+#### Scenario: a four-entry hook is rewritten to two without losing Codex's approvals
+- **GIVEN** a connected Codex agent carrying Coffer's hook on `SessionStart`, `UserPromptSubmit`, `PreToolUse` and `PostToolUse`, with `config.toml` recording its approval of all four
+- **WHEN** a reconcile pass runs
+- **THEN** the hook is two entries, on `SessionStart` and `UserPromptSubmit`, with the commands and positions they had
+- **AND** the two kept entries' approvals in `config.toml` still match, so the next pass reports no `hook_untrusted`, and Coffer wrote no approval
+
 #### Scenario: a current Codex hook Codex has not approved is reported, not written
 - **GIVEN** a connected Codex agent carrying the current hook, and no approval for its entries in Codex's `config.toml`
 - **WHEN** a reconcile pass runs on its period, and again when a person applies it
@@ -390,7 +402,7 @@ The hooks wanted are those of every connected agent and of every agent that alre
 - **AND** once `config.toml` records Codex's approval of every one of those entries, the next pass finds nothing to do
 
 ### Requirement: Audit every delivery fire
-Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact: every session start, and every prompt, guard and error fire that delivered a note. The event MUST name its moment (`session_start`, `prompt`, `guard`, `error`), the session, and the notes it carried (and, for a trigger, the trigger) — never their text. A fire is an event, not a property of the agent: the hook's per-agent status MUST report installation only, and MUST NOT carry a last-fired timestamp.
+Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact: every session start, and every prompt fire that delivered a note. The event MUST name its moment (`session_start` or `prompt`), the session, and the notes it carried — never their text. A fire is an event, not a property of the agent: the hook's per-agent status MUST report installation only, and MUST NOT carry a last-fired timestamp.
 
 #### Scenario: every hook fire is recorded in the audit log
 - **GIVEN** an agent for which delivery has been installed
@@ -398,39 +410,25 @@ Coffer MUST record **an audit event for every delivery fire**, so that whether d
 - **THEN** exactly one audit event is written naming that agent as both the resource and the actor
 - **AND** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own (see "Audit every delivery fire")
 
-#### Scenario: a prompt and a guard fire each name their moment and notes
-- **GIVEN** a session that is given a note at a prompt and has a command held by a trigger
+#### Scenario: name the moment and the notes of a session-start fire and a prompt fire
+- **GIVEN** a session that is given the index at its start and a note at a prompt
 - **WHEN** the audit log is read
-- **THEN** one `memory_delivery_fired` event names moment `prompt` and the note, and another names moment `guard`, the trigger and its note, and neither carries the note's text
-
-### Requirement: Cover memory management on REST and the CLI
-A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory as a read-only tree, update memory (see "Update memory in one action"), answer one fire of the memory hook (`POST /hook`, whose session-start answer is the composed session context), manage triggers (see "Keep triggers in the vault, armed only by a person"), read the delivery overview and a partition's Delivered view (see "Count what memory delivered and what was read", "Show what each agent is given at session start"), and read what has been retired. The `coffer memory` CLI group MUST offer `list`, `show`, `edit`, `rm`, `sync` (update memory: an aggregation, then a distil pass over every partition that gained entries, see "Update memory in one action"), `hook` (the command every installed memory hook entry runs), `trigger` (`list`, `add`, `arm`, `disarm`, `delete`) and `delivered` (the overview, or one partition's Delivered view). It offers no `add`, because partitions are created only by aggregation (see "Provision partitions only from aggregation"), and no `enable` or `disable`, because a partition has no switch (see "Serve every partition to every agent"). A partition's notes, its index, its retirement record and its file tree are plain files (see "Keep notes readable as plain files"), so on the command line `coffer path memory [<partition>]` prints the absolute path of the memory root or of one partition, and they are read on disk; the `coffer memory` group carries no command that lists or prints a note or a file. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family: on the command line they are `coffer agent connect|disconnect <agent>`, and `coffer agent show <agent>` carries the hook as a part of its `coffer_connection`.
-
-#### Scenario: a partition's own directory is browsable as a file tree
-- **GIVEN** a distilled partition
-- **WHEN** its file tree is requested
-- **THEN** the tree's root carries the partition directory's absolute path and holds `MEMORY.md`, a `notes/` directory listing one Markdown file per note, and `RETIRED.md` when anything has been retired, each node carrying its absolute path and that of the folder holding it
-- **AND** `.raw/` is not in the tree, no route serves a file's text (a note is read on disk, see "Keep notes readable as plain files"), and a write to the family is refused; `MEMORY_UNSAFE_PATH` (400) answers only a partition name or trigger id that is `..`, holds a path separator or is hidden (see "Present a partition as its memories", "Confine reads to registered agents' memory paths")
-
-#### Scenario: locate a partition's notes from the command line
-- **GIVEN** a distilled partition named `coffer`
-- **WHEN** `coffer path memory coffer` runs, and then `coffer path memory` with no partition
-- **THEN** the first prints the absolute path of the partition directory, which holds `MEMORY.md` and `notes/`, and the second prints the absolute memory root that holds it
-- **AND** `coffer memory` offers no `partitions`, `notes`, `note`, `retired`, `ls`, `read`, `distil`, `delivery`, `delivery-install`, `delivery-remove` or `context` command
-
-#### Scenario: the agent's command-line view reports delivery state
-- **GIVEN** two registered agents, one connected by `coffer agent connect <agent>` and one not
-- **WHEN** `coffer agent show <name> --json` runs for each
-- **THEN** the first's `coffer_connection` is `connected` with its `memory_hook` part installed, the second's is `disconnected`, and neither carries a last-fired time
+- **THEN** one `memory_delivery_fired` event names moment `session_start`, and another names moment `prompt` and the note, and neither carries the note's text
 
 ### Requirement: Present a partition as its memories
-The web UI MUST present partitions **as a table** once any exists; with none, it shows the first-run welcome every other empty surface shows — *Nothing distilled yet*, with **Update memory** and the connected agents whose memory Coffer found on this machine, or, with no agent connected, saying there is nothing to read and offering **Open Agents** to connect one. Each row MUST carry the partition's path ("Every project" for `global`), a sample memory — or, before a first distil, how many entries were read from which agents and are waiting to distil — how many memories it holds, its sources (the agents it came from, "All agents" when every agent that contributed anywhere contributed here) and its state, in a column headed **Distilled**: when it was last distilled, "Not distilled yet", "Distilling…" while a pass over it runs, or "Repository missing". Healthy rows are grey: only **Repository missing** is coloured, and only that row offers a Delete, which asks first because it cannot be undone (a confirmation naming the partition, with Cancel and Delete partition). The partitions section's title carries no count of partitions or memories. A partition's page MUST have no back link, and no Automatic control: its title is the partition's name alone, and its description line carries the path, the memory count and when it was last distilled (*~/code/coffer · 38 memories · distilled 2 h ago*). Its ⋯ menu holds **Reveal partition folder**, **Copy path**, **Distil history in Activity** and, only when its repository is gone, **Delete partition**. A partition not yet distilled shows no memory list: its Memories tab shows only the empty state, which offers no Update memory of its own because the header has one. While Coffer's engine is not set, a banner on the partition's page MUST say *Coffer’s engine isn’t set, so each agent’s entry stays its own memory* until it is set in Settings › General, with **Open Settings**. Each memory in its list MUST name the agents it was learned from ("All agents" when that is every agent the partition came from). The partition listing MUST carry when its newest memory was last updated (`updated_at`, absent for a partition holding no memory), which the Overview's Memory tile words as "Last update 14 min ago". One partition's page MUST carry two tabs. **Memories** (the default) lists its memories — the web UI's label for what this spec and the disk call notes (中文 记忆条目) — beside the selected memory, with the partition's retired memories in a collapsed, read-only **Retired** group, each with the reason it was retired. The selected memory MUST be rendered with a meta line naming the agents it was learned from and when it was last updated, taken from its provenance ("Record provenance and merge by meaning"), and its frontmatter MUST be shown as that metadata, not rendered as body text. The page MUST NOT show the agents' own memory: no native paths, no original agent text, no `.raw/` entry, no `MEMORY.md` index or `RETIRED.md` file, and no file tree — those stay in the data, on the REST routes and in the CLI (see "Cover memory management on REST and the CLI"), and only this page leaves them out. The memory's own files are reached through the partition's ⋯ menu (**Reveal partition folder**, **Copy path**), not from each memory. The list and the memory MUST extend to the bottom of the window and scroll inside. It MUST NOT carry per-memory actions: a memory is derived by distillation, and the page says so by offering none. The Memory page's title carries the **Experimental** tag ([experimental-features](../experimental-features/spec.md)); a partition's page does not. **Delivered** (`/memory/<uid>/delivered`) shows, read-only, the exact session-start text each agent receives in the partition's project, with a switch between agents ([web-ui](../web-ui/spec.md) "Show memory delivery on the Memory page"); it shows no hook state.
+The web UI MUST present partitions **as a table** once any exists; with none, it shows the first-run welcome every other empty surface shows — *Nothing distilled yet*, with **Update memory** and the connected agents whose memory Coffer found on this machine, or, with no agent connected, saying there is nothing to read and offering **Open Agents** to connect one. Each row MUST carry the partition's path ("Every project" for `global`), a sample memory — or, before a first distil, how many entries were read from which agents and are waiting to distil — how many memories it holds, its sources (the agents it came from, "All agents" when every agent that contributed anywhere contributed here) and its state, in a column headed **Distilled**: when it was last distilled, "Not distilled yet", "Distilling…" while a pass over it runs, or "Repository missing". Healthy rows are grey: only **Repository missing** is coloured, and only that row offers a Delete, which asks first because it cannot be undone (a confirmation naming the partition, with Cancel and Delete partition). The partitions section's title carries no count of partitions or memories. A partition's page MUST have no back link, and no Automatic control: its title is the partition's name alone, and its description line carries the path, the memory count and when it was last distilled (*~/code/coffer · 38 memories · distilled 2 h ago*). Its ⋯ menu holds **Reveal partition folder**, **Copy path**, **Distil history in Activity** and, only when its repository is gone, **Delete partition**. A partition not yet distilled shows no memory list: its Memories tab shows only the empty state, which offers no Update memory of its own because the header has one. While Coffer's engine is not set, a banner on the partition's page MUST say *Coffer’s engine isn’t set, so each agent’s entry stays its own memory* until it is set in Settings › General, with **Open Settings**. Each memory in its list MUST name the agents it was learned from ("All agents" when that is every agent the partition came from). The partition listing MUST carry when its newest memory was last updated (`updated_at`, absent for a partition holding no memory), which the Overview's Memory tile words as "Last update 14 min ago". One partition's page MUST carry two tabs. **Memories** (the default) lists its memories — the web UI's label for what this spec and the disk call notes (中文 记忆条目) — beside the selected memory, with the partition's retired memories in a collapsed, read-only **Retired** group, each with the reason it was retired. The selected memory MUST be rendered with a meta line naming the agents it was learned from and when it was last updated, taken from its provenance ("Record provenance and merge by meaning"), and its frontmatter MUST be shown as that metadata, not rendered as body text. The page MUST NOT show the agents' own memory: no native paths, no original agent text, no `.raw/` entry, no `MEMORY.md` index or `RETIRED.md` file, and no file tree — those stay in the data and on disk, and only this page leaves them out. The memory's own files are reached through the partition's ⋯ menu (**Reveal partition folder**, **Copy path**), not from each memory. The list and the memory MUST extend to the bottom of the window and scroll inside. The selected memory MUST offer one per-memory action, **Edit** (see "Edit a memory in the web UI or on disk"), and no other: a memory is derived by distillation and is not deleted from the page. A retired memory offers none. The Memory page's title carries the **Experimental** tag ([experimental-features](../experimental-features/spec.md)); a partition's page does not. **Delivered** (`/memory/<uid>/delivered`) shows, read-only, the exact session-start text each agent receives in the partition's project, with a switch between agents ([web-ui](../web-ui/spec.md) "Show memory delivery on the Memory page"); it shows no hook state.
 
 #### Scenario: browse a partition's memories with a read-only preview
 - **GIVEN** the memory pages, with no partitions and then with one distilled partition that holds raw entries, a memory learned from Claude Code and Codex, and one retired memory
 - **WHEN** the partitions page and the partition's page render and the memory is chosen
 - **THEN** the partitions page shows the first-run welcome with none and the table with one, and the partition's page lists its memories beside the chosen one, whose meta line names Claude Code and Codex and when it was updated and whose frontmatter is not in the rendered body
-- **AND** the retired memory is in a collapsed Retired group with its reason, the page shows no file tree, no `MEMORY.md`, `RETIRED.md` or `.raw/`, no native path and no agent's original text, and it offers open-in-editor and reveal-in-file-manager and no per-memory edit or delete action
+- **AND** the retired memory is in a collapsed Retired group with its reason, the page shows no file tree, no `MEMORY.md`, `RETIRED.md` or `.raw/`, no native path and no agent's original text, and the chosen memory offers Edit and no delete action
+
+#### Scenario: the selected memory is edited in place
+- **GIVEN** a partition's page with a memory selected
+- **WHEN** the user chooses Edit, changes the body and saves
+- **THEN** the memory renders the saved body with a refreshed update time, and a save refused as changed offers the current text so nothing is lost (see "Edit a memory in the web UI or on disk")
+- **AND** a retired memory in the Retired group offers no Edit
 
 #### Scenario: a partition lists when its newest memory was updated
 - **GIVEN** a partition holding a memory
@@ -465,7 +463,7 @@ The web UI MUST present partitions **as a table** once any exists; with none, it
 - **AND** the first row shows a sample memory and "All agents", and the second says its entries from Codex are waiting
 
 ### Requirement: Audit every lifecycle act
-Every lifecycle act — aggregation, distil, retirement, delivery installed, removed or fired — MUST record an audit event with its actor.
+Every lifecycle act — aggregation, distil, retirement, a memory edited, delivery installed, removed or fired — MUST record an audit event with its actor.
 
 #### Scenario: audit a requested aggregation and distil with their actor
 - **GIVEN** a registered agent with native memory and a partition to distil
@@ -536,20 +534,20 @@ Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record r
 - **THEN** the note with a surviving entry is untouched, the routing request does not list the sources-gone title among the retired subjects, and the returning entry is distilled like any new one
 
 ### Requirement: Expose no memory tool and name the memory root at session start
-The MCP gateway MUST expose no built-in tool for this layer: no tool that locates, reads, searches or records a note. An agent records something the way it already does, and Coffer reads it on the next pass. An agent finds a note the way it finds any file: session-start delivery (see "Deliver the index and the notes path at session start") MUST name the **absolute memory root** and state that every partition's notes are Markdown files under `<root>/<partition>/notes/`, so an agent looking for a note in a partition the session was not opened in searches that one directory with its own tools. The memory root is one directory, so one search covers every partition. On the command line `coffer path memory` prints the same root.
+The MCP gateway MUST expose no built-in tool for this layer: no tool that locates, reads, searches or records a note. An agent records something the way it already does, and Coffer reads it on the next pass. An agent finds a note the way it finds any file: session-start delivery (see "Deliver the index and the notes path at session start") MUST name the **absolute memory root** and state that every partition's notes are Markdown files under `<root>/<partition>/notes/`, so an agent looking for a note in a partition the session was not opened in searches that one directory with its own tools. The memory root is one directory, so one search covers every partition. No command prints the root: the session-start payload is where it is named.
 
 #### Scenario: no memory tool is listed, and delivery names the memory root
 - **GIVEN** a running daemon, a partition holding notes, and a `global` partition holding more
 - **WHEN** an agent lists the gateway's tools, and the session context is composed for a cwd inside that partition's repository
 - **THEN** no `coffer__recall`, no `coffer__remember` and no other memory tool is listed
-- **AND** the payload names the absolute memory root that `coffer path memory` prints, and states that each partition's notes are Markdown files under `<root>/<partition>/notes/` to be searched with the agent's own tools
+- **AND** the payload names the absolute memory root and states that each partition's notes are Markdown files under `<root>/<partition>/notes/` to be searched with the agent's own tools
 
 ### Requirement: Provision partitions only from aggregation
 Partitions MUST be **created by aggregation**, not by the user, and MUST NOT be created by an agent's working directory at read time.
 
-#### Scenario: compose context and locate the memory root without creating a partition
+#### Scenario: compose session context without creating a partition
 - **GIVEN** a memory root with no partitions and a working directory inside a git repository
-- **WHEN** the session context is composed for that working directory and `coffer path memory` runs
+- **WHEN** the session context is composed for that working directory
 - **THEN** no partition directory and no `memory` Resource exists afterwards
 
 ### Requirement: Send file content out only for distil
@@ -570,7 +568,7 @@ A partition MUST NOT carry the Resource framework's per-agent reach or an enable
 - **AND** no per-agent reach is written for it, and a request to disable it through the generic resource route is refused: the partition is served to every agent, including the one that contributed nothing to it
 
 ### Requirement: Update memory in one action
-`POST /api/v1/memory/sync` and `coffer memory sync` MUST run an aggregation (see "Aggregate on an interval and on demand") and then a distil pass over every partition with something to distil — raw entries it has not yet distilled (see "Distil incrementally in two stages"), or a note none of whose raw entries is left (see "Retire a note whose raw entries are all gone") — and MUST answer with what the aggregation wrote and which partitions were distilled. A distil pass already running over a partition MUST NOT fail the action: that partition is reported as skipped. The web UI MUST offer this as one **Update memory** button — the partitions page's primary action, beside the **Automatic · hourly** control whose popover holds the switch and the interval, and also on a partition's page — and MUST NOT offer aggregation or distillation as separate buttons.
+`POST /api/v1/memory/sync` MUST run an aggregation (see "Aggregate on an interval and on demand") and then a distil pass over every partition with something to distil — raw entries it has not yet distilled (see "Distil incrementally in two stages"), or a note none of whose raw entries is left (see "Retire a note whose raw entries are all gone") — and MUST answer with what the aggregation wrote and which partitions were distilled. A distil pass already running over a partition MUST NOT fail the action: that partition is reported as skipped. The web UI MUST offer this as one **Update memory** button — the partitions page's primary action, beside the **Automatic · hourly** control whose popover holds the switch and the interval, and also on a partition's page — and MUST NOT offer aggregation or distillation as separate buttons.
 
 #### Scenario: one action reads new agent memory and distils it
 - **GIVEN** a registered agent whose native memory gained an entry about a repository with a distilled partition
@@ -604,60 +602,16 @@ The ranking index is derived: it is held in memory, rebuilt from the note files 
 - **WHEN** the same session sends a prompt that ranks the same note first, and a second session sends that prompt too
 - **THEN** the first session is not given the note again, and the second session is
 
-### Requirement: Guard a known trap once per session
-Before a hook-driven session runs a shell command, Coffer MUST check the command against every **armed** `block` trigger whose note the session can reach — a `global` note's trigger in every session, a repository note's trigger only in that repository's sessions. The command pattern MUST be matched **from the start** of each shell segment that **executes** — the program's base name and its arguments, after any `VAR=value` prefix, or, when the program is an interpreter running a script (`bash`, `sh`, `zsh`, `python3`, `node`, …), the script's base name and its arguments — so a command that only mentions the pattern in an argument (`cat scripts/e2e.sh`) does not match while the command that runs it (`bash scripts/e2e.sh`) does; an `unless` pattern matching the whole command keeps the trigger quiet. The first matching command in a session MUST be **denied once**, through the agent's own deny decision, with the note as the reason and a line saying it is held once; the same trigger MUST NOT hold another command in that session, so the agent's next attempt passes. After a shell command, an armed `context` trigger whose error pattern the command's output shows MUST add the note as context, once per session, and MUST NOT block. A fire without a `session_id` holds nothing.
-
-#### Scenario: a matching command is denied once with the note as the reason
-- **GIVEN** an armed `block` trigger on a repository note whose command pattern matches `make verify` unless `v20` appears, and a session opened in that repository
-- **WHEN** the session runs `make verify`, then runs `make verify` again
-- **THEN** the first answer is `permissionDecision: "deny"` whose reason names the note's file and its rule and says it is held once
-- **AND** the second answer is nothing, so the command runs, and `PATH=$HOME/.nvm/versions/node/v20.20.2/bin:$PATH make verify` in a fresh session is not held either
-
-#### Scenario: a command that only mentions the pattern passes
-- **GIVEN** an armed `block` trigger whose command pattern names `e2e`
-- **WHEN** the session runs `cat scripts/e2e.sh`, then `bash scripts/e2e.sh`
-- **THEN** the first is not held and the second is
-
-#### Scenario: an error in a command's output adds the note without blocking
-- **GIVEN** an armed `context` trigger whose error pattern is `timeout: command not found`
-- **WHEN** a session's shell command finishes with that text in its output, and then again
-- **THEN** the first `PostToolUse` answer carries the note as `additionalContext` and no deny, and the second answer is nothing
-
-#### Scenario: a trigger on another repository's note stays quiet
-- **GIVEN** an armed `block` trigger on a note in repository A's partition
-- **WHEN** a session opened in repository B runs the matching command
-- **THEN** nothing is held
-
-### Requirement: Keep triggers in the vault, armed only by a person
-A trigger MUST be one Markdown file in the vault, `vault/memory-triggers/<id>.md`, whose frontmatter names its note (`<partition>/<slug>`), its kind (`block` or `context`), its command, `unless` and error patterns, who proposed it, who armed it and when, and when it was created. It lives beside the derived memory tree, never inside it, so deleting and rebuilding that tree keeps every trigger, and it travels with the vault to the user's other machines ([vault-sync](../vault-sync/spec.md) "Apply knowledge, skill and memory-trigger file changes"). A trigger takes effect only while **armed**, and only a person arms one: a trigger a person writes (`POST /api/v1/memory/triggers`, `coffer memory trigger add`) is armed by that person as it is written, while a trigger the distil pass proposes for a note it judges a known trap tied to a command lands **unarmed** and does nothing until a person arms it. Triggers MUST be listed, armed, disarmed and deleted from both REST (`GET /api/v1/memory/triggers`, `POST …/{id}/arm`, `POST …/{id}/disarm`, `DELETE …/{id}`) and the CLI (`coffer memory trigger list|add|arm|disarm|delete`), each act an audit event naming the trigger and its note. Nothing is seeded: a vault has no trigger until a person writes one or distil proposes one.
-
-#### Scenario: a proposed trigger does nothing until a person arms it
-- **GIVEN** a distil pass whose writing stage returned a trigger for the note it wrote
-- **WHEN** the pass finishes, and a session then runs the matching command
-- **THEN** `vault/memory-triggers/` holds one file for it with `proposed_by: distil` and no `armed_by`, a `memory_trigger_proposed` event is recorded, and the command is not held
-- **AND** once a person arms it with `coffer memory trigger arm <id>`, the matching command in a new session is held
-
-#### Scenario: triggers are managed from REST and the command line
-- **GIVEN** a running daemon and no triggers
-- **WHEN** a person adds a trigger with `coffer memory trigger add`, disarms it over REST, arms it again from the CLI, and deletes it over REST
-- **THEN** the listing shows it armed, then unarmed, then armed, then gone, its file follows each step, and `memory_trigger_added`, `memory_trigger_disarmed`, `memory_trigger_armed` and `memory_trigger_deleted` are recorded with that person as actor
-- **AND** a trigger whose pattern does not compile is refused with `MEMORY_TRIGGER_INVALID` and no file is written
-
-#### Scenario: a fresh vault has no triggers
-- **GIVEN** a new vault on which memory has been aggregated and distilled without an internal connection
-- **WHEN** the triggers are listed
-- **THEN** there are none, and `vault/memory-triggers/` holds no file
-
 ### Requirement: Fail open when Coffer cannot answer
-Every memory hook MUST fail open: when the daemon is not running, does not answer within the hook's own short timeout, or answers with an error, the hook MUST print nothing and exit 0, so memory never stops a prompt or a command because Coffer is down. A fire that can deliver nothing — a trivial prompt, a shell command no armed trigger matches — MUST be answered without contacting the daemon.
+Every memory hook MUST fail open: when the daemon is not running, does not answer within the hook's own short timeout, or answers with an error, the hook MUST print nothing and exit 0, so memory never stops a prompt because Coffer is down. A fire that can deliver nothing — a trivial prompt — MUST be answered without contacting the daemon.
 
 #### Scenario: the hook prints nothing and exits 0 with no daemon
-- **GIVEN** no daemon running and an armed `block` trigger that matches `make verify`
-- **WHEN** `coffer memory hook` is given a `SessionStart`, a `UserPromptSubmit` and a `PreToolUse` event for `make verify` on stdin
+- **GIVEN** no daemon running
+- **WHEN** `coffer memory hook` is given a `SessionStart` and a `UserPromptSubmit` event on stdin
 - **THEN** each run prints nothing and exits 0
 
 ### Requirement: Word delivered notes as provenance plus fact
-Every note delivered at a prompt, before a command or after one MUST read as **provenance plus fact**: it names the note's file, and states the note's substance as "the user's standing rule is: …" for a `feedback` note and as "a fact they recorded: …" otherwise. Delivered text MUST NOT be phrased as an instruction to the agent.
+Every note delivered at a prompt MUST read as **provenance plus fact**: it names the note's file, and states the note's substance as "the user's standing rule is: …" for a `feedback` note and as "a fact they recorded: …" otherwise. Delivered text MUST NOT be phrased as an instruction to the agent.
 
 #### Scenario: a delivered note names its file and reads as a standing rule
 - **GIVEN** a `feedback` note and a `project` note that both match a prompt
@@ -665,7 +619,7 @@ Every note delivered at a prompt, before a command or after one MUST read as **p
 - **THEN** the `feedback` note's line names its absolute path and reads "the user's standing rule is: …", and the `project` note's reads "a fact they recorded: …"
 
 ### Requirement: Count what memory delivered and what was read
-`GET /api/v1/memory/deliveries` and `coffer memory delivered` MUST report, for every registered agent with a delivery hook, over the last **seven days**: the number of delivery fires recorded in the audit log, the same count by moment (`session_start`, `prompt`, `guard`, `error`), when memory last reached it, and how many **distinct notes** its sessions opened. The last is read off the file paths the agent's tool calls named — a path under the memory root naming a note — and never off what a note, a tool result or a message says; when the agent's transcripts cannot be read it MUST be reported as `unavailable` rather than as zero. The report MUST NOT carry whether a hook is installed or trusted.
+`GET /api/v1/memory/deliveries` MUST report, for every registered agent with a delivery hook, over the last **seven days**: the number of delivery fires recorded in the audit log, the same count by moment (`session_start`, `prompt`), when memory last reached it, and how many **distinct notes** its sessions opened. The overview is the web UI's delivery statistics. The last is read off the file paths the agent's tool calls named — a path under the memory root naming a note — and never off what a note, a tool result or a message says; when the agent's transcripts cannot be read it MUST be reported as `unavailable` rather than as zero. The report MUST NOT carry whether a hook is installed or trusted.
 
 #### Scenario: the overview counts a week of deliveries and the notes read
 - **GIVEN** a Claude Code agent with five delivery fires in the last week and one older than that, and a transcript from this week whose tool calls read two distinct notes, one of them twice
@@ -679,7 +633,7 @@ Every note delivered at a prompt, before a command or after one MUST read as **p
 - **THEN** its notes read is `null` with status `unavailable`, and its delivery count is still reported
 
 ### Requirement: Show what each agent is given at session start
-`GET /api/v1/memory/partitions/{uid}/delivered` and `coffer memory delivered <partition>` MUST return, for every registered agent with a delivery hook, the **exact text** that agent's session-start hook would add in that partition's repository — composed by the same function and under the same ceiling the hook uses — read only, and without whether a hook is installed or trusted.
+`GET /api/v1/memory/partitions/{uid}/delivered` MUST return, for every registered agent with a delivery hook, the **exact text** that agent's session-start hook would add in that partition's repository — composed by the same function and under the same ceiling the hook uses — read only, and without whether a hook is installed or trusted. The web UI's partition page shows it on its Delivered tab.
 
 #### Scenario: the Delivered view carries each agent's exact session-start text
 - **GIVEN** a distilled repository partition and a registered Claude Code and Codex agent
@@ -705,13 +659,13 @@ A **channel-driven turn** gets its prompt's notes from Coffer rather than from i
 - **AND** the second channel turn is given nothing new, and the developer-driven turn's prompt reaches its agent unchanged
 
 ### Requirement: Remember what a session was given across daemon restarts
-What each session was given — the notes delivered at its prompts, and the triggers that held or annotated one of its commands — MUST survive a daemon restart, so a restart neither brings a note into a session again nor lets a trigger hold a second command in it. The record MUST be the audit log's delivery fires (see "Audit every delivery fire"), which already name each fire's session, notes and trigger: the daemon MUST rebuild the per-session record from the fires of the last **seven days** before it answers its first prompt or command, and MUST add no table for it (see "Add no table of its own"). A session idle for longer than that is treated as new. A rebuild that fails MUST be logged and leave the record empty rather than stop delivery.
+What each session was given — the notes delivered at its prompts — MUST survive a daemon restart, so a restart does not bring a note into a session again. The record MUST be the audit log's delivery fires (see "Audit every delivery fire"), which already name each fire's session and notes: the daemon MUST rebuild the per-session record from the fires of the last **seven days** before it answers its first prompt, and MUST add no table for it (see "Add no table of its own"). A session idle for longer than that is treated as new. A rebuild that fails MUST be logged and leave the record empty rather than stop delivery.
 
 #### Scenario: a daemon restart gives a session nothing twice
-- **GIVEN** a session that was given a note at a prompt and had a command held by a trigger, and then the daemon is restarted
-- **WHEN** the same session sends the same prompt and runs the same command, and a new session does both too
-- **THEN** the first session is given nothing and its command passes
-- **AND** the new session is given the note and its command is held
+- **GIVEN** a session that was given a note at a prompt, and then the daemon is restarted
+- **WHEN** the same session sends the same prompt, and a new session sends it too
+- **THEN** the first session is given nothing
+- **AND** the new session is given the note
 
 ### Requirement: Report the last read of the agents' memory
 `GET /api/v1/memory/reading` MUST answer when Coffer last read the agents' memory
@@ -719,7 +673,7 @@ What each session was given — the notes delivered at its prompts, and the trig
 parse, the agent, the source path, the reason and when that agent's memory was last read with
 nothing failing, if known. The answer MUST be read from the `memory_aggregated` audit events,
 which therefore carry each failure's agent, path and reason, so it is the same whoever started
-the read — the timer, Update memory or `coffer memory sync` — and survives a daemon restart. Only
+the read — the timer or Update memory — and survives a daemon restart. Only
 the newest read decides what failed. The Memory page's header MUST say "Read 14 min ago", with
 "· 1 agent failed" when the last read left an agent unread, and the page MUST then show a
 warning banner naming the agent and the path, saying that agent's memories stay as its last full read
@@ -747,3 +701,67 @@ is in flight MUST read "Distilling…".
 - **THEN** its run carries no count while it reads the agents' memory, then 0, 1 and 2 of 3 as it
   distils the three partitions in turn, leaving the fourth alone
 - **AND** it is no longer listed once it has answered
+
+### Requirement: Manage memory in the web UI
+People MUST manage memory in the web UI: browse partitions and the memories in them, edit a memory (see "Edit a memory in the web UI or on disk"), run **Update memory** (see "Update memory in one action"), read the delivery statistics and a partition's Delivered view (see "Count what memory delivered and what was read", "Show what each agent is given at session start"), and read what was retired. The REST family under `/api/v1/memory` is the web UI's own interface: it carries what that page needs and no route that no page calls, and no requirement promises it to anything else. The one route another program calls is `POST /api/v1/memory/hook`, which answers one fire of the memory hook, whose session-start answer is the composed session context. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family.
+
+There MUST be no command group for memory beyond one hidden entry, and no `coffer path` target for it. The single exception is `coffer memory hook`, the command every installed memory hook entry runs: it MUST be hidden from `coffer --help` and from the CLI reference, because a person never types it. A partition's notes, its index and its retirement record are plain files (see "Keep notes readable as plain files"), so the way to them is the memory root that session-start delivery names (see "Expose no memory tool and name the memory root at session start"), not a command.
+
+#### Scenario: memory is managed from the web UI and has no command group
+- **GIVEN** a running daemon with a distilled partition
+- **WHEN** the command tree of `coffer` is listed, including its hidden commands
+- **THEN** the only command under `memory` is `hook`, it is absent from the help output and the CLI reference, and there is no `path memory` target
+- **AND** the memory page lists the partition and its memories, runs Update memory and shows the Delivered view without any command
+
+#### Scenario: a path segment that escapes the memory root is refused
+- **GIVEN** a request on the memory family naming a partition or a note slug that is `..`, holds a path separator or is hidden
+- **WHEN** the route runs
+- **THEN** it is refused with `MEMORY_UNSAFE_PATH` (400) and nothing outside the partition is read or written
+
+#### Scenario: the delivery state of an agent is read on the agent's page
+- **GIVEN** two registered agents, one connected to Coffer and one not
+- **WHEN** the agent's detail data is read for each
+- **THEN** the first's `coffer_connection` is `connected` with its `memory_hook` part installed, the second's is `disconnected`, and neither carries a last-fired time
+
+### Requirement: Edit a memory in the web UI or on disk
+A person MUST be able to edit a memory in the web UI or in their own editor. `PUT /api/v1/memory/partitions/{uid}/notes/{slug}` MUST replace the note's **body** with the text it is given, keep the note's frontmatter, stamp `updated_at`, and take the fingerprint the note's read returned. A note that changed since — distil rewrote it, or it was edited on disk — MUST be refused with `MEMORY_NOTE_CONFLICT` (409) and left untouched, and the refusal MUST carry what an editor needs to recover without a second save over the note: `saved: false`, and the note as it is now, its body and its fingerprint. An accepted save MUST record a `memory_note_edited` audit event naming the partition, the note and the user. Editing the file under `notes/` with any other tool needs no Coffer surface: the note is the file.
+
+An edited note is the note, not a suggestion. It is the current body the distil writing stage receives the next time an entry is routed to it, so the edit persists until newer or better-evidenced material revises it (see "Judge a contradiction by evidence, not by who wrote it"). The derived tree stays disposable: deleting it and rebuilding reproduces the notes from the agents' own memory and loses every edit, and the guide says so.
+
+#### Scenario: a save replaces the body and keeps the frontmatter
+- **GIVEN** a note read with its fingerprint
+- **WHEN** a new body is saved with that fingerprint
+- **THEN** the note's body is the saved text, its `title`, `description`, `type` and provenance are unchanged, its `updated_at` is stamped, and the answer carries the new fingerprint
+- **AND** a `memory_note_edited` event names the partition, the note and the user
+
+#### Scenario: a save over a note that changed is refused with the current text
+- **GIVEN** a note read with its fingerprint, and a distil pass that then rewrote it
+- **WHEN** the save arrives with the fingerprint the editor loaded
+- **THEN** it is refused with 409 `MEMORY_NOTE_CONFLICT` with `saved` false and the body and fingerprint the note has now
+- **AND** the file still holds the distil pass's text, and saving the user's text again needs the new fingerprint
+
+#### Scenario: an edited note is the body distil's writing stage receives
+- **GIVEN** a note a person edited, and a new raw entry routed to that note
+- **WHEN** the distil pass runs with an internal connection that records its requests
+- **THEN** the writing request carries the edited body as the note's current body
+- **AND** a note left alone by routing keeps the edited text byte for byte
+
+#### Scenario: an edit made on disk needs no Coffer surface
+- **GIVEN** a note's file under `notes/`
+- **WHEN** a person changes its body in their own editor
+- **THEN** the next read of the note, the index line rendered from it and the next session's delivery carry the changed text
+- **AND** deleting the derived tree and rebuilding it gives back a note without that edit
+
+### Requirement: Judge a contradiction by evidence, not by who wrote it
+When a distil pass finds two statements that disagree — a note's body and a raw entry, or an edited note and newer material — the newer statement MUST win unless the older one is shown to be right: by a source, a date, a command's output or the code. The writing stage's instruction MUST say so, and MUST NOT exempt a statement because a person or an agent edited it. A statement that is superseded MUST stay legible: retired through "Record retirements so they stick" with the reason and the note that replaced it, or kept in the rewritten body with the date it changed.
+
+#### Scenario: a newer entry revises an edited note
+- **GIVEN** a note a person edited, and a newer raw entry that contradicts the edit and names a command's output as its evidence
+- **WHEN** the distil pass runs with an internal connection
+- **THEN** the writing request's instruction states the newer-or-better-evidenced rule and does not mark the body as untouchable
+- **AND** the note's rewritten body follows the entry and still shows the date the statement changed
+
+#### Scenario: keep an edited statement against an older entry without evidence
+- **GIVEN** a note a person edited today, and a raw entry from last month that disagrees with the edit and carries no evidence
+- **WHEN** the distil pass runs
+- **THEN** the note's body still holds the edited statement

@@ -24,7 +24,7 @@ Because the delivered path is a link, a person editing a skill from inside an ag
 
 ## History
 
-The master folders are inside the vault repository, so a skill has a history: every save through Coffer is a commit written by `user`, and an edit made in an editor or by an agent's own file tools is committed as `disk` once the file has been quiet. A save from the web UI states the fingerprint of what it read, so an edit made on disk in the meantime is refused rather than overwritten. The skill's **History** tab lists the versions with who wrote each, shows each version's changes file by file, and restores a version as a new commit after asking; `coffer vault history skills/<name>/` and `coffer vault restore` do the same from the terminal. See [Editing the vault by hand](/guides/vault-files).
+The master folders are inside the vault repository, so a skill has a history: every save through Coffer is a commit written by `user`, and an edit made in an editor or by an agent's own file tools is committed as `disk` once the file has been quiet. A save from the web UI states the fingerprint of what it read, so an edit made on disk in the meantime is refused rather than overwritten. The skill's **History** tab lists the versions with who wrote each, shows each version's changes file by file, and restores a version as a new commit after asking. See [Editing the vault by hand](/guides/vault-files).
 
 Coffer's own `coffer-guide` is the exception: it is rendered from the running build, so it lives under `~/.coffer/derived/skills/coffer-guide/`, outside the vault, and has no history.
 

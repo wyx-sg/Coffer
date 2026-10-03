@@ -15,7 +15,7 @@ and
 State is stored by what it **is**; the class decides the directory, and the
 directory decides whether it can travel (`StorageClass`, `domain/vault/layout.py`;
 the roots are resolved from `HOME` at every call by `infrastructure/vault/home.py`,
-with no per-tree override, and `coffer path` prints them).
+with no per-tree override, and `coffer path logs` prints the log directory).
 
 | Class | Directory | What | Travels |
 | --- | --- | --- | --- |
@@ -34,7 +34,6 @@ with no per-tree override, and `coffer path` prints them).
     state/settings/internal-engine.json
     knowledge/<collection>/...
     skills/<name>/...                      skill master folders
-    memory-triggers/<id>.md
     secret/<ref>.enc                       Fernet ciphertext
     machines/<machine id>.json             one descriptor per machine
     .git/                                  info/exclude, tags coffer/pre-apply/<time>
@@ -76,7 +75,7 @@ in and the Sync page groups by (`area_of`): the first path segment, except that
 `resources/<kind>/` and `state/<area>/` are areas of their own. `machines/` and
 `manifest.json` are the registry and are never counted as vault content. The
 top-level directories are `resources`, `state`, `knowledge`, `skills`,
-`memory-triggers`, `secret` and `machines`; anything else a person puts there
+`secret` and `machines`; anything else a person puts there
 is kept and committed but belongs to no area Coffer reads.
 
 `vault/.git/info/exclude` — never a tracked `.gitignore` another machine could
@@ -102,8 +101,8 @@ rather than misread it.
 
 Resource files, state documents and machine descriptors are **JSON objects**
 (`domain/vault/document.py`): 2-space indent, a trailing newline, keys in the
-order the file already had them. Knowledge documents, skill files and memory
-triggers are carried as bytes, not parsed as vault documents.
+order the file already had them. Knowledge documents and skill files
+are carried as bytes, not parsed as vault documents.
 
 - **Unknown top-level keys are kept.** A reader validates the keys it knows
   and carries every other top-level key verbatim, in place; a write puts them
@@ -237,7 +236,7 @@ and `Coffer-Undoes` (spec knowledge). A history row shows the writer as
 ### History, diff and restore
 
 Any vault file or folder: `GET /api/v1/vault/{history,diff,content,changes,problems}`,
-`POST /api/v1/vault/restore`; `coffer vault history|diff|show|restore|problems`.
+`POST /api/v1/vault/restore`; the CLI keeps only `coffer vault problems`.
 A restore is a new commit through the same checks, carrying
 `Coffer-Restored-From` and audited `vault_file_restored`; a folder restore
 removes files the version did not have. `secret/` is refused

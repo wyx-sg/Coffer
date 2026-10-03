@@ -91,20 +91,6 @@ If a login is needed, tell me how and I will log in myself; do not handle my cre
 
 Coffer 从不替你登录，页面也不显示任何登录命令。未登录的命令同样通过交接交给你的智能体：提示词写明失败的登录检查和技能声明的登录命令，只要求智能体告诉你该运行什么；登录由你自己运行，要求输入的内容也由你自己输入。然后点 **重新检查**。
 
-## 在命令行上 {#on-the-command-line}
-
-```sh
-coffer cli list                 # every required command, problems first
-coffer cli list --json
-coffer cli show uv              # one command: path, version, login, servers and skills
-coffer cli check                # probe every command again
-coffer cli check gh             # probe one again
-coffer cli prompt gh            # the prompt to give your agent
-coffer cli prompt gh | pbcopy   # straight to the clipboard on macOS
-```
-
-`coffer cli prompt` 打印的正是页面复制的那段文字，对已就绪的命令以非零退出。全部选项见 [CLI 参考](/zh/reference/cli/cli)。
-
 ## 相关 {#related}
 
 - [技能](/zh/guides/skills)——导入技能与 `SKILL.md` 格式。

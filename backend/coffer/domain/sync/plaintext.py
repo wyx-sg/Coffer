@@ -6,7 +6,7 @@ Coffer's hands for good: it is in the remote's history, in every clone, and in
 any backup of either. So before a round pushes, every file the push would
 publish — each blob the remote does not already hold, from every commit since
 the remote's head — is read for a plaintext secret, with the same detection
-``coffer secret scan`` uses. An encrypted ``secret/<ref>.enc`` file is
+the Secrets page's scan uses. An encrypted ``secret/<ref>.enc`` file is
 ciphertext and is not read.
 
 A finding names the file, the line and the name the value was assigned to,

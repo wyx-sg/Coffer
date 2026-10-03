@@ -9,9 +9,8 @@ Invocation handlers (tools/call, resources/read, prompts/get) live in
 `gateway_handlers`; the tools/list composition (aggregate, plus built-ins,
 minus what tiering hides) lives in `gateway_tools_list`.
 
-Server-initiated request plumbing (sampling and roots) lives in
-`gateway_server_requests`, the pure envelope parsing in `gateway_parsing`, and
-the per-agent scope filter for the enabled-server list in `gateway_scope`.
+Sampling and roots live in `gateway_server_requests`, envelope parsing in
+`gateway_parsing`, and the per-agent server filter in `gateway_scope`.
 
 For the spec's "upstream tool list changes mid-session" scenario, the session
 subscribes to each upstream's notification stream
@@ -189,6 +188,7 @@ class MCPGatewaySession:
             hidden_count=self.last_hidden_count,
             tools=[tool.name for tool in self._builtin.list()],
             memory_root=self._builtin.directory("memory"),
+            knowledge=self._builtin.directory("knowledge") is not None,
         )
 
     # --- Request dispatch ---

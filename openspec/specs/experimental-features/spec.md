@@ -43,8 +43,8 @@ anything. A `features` object a person already holds is kept as it is.
 
 #### Scenario: the registry names the four experimental features
 - **GIVEN** a running daemon
-- **WHEN** `GET /api/v1/daemon/features` is requested and `coffer config list feature.` runs
-- **THEN** the route and the command list exactly `knowledge`, `memory`, `sync` and `models`, in that order, each with its state and what decided it
+- **WHEN** `GET /api/v1/daemon/features` is requested
+- **THEN** the route lists exactly `knowledge`, `memory`, `sync` and `models`, in that order, each with its state and what decided it
 - **AND** the daemon status `features` map names the same four keys
 
 #### Scenario: a stored setting for a feature the registry does not name is ignored
@@ -81,25 +81,24 @@ refused with 409 `FEATURE_PINNED`.
 - **WHEN** a request switches `f` on
 - **THEN** it answers 409 `FEATURE_PINNED` and `f` stays off
 
-### Requirement: Switch a feature from the settings page or the command line
-A feature MUST be switchable from Settings → Features, from
-`coffer config set feature.<key> on|off`, and from
-`PUT /api/v1/daemon/features/{key}`. `coffer config unset feature.<key>` MUST
+### Requirement: Switch a feature from the settings page or over REST
+A feature MUST be switchable from Settings → Features and from
+`PUT /api/v1/daemon/features/{key}`. `DELETE /api/v1/daemon/features/{key}` MUST
 remove the machine's own setting, so the feature returns to off.
-`coffer config list feature.` MUST list every registered feature with its state
+`GET /api/v1/daemon/features` MUST list every registered feature with its state
 and the layer that decided it — a pin, the setting or the default. The switch
 MUST take effect at once, with no daemon restart, and MUST be written to the
 daemon config before the request answers.
 
 #### Scenario: switching a feature on opens its surfaces without a restart
 - **GIVEN** a running daemon with a registered feature `f` that owns route prefix `p`, switched off
-- **WHEN** `coffer config set feature.f on` runs
+- **WHEN** `PUT /api/v1/daemon/features/f` switches it on
 - **THEN** a route under `p` answers on the same daemon process instead of 404 `FEATURE_DISABLED`
 - **AND** the daemon config holds `f: true`
 
 #### Scenario: unsetting a feature returns it to off
 - **GIVEN** a daemon config that switches a registered feature `f` on
-- **WHEN** `coffer config unset feature.f` runs and then `coffer config list feature.`
+- **WHEN** `DELETE /api/v1/daemon/features/f` is requested and then `GET /api/v1/daemon/features`
 - **THEN** the daemon config no longer holds a setting for `f`
 - **AND** the listing names every registered feature, with `f` off and decided by the default
 
@@ -107,8 +106,8 @@ daemon config before the request answers.
 While a feature is off: every REST route under a route prefix it names MUST
 answer 404 with code `FEATURE_DISABLED` naming the feature; its MCP tools MUST
 be absent from the tool list and a call to one MUST answer as a call to an
-unknown tool; its CLI commands MUST print one line naming
-`coffer config set feature.<key> on` and exit 1; its own background passes MUST
+unknown tool; its refusals and hints MUST name Settings → Features as where it is
+switched on, and no command; its own background passes MUST
 skip their rounds. A resource whose kind the feature owns MUST be out of reach
 of the kind-agnostic resource routes too: a route naming such a kind, or a uid
 whose resource is of it, MUST answer 404 `FEATURE_DISABLED`, and a list MUST
@@ -131,10 +130,10 @@ leave those resources out.
 - **THEN** the tool is absent
 - **AND** a call to it answers as an unknown tool
 
-#### Scenario: a switched-off feature's command says how to switch it on
+#### Scenario: a switched-off feature's refusal says how to switch it on
 - **GIVEN** a registered feature `f` that owns route prefix `p`, switched off
-- **WHEN** a `coffer` command that reads a route under `p` runs
-- **THEN** it prints a line naming `coffer config set feature.f on` and exits 1
+- **WHEN** a route under `p` is requested
+- **THEN** the answer names Settings → Features as where to switch `f` on
 
 ### Requirement: Make a switched-off feature look absent in the UI
 While a feature is off, the web UI MUST show nothing that belongs to it: its
@@ -195,10 +194,9 @@ carry.
 ### Requirement: Close the knowledge feature's surfaces
 While `knowledge` is off, `/api/v1/knowledge` MUST answer 404
 `FEATURE_DISABLED` and the `knowledge` kind MUST be out of reach of the resource
-routes. The `coffer__write` tool, which writes a knowledge document, MUST be
-absent from the tool list and answer as an unknown tool. The `coffer-guide`
-skill MUST be rendered without its knowledge catalogue and `coffer__write`
-sections, and switching `knowledge` on MUST restore them. The curation pass MUST
+routes. The `coffer-guide`
+skill MUST be rendered without its knowledge catalogue, and switching
+`knowledge` on MUST restore it. The curation pass MUST
 skip its rounds. The channel `/kb` command MUST be out of `/help` and the menus
 and answer that Knowledge is switched off, keeping any pending document.
 
@@ -207,15 +205,15 @@ and answer that Knowledge is switched off, keeping any pending document.
 - **WHEN** a route under `/api/v1/knowledge` is requested
 - **THEN** it answers 404 `FEATURE_DISABLED` naming `knowledge`
 
-#### Scenario: knowledge off hides the write tool
+#### Scenario: knowledge off leaves coffer__search_tools the only built-in tool
 - **GIVEN** `knowledge` off
 - **WHEN** an agent opens a gateway session and lists the tools
-- **THEN** `coffer__write` is absent, a call to it answers as an unknown tool, and the handshake instructions do not name it
+- **THEN** the `coffer__` tools listed are `coffer__search_tools` alone, a call to any other `coffer__` tool answers as an unknown tool, and the handshake instructions name no knowledge tool
 
 #### Scenario: knowledge off re-renders the coffer-guide skill without its knowledge sections
 - **GIVEN** `knowledge` off
 - **WHEN** the `coffer-guide` skill is rendered
-- **THEN** it carries no knowledge catalogue or `coffer__write` section, and the sections return once `knowledge` is on
+- **THEN** it carries no knowledge catalogue, and the catalogue returns once `knowledge` is on
 
 #### Scenario: knowledge off skips the curation pass
 - **GIVEN** `knowledge` off
@@ -353,7 +351,7 @@ embed data of a switched-off feature MUST leave that section out.
 
 #### Scenario: sync off leaves the vault single-machine
 - **GIVEN** `sync` off
-- **WHEN** curation runs, the engine's curate-owner is displayed with `coffer config`, and a channel is read
+- **WHEN** curation runs, the engine's curate-owner is displayed in Settings, and a channel is read
 - **THEN** curation and the display treat the vault as single-machine, and the channel stays bound to its machine
 
 ### Requirement: Show the Features tab in every build

@@ -8,7 +8,7 @@
 //
 // There is no `search` and no `grep` here because the daemon serves neither
 // (see "Cover knowledge management on REST and the CLI"). New knowledge goes in as MATERIAL — an
-// upload here, an agent's `coffer__write`, the CLI — which waits in the collection's hidden inbox
+// upload here, an agent's file in `.inbox/` — which waits in the collection's hidden inbox
 // until a curation pass curates it into the documents; with no internal model
 // configured it becomes a document as it is.
 //

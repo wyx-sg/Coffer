@@ -1,5 +1,5 @@
-"""Wire models of the custom tools routes (spec mcp-gateway "Manage custom tools
-on REST and the command line"; design add-http-custom-tools §9).
+"""Wire models of the custom tools routes (spec mcp-gateway "Manage custom
+tools through REST and the Custom tools page"; design add-http-custom-tools §9).
 
 These are the only hand-written description of the wire: the contract in
 ``openspec/specs/mcp-gateway/contracts/api.openapi.yaml`` and the frontend's

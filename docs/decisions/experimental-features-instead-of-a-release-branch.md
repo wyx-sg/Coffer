@@ -78,8 +78,7 @@ Gates act at request time, on every surface:
   and puts it back when switched on (spec experimental-features "Withdraw what a
   switched-off feature put in front of agents"): `memory` withdraws the memory
   delivery hook and the memory section of `coffer-guide`; `knowledge` withdraws
-  `coffer__write`, the knowledge sections of `coffer-guide` and the channel
-  `/kb`; `models` withdraws the provider projection from agents' own
+  the knowledge sections of `coffer-guide` and the channel `/kb`; `models` withdraws the provider projection from agents' own
   configuration and empties the model proxy.
 
 One security detail survives from the earlier channel design and is not a

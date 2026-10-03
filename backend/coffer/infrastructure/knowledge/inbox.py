@@ -27,7 +27,10 @@ from coffer.infrastructure.knowledge.fs import (
     timestamp,
     write_file,
 )
-from coffer.infrastructure.knowledge.naming import slugify, unique_name
+from coffer.infrastructure.knowledge.naming import opening_prose, slugify, unique_name
+
+#: The keys every item a Coffer surface writes carries.
+_SUBMITTED_KEYS = ("title", "description", "actor", "created_at", "updated_at")
 
 
 def _inbox_item(collection: str, name: str) -> pathlib.Path:
@@ -74,6 +77,64 @@ def submit_material(
         ),
     )
     return target.name
+
+
+def has_complete_frontmatter(collection: str, name: str) -> bool:
+    """Whether an item carries every key a Coffer surface writes. A file that
+    lacks one was written outside Coffer."""
+    fm, _ = split_frontmatter(decode(_inbox_item(collection, name).read_bytes()))
+    return all(fm.get(key) for key in _SUBMITTED_KEYS)
+
+
+def _first_heading(body: str) -> str:
+    for line in body.splitlines():
+        if line.startswith("# ") and line[2:].strip():
+            return line[2:].strip()
+    return ""
+
+
+def adopt_dropped(collection: str, name: str) -> tuple[str, str, bool]:
+    """Fill the frontmatter of an item written outside Coffer, in place (spec
+    knowledge "Submit material by writing a file into the inbox").
+
+    ``title`` is kept, else the first ``# `` heading, else the file name's stem;
+    ``description`` is kept, else the first prose paragraph, else the title;
+    ``actor`` is kept as written (self-reported), else ``agent``; the two
+    timestamps are kept, else now; every other key a writer set is kept, and the
+    body is unchanged. Returns ``(title, actor, actor_reported)``.
+    """
+    path = _inbox_item(collection, name)
+    fm, body = split_frontmatter(decode(path.read_bytes()))
+    title = str(fm.get("title") or "").strip() or _first_heading(body) or path.stem
+    description = str(fm.get("description") or "").strip() or opening_prose(body, fallback=title)
+    reported = str(fm.get("actor") or "").strip()
+    actor = reported or ACTOR_AGENT
+    now = timestamp()
+    atomic_write(
+        path,
+        render(
+            {
+                **fm,
+                "title": title,
+                "description": description,
+                "actor": actor,
+                "created_at": fm.get("created_at") or now,
+                "updated_at": fm.get("updated_at") or now,
+            },
+            body,
+        ),
+    )
+    return title, actor, bool(reported)
+
+
+def non_markdown_items(collection: str) -> tuple[str, ...]:
+    """Files in a collection's inbox that are not Markdown: never curated."""
+    directory = paths.inbox_dir(collection)
+    if not directory.is_dir():
+        return ()
+    return tuple(
+        sorted(e.name for e in directory.iterdir() if e.is_file() and not is_markdown(e.name))
+    )
 
 
 def _submitted_at(entry: pathlib.Path) -> float:

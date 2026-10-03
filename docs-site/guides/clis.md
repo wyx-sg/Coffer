@@ -91,20 +91,6 @@ When the agent is done, press **Check again**.
 
 Coffer never logs in for you, and the page shows no login command. A command that is not logged in hands the login to your agent the same way: its prompt names the login check that failed and the login command the skill declared, and asks your agent only to tell you what to run; you run the login and type anything it asks for yourself. Then press **Check again**.
 
-## On the command line
-
-```sh
-coffer cli list                 # every required command, problems first
-coffer cli list --json
-coffer cli show uv              # one command: path, version, login, servers and skills
-coffer cli check                # probe every command again
-coffer cli check gh             # probe one again
-coffer cli prompt gh            # the prompt to give your agent
-coffer cli prompt gh | pbcopy   # straight to the clipboard on macOS
-```
-
-`coffer cli prompt` prints the same text the page copies, and exits non-zero for a command that is ready. Every option is in the [CLI reference](/reference/cli/cli).
-
 ## Related
 
 - [Skills](/guides/skills) — importing skills and the `SKILL.md` format.

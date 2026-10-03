@@ -12,7 +12,7 @@ import pytest
 from coffer.infrastructure.knowledge import fs, inbox
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
-from .conftest import _create_collection, _hold_material, _submit
+from .conftest import _create_collection, _hold_material, _submit, _submit_material
 
 
 @pytest.mark.acceptance(
@@ -46,11 +46,9 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
     scratch.parent.mkdir(parents=True)
     scratch.write_text("---\ntitle: Hidden\ndescription: d\n---\n\nb\n", encoding="utf-8")
     _hold_material(monkeypatch)
-    waiting = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "d", "body": "b"},
-    )
-    assert waiting.status_code == 201, waiting.text
+    assert _submit_material(
+        client, collection="shopee", title="Waiting", description="d", body="b"
+    ).pending
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
     assert entry["document_count"] == 1

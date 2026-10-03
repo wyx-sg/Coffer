@@ -8,8 +8,7 @@ switch and timer of every pass Coffer runs when nobody asked it to, the one
 machine allowed to run curation, the bound on one call to that model, and the
 speech-to-text model. It owns one settings
 document per vault, the surfaces that show and change it (`/api/v1/internal-engine-config`,
-the `engine.*` and `transcribe.*` keys of `coffer config`, the Coffer's model section of
-Settings › General), its convergence between machines, and the
+the Coffer's model section of Settings › General), its convergence between machines, and the
 rule that a pass with nothing configured is a clean no-op rather than an error.
 
 Coffer does work on its own behalf: it aggregates the agents' memory, lets a
@@ -34,8 +33,7 @@ synced document.
 Out of scope: creating, editing, activating or flagging a connection (both
 `internal_default` and `transcribe_default` are provider-switching's fields and
 routes, `POST /api/v1/providers/{uid}/internal-default` and
-`POST /api/v1/providers/{uid}/transcribe-default`, and
-`coffer config set engine.provider|transcribe.provider <name>`); what each pass
+`POST /api/v1/providers/{uid}/transcribe-default`); what each pass
 does (memory and knowledge); `GET /api/v1/upkeep/runs`, a cross-kind read of
 what is in flight; any model registry; and per-collection or per-partition
 timers. Coffer runs as a single-user tool behind the existing `X-Coffer-Token`
@@ -310,64 +308,24 @@ machine that made it, when it came from another one.
 - **THEN** every one of those returns to its default,
 - **AND** nothing is written back, so the vault holds no settings document.
 
-### Requirement: Show, set and clear the engine model from the CLI
-A CLI MUST show, set and clear the engine model — `coffer config get engine.model`,
-`coffer config set engine.model <id>` and `coffer config unset engine.model` — with the same effect
-and the same audit entry as the HTTP route, so a terminal-only operator can see and change which
-model Coffer thinks with. `unset` leaves the model unchosen, which makes every internal pass a clean
-no-op (see "Make every internal pass a clean no-op when nothing is configured").
-
-#### Scenario: the command line shows and sets the engine model
-- **GIVEN** the daemon is running and a connection is the internal default,
-- **WHEN** the operator runs `coffer config set engine.model <id>`, then
-  `coffer config get engine.model`, then `coffer config unset engine.model`,
-- **THEN** each has the same effect as the HTTP route — the model is stored,
-  reported and cleared — and the audit entry is the same one the route records.
-
-### Requirement: List and change each unattended pass from the CLI
-A CLI MUST list every pass's switch, chosen interval and default interval —
-`coffer config list engine.upkeep. [--json]`, printing the default that runs when none is chosen
-so the terminal shows what the page shows — and change one value of one pass per invocation —
-`coffer config set engine.upkeep.<pass>.enabled on|off` and
-`coffer config set engine.upkeep.<pass>.interval <seconds>`, where `<pass>` is one of `aggregate`,
-`distil`, `curate`. `coffer config unset engine.upkeep.<pass>.interval` MUST return that pass to its
-default interval, and `coffer config unset engine.upkeep.<pass>.enabled` MUST switch it back on, the
-shipped state (see "Ship every unattended pass switched on"). It MUST refuse an interval below the
-floor with the same error the route gives, and a key naming a pass Coffer does not run MUST be
-refused as an unknown key before any route is called.
-
-#### Scenario: the command line lists and changes each unattended pass
-- **GIVEN** the daemon is running,
-- **WHEN** the operator runs `coffer config list engine.upkeep. --json`, then
-  `coffer config set engine.upkeep.curate.enabled off`, then
-  `coffer config set engine.upkeep.distil.interval 900`, then
-  `coffer config unset engine.upkeep.distil.interval`,
-- **THEN** the listing is machine-readable and names each pass's switch, its
-  chosen interval and the default that runs while none is chosen; each `set`
-  changes one value of one pass only; `unset` returns `distil` to its default interval;
-  and an interval below the floor or a key naming an unknown pass is refused,
-  the first with the same error the route gives.
-
 ### Requirement: Carry the bound on one model call
 The settings document MUST carry the bound on ONE call to Coffer's own model, where `NULL`
 means the built-in default. The default MUST live in one place in the code
 rather than be copied into each vault, exactly as an unchosen interval's does
 (see "Report an unchosen interval beside its default"), so raising it later
 reaches every vault that never chose. `GET /api/v1/internal-engine-config` MUST
-report the chosen bound and that default together, and so MUST
-`coffer config get engine.timeout` and `coffer config list engine.`.
+report the chosen bound and that default together.
 
 #### Scenario: bound how long one call to Coffer's own model may take
 - **GIVEN** the engine has a connection and a model, and no bound has been
   chosen,
 - **WHEN** the operator reads the bound, sets one, and returns it to the default
-  (`PUT /api/v1/internal-engine-config/timeout`, or `coffer config get | set | unset
-  engine.timeout`),
+  (`PUT /api/v1/internal-engine-config/timeout`),
 - **THEN** an unchosen bound is reported as unchosen beside the built-in default
   that applies, a chosen one is what every internal model call runs under — the
   distil pass, knowledge ingestion's description step, curation's agentic turns
   and speech-to-text alike — a value outside the permitted range is refused by
-  the route and by the CLI with the same error, and a value already stored
+  the route, and a value already stored
   outside that range is clamped by a background pass rather than taking it down.
 
 ### Requirement: Run every internal model call under the bound
@@ -392,7 +350,7 @@ daemon restart.
 
 ### Requirement: Refuse an out-of-range bound at a surface and clamp it in a pass
 A bound outside the permitted range MUST be refused by
-`PUT /api/v1/internal-engine-config/timeout` and by the CLI with the same error,
+`PUT /api/v1/internal-engine-config/timeout`,
 rather than a different number applied silently. A value already STORED outside
 that range MUST be clamped by the background passes rather than raised on: the
 surfaces refuse it on the way in, so a value found out there came from an older
@@ -458,24 +416,19 @@ default; outside the floor–ceiling range is refused, not clamped) and
 `PUT /api/v1/internal-engine-config/transcribe-model` (`null` or empty clears
 it, which stops transcription) MUST each change one value and leave the rest of
 the document alone, audited like any other write to it (see "Audit every write to
-the engine settings"). A CLI MUST show, set and return-to-default the bound —
-`coffer config get | set <seconds> | unset engine.timeout`, where `get` prints the chosen bound
-beside the default and `unset` returns to the built-in one — and show, set and clear the
-speech-to-text model — `coffer config get | set <id> | unset transcribe.model` — with the same
-effects, refusals and audit entries as the routes. The Coffer's model section of Settings ›
+the engine settings"). The Coffer's model section of Settings ›
 General MUST show and change both.
 
 #### Scenario: the bound and the speech-to-text model change one value at a time
 - **GIVEN** a settings document with a chosen engine model and a pass switched off,
 - **WHEN** the operator sets the bound and the speech-to-text model through the
-  routes, and then again through `coffer config set engine.timeout` and
-  `coffer config set transcribe.model`,
+  routes,
 - **THEN** each write changes only its own value and the engine model and the
   pass's switch are left as they stood,
 - **AND** every one of those writes is recorded as an `internal_engine_model_set`
   audit entry.
 
-### Requirement: Report and change the curation owner from every surface
+### Requirement: Report and change the curation owner over REST and in the Knowledge popover
 The settings document MUST carry the curation owner — the one machine allowed to run
 the `curate` pass, or none — and every surface that shows the engine MUST report
 and change it, applying the four-state rule of
@@ -491,14 +444,6 @@ and change it, applying the four-state rule of
   vault that has never converged has no registry and must still be able to name
   its own machine. The write MUST be audited like any other write to the document
   (see "Audit every write to the engine settings").
-- A CLI MUST show, set and clear the owner through the key `engine.curate_owner` —
-  `coffer config get engine.curate_owner [--json]`,
-  `coffer config set engine.curate_owner this|<machine_id>` and
-  `coffer config unset engine.curate_owner`, whose default is no owner — where `this` names this
-  machine, `get` and `set` print which of the four states the owner is in, `get --json` carries
-  `curate_owner_machine_id`, `state` and `this_machine_id`, and an owner no machine in a
-  non-empty registry claims is printed as the fault it is together with how to take the pass
-  back.
 - The Knowledge page's Automatic popover MUST show the owner as "Curation runs on" once the
   vault's registry (`GET /api/v1/sync/machines`) names more than one machine, with a picker of
   the known machines that names a new owner; an owner no known machine claims MUST be shown
@@ -515,48 +460,17 @@ and change it, applying the four-state rule of
 - **AND** each write records an `internal_engine_model_set` audit entry naming
   the actor, whose details carry the owner as it stands after that write.
 
-#### Scenario: the command line shows, sets and clears the curation owner
-- **GIVEN** the daemon is running on a vault that has named no curation owner,
-- **WHEN** the operator runs `coffer config get engine.curate_owner`, then
-  `coffer config set engine.curate_owner this`, then
-  `coffer config get engine.curate_owner --json`, then
-  `coffer config unset engine.curate_owner`,
-- **THEN** the first prints that no owner is named and the pass runs wherever
-  the vault is read, `set` names this machine and prints it as this machine,
-  the JSON carries this machine's id with state `self`, and `unset` prints the
-  unowned line again,
-- **AND** the settings route reports the owner that each step left.
-
-### Requirement: Keep every engine setting under one key namespace
-Every setting this capability owns MUST be read and changed on the command line through the
-generic `coffer config list|get|set|unset` command of
-[resource-framework](../resource-framework/spec.md) (one key registry, typed validation,
-`unset` returns a key to its default, `config list` shows each key's type, default and help).
-The keys MUST be `engine.provider` (the connection the engine borrows, whose flag is
-[provider-switching](../provider-switching/spec.md) "Set the internal-engine default"),
-`engine.model`, `engine.timeout`, `engine.curate_owner`, `engine.upkeep.<pass>.enabled` and
-`engine.upkeep.<pass>.interval` for each of `aggregate`, `distil` and `curate`, plus
-`transcribe.provider` (the connection flagged by
-[provider-switching](../provider-switching/spec.md) "Keep an independent speech-to-text default")
-and `transcribe.model`. Each key MUST have the same effect, the same refusals and the same audit
-entry as the route that stores it; the routes under `/api/v1/internal-engine-config` are
-unchanged. `coffer engine` is not a command.
-
-#### Scenario: the command line lists every engine setting under one namespace
-- **GIVEN** the daemon is running with a connection flagged as the internal default, a chosen
-  engine model and no other engine setting chosen,
-- **WHEN** the operator runs `coffer config list engine.` and `coffer config list transcribe.`,
-- **THEN** the first lists `engine.provider`, `engine.model`, `engine.timeout`,
-  `engine.curate_owner` and an `enabled` and an `interval` key for each of `aggregate`, `distil`
-  and `curate`, each with its current value, its default and its help,
-- **AND** the second lists `transcribe.provider` and `transcribe.model`, and
-  `coffer engine model show` is refused as an unknown command.
+#### Scenario: the popover shows and sets the curation owner
+- **GIVEN** a vault whose registry names two machines and that has named no curation owner, and the Knowledge page's Automatic popover
+- **WHEN** the operator opens the popover and picks this machine as "Curation runs on"
+- **THEN** the first state reads as no owner and warns that every machine curates, and the pick writes this machine as the owner,
+- **AND** once an owner is named the picker offers only machines: clearing the owner is the route's `null` above, not a popover choice.
 
 ### Requirement: Report when each unattended pass last ran and runs next
 Each pass in the upkeep block of `GET /api/v1/internal-engine-config` (and of every answer
 the settings routes give) MUST carry `last_pass_at` and `next_pass_at`. `last_pass_at` MUST be
-when that pass last finished on this machine, whoever asked for it — the timer, a button or the
-CLI — read from the audit event the pass records (`memory_aggregated`, `memory_distilled`,
+when that pass last finished on this machine, whoever asked for it — the timer or a button —
+read from the audit event the pass records (`memory_aggregated`, `memory_distilled`,
 `knowledge_curated`), so it survives a daemon restart; it is `null` when the pass never ran.
 `next_pass_at` MUST be when this machine's timer runs the pass next, counted from the moment
 its worker began waiting against the interval as it stands now (a worker's start delay
@@ -589,7 +503,7 @@ option MUST name the real number.
   popover MUST show "Curation runs on" with a picker of the known machines and the line "One
   Mac curates; the others get the result through sync.", writing through
   `PUT /api/v1/internal-engine-config/curation-owner`; the owner is resolved by the four-state
-  rule of "Report and change the curation owner from every surface", and an owner no known
+  rule of "Report and change the curation owner over REST and in the Knowledge popover", and an owner no known
   machine claims MUST read as that fault in the popover and on the header control, with the
   picker offering this machine to take the pass back. While another machine owns the pass the
   last/next line is not shown, because this machine's timer does not run it.

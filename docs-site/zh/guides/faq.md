@@ -55,11 +55,11 @@ Coffer 免费且开源，采用 MIT 许可证。唯一的费用是你本来就�
 
 ## Coffer 会修改我的智能体配置文件吗？ {#does-coffer-change-my-agents-configuration-files}
 
-只有在你要求时才会，而且每次改动都记录在审计日志里。把智能体接入 Coffer，会往智能体配置里写一个 MCP 服务器条目，并往它的设置里写 Coffer 的记忆 Hook（四个条目：会话开始、每次提示词、每条 shell 命令之前和之后）。投递技能会在智能体的技能目录中放一个指向它的链接（对 Claude Code 来说是 `~/.claude/skills`）。切换模型提供商会把提供商的设置写进智能体自己的配置。Coffer 会读取智能体自己的记忆文件，但从不写入。见[智能体](/zh/guides/agents)。
+只有在你要求时才会，而且每次改动都记录在审计日志里。把智能体接入 Coffer，会往智能体配置里写一个 MCP 服务器条目，并往它的设置里写 Coffer 的记忆 Hook（两个条目：会话开始和每次提示词）。投递技能会在智能体的技能目录中放一个指向它的链接（对 Claude Code 来说是 `~/.claude/skills`）。切换模型提供商会把提供商的设置写进智能体自己的配置。Coffer 会读取智能体自己的记忆文件，但从不写入。见[智能体](/zh/guides/agents)。
 
 ## 我需要自己启动守护进程吗？ {#do-i-have-to-start-the-daemon-myself}
 
-不需要。任何需要守护进程的 `coffer` 命令、通过 `coffer-mcp-shim` 连接的智能体以及桌面应用，在守护进程没运行时都会启动它。`coffer daemon status` 是例外：它只报告状态，会说 `not running` 而不是启动一个。在 macOS 上，`coffer daemon service install` 会让它开机启动，并在崩溃后重启。见[运行守护进程](/zh/guides/daemon)。
+不需要。任何需要守护进程的 `coffer` 命令、通过 `coffer-mcp-shim` 连接的智能体以及桌面应用，在守护进程没运行时都会启动它。`coffer daemon status` 是例外：它只报告状态，会说 `not running` 而不是启动一个。在 macOS 上，**设置 → 守护进程 → 开机自启动** 会让它开机启动，并在崩溃后重启。见[运行守护进程](/zh/guides/daemon)。
 
 ## 我的数据在哪里？ {#where-is-my-data}
 
@@ -67,7 +67,7 @@ Coffer 免费且开源，采用 MIT 许可证。唯一的费用是你本来就�
 
 | 路径 | 内容 |
 | --- | --- |
-| `vault/` | 存放你的配置和内容的 git 仓库：每个资源一个 JSON 文件、知识集、技能文件夹、记忆触发器、加密密钥 |
+| `vault/` | 存放你的配置和内容的 git 仓库：每个资源一个 JSON 文件、知识集、技能文件夹、加密密钥 |
 | `local/` | 只属于本机的设置：智能体、生效范围、保留策略、同步远端 |
 | `content/` | 附件和聊天工作目录 |
 | `runs.db` | 历史：对话、审计和调用日志、同步轮次、用量 |

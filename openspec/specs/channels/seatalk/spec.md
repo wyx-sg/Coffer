@@ -113,15 +113,14 @@ alternative either: none is published. See
   `$COFFER_SEATALK_SDK_DIR` chose it), the platform documentation where the
   person downloads the archive, and the steps: find the downloaded archive
   (usually in `~/Downloads`), unpack it so that `<directory>/seatalk_oapi_sdk/`
-  exists without pip-installing it, check the package landed, and confirm with
-  `coffer channel show <name>` that the websocket reads connected; `handoff` is
+  exists without pip-installing it, check the package landed, and confirm from the
+  channel's status that the websocket reads connected; `handoff` is
   null in every other state. The channel page MUST show one sentence linking
   the platform's download page, the hand-off (Copy prompt, and Ask an agent
   when a managed agent is available) and the header's Retry — and no manual
   procedure. The Overview's attention item for the channel MUST carry the same
   prompt as its `handoff`, with the reason code `channel_sdk_missing` and a
-  reason sentence that names no command. `coffer channel show` MUST print the
-  same prompt.
+  reason sentence that names no command.
 - An installation without the SDK has **no SeaTalk inbound**. The websocket
   connection is the only inbound transport, so an outside user of this project
   who cannot obtain the SDK can register a SeaTalk channel and send to its
@@ -141,7 +140,7 @@ alternative either: none is published. See
 #### Scenario: a missing sdk is handed to an agent from the channel page
 - **GIVEN** a SeaTalk channel whose websocket reports `sdk_missing`, with `$COFFER_SEATALK_SDK_DIR` set
 - **WHEN** its status is read and its page is opened
-- **THEN** the status carries a `handoff` prompt naming `<dir>/seatalk_oapi_sdk/`, the variable that chose the directory, the platform's download page, `~/Downloads` and `coffer channel show <name>`, and leaving the login to the person
+- **THEN** the status carries a `handoff` prompt naming `<dir>/seatalk_oapi_sdk/`, the variable that chose the directory, the platform's download page, `~/Downloads` and the channel's status, and leaving the login to the person
 - **AND** the page's banner links the platform's download page and offers Copy prompt beside the header's Retry, without the error text
 - **AND** once the websocket connects, `handoff` is null
 
@@ -495,7 +494,7 @@ answer.
 #### Scenario: status names the websocket connection state
 - **GIVEN** an enabled seatalk channel whose websocket connection is up, and one
   whose last connection attempt failed
-- **WHEN** the user queries status via REST and the CLI
+- **WHEN** the user queries status via REST and on the Channels page
 - **THEN** each reports the connection state as the channel's inbound state, and
   the failed one carries its last error verbatim
 - **AND** neither surface reports a listener, port, path, public URL or tunnel

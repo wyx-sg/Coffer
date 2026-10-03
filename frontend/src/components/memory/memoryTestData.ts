@@ -97,6 +97,7 @@ export const NATIVE_PATH = "/Users/dev/.claude/projects/-Users-dev-work-coffer/m
 export const NODE_NOTE: NoteOut = {
   ...NOTES.notes[0],
   body: "Run the frontend tests on **Node 20**, the version CI uses.",
+  fingerprint: "fp-node-1",
   origins: [
     {
       agent: "codex",
@@ -118,6 +119,7 @@ export const NODE_NOTE: NoteOut = {
 export const PORT_NOTE: NoteOut = {
   ...NOTES.notes[1],
   body: "The shim pins the port per session.",
+  fingerprint: "fp-port-1",
   origins: [
     {
       agent: "claude-code",

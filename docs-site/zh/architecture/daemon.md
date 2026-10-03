@@ -9,7 +9,7 @@ Coffer 每个保险库运行一个常驻守护进程，其他每个部分都是�
 
 ## 问题 {#the-problem}
 
-一个保险库的状态只有一个所有者：一个 SQLite 写入者、一组上游 MCP 子进程、一组消息渠道连接。但需要这个所有者的进程各有各的节奏，来来去去。编辑器打开时，MCP 客户端启动一个 shim。开发者在终端里运行 `coffer skill list`。没开任何窗口时来了一条 Telegram 消息。这些调用方都不应该需要知道 Coffer 是否在运行，也都绝不能导致出现第二个守护进程，因为第二个守护进程不会大声失败：它会把保险库的状态拆散在两个进程之间，而你要很久以后才发现。
+一个保险库的状态只有一个所有者：一个 SQLite 写入者、一组上游 MCP 子进程、一组消息渠道连接。但需要这个所有者的进程各有各的节奏，来来去去。编辑器打开时，MCP 客户端启动一个 shim。开发者在终端里运行 `coffer daemon status`。没开任何窗口时来了一条 Telegram 消息。这些调用方都不应该需要知道 Coffer 是否在运行，也都绝不能导致出现第二个守护进程，因为第二个守护进程不会大声失败：它会把保险库的状态拆散在两个进程之间，而你要很久以后才发现。
 
 所以设计必须回答四个问题：
 
@@ -234,7 +234,7 @@ coffer daemon restart              # a running daemon owns its socket; restart t
 coffer config unset daemon.port    # back to 8000
 ```
 
-`daemon.port` 这个键在没有守护进程运行时也能用，因为你恰恰是在守护进程起不来时才去改端口。因此它是唯一一个由 CLI 直接写进绑定前设置文件、而不经过路由的 `coffer config` 键。Web 界面通过运行中的守护进程访问同一个文件：`GET /api/v1/daemon/port` 返回已保存的端口、实际绑定的端口，以及是否有待重启生效的改动；`PUT /api/v1/daemon/port` 保存下次启动的端口，绑不上的端口会被拒绝。
+`daemon.port` 这个键在没有守护进程运行时也能用，因为你恰恰是在守护进程起不来时才去改端口。因此 `coffer config set daemon.port` 直接写进绑定前设置文件，而不经过路由，`coffer config` 也只承载这类键。Web 界面通过运行中的守护进程访问同一个文件：`GET /api/v1/daemon/port` 返回已保存的端口、实际绑定的端口，以及是否有待重启生效的改动；`PUT /api/v1/daemon/port` 保存下次启动的端口，绑不上的端口会被拒绝。
 
 一个扫描空闲端口的守护进程会悄悄搞坏两样东西：你的 Web 界面书签，以及浏览器按那个源保存的一切。拒绝启动并说出占用端口的进程，是更好的失败方式。如果占用者本身就是一个 Coffer 守护进程，消息会说它很可能是你自己还在预热的守护进程，而不是叫你杀掉它。
 
@@ -327,7 +327,7 @@ stateDiagram-v2
 
 ## 登录服务 {#login-service}
 
-在 macOS 上，`coffer daemon service install` 会写一个用户级 launchd agent `~/Library/LaunchAgents/dev.coffer.daemon.plist`，让守护进程在任何东西找它之前就已在运行：
+在 macOS 上，打开**开机自启动**（**设置 › 守护进程**）会写一个用户级 launchd agent `~/Library/LaunchAgents/dev.coffer.daemon.plist`，让守护进程在任何东西找它之前就已在运行：
 
 | 键 | 值 | 原因 |
 | --- | --- | --- |
@@ -337,7 +337,7 @@ stateDiagram-v2
 | Program | `~/.coffer/bin/coffer-daemon` 符号链接 | 固定到某个版本目录的路径，在两次升级后那个目录被清理时就失效了。 |
 | `StandardOutPath` / `StandardErrorPath` | `~/.coffer/logs/daemon.log` | 所有写入者共用一个日志。 |
 
-安装和卸载在没有守护进程运行时也能用，也可以通过 Web 界面的常驻设置（`PUT /api/v1/daemon/residency`）完成。卸载会删除 plist，然后把任务 bootout 掉，只有一个例外，用来保住当前这次请求。一旦 launchd 启动了守护进程，守护进程*就是*那个任务，而 `launchctl bootout` 会杀掉正在应答这个设置请求的进程本身。所以当任务下面有进程在运行时，卸载让它继续运行，由守护进程在退出时（入口的最后一步）自己把任务 bootout 掉。否则用户把「登录时启动」关掉之后，launchd 仍会按它手里的定义在守护进程崩溃后重启它。任务已加载但下面没有进程时，会立即 bootout。
+打开和关闭它是 Web 界面的常驻设置（`PUT /api/v1/daemon/residency`）。卸载会删除 plist，然后把任务 bootout 掉，只有一个例外，用来保住当前这次请求。一旦 launchd 启动了守护进程，守护进程*就是*那个任务，而 `launchctl bootout` 会杀掉正在应答这个设置请求的进程本身。所以当任务下面有进程在运行时，卸载让它继续运行，由守护进程在退出时（入口的最后一步）自己把任务 bootout 掉。否则用户把「登录时启动」关掉之后，launchd 仍会按它手里的定义在守护进程崩溃后重启它。任务已加载但下面没有进程时，会立即 bootout。
 
 ## 取舍与备选方案 {#trade-offs-and-alternatives}
 

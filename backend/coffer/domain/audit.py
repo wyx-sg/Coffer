@@ -26,7 +26,7 @@ class AuditEventType(StrEnum):
     # the listing, left to search, or handed back to the usage ranking.
     TOOL_EXPOSURE_CHANGED = "tool_exposure_changed"
     TOKEN_ROTATED = "token_rotated"
-    # spec daemon "Change residency from the settings page or the command line":
+    # spec daemon "Change residency from the settings page":
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     # spec daemon "Restart itself on request": the web UI asked the daemon to
@@ -92,12 +92,7 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
-    # spec memory "Keep triggers in the vault, armed only by a person"
-    MEMORY_TRIGGER_ADDED = "memory_trigger_added"
-    MEMORY_TRIGGER_PROPOSED = "memory_trigger_proposed"
-    MEMORY_TRIGGER_ARMED = "memory_trigger_armed"
-    MEMORY_TRIGGER_DISARMED = "memory_trigger_disarmed"
-    MEMORY_TRIGGER_DELETED = "memory_trigger_deleted"
+    MEMORY_NOTE_EDITED = "memory_note_edited"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"

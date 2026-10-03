@@ -50,7 +50,7 @@ flowchart LR
 
 | Class | Where | What it holds | Syncs | History | Safe to delete |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, memory triggers, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
+| **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
 | **local** | `local/` | Machine-local resources (agents), reach, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage. | Never | It *is* history | You lose history |
@@ -69,7 +69,6 @@ Which class a resource belongs to is declared by its kind, with a per-row refine
 ├── state/settings/internal-engine.json Coffer's model and upkeep settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
-├── memory-triggers/<id>.md             triggers you wrote or armed
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
 └── machines/<machine id>.json          one descriptor per machine that syncs
 ```
@@ -191,7 +190,7 @@ flowchart LR
 
 A hand edit is found, not intercepted. File events are a hint (debounced until the path has been quiet for a second), a scan every 60 seconds and at boot is the truth. A valid edit is committed as a `disk` write and audited as `vault_file_edited` by a human. An invalid one stays in the working tree, uncommitted, and is flagged on the attention list and in `coffer vault problems`, while `HEAD` stays in effect. The effective state is always `HEAD`: the stores read documents from a cache loaded from `HEAD` and refreshed after each commit.
 
-Every file and folder in the vault has a history you can read, diff and restore: `coffer vault history|diff|show|restore`, the REST routes under `/api/v1/vault/`, and the **History** tab of a skill. A restore is a new commit through the same checks. See [Edit the vault by hand](/guides/vault-files).
+Every file and folder in the vault has a history you can read, diff and restore: the REST routes under `/api/v1/vault/` and the **History** tab of a skill. A restore is a new commit through the same checks. See [Edit the vault by hand](/guides/vault-files).
 
 The vault needs `git`. A machine without it fails at startup with a message saying so. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff`, and the Sync status reports the problem `git_missing` with the same prompt.
 

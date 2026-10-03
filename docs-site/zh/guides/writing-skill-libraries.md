@@ -163,7 +163,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  不要保留 `~/.coffer/secrets/<name>.env` 这样的明文文件；`coffer secret scan` 会找出它们，`coffer secret import` 会把它们移入存储。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的名称，这样 Coffer 能在它未设置时告诉你。
+  不要保留 `~/.coffer/secrets/<name>.env` 这样的明文文件；密钥页面上的**查找明文密钥**会找出它们并把它们移入存储。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的名称，这样 Coffer 能在它未设置时告诉你。
 
 ## 描述 {#descriptions}
 
@@ -284,28 +284,24 @@ environments:
 
 ## 编写流程 {#authoring-workflow}
 
-在 `~/.coffer` 之外、你自己的文件夹里编写（示例用的是 `~/src/skills/<domain>`）。`coffer skill add` 会把文件夹拷进 `~/.coffer/vault/skills/`；在存储内部编写，就等于把一个文件夹导入到它自己身上。
+在 `~/.coffer` 之外、你自己的文件夹里编写（示例用的是 `~/src/skills/<domain>`）。添加技能会把文件夹拷进 `~/.coffer/vault/skills/`；在存储内部编写，就等于把一个文件夹导入到它自己身上。
 
 ```sh
 # 1. Author and test in the authoring root
 cd ~/src/skills/<domain>
 ~/.cache/coffer-skill-venv/bin/pytest -q scripts
 ~/.cache/coffer-skill-venv/bin/python scripts/lint_portable.py .
-
-# 2. Import into the master store; Coffer validates and delivers it
-coffer skill add ~/src/skills/<domain>
-
-# 3. Confirm delivery
-coffer skill verify
 ```
+
+然后从 **Skills → Add skill → From a folder**（选编写目录）添加这个文件夹。Coffer 会校验并投递它，技能页面上的**检查副本**确认投递情况。
 
 第一次导入之后，以编写目录作为唯一的事实来源：
 
-- 做正式改动时，编辑编写目录，重新运行测试和 lint，然后 `coffer skill add --force ~/src/skills/<domain>`。
-- 做快速修复时，编辑 `coffer path skill <domain>` 打印出的主文件夹中的文件；智能体下次读取时就会看到改动。把同样的改动也应用到编写目录，否则下一次 `coffer skill add --force` 会把它覆盖掉。
-- `coffer skill verify` 报告主副本与每个智能体已投递链接之间的偏移，`--fix` 修复缺失或被改指向的链接。
+- 做正式改动时，编辑编写目录，重新运行测试和 lint，然后再从 **Skills → Add skill → From a folder** 添加一次，并在冲突那一行选择**替换**。
+- 做快速修复时，编辑主文件夹（`~/.coffer/vault/skills/<domain>/`，或技能的**文件**标签页）中的文件；智能体下次读取时就会看到改动。把同样的改动也应用到编写目录，否则下一次**替换**会把它覆盖掉。
+- **检查副本**报告主副本与每个智能体已投递链接之间的偏移，**修复**把缺失或被改指向的链接放回去。
 
-当一个新领域取代了几个旧的单一用途技能时，要等新领域端到端跑通之后，再用 `coffer skill rm` 删除旧的，然后确认智能体的技能文件夹里没有残留的过期链接。
+当一个新领域取代了几个旧的单一用途技能时，要等新领域端到端跑通之后，再删除旧的（技能的 **⋯ › 删除…**），然后确认智能体的技能文件夹里没有残留的过期链接。
 
 ## 设计一个新领域 {#designing-a-new-domain}
 

@@ -4,7 +4,7 @@
 Aggregation and distillation are two passes over two directories, but a person has
 one intent — "bring the notes up to date" — and either pass alone leaves the notes
 stale: aggregation only fills ``.raw/``, and distil only reads what is already
-there. So ``POST /api/v1/memory/sync`` and ``coffer memory sync`` run both, in that
+there. So ``POST /api/v1/memory/sync`` runs both, in that
 order, and the web UI offers them as one **Update memory** button.
 
 **Only partitions with something to distil are distilled.** An entry is

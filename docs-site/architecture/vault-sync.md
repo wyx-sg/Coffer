@@ -38,7 +38,7 @@ Everything committed in the vault repository, and nothing else:
 | Travels (in `~/.coffer/vault`) | Stays on each machine |
 | --- | --- |
 | Resource files of `mcp_server`, `skill`, `channel`, `provider` and `knowledge` | Agents (`local/resources/agent/`): an agent's config directory is a fact about this machine |
-| Knowledge documents and `.inbox/` material, skill master folders, memory triggers | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
+| Knowledge documents and `.inbox/` material, skill master folders | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
 | MCP capability switches, channel pairings, Coffer's model and upkeep settings (`state/`) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
 | Secret ciphertext (`secret/`), only with `include_secret` | Machine-local ciphertext (`local/secret/`), the secret boundary, the master key |
 | One descriptor per machine (`machines/<id>.json`) | `runs.db` (conversations, audit, invocations, rounds), `content/`, logs, `daemon-config.json` |
@@ -82,7 +82,7 @@ sequenceDiagram
 5. **Stop?** A content conflict, the same resource name with two different uids, or a merged file that fails validation stops the round, whole. Nothing is checked out and nothing is pushed.
 6. **Guard.** The [deletion breaker](#the-deletion-breaker) runs over what the round would remove here and what this machine's own commits would remove from the shared history.
 7. **Check out.** `L` is tagged `refs/tags/coffer/pre-apply/<timestamp>` (ten kept). `M` is committed with parents `L` and `R`, and `git read-tree -m -u L M` moves the vault to it under the vault's write lock. Git verifies every path it will change against `L` before it writes a file, so a path you are editing (an uncommitted or invalid edit) makes the round wait with `waiting_on_edit` and name the file.
-8. **Publish.** This machine's descriptor is updated in its own commit. Before the push, every blob the push would publish (reachable from the commit being pushed and not from `R`, so every version in every unpushed commit) is read with `coffer secret scan`'s detection; `secret/*.enc` is ciphertext and is skipped. A value a file still holds stops the round as `plaintext_found` with nothing pushed. A value only an earlier unpushed commit holds is folded out: the unpushed commits become one commit on `R` with the same tree, which is pushed instead, and the descriptor is written again on top of it so the pushed descriptor names a commit the remote holds. Then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
+8. **Publish.** This machine's descriptor is updated in its own commit. Before the push, every blob the push would publish (reachable from the commit being pushed and not from `R`, so every version in every unpushed commit) is read with Coffer's plaintext-secret detection; `secret/*.enc` is ciphertext and is skipped. A value a file still holds stops the round as `plaintext_found` with nothing pushed. A value only an earlier unpushed commit holds is folded out: the unpushed commits become one commit on `R` with the same tree, which is pushed instead, and the descriptor is written again on top of it so the pushed descriptor names a commit the remote holds. Then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
 
 After a round that changed the vault, the [reconciler](/architecture/reconciler) runs one pass, so each kind re-projects what arrived: agent config, shims, skill deliveries, provider projections. The round [holds the reconciler](/architecture/reconciler) from its first git call until that pass has run, so no pass judges the vault half applied. Sync itself imports no kind.
 
@@ -138,8 +138,8 @@ It counts **losses, not deletions**. A resource file is lost only when its uid i
 
 A hold is answered one of two ways, and either continues the round:
 
-- **Confirm** applies the deletions (`coffer sync hold --confirm`, **Delete n files**).
-- **Restore** keeps the files (`coffer sync hold --restore`, **Restore n files**). Incoming, the merged tree takes this machine's versions of them, so they stay here and go back up. Outgoing, the deleted files are written back from the shared base as a commit of yours, and the next round pushes them.
+- **Confirm** applies the deletions (**Delete n files**).
+- **Restore** keeps the files (**Restore n files**). Incoming, the merged tree takes this machine's versions of them, so they stay here and go back up. Outgoing, the deleted files are written back from the shared base as a commit of yours, and the next round pushes them.
 
 ## Joining
 
@@ -151,13 +151,13 @@ A machine that has never converged with the remote is **joining**. A timer never
 | **New** machine | The remote has no descriptor for this machine. | The union: files only the remote has come down, files only this machine has go up, identical files need nothing. A file both hold with different content is left exactly as it is here, not pushed, until you choose. Nothing is deleted on either side. |
 | **Returning** machine | The remote holds this machine's descriptor, naming the commit it last converged at, and that commit is still in the remote's history. | An ordinary three-way merge from that commit, so what the others deleted while it was away is deleted here, its own edits survive, and nothing deleted comes back. Its own deletions since then are real deletions, guarded by the breaker. |
 
-A file a new machine's join left different is settled per file or all at once: **keep mine**, **take theirs** or an edited merge (`coffer sync choose`). It is served in the shape of a stopped round's conflicting file, so it opens in the same Resolve page and can be handed to an agent the same way (`POST /api/v1/sync/join-choices/handoff`); an edited answer commits the merge as this machine's version, which the next round pushes. A same-name resource with a different uid stops the join and asks, like any conflict.
+A file a new machine's join left different is settled per file or all at once: **keep mine**, **take theirs** or an edited merge. It is served in the shape of a stopped round's conflicting file, so it opens in the same Resolve page and can be handed to an agent the same way (`POST /api/v1/sync/join-choices/handoff`); an edited answer commits the merge as this machine's version, which the next round pushes. A same-name resource with a different uid stops the join and asks, like any conflict.
 
 Treating a returning machine as new looks conservative and is a data-loss bug: a union has no base to disagree with, so every deletion the fleet made while the machine was away comes back. That is why the descriptor records the last converged commit.
 
 ## Rollback
 
-`coffer sync rollback <round>` (or **Roll back to before this round** in the round's drawer) puts back what one round changed, from its snapshot, as a new `user` commit on this machine that the next round pushes. Only the paths that round changed are touched, and a file edited since the round is kept and listed. The plan is shown first. A round that applied nothing, and a rollback itself, cannot be rolled back.
+**Roll back to before this round** in the round's drawer puts back what one round changed, from its snapshot, as a new `user` commit on this machine that the next round pushes. Only the paths that round changed are touched, and a file edited since the round is kept and listed. The plan is shown first. A round that applied nothing, and a rollback itself, cannot be rolled back.
 
 Rolling back never moves `HEAD` backwards: history only grows, so the other machines follow the undo like any other change.
 
@@ -169,7 +169,7 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 - **Name.** A label. Renaming is free, nothing keys on it, and the new name is committed at once.
 - **Retire.** Deleting another machine's descriptor is an ordinary commit of yours that the next round pushes. A machine that syncs again comes back. Retiring runs at once and can be undone: `POST /api/v1/sync/machines/{id}/restore` writes the descriptor back exactly as the vault's history held it before it was retired (`SYNC_MACHINE_NOT_FOUND` for a machine the vault never held).
 - **Stop syncing.** Forgetting the remote runs at once and can be undone: this machine keeps, on itself only, the remote's settings (the push secret as a name, never its value), whether it had joined, a round waiting for a person and a join's differing files, and `POST /api/v1/sync/remote/restore` puts them back. It is refused with `SYNC_NOTHING_TO_RESTORE` when nothing was stopped or another remote was set since, and with `SYNC_REMOTE_EXISTS` while a remote is set.
-- **The master key.** Secrets whose ciphertext arrived but whose key did not are reported as locked, rather than failing at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and `coffer sync key import` (or **Settings › Security › Import a master key**) installs it on the other machine after showing whose key the file holds beside this machine's (`POST /api/v1/sync/key/import/preview`). The key it replaces is kept as a backup, and the running daemon seals every secret stored afterwards under the imported key.
+- **The master key.** Secrets whose ciphertext arrived but whose key did not are reported as locked, rather than failing at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and **Settings › Security › Import a master key** installs it on the other machine after showing whose key the file holds beside this machine's (`POST /api/v1/sync/key/import/preview`). The key it replaces is kept as a backup, and the running daemon seals every secret stored afterwards under the imported key.
 
 ## Problems a round reports
 
@@ -182,7 +182,7 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 | Cloud folder | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. | Move the vault out of that folder: **Move the vault…** (`POST /api/v1/sync/vault/move`) pauses rounds and agent writes, moves the folder (or copies it when the target is on another filesystem), checks the repository at the new place and leaves `~/.coffer/vault` leading to it. A target that is relative, overlapping, inside another synchronised folder or not empty is refused (`SYNC_VAULT_TARGET_INVALID`, `_IN_CLOUD`, `_NOT_EMPTY`), and a failed move puts the vault back (`SYNC_VAULT_MOVE_FAILED`). |
 | Layout | `remote_too_new`, `remote_too_old` | The remote was written with another vault layout. | Newer: upgrade this machine. Older: rebuild the remote. |
 
-Each problem is shown as a banner on the **Sync** page (with an **×** that ignores it, shared with Overview, which brings it back when the situation changes), marks the **Sync** entry in the sidebar, and makes `coffer sync status` exit non-zero.
+Each problem is shown as a banner on the **Sync** page (with an **×** that ignores it, shared with Overview, which brings it back when the situation changes), marks the **Sync** entry in the sidebar.
 
 ### Remote layout
 
@@ -206,7 +206,7 @@ Coffer shells out to the real `git`, so the remote stays an ordinary repository 
 
 ## The worker
 
-The sync worker runs one round 30 seconds after the daemon starts and then on the remote's interval, one hour by default and never shorter than 60 seconds. The interval is re-read before each wait, so a change needs no restart. With no remote, or a paused one, nothing runs; **Sync now** and `coffer sync now` still run a round on request.
+The sync worker runs one round 30 seconds after the daemon starts and then on the remote's interval, one hour by default and never shorter than 60 seconds. The interval is re-read before each wait, so a change needs no restart. With no remote, or a paused one, nothing runs; **Sync now** still runs a round on request.
 
 ## Trade-offs and alternatives
 
@@ -215,7 +215,7 @@ The sync worker runs one round 30 seconds after the daemon starts and then on th
 - **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record; peer-to-peer tools and object stores have no three-way merge. Git suits an audience that already holds git credentials.
 - **Commit all of `~/.coffer`.** It would carry machine-local state and binary databases. The five storage classes put only the vault under git.
 
-The cost is real: a genuine conflict stops sync on this machine until you answer it. That is surfaced where you already are: the sidebar mark, `coffer sync status`, and the desktop notification.
+The cost is real: a genuine conflict stops sync on this machine until you answer it. That is surfaced where you already are: the sidebar mark and the desktop notification.
 
 ## Where it lives in the code
 

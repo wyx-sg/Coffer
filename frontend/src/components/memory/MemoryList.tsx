@@ -4,8 +4,7 @@
 // memories"): each memory as its title and one-line description, the selected
 // one highlighted. Under them, a collapsed "Retired (n)" group, read-only:
 // each retired memory with the reason it left. There is no Restore and no
-// per-memory action anywhere — a memory is derived by distillation, and the
-// list says so by offering none. The Retired group is pinned under the list
+// action in the list: the selected memory's Edit sits on the pane beside it. The Retired group is pinned under the list
 // (board 5.2.06): the memories scroll above it.
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";

@@ -27,13 +27,6 @@ def test_memory_root_is_derived_under_home(
     assert paths.memory_root() == tmp_path / ".coffer" / "derived" / "memory"
 
 
-def test_triggers_live_in_the_vault(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    assert paths.triggers_root() == tmp_path / ".coffer" / "vault" / "memory-triggers"
-
-
 def test_partition_dir_is_one_segment_under_root() -> None:
     assert paths.partition_dir("global") == paths.memory_root() / "global"
     assert paths.partition_dir("coffer") == paths.memory_root() / "coffer"

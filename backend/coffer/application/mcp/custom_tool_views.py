@@ -1,6 +1,6 @@
 """What the custom tools page shows of a group: health, secret, 24-hour summary.
 
-Spec mcp-gateway "Manage custom tools on REST and the command line"; design
+Spec mcp-gateway "Manage custom tools through REST and the Custom tools page"; design
 add-http-custom-tools §9. Read-only: it reads the group's row and config, the
 invocation log, the secret store and the secret boundary, and writes
 nothing but what ``SecretBoundary.check`` records (a pending approval appears

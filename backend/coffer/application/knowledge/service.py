@@ -4,7 +4,7 @@ Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowle
 collection is one tree of documents that a person and Coffer's curation pass write
 together (spec knowledge "Store each collection as one tree of Markdown files"). What
 this layer adds on top of the directory is the one rule about *how new knowledge
-arrives*: every entrance — an upload, an agent's ``coffer__write``, the CLI — submits
+arrives*: every entrance — an upload, an agent's inbox file, a channel's ``/kb`` — submits
 **material**, which waits in the collection's hidden inbox until a pass folds it into
 the documents (see "Submit every entrance's input as material"). With no internal model
 to fold it, the material becomes a document of its own on the spot (see "Promote
@@ -119,9 +119,9 @@ class KnowledgeService:
         not a collection (see "Create collections only deliberately"), and every one is
         served whether or not its row is enabled (see "Serve every collection to every agent").
         """
-        return sorted(r.name for r in await self._rows())
+        return sorted(r.name for r in await self.collection_rows())
 
-    async def _rows(self) -> list[Resource]:
+    async def collection_rows(self) -> list[Resource]:  # the sweep walks these directories
         return await self._resources.list(kind=KIND_KNOWLEDGE)
 
     async def collection(self, uid: str) -> Resource:
@@ -147,7 +147,7 @@ class KnowledgeService:
         write path repeating the lookup.
         """
         name = paths.collection_of(relpath)
-        for row in await self._rows():
+        for row in await self.collection_rows():
             if row.name == name:
                 return row
         raise CollectionNotFound(name)
@@ -205,7 +205,7 @@ class KnowledgeService:
     async def list_collections(self) -> list[CollectionEntry]:
         """The registered collections joined with the catalogue walk, each carrying
         the uid its routes address; a folder nobody registered is left out."""
-        row_by_name = {r.name: r for r in await self._rows()}
+        row_by_name = {r.name: r for r in await self.collection_rows()}
         return [
             dataclasses.replace(c, uid=row_by_name[c.name].uid)
             for c in catalogue.list_collections()

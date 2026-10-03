@@ -109,8 +109,6 @@ async def _write_targets(
             continue
         store.write_note(assemble(target, result, partition))
         written.add(slug)
-        if result.trigger is not None:
-            counts.proposals.append((slug, *result.trigger))
         if target.existing is None:
             counts.opened += 1
         else:

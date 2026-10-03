@@ -28,8 +28,7 @@ _logger = logging.getLogger(__name__)
 #: still has something to save.
 KNOWLEDGE_OFF = (
     "⚠️ Knowledge is switched off on this machine, so nothing was saved. "
-    "Switch it on in Coffer's Settings → Features, or run: "
-    "coffer config set feature.knowledge on"
+    "Switch it on in Coffer's Settings › Features."  # noqa: RUF001
 )
 
 

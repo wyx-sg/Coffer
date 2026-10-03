@@ -75,7 +75,10 @@ every agent"): the kind is non-toggleable, and it is always enabled.
   collection root's non-empty `.inbox` as a directory and its items as files,
   and the read route reads an item, each marked `inbox: true`. Every other
   hidden segment is still *refused* by the path guard rather than merely
-  skipped, and no write or delete reaches the inbox.
+  skipped. Coffer's own surfaces never write or delete an inbox item (a pass
+  deletes one once folded in); an agent adds one by writing a Markdown file there
+  with its own file tools, and the sweep normalises its frontmatter (see
+  "Submit material by writing a file into the inbox").
 
 ### `README.md`
 
@@ -149,8 +152,8 @@ curation on a sweep and on demand"):
    not `curation` or `sync`, oldest change first. Edits still on disk are
    committed first as `disk` writes, so an edit in any editor is judged by the
    same `HEAD`; the next sweep hands the document to a pass, which carries the
-   edit into the rest of the collection and never reverts it (see "Let newer
-   statements win and a person's edit stand"). Nothing has to be told, and a
+   edit into the rest of the collection as a newer statement (see "Let the newer or
+   better-evidenced statement win"). Nothing has to be told, and a
    checkout, a restore from backup or a clock change that only moves
    modification times makes nothing pending.
 
@@ -287,9 +290,8 @@ every agent"). The kind declares itself non-toggleable, so the generic
 enable/disable route refuses it; the layer does not read `enabled` at all, and
 the sweep lists every registered collection. Every
 registered collection's name, description, catalogue and paths appear in the
-rendered `coffer-guide` skill every agent reads, and `coffer__write` refuses only
-a write naming a collection that does not exist, answering with the ones that
-do.
+rendered `coffer-guide` skill every agent reads; a file an agent writes into a
+directory that is not a collection is left alone and is not catalogued.
 
 The per-agent reach that used to sit here is withdrawn too. It was never set — every collection's scope was null in
 the live vault — and it could not have withheld anything it was asked to: the
@@ -418,13 +420,12 @@ pass is going to start.
 ## Audit and invocation records
 
 Unchanged in shape and still database-backed, because they are not knowledge —
-they are Coffer's own bookkeeping. `coffer__write` records one `mcp_invocations`
-row (tool, actor, duration, outcome — never arguments, never content) and every
-submission — from the tool, the CLI, the REST route, an upload or a channel —
-records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller, with the
-inbox `item` it wrote, the document path when it was promoted and `pending`
-when it waits (see "Submit
-material through coffer__write"); a save from the web UI records
+they are Coffer's own bookkeeping. Every submission — an inbox file an agent
+wrote (recorded by the sweep when it first sees the file), an upload or a
+channel — records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller
+(`actor_reported: true` when the actor came from the file's own frontmatter), with the
+inbox `item`, the document path when it was promoted and `pending`
+when it waits (see "Submit material by writing a file into the inbox"); a save from the web UI records
 `KNOWLEDGE_EDITED` with the path, and so do a restore (with `restored_from`)
 and an undo (with `undo` and its `documents`); a delete records
 `KNOWLEDGE_DELETED`. A

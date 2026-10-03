@@ -186,7 +186,7 @@ The SSE route stays open across turns. With no turn running, it holds the connec
 Replacing the queue with `PUT .../pending` reconciles the new texts against the existing entries: each text reuses the first unused entry with the same text. A queue reordered from the browser therefore keeps each channel message's attachments and its channel renderer. Only a text that was not queued before becomes a new, bare entry.
 
 ::: info No CLI
-Coffer has no `coffer chat` command group. Conversations are reachable over REST, from the web page and from channels. The [chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) records this as a known gap in the REST and CLI parity rule.
+Conversations are driven from the web page and from channels, over REST. The CLI has no chat commands, because it carries only what needs it ([chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)).
 :::
 
 ## Agent adapters

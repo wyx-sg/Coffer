@@ -41,7 +41,7 @@ function agent(type: AgentOut["type"]): AgentOut {
 const SETTINGS = "/home/u/.claude/settings.json";
 const LOCAL = "/home/u/.claude/settings.local.json";
 const PLUGIN_HOOKS = "/home/u/.claude/plugins/cache/superpowers/hooks/hooks.json";
-const COFFER_CMD = "coffer memory index --agent-uid u-claude_code";
+const COFFER_CMD = "coffer memory hook --agent-uid u-claude_code";
 
 function hook(over: Partial<NativeHook>): NativeHook {
   return {
@@ -61,7 +61,7 @@ function hook(over: Partial<NativeHook>): NativeHook {
 }
 
 const COFFER: CofferHook = {
-  event: "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit",
+  event: "SessionStart,UserPromptSubmit",
   path: SETTINGS,
   health: "current",
   trust: "not_required",
@@ -69,8 +69,8 @@ const COFFER: CofferHook = {
   expected_command: COFFER_CMD,
   last_fired_at: new Date(Date.now() - 2 * 3_600_000).toISOString(),
 };
-const COFFER_ROWS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"].map(
-  (event, i) => hook({ event, command: COFFER_CMD, coffer: true, group_index: i }),
+const COFFER_ROWS = ["SessionStart", "UserPromptSubmit"].map((event, i) =>
+  hook({ event, command: COFFER_CMD, coffer: true, group_index: i }),
 );
 const OWN_ROWS = [
   hook({ event: "UserPromptSubmit", command: "~/.claude/hooks/ticket-context.sh", path: LOCAL }),
@@ -149,12 +149,12 @@ describe("AgentHooksTab", () => {
     // Coffer's hook: one block, events as tags, the file as a link, no fix when current.
     const coffer = await cofferBlock();
     expect(
-      coffer.getByText("Gives every session Coffer’s memory. One hook on 4 events."),
+      coffer.getByText("Gives every session Coffer’s memory. One hook on 2 events."),
     ).toBeInTheDocument();
     expect(coffer.getByText("Current")).toBeInTheDocument();
     expect(coffer.getByText(/^Fired /)).toBeInTheDocument();
     expect(coffer.getByText(COFFER_CMD)).toBeInTheDocument();
-    for (const e of ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"]) {
+    for (const e of ["SessionStart", "UserPromptSubmit"]) {
       expect(coffer.getByText(e)).toBeInTheDocument();
     }
     expect(coffer.getByRole("link", { name: "~/.claude/settings.json" })).toHaveAttribute(
@@ -204,7 +204,7 @@ describe("AgentHooksTab", () => {
 
   test("a stale Coffer hook says why and Repair opens the review flow", async () => {
     const onRepair = vi.fn();
-    renderTab(full({ health: "stale", installed_command: "coffer memory index --agent old" }), {
+    renderTab(full({ health: "stale", installed_command: "coffer memory hook --agent old" }), {
       onRepair,
     });
     const coffer = await cofferBlock();
@@ -234,7 +234,7 @@ describe("AgentHooksTab", () => {
       coffer.getByText(/taken out of .*hooks\.json, so Codex starts sessions without memory/),
     ).toBeInTheDocument();
     expect(coffer.getByText("—")).toBeInTheDocument();
-    expect(coffer.getByText("PostToolUse")).toBeInTheDocument();
+    expect(coffer.getByText("UserPromptSubmit")).toBeInTheDocument();
     fireEvent.click(coffer.getByRole("button", { name: "Repair" }));
     expect(onRepair).toHaveBeenCalled();
   });

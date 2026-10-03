@@ -59,7 +59,6 @@ const AREA_KEY: Record<string, string> = {
   skills: "skills",
   resources: "resources",
   secret: "secret",
-  "memory-triggers": "memoryTriggers",
   machines: "machines",
 };
 

@@ -192,7 +192,7 @@ environment, region, symptom keywords, root-cause category, status (located or
 partial), related tickets. The body is the detailed report, re-checked for
 secrets before filing. Recall greps these fields.
 
-**To verify first.** `coffer knowledge write` and `upload` both feed
+**To verify first.** An agent's inbox file and an upload both feed
 curation, which merges and rewrites material; neither keeps a document as
 written. A file written directly into the collection is also noticed by
 curation. The first implementation step creates `incidents`, writes one report
@@ -209,8 +209,8 @@ From the review of `coffer-testing-change`, only what the new domain shares:
   `coffer-reporting-evidence` for their reports and declare the dependency;
   the report sections that duplicated it are removed.
 - `coffer-testing-change` adopts the try-first rule in preflight.
-- `coffer-testing-change`'s archive phase stops calling the removed
-  `coffer knowledge ingest` and follows whatever the archive experiment above
+- `coffer-testing-change`'s archive phase writes its archive as
+  files and follows whatever the archive experiment above
   settles.
 
 The rest of that review (a read-only database query path, the test-plan

@@ -49,18 +49,6 @@ To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **
 
 ## 3. Register the channel
 
-::: code-group
-
-```sh [CLI]
-# Paste the App Secret at the prompt; it is read from stdin
-coffer secret set channel/st/app-secret
-
-coffer channel add my-seatalk --type seatalk \
-  --app-id <APP_ID> \
-  --app-secret-ref channel/st/app-secret \
-  --agent claude-code
-```
-
 ```text [Web UI]
 Channels → Add channel
   Type:           SeaTalk
@@ -71,31 +59,9 @@ Channels → Add channel
 → Create
 ```
 
-:::
-
 The configuration is the App ID and a reference to the App Secret, plus the fields every channel has. The channel is bound to this machine and starts connecting immediately.
 
-Check the connection:
-
-```sh
-coffer channel show my-seatalk
-```
-
-```text
-channel:  my-seatalk (seatalk)
-uid:      4c7a…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-idle:     new conversation after 24 h idle
-secret:   app_secret_ref = channel/st/app-secret
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     not paired
-inbound:  websocket (connected)
-```
-
-Wait for `connected` before the next step. The channel's page shows the same state as the **SeaTalk connection** badge on its status line.
+Check the connection: the **SeaTalk connection** badge on the channel's status line reads **Connected** when it is up. Wait for it before the next step.
 
 ## 4. Switch the app to WebSocket delivery
 
@@ -104,7 +70,7 @@ Wait for `connected` before the next step. The channel's page shows the same sta
 
 ## 5. Pair your account
 
-1. On the channel's **Overview** choose **Generate pairing code**, or run `coffer channel pair my-seatalk`.
+1. On the channel's **Overview** choose **Generate pairing code**.
 2. In SeaTalk, open a direct chat with the bot and send the eight-character code.
 3. The bot confirms and sends the help card once. SeaTalk has no command menu, so this card is how the bot shows what it accepts; send `/help` to see it again.
 
@@ -114,7 +80,7 @@ Send the bot a message. A typing indicator appears at once, the reply streams in
 
 ## Connection states
 
-`coffer channel show` and the **SeaTalk connection** badge on the channel's page report the connection as the channel's inbound state. With `--json`, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
+The **SeaTalk connection** badge on the channel's page reports the connection as the channel's inbound state. Over REST, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
 
 | State | Shown on the channel's page | Meaning |
 | --- | --- | --- |
@@ -157,7 +123,7 @@ Each group thread is its own conversation, so you can run Claude Code in one thr
 
 Because a main-chat @mention always roots a new thread, a command sent in the main chat sets the **group's defaults** instead: `@bot /model …`, `@bot /dir …` and `@bot /new <agent>` choose what every new thread in the group starts on, `@bot /status` shows those defaults and the running threads, and `@bot /stop` stops every turn running in the group. Inside a thread, commands apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**, or run `coffer channel edit my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
@@ -216,10 +182,10 @@ On the channel's page choose **Replace secret** (in the **⋯** menu, or under *
 Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`), and that `COFFER_SEATALK_SDK_DIR`, if you use it, is set where the daemon starts — not only in your current shell. Replies and notifications still work meanwhile.
 
 **The state is `kicked`.**
-Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, use `coffer channel bind` from the machine that currently runs it.
+Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, change **Runs on** on its **Settings** tab from the machine that currently runs it.
 
 **Re-verify fails in the Developer Portal.**
-The channel is not connected yet. Wait until `coffer channel show` shows `connected`, then press **Re-verify** again.
+The channel is not connected yet. Wait until the **SeaTalk connection** badge reads **Connected**, then press **Re-verify** again.
 
 **`connected`, but the bot never answers.**
 Check pairing (`peer: not paired` means the bot answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.

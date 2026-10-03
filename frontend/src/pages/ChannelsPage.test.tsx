@@ -1,6 +1,6 @@
 // frontend/src/pages/ChannelsPage.test.tsx
 // The Channels page as a list beside the open channel (spec channels "Manage
-// channels from the Channels page and the CLI"): the list's groups, the first
+// channels from the Channels page"): the list's groups, the first
 // channel opened at `/channels`, the first-run page, the header each state
 // puts a channel in (status word, banner, primary action), the tabs in the
 // path, and the commands — reconnect (a restart request), send test, re-pair,

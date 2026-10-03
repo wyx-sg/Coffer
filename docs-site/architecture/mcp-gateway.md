@@ -97,7 +97,7 @@ On `initialize`, the session records the client's declared capabilities, the lau
 The identity is self-reported, not verified. Any local process that holds the token can open `/mcp` and claim any uid. This is acceptable under the loopback-only, single-user posture described in [Security model](/architecture/security).
 :::
 
-The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters. The string says what Coffer is, names each built-in tool the session currently lists, says where the agent reads what Coffer has no tool for — the memory root to search with its own file tools and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
+The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters. The string says what Coffer is, names Coffer's own tool, says where the agent reads what Coffer has no tool for — the knowledge and memory files to read and edit with its own file tools and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
 
 ## Discovery and namespacing
 
@@ -109,7 +109,7 @@ Discovery asks the upstream for `tools/list`, `resources/list` and `prompts/list
 | Prompt | `summarize` | `jira__summarize` |
 | Resource | `file:///notes.md` | `coffer://jira/file:///notes.md` |
 
-Parsing splits on the first `__`, so the kind refuses any server name that contains `__`. Because the server name is the prefix of every tool name an agent sees, and agents' permission rules and skills quote it, the name is fixed once registered: a change is refused with `409 NAME_IMMUTABLE`. A server carries no display title beside it; its description is the free note. A client adds its own prefix on top — Claude Code shows `mcp__coffer__<server>__<tool>` — and model provider APIs cap a tool name at 64 characters (Cursor drops tools above 60). So a server name is capped at 24 characters, which leaves 25 for the upstream tool name, and each discovered capability row carries `client_name_length`, the length of `mcp__coffer__<server>__<tool>`; the **Tools** tab and `coffer mcp cap list` flag rows above 64. An upstream that answers `resources/list` or `prompts/list` with `-32601` (method not found) is treated as having none of that capability. It is not treated as failing.
+Parsing splits on the first `__`, so the kind refuses any server name that contains `__`. Because the server name is the prefix of every tool name an agent sees, and agents' permission rules and skills quote it, the name is fixed once registered: a change is refused with `409 NAME_IMMUTABLE`. A server carries no display title beside it; its description is the free note. A client adds its own prefix on top — Claude Code shows `mcp__coffer__<server>__<tool>` — and model provider APIs cap a tool name at 64 characters (Cursor drops tools above 60). So a server name is capped at 24 characters, which leaves 25 for the upstream tool name, and each discovered capability row carries `client_name_length`, the length of `mcp__coffer__<server>__<tool>`; the **Tools** tab flags rows above 64. An upstream that answers `resources/list` or `prompts/list` with `-32601` (method not found) is treated as having none of that capability. It is not treated as failing.
 
 Each cold fetch also records when each capability was first and last seen, in `derived.db`, keyed on the server's uid. Your switches are a separate vault document, `state/mcp-preferences/<server>.json`, which lists only the capabilities you switched off, so a tool you disabled stays disabled if it vanishes and comes back, and the switch travels with vault sync. Preferences are read fresh on every list, so a toggle takes effect immediately, whatever the cache holds.
 
@@ -186,10 +186,9 @@ The built-in tool registry is an in-process registry that the composition root f
 
 | Tool | Declared by |
 | --- | --- |
-| `coffer__write` | The knowledge slice |
 | `coffer__search_tools` | The gateway itself (gateway-owned) |
 
-`coffer__write` belongs to the `knowledge` experimental feature; `coffer__search_tools` is gateway-owned and always present. For a tool that belongs to a feature, the registry checks the feature on every read: while the feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
+`coffer__search_tools` is gateway-owned and always present. A call to any other `coffer__` name falls through to upstream routing and fails as an unknown tool would. Knowledge and memory have no built-in tool: agents change them with their own file tools, so the registry holds no tool for either.
 
 Before a built-in handler runs, the gateway sets `agent` as described above. It also fills `cwd` when the tool's schema declares that property and the client left it empty. The handler's return value is wrapped as an MCP tool result: JSON text in `content`, the same object in `structuredContent`, and `isError: false`. An exception inside a handler becomes an in-band `isError: true` result, not a JSON-RPC error, so the model can read it and correct itself. The text shows the message of a Coffer-authored error or an invalid-value error, and only the exception's type name for any other exception. For tool behaviour, see [MCP tools](/reference/mcp-tools).
 
@@ -293,7 +292,7 @@ One probe serves both tests: `POST /api/v1/resources/mcp_server/{uid}/test` for 
 
 ### The built-in `coffer` server
 
-The MCP servers page lists Coffer's own endpoint last, under Built-in. It is not a resource: `GET /api/v1/mcp/builtin` describes it from what the daemon knows — the bound port (`http://127.0.0.1:<port>/mcp`), the built-in tool list above (switched-off features' tools left out), the agents whose MCP config holds Coffer's entry (supplied by the composition root, since the MCP kind may not read the agent kind), and the last 24 hours of calls logged under the reserved uid `coffer`. Its Invocations tab reads `GET /api/v1/mcp/invocations?uid=coffer`.
+The MCP servers page lists Coffer's own endpoint last, under Built-in. It is not a resource: `GET /api/v1/mcp/builtin` describes it from what the daemon knows — the bound port (`http://127.0.0.1:<port>/mcp`), the built-in tool list above, the agents whose MCP config holds Coffer's entry (supplied by the composition root, since the MCP kind may not read the agent kind), and the last 24 hours of calls logged under the reserved uid `coffer`. Its Invocations tab reads `GET /api/v1/mcp/invocations?uid=coffer`.
 
 ## Notifications and server-initiated requests
 
@@ -345,7 +344,7 @@ A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its co
 | Reach override | `~/.coffer/local/tool-reach.json` | Reach is machine-local; an override narrows the group's scope for one tool. |
 | The per-tool gate | The gateway, per session | Computes, per session, the switched-off and out-of-reach tools; `tools/list` and `coffer__search_tools` drop them and `tools/call` refuses them as `denied` — the same shape as a disabled capability. |
 | Annotations | Each discovered tool's annotations, copied to its listing entry | A tool that changes data is listed `readOnlyHint: false, destructiveHint: true`, any other `readOnlyHint: true`; every upstream's own annotations are passed through too. |
-| Management | The MCP application package, the custom-tool REST routes and the `coffer tool` CLI group | Every write goes through the resource service, so validation, the missing-secret probe, audit and the eviction of live connections come with it. |
+| Management | The MCP application package and the custom-tool REST routes | Every write goes through the resource service, so validation, the missing-secret probe, audit and the eviction of live connections come with it. |
 | OpenAPI | A pure reader in the MCP domain package, and a fetcher in the MCP infrastructure package | The document is read into draft tools; a URL is fetched through the SSRF guard (5 MiB, 20 s, redirects re-checked). |
 
 ### The secret boundary

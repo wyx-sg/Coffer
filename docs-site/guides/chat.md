@@ -13,13 +13,13 @@ The page drives the agent you already use, through that agent's own runtime: Cla
 
 The page is one window onto a conversation, and an IM channel is another. A conversation you start on your phone through Telegram or SeaTalk appears on the Conversations page, where you can watch its turns stream, stop them, and keep typing. The agent cannot tell which window a turn came from.
 
-::: info No CLI
-There is no `coffer chat` command group. Conversations are reachable from the Conversations page, from a channel, and over the REST API under `/api/v1/chat`.
+::: info Web UI and REST
+Conversations are reachable from the Conversations page, from a channel, and over the REST API under `/api/v1/chat`.
 :::
 
 ## Prerequisites
 
-- A running daemon. Open the UI with `coffer open` or the [desktop app](/guides/desktop-app).
+- A running daemon. Open the UI with the [desktop app](/guides/desktop-app), or in a browser at the daemon's address.
 - At least one managed agent registered on the **Agents** page, with its CLI installed on this machine. See [Agents](/guides/agents).
 - The agent logged in the way you would log in to use it in a terminal. For Claude Code, run `claude` once and complete `/login`.
 
@@ -211,7 +211,7 @@ An archived conversation opens read-only: its history reads normally, the compos
 
 ### Retention
 
-Coffer archives a conversation with no new message for 7 days and deletes archived conversations 30 days after they were archived. Change the deletion window, or set it to **Keep forever**, under **Settings → Data → History → Conversations**; the archive window is `coffer config set retention.conversations_archive <days>`. Archiving is reversible; deletion is not.
+Coffer archives a conversation with no new message for 7 days and deletes archived conversations 30 days after they were archived. Change the deletion window, or set it to **Keep forever**, under **Settings → Data → History → Conversations**; the archive window is the **Auto-archive idle chats** setting in the same section. Archiving is reversible; deletion is not.
 
 ## Chat and the agent's own sessions
 

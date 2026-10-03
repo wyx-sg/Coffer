@@ -231,8 +231,8 @@ class MCPInvocationRepo:
     ) -> dict[str, dict[str, tuple[int, int]]]:
         """``{server uid: {tool: (calls, failures)}}`` at or after ``since``.
 
-        The custom tools page's 24-hour summary (spec mcp-gateway "Manage
-        custom tools on REST and the command line"). A failure is an ``error``
+        The custom tools page's 24-hour summary (spec mcp-gateway "Manage custom tools
+        through REST and the Custom tools page"). A failure is an ``error``
         or a ``timeout``; a ``denied`` call is counted as a call only.
         """
         if not resource_uids:

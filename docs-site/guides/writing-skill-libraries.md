@@ -163,7 +163,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; `coffer secret scan` finds them and `coffer secret import` moves them into the store. See [Secrets](/guides/secrets). Name each secret the skill uses under `requires: {secrets: [...]}` so Coffer can say when it is not set.
+  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; **Find plaintext keys** on the Secrets page finds them and moves them into the store. See [Secrets](/guides/secrets). Name each secret the skill uses under `requires: {secrets: [...]}` so Coffer can say when it is not set.
 
 ## Descriptions
 
@@ -282,28 +282,24 @@ Write the flow as numbered functions with explicit gates between them:
 
 ## Authoring workflow
 
-Author outside `~/.coffer`, in a folder of your own (the examples use `~/src/skills/<domain>`). `coffer skill add` copies a folder into `~/.coffer/vault/skills/`; authoring inside the store would mean importing a folder onto itself.
+Author outside `~/.coffer`, in a folder of your own (the examples use `~/src/skills/<domain>`). Adding a skill copies a folder into `~/.coffer/vault/skills/`; authoring inside the store would mean importing a folder onto itself.
 
 ```sh
 # 1. Author and test in the authoring root
 cd ~/src/skills/<domain>
 ~/.cache/coffer-skill-venv/bin/pytest -q scripts
 ~/.cache/coffer-skill-venv/bin/python scripts/lint_portable.py .
-
-# 2. Import into the master store; Coffer validates and delivers it
-coffer skill add ~/src/skills/<domain>
-
-# 3. Confirm delivery
-coffer skill verify
 ```
+
+Then add the folder from **Skills → Add skill → From a folder** (the authoring root). Coffer validates and delivers it, and **Check copies** on the Skills page confirms delivery.
 
 After the first import, keep the authoring root as the source of truth:
 
-- For a real change, edit the authoring root, run the tests and the lint again, then `coffer skill add --force ~/src/skills/<domain>`.
-- For a quick fix, edit the file in the master folder that `coffer path skill <domain>` prints; agents see the change on their next read. Apply the same change to the authoring root, or the next `coffer skill add --force` overwrites it.
-- `coffer skill verify` reports drift between the master and each agent's delivered link, and `--fix` repairs missing or re-pointed links.
+- For a real change, edit the authoring root, run the tests and the lint again, then add it again from **Skills → Add skill → From a folder** and choose **Replace** on the conflict row.
+- For a quick fix, edit the file in the master folder (`~/.coffer/vault/skills/<domain>/`, or the skill's **Files** tab); agents see the change on their next read. Apply the same change to the authoring root, or the next **Replace** overwrites it.
+- **Check copies** reports drift between the master and each agent's delivered link, and **Repair** puts back missing or re-pointed links.
 
-When a new domain replaces older single-purpose skills, remove the old ones with `coffer skill rm` only after the new domain has worked end to end, then confirm no stale links remain in the agents' skill folders.
+When a new domain replaces older single-purpose skills, remove the old ones (**⋯ › Delete…** on the skill) only after the new domain has worked end to end, then confirm no stale links remain in the agents' skill folders.
 
 ## Designing a new domain
 

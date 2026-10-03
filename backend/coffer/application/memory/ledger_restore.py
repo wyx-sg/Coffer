@@ -2,11 +2,10 @@
 session was given across daemon restarts").
 
 Every fire that delivered something is one ``memory_delivery_fired`` event
-naming its moment, its session, its notes and — for a trigger — the trigger
-(spec memory "Audit every delivery fire"). Reading the recent ones back, oldest
-first, gives the ledger exactly what earlier daemons gave, so a restart neither
-brings a note in again nor lets a trigger hold a second command in a session
-that is still going.
+naming its moment, its session and its notes (spec memory "Audit every
+delivery fire"). Reading the recent ones back, oldest first, gives the ledger
+exactly what earlier daemons gave, so a restart does not bring a note in again
+in a session that is still going.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from coffer.application.memory.hook_service import MOMENT_ERROR, MOMENT_GUARD, MOMENT_PROMPT
+from coffer.application.memory.hook_service import MOMENT_PROMPT
 from coffer.application.memory.session_ledger import MAX_SESSIONS, SessionLedger
 from coffer.domain.audit import AuditEntry, AuditEventType
 
@@ -63,11 +62,6 @@ async def restore_from_audit(
             notes = _names(details.get("notes"))
             if notes:
                 ledger.mark_delivered(session_id, notes)
-                applied += 1
-        elif moment in (MOMENT_GUARD, MOMENT_ERROR):
-            trigger = details.get("trigger")
-            if isinstance(trigger, str) and trigger:
-                ledger.mark_fired(session_id, trigger)
                 applied += 1
     return applied
 

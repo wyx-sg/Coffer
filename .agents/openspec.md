@@ -181,9 +181,10 @@ the draft was withdrawn.
 restructure moved the audit log and per-table retention into it, and
 `audit_log` and `retention_policies` are durable state this spec seeds, reads,
 configures and prunes rather than another spec's state it displays. With them it
-is also independently operable — each kind's lifecycle verbs, `coffer log audit`,
-`coffer log prune` and the `retention.*` keys of `coffer config` against a
-running daemon, with acceptance scenarios that exercise each. The move was forced rather than convenient: the
+is also independently operable — each kind's lifecycle routes, the audit
+read (`GET /api/v1/audit`, `coffer log audit`) and the retention routes with
+the Data settings section over them, against a running daemon, with
+acceptance scenarios that exercise each. The move was forced rather than convenient: the
 three framework obligations the first audit would have parked in the
 principles could not live there, because the principles hold rules and not
 routes, tables, entities or scenarios, so parking them would have deleted them
@@ -258,7 +259,7 @@ What follows is the procedure, recovered from that audit.
   subject read both ways.
 - **"It governs how other specs deliver."** The rule belongs in this file. Where
   such a rule needs a test, the assertion may live as a requirement in the one
-  spec whose scope is already cross-kind — the REST/CLI parity rule is stated
+  spec whose scope is already cross-kind — the minimal-CLI rule is stated
   below and made testable as a requirement of `resource-framework` — but it is stated
   once, in prose here, and tested once, there. Duplicating the prose into the
   spec would make this file advisory.
@@ -281,36 +282,42 @@ What follows is the procedure, recovered from that audit.
 
 ## End-to-End Deliverable Rule
 
-Every feature, on completion, must deliver a usable end-to-end product: backend persistence + the surfaces that expose it (CLI, MCP / `coffer-mcp-shim`, REST) — all wired so the user can really operate the feature.
+Every feature, on completion, must deliver a usable end-to-end product: backend persistence + the surfaces that expose it (web UI, REST, MCP / `coffer-mcp-shim`, and a CLI command only where the rule below allows one) — all wired so the user can really operate the feature.
 
 A capability is "shipped" only when the end-to-end deliverable works AND every requirement's scenarios have at least one covering test.
 
-**Every mutation, and every read of state that is not a plain file, is reachable
-from both REST and the CLI.** Whatever a user can change in a spec's state through
-the management API they can also change through `coffer`, sharing the same daemon
-and the same error model — and the reverse — and the same holds for reading state
-that lives in the database or the daemon's memory. Plain files are the one
-narrowing: where the owning spec declares a file directly readable or editable
-(knowledge documents, memory notes, skill master folders, agents' own config and
-native-memory files, the daemon log), the CLI satisfies parity by naming the file
-with `coffer path`, and the agent or person reads and edits it with their own
-tools. The REST route that serves such a file to the web UI stays, because a
-browser page cannot read the disk, and the parity test lists every such route by
-name so that a REST read with no CLI command is a reviewed decision rather than a
-gap. A setting changed with `coffer config` counts as the CLI counterpart of the
-route that stores it. This is policy over every spec rather than a promise of any one of
-them, which is why the rule is stated here: written into a single spec's prose
-it would read as that spec's private promise, and the next spec would quietly
-ship a REST-only half. A spec that cannot honour it records the gap in its
-`## Purpose` instead of leaving the omission to be discovered.
+**The command line carries only what needs it.** The web UI is where Coffer is
+managed, and its REST routes are that UI's own interface, so a mutation or a
+read of state that is not a file owes no `coffer` command: a web UI operation
+owes no CLI counterpart, and a spec does not ship one for completeness. A
+command exists only for one of four reasons:
 
-The **test** for it lives in
-[`resource-framework`](../openspec/specs/resource-framework/spec.md) as the
-REST/CLI parity requirement, with the acceptance scenarios "command line
-covers every visual operation", "file-backed reads are answered by coffer path"
-and "command line surfaces same errors". That is
-not a second statement of the rule — the assertion runs over the whole command
-tree across every spec, so it has no narrower home, and `resource-framework` is
-the only spec whose scope is already cross-kind. Stated once here, tested once
-there: change the policy and you change this paragraph *and* that requirement,
-never one of them.
+- **program** — a program Coffer installs or writes runs it (the memory hook
+  entry point, an agent's key helper);
+- **offline** — it must work when the daemon is down or cannot start;
+- **hand-off** — a prompt Coffer gives an agent tells it to run the command,
+  because what it reads or writes is not a file;
+- **no-ui** — the web UI cannot do it.
+
+Plain files are not a reason: where the owning spec declares a file directly
+readable or editable (knowledge documents, memory notes, skill master folders,
+agents' own config and native-memory files), the agent or person reads and
+edits it with their own tools at the path the web UI, the spec or the hand-off
+prompt names. This is policy over every spec rather than a promise of any one
+of them, which is why the rule is stated here: written into a single spec's
+prose it would read as that spec's private promise, and the next spec would
+quietly ship a command for each page.
+
+Each command is recorded with its reason in one place in the CLI package. The
+**test** for it lives in
+[`resource-framework`](../openspec/specs/resource-framework/spec.md) as "Keep
+the command line to what needs it", with the acceptance scenarios "command line
+covers every visual operation", "every command has a recorded reason", "a
+command missing from the list fails the test", "file-backed reads are answered
+by coffer path" and "a kept command surfaces the daemon's errors": it walks the live
+command tree and asserts it equals the recorded list in both directions, and
+that every group's `--help` renders. That is not a second statement of the rule
+— the assertion runs over the whole command tree across every spec, so it has
+no narrower home, and `resource-framework` is the only spec whose scope is
+already cross-kind. Stated once here, tested once there: change the policy and
+you change this paragraph *and* that requirement, never one of them.

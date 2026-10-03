@@ -32,27 +32,12 @@ With no provider yet, the page offers three ways in — **Anthropic or compatibl
 
 ## Add a provider
 
-**Web UI:** open **Model providers** and click **Add provider**. The dialog has two steps.
+Open **Model providers** and click **Add provider**. The dialog has two steps.
 
 1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex, chat and Coffer's engine) or **Anthropic-compatible** (Claude Code, chat and Coffer's engine). Give it a **Name** and paste the **API key**; the key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with the key you typed — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. Missing or malformed fields are named under each field.
 2. **Models.** Tick the models the provider should offer, with search and a type filter. Nothing ticked means every model the endpoint serves is offered. **Add provider** saves it and opens it.
 
 Choosing **Ollama** or **LM Studio** takes the local path instead: no key, and Coffer looks for a runtime on this Mac (see [Local model runtimes](#local-model-runtimes)). The next step stays greyed out until a runtime is chosen or an address is filled in, and the **Name** field appears once a runtime is chosen.
-
-**CLI:**
-
-```sh
-# Store the key first, so it never appears on a command line
-printf '%s' "$DEEPSEEK_API_KEY" | coffer secret set deepseek/key
-
-coffer provider add deepseek \
-  --protocol openai \
-  --base-url https://api.deepseek.com \
-  --secret-ref deepseek/key
-# added provider deepseek (openai)
-```
-
-`coffer provider add` also accepts `--secret <key>`, which stores the key under a new opaque ref of the form `provider/<uuid>/key` — but the value then sits in your shell history. For `anthropic`, `openai` and `unknown` you must give exactly one of `--secret` or `--secret-ref`.
 
 | Protocol | Meaning | Key |
 | --- | --- | --- |
@@ -67,15 +52,7 @@ The protocol describes the endpoint. It decides how Coffer lists the endpoint's 
 
 A new provider with a key reaches every agent, including agents you register later. An `ollama` provider starts dormant and never reaches an agent.
 
-**Web UI:** use the **Reach** control in the provider's header on **Model providers**.
-
-**CLI:**
-
-```sh
-coffer provider scope deepseek --agents codex
-coffer provider scope deepseek               # show the current reach
-coffer provider scope deepseek --all         # back to every agent
-```
+Use the **Reach** control in the provider's header on **Model providers**.
 
 The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching `claude-code` writes Claude Code's `settings.json` in its shape; reaching `codex` writes Codex's `config.toml`. That is how an OpenAI-compatible gateway can drive Claude Code — as long as the gateway really accepts what Claude Code sends. Coffer does not translate between protocols.
 
@@ -93,21 +70,7 @@ Picking the **Built-in login** puts the agent back on its own login; the form as
 
 The agent's **Overview › Model** section then reads the provider, the model, the effort and the **Route** — through Coffer's proxy, with a **Test** button. **Rotate proxy token**, which replaces the agent's own local token for Coffer's proxy, is in the agent page's **⋯** menu, offered only while the agent runs on a provider; the built-in login bypasses the proxy.
 
-### From the command line
-
-```sh
-coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
-coffer provider switch deepseek --agent claude_code
-# switched claude_code to deepseek [openai]
-coffer provider switch deepseek       # no --agent: every registered, enabled agent it reaches
-
-coffer provider builtin claude_code   # Claude Code back on its own login
-coffer provider builtin codex         # Codex back on its own login
-```
-
 Which provider an agent runs on is a field of the agent itself (its `connection_uid`), so an agent is on at most one provider at a time and the choice stays on this machine; it never syncs. A provider that is deleted, switched off or no longer reaches the agent leaves that agent on its own login.
-
-`builtin` takes the type of the agent to revert, `claude_code` or `codex` — not a wire, because a provider reaches agents through its reach, and a wire does not name an agent. It is idempotent and reverts only that agent: another agent running on the same provider stays on it.
 
 Which provider an agent runs on is a setting of the agent itself, so an agent is on at most one provider and switching one agent never moves another. Switching an agent onto a provider it is not reached by (the provider or the agent is switched off, or the provider's reach does not name the agent) is refused with `PROVIDER_DOES_NOT_REACH_AGENT`. The choice is per machine: it is part of the agent's record, which is not synced.
 
@@ -144,7 +107,7 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 - **The file names the proxy, not the provider.** Switching Claude Code from one API-key provider to another changes the proxy's route; `settings.json` stays as it is, and renaming a provider touches nothing.
 - **`NO_PROXY`** gains `127.0.0.1,localhost`, so a corporate `HTTPS_PROXY` never captures the loopback call. Your own entries stay, and switching back removes only the pair Coffer appended.
 - **The model** goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. **Effort** goes in `effortLevel`.
-- **Every tier is pinned.** Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable. On an endpoint that serves no Claude ids each tier is the agent's model; on a gateway serving Claude ids each tier is the model whose name carries it. `coffer agent edit <agent> --tier haiku=<model>` sets one yourself.
+- **Every tier is pinned.** Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable. On an endpoint that serves no Claude ids each tier is the agent's model; on a gateway serving Claude ids each tier is the model whose name carries it. **Model per tier** in the Change model dialog sets one yourself.
 - **`modelPicker`** puts the provider's models in `/model`, replacing the built-in rows when the provider serves no Claude ids.
 
 The helper names the `coffer` CLI by absolute path (shell-quoted if the path holds a space), because Claude Code started from the Dock or Finder does not get your login shell's `PATH`. For an install under `~/.coffer/bin` the path is the stable `~/.coffer/bin/coffer`, so an upgrade does not break it.
@@ -176,22 +139,12 @@ Reverting to the built-in login removes exactly the keys Coffer wrote. A `model`
 
 A provider can be a model runtime on this machine: **Ollama** (≥ 0.14.0 for Claude Code, ≥ 0.13.4 for Codex), **LM Studio** (≥ 0.4.1 / ≥ 0.3.29), **vLLM** (≥ 0.11.1 / ≥ 0.10.0) or llama.cpp's **llama-server** (Codex support is experimental). Coffer talks to each in its own native protocol through the proxy — no translation — so `mlx_lm.server`, which speaks only Chat Completions, is not supported; use LM Studio's MLX engine.
 
-**Web UI:** in **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible** when the runtime serves it, or **Ollama API** for Coffer's engine only. The next step starts with the models that can call tools ticked, each showing its context window.
+In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible** when the runtime serves it, or **Ollama API** for Coffer's engine only. The next step starts with the models that can call tools ticked, each showing its context window.
 
-If nothing answers, the dialog says so and offers a prompt for your agent (**Ask an agent**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running. `coffer provider detect-local` prints the same prompt when it finds nothing.
+If nothing answers, the dialog says so and offers a prompt for your agent (**Ask an agent**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running.
 
-**CLI:**
-
-```sh
-coffer provider detect-local
-# ollama 0.14.2 at http://127.0.0.1:11434 — anthropic, openai
-#   qwen3-coder  (65536, tools)
-
-coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:11434 --local
-```
-
-- **Detection is read-only.** It probes loopback addresses only (each runtime's default port, or the URL you give), fingerprints the runtime rather than trusting the port, and never pulls, loads or downloads a model. vLLM's default port 8000 is Coffer's own daemon port, so start vLLM on another port and pass it with `--base-url`.
-- **`--local` needs no key** and curates the runtime's models that can call tools, each with the context window the runtime serves it with. Ollama's served window is known once the model is loaded; before that it is unknown, and you can set it in the provider's **Models** section.
+- **Detection is read-only.** It probes loopback addresses only (each runtime's default port, or the URL you give), fingerprints the runtime rather than trusting the port, and never pulls, loads or downloads a model. vLLM's default port 8000 is Coffer's own daemon port, so start vLLM on another port and type its address, then press **Detect**.
+- **A local runtime needs no key**; Coffer curates the runtime's models that can call tools, each with the context window the runtime serves it with. Ollama's served window is known once the model is loaded; before that it is unknown, and you can set it in the provider's **Models** section.
 - **Claude Code** gets `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (local runtimes reject its beta fields) and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to the served window, with every tier pinned to the one model. **Codex** gets the window in its catalogue. Coffer never runs Codex with `--oss`, which can pull models.
 - Agents work far better with a window of at least 64k tokens; token counts from local runtimes are approximate, and a first request may wait for a cold model load.
 
@@ -209,15 +162,15 @@ Only switched-on models appear in agent, chat and channel pickers, and chat pick
 
 The line under the **Models** title says once where most prices come from — "bundled with Coffer, updated <date>", or from the provider — and each model row shows its price per 1M tokens (input · output), marking only the exceptions:
 
-- **You set** — a price you recorded on this provider; it wins over everything else. **Set price…** (or click the price) opens a small form with the input and output price and, at the bottom left, **Reset to default**, which removes it. `coffer provider price <name> <model> --input <usd> --output <usd>` does the same, `--reset` removes it, and `coffer provider price <name>` lists every price with its source.
+- **You set** — a price you recorded on this provider; it wins over everything else. **Set price…** (or click the price) opens a small form with the input and output price and, at the bottom left, **Reset to default**, which removes it.
 - **From `<provider>`** — the provider's own API reported it when its models were listed (OpenRouter does). It is refreshed each time the models are listed or refreshed, never per request.
-- **Bundled · updated `<date>`** — Coffer's price list: pydantic's genai-prices, with Coffer's own Anthropic rates for the newest models. It knows prices per provider, historical prices and long-context tiers. A copy ships with each release, and the daemon refreshes it from genai-prices once a day; the date is when the data in use was taken. **Refresh model prices** in **Settings › General** (`coffer config set prices.refresh off`) turns the refresh off on a firewalled machine. No price is ever looked up while a request is being costed.
+- **Bundled · updated `<date>`** — Coffer's price list: pydantic's genai-prices, with Coffer's own Anthropic rates for the newest models. It knows prices per provider, historical prices and long-context tiers. A copy ships with each release, and the daemon refreshes it from genai-prices once a day; the date is when the data in use was taken. **Refresh model prices** in **Settings › General** turns the refresh off on a firewalled machine. No price is ever looked up while a request is being costed.
 - **Local · no cost** — a model runtime on this Mac.
 - **—** — nothing prices it, with **Set price…**. [Usage](/guides/usage) shows `—` for it until you set one.
 
 An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer.
 
-What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, a channel's `/model` card, and `coffer agent models`:
+What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, and a channel's `/model` card:
 
 - when the provider the agent runs on curates **text** models, exactly those, in your order;
 - otherwise, the agent's own catalogue (see [Agents](/guides/agents#models)).
@@ -228,8 +181,8 @@ Non-text models are never offered as chat models. A provider that curates only n
 
 When an agent's model is offered by more than one enabled provider, Coffer's proxy moves a request that fails before its first byte (a connection error, a 5xx, 529 or 429, a rejected key, or a first-byte timeout) to the next provider that offers the same model. It is automatic and needs no setup:
 
-- The providers are tried in the **order of the Model providers list**, the agent's own provider first. Drag the rows to change it, or run `coffer provider order <name>…` to put the named providers first.
-- **Use as fallback for other providers** (on by default, in the provider's **Endpoint**) decides whether other providers' requests may fail over to it. `coffer provider edit <name> --no-fallback` switches it off.
+- The providers are tried in the **order of the Model providers list**, the agent's own provider first. Drag the rows to change it.
+- **Use as fallback for other providers** (on by default, in the provider's **Endpoint**) decides whether other providers' requests may fail over to it.
 - A local runtime never fails over and is never a fallback.
 - The model never changes, and nothing fails over after the first byte of the answer; the agent's own retry lands on a healthy provider.
 - Each failover is recorded in **Activity**, and **Usage** meters the provider that actually answered.
@@ -238,27 +191,15 @@ See [The local model proxy](../architecture/model-proxy.md#failover) for the exa
 
 ## Edit, rename and delete
 
-**Web UI:** on the provider's header:
+On the provider's header:
 
 - **Edit** changes the **Name**, the **Protocol** and the **Base URL**, with **Test** before you save. Renaming changes only the label; the page stays where it is. The protocol is locked while an agent runs on the provider. The key is not edited here.
 - **Replace key** (on Overview, or the key-rejected banner) takes a new key, can **Test** it first, and overwrites the value behind the same secret — the agents' config files only name the secret, so they do not change. When the key is in use, the new value waits until you approve it in the Coffer app: the dialog and the API key row say **Waiting for approval in the Coffer app**, with **Review**. See [Secret store](/guides/secret-store).
 - **⋯ › Delete provider** deletes a provider nothing runs on, with its secret, after a confirmation. A provider something runs on is not blocked: **Delete provider** opens a review instead. The left side says what will happen to each user — an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted — and the right side shows exactly the lines Coffer will remove from each agent's config file (for Codex its model, provider table, effort and model-list pointer; your own lines stay). **Delete** applies it: the agents are put back on their own logins first, then the provider goes. If an agent's file changed in the meantime the delete stops with the provider still there.
 
-**CLI:**
-
-```sh
-coffer provider edit deepseek --base-url https://api.deepseek.com/v1
-coffer provider edit deepseek --secret "$NEW_KEY"      # rotates the key in place
-coffer provider edit deepseek --title "DeepSeek (EU account)"
-coffer provider edit deepseek --name deepseek-eu
-coffer provider rm deepseek
-```
-
-- **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
-
-- **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
-- **Waiting for approval.** A new `--secret` for a key in use, a new `--base-url` for a connection whose key already goes somewhere, and `coffer provider add … --secret-ref` with a key another connection uses are saved but held until you approve them in the Coffer app. The command prints `waiting for approval in the Coffer app` with the approval's id and exits `9`; with `--wait` it waits for your answer instead. The old key and URL stay in use until then.
-- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while an agent runs on the provider. Run `coffer provider builtin <agent_type>` for each agent running on it (the refusal names them), edit, then switch again.
+- **Replacing** the key overwrites the stored secret at the same ref; nothing that cites it changes.
+- **Waiting for approval.** A new key for a key in use, a new base URL for a connection whose key already goes somewhere, and a key another connection already uses are saved but held until you approve them in the Coffer app. The old key and URL stay in use until then.
+- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while an agent runs on the provider. Put each agent running on it (the refusal names them) back on its **Built-in login**, edit, then switch again.
 - **Renaming** changes only the label. The uid, the secret ref and the agents' files stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
 - **Deleting** first puts every agent that runs on the provider back on its own login, then removes the provider and deletes its secret if nothing else cites it.
 
@@ -285,20 +226,9 @@ A choice saves as soon as you make it; there is no Save button. A line under eac
 
 The passes Coffer runs on its own are switched on the pages they upkeep: curation from the **Automatic** control in the Knowledge header, reading and distilling memory from the one in the Memory header.
 
-**CLI:**
-
-```sh
-coffer config set engine.provider deepseek        # the endpoint and key
-coffer config set engine.model deepseek-flash     # the model
-coffer config list engine.
-
-coffer config set transcribe.provider openai-direct
-coffer config set transcribe.model whisper-1
-```
-
 At most one provider is the internal-engine default, and at most one carries speech to text; setting either moves the flag from wherever it was. A provider can be switched into agents and be the engine's default at the same time. An `ollama` provider can only ever serve the engine. When the engine's provider changes, the engine model is cleared unless the new provider's curated list includes it.
 
-The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.enabled` and `engine.upkeep.<pass>.interval`), the per-call time limit (`engine.timeout`), and which machine may run knowledge curation (`engine.curate_owner`); `coffer config list engine.` prints each with its current value, default and help. `engine.provider` and `transcribe.provider` have no default, so `config unset` refuses them: move the flag by naming another connection. `coffer daemon status` shows the passes running right now. See the [CLI reference](/reference/cli).
+The unattended passes, the per-call time limit and which machine may run knowledge curation are Settings page controls as well. The engine provider and the speech-to-text provider have no default: move the flag by choosing another provider. `coffer daemon status` shows the passes running right now.
 
 ## Troubleshooting
 
@@ -307,9 +237,9 @@ The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.e
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
 | Switch fails with `PROVIDER_DOES_NOT_REACH_AGENT` | The provider or the agent is switched off, or the provider's reach does not name the agent | Switch it on or add the agent to its reach, then switch again. |
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
-| The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key; `coffer proxy status` shows the proxy itself. |
-| The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; `coffer proxy rotate <agent>` issues a fresh token. |
-| Nothing answers on `127.0.0.1:8001` | The proxy is not running | `coffer proxy status`; the daemon restarts a crashed proxy within a few seconds. |
+| The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key. |
+| The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; **Rotate proxy token** in the agent page's **⋯** menu issues a fresh one. |
+| Nothing answers on `127.0.0.1:8001` | The proxy is not running | The daemon restarts a crashed proxy within a few seconds; `coffer daemon status` shows whether the daemon is up. |
 | The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and cleared the agent's provider rather than re-route it | Switch again if you still want the provider. |
 
 ## Related

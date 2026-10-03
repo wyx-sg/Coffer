@@ -1,6 +1,6 @@
 """A partition listed as a file tree, which is what the surface claims it is.
 
-"Cover memory management on REST and the CLI" rests on the claim that a
+"Manage memory in the web UI" rests on the claim that a
 partition *is* a folder of derived Markdown, so Coffer's own writing (``MEMORY.md``,
 ``notes/``, ``RETIRED.md``) is listed, and the hidden ``.raw/`` of verbatim agent
 input is not. The ``.<name>.tmp`` files an atomic write leaves for a few

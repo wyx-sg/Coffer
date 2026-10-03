@@ -186,7 +186,7 @@ SSE 路由跨轮次保持打开。没有轮次运行时，它保持连接，把�
 用 `PUT .../pending` 替换队列时，会把新文字和已有条目做调和：每段文字复用第一个未被使用、文字相同的条目。因此在浏览器里重排过的队列，会保留每条消息渠道消息的附件和它的消息渠道渲染器。只有之前没排过队的文字才会成为一个新的、空白的条目。
 
 ::: info 没有命令行
-Coffer 没有 `coffer chat` 命令组。对话可以通过 REST、Web 页面和消息渠道访问。[chat 规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)把这一点记录为 REST 与命令行对等规则中的一个已知缺口。
+对话通过 REST 在 Web 页面和消息渠道里驱动。命令行没有对话命令，因为它只承载确实需要它的东西（[chat 规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)）。
 :::
 
 ## 智能体适配器 {#agent-adapters}

@@ -1,5 +1,5 @@
 """Walking a tool's help tree: what it asks the runner for, and where it
-stops (spec skill-manager "Serve required commands on REST, the command line and the web")."""
+stops (spec skill-manager "Serve required commands on REST and the web")."""
 
 from __future__ import annotations
 

@@ -42,14 +42,14 @@ Coffer 是一个本地进程，把这些资产只存一份，再通过智能体�
 | --- | --- |
 | 编程智能体 | Claude Code 和 Codex，Coffer 注册的两种智能体。每个智能体通过 Coffer 写进它配置里的一条 MCP 服务器条目连到 Coffer，并读取 Coffer 投递到它技能目录里的技能。 |
 | `coffer-mcp-shim` | 一个很小的 stdio 转 HTTP 转发器，智能体把它当作 MCP 服务器启动。它找到（或启动）守护进程，把 JSON-RPC 转发到 `/mcp`，并在握手里盖上智能体的身份。 |
-| `coffer` CLI | 一个 Typer 应用。每条命令都是一次对守护进程的 HTTP 调用；CLI 自己从不打开数据库或密钥存储。 |
+| `coffer` CLI | 一个 Typer 应用，命令很少：守护进程的生命周期、一次性迁移、日志、`coffer run`，以及少数由程序或智能体交接运行的命令。每条读写状态的命令都是一次对守护进程的 HTTP 调用；CLI 自己从不打开数据库或密钥存储。 |
 | Web 界面 | 一个 React 单页应用，构建成静态文件，由守护进程在自己的源上提供。 |
 | 桌面壳 | 一个 Tauri 2 应用，在原生窗口里承载同一份构建好的前端，并带一个菜单栏项。它通过 IPC 把守护进程地址和令牌交给页面，在没有守护进程运行时启动一个，并根据签名的发布清单自我更新。 |
 | HTTP API | `/api/v1/*` 下的 FastAPI 路由：所有客户端共用的管理面。 |
 | MCP 网关 | `/mcp` 端点。它把每个启用的上游 MCP 服务器聚合到一个端点后面，加上 Coffer 的内置工具，并按生效范围过滤每个智能体能看到的内容。见 [MCP 网关](/zh/architecture/mcp-gateway)。 |
 | 资源框架与各类型 | 与类型无关的核心，给每个用户管理的东西（一个 MCP 服务器、一个技能、一个消息渠道）同一套身份、生命周期、审计轨迹和生效范围，外加接入它的七种类型。见 [资源框架](/zh/architecture/resource-framework)。 |
 | 后台 worker | 进程内的 asyncio 循环：保留期清理、知识整理、记忆聚合与提炼、保险库同步轮次、对话记录缓存预热、MCP 会话回收，以及承载 Telegram 轮询和 SeaTalk websocket 连接的消息渠道运行时。完整列表和运行周期见 [守护进程与进程](/zh/architecture/daemon#background-work)。 |
-| `vault/` | `~/.coffer` 下的一个 git 仓库，是配置和内容的记录系统：每个资源一个 JSON 文件、状态文档、知识集、技能文件夹、记忆触发器和密钥密文。每一次被接受的写入都是一次经过校验、写明写入者的提交。它旁边，`local/` 存只对本机成立的东西，`content/` 存媒体和对话工作目录，`derived/` 存可以重建的东西，比如记忆树。见 [持久化](/zh/architecture/persistence)。 |
+| `vault/` | `~/.coffer` 下的一个 git 仓库，是配置和内容的记录系统：每个资源一个 JSON 文件、状态文档、知识集、技能文件夹和密钥密文。每一次被接受的写入都是一次经过校验、写明写入者的提交。它旁边，`local/` 存只对本机成立的东西，`content/` 存媒体和对话工作目录，`derived/` 存可以重建的东西，比如记忆树。见 [持久化](/zh/architecture/persistence)。 |
 | `runs.db` | SQLite，只存历史：审计日志、MCP 调用、对话和消息、同步轮次、用量。 |
 | 上游 MCP 服务器 | 你注册的服务器（stdio 子进程或 HTTP 端点），按客户端会话启动。 |
 | 模型提供商 | Coffer 自己的处理流程所用的 Anthropic、OpenAI 兼容和 Ollama 端点，以及它投射到智能体里的提供商配置。 |
@@ -69,7 +69,7 @@ Coffer 以一小组相互协作的进程运行，其中只有一个持有状态�
 | 上游 MCP 服务器 | 每个客户端会话、每个服务器一个。 | 由网关的会话级 supervisor 拉起，会话关闭时回收。 |
 | 智能体运行时 | 每个对话轮次或每个对话。 | Claude Agent SDK 和 Codex app-server，由对话平台启动来跑一个轮次。 |
 
-CLI、shim 和桌面壳都通过 `~/.coffer/daemon.json`（pid、端口、令牌；权限 `0600`）找到守护进程，这个文件由守护进程在启动时写入、退出时删除。`~/.coffer/daemon.lock` 上的拉起锁让并发的探测或拉起尝试最终汇聚到同一个守护进程。在 macOS 上，`coffer daemon service install` 会把守护进程注册为登录服务。完整生命周期见 [守护进程与进程](/zh/architecture/daemon)。
+CLI、shim 和桌面壳都通过 `~/.coffer/daemon.json`（pid、端口、令牌；权限 `0600`）找到守护进程，这个文件由守护进程在启动时写入、退出时删除。`~/.coffer/daemon.lock` 上的拉起锁让并发的探测或拉起尝试最终汇聚到同一个守护进程。在 macOS 上，**开机自启动**会把守护进程注册为登录服务。完整生命周期见 [守护进程与进程](/zh/architecture/daemon)。
 
 ## 主要数据流 {#main-data-flows}
 

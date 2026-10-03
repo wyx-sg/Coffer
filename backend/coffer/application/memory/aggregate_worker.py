@@ -2,7 +2,7 @@
 
 Spec memory "Aggregate on an interval and on demand": aggregation MUST run on a worker
 on an interval and MUST also be triggerable by hand. It ran only by hand for its whole
-first life — the Memory page's Sync button and `coffer memory sync` — which made a layer
+first life — the Memory page's Sync button — which made a layer
 whose entire premise is "what your agents already learned is here" quietly depend on the
 user remembering to ask. A lesson an agent recorded this morning was not in Coffer until
 someone clicked.

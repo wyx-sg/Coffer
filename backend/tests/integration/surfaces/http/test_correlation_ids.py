@@ -128,39 +128,24 @@ def test_a_requests_audit_row_and_log_line_carry_its_trace_id(client: TestClient
     spec="resource-framework", scenario="an MCP call's records carry its session and trace id"
 )
 def test_an_mcp_calls_invocation_audit_row_and_log_share_one_trace_id(client: TestClient) -> None:
-    assert client.post("/api/v1/knowledge/collections", json={"name": "notes"}).status_code == 201
     session = _mcp(client, None, "initialize", {}, "init-1").headers["mcp-session-id"]
     called = _mcp(
         client,
         session,
         "tools/call",
-        {
-            "name": "coffer__write",
-            "arguments": {
-                "collection": "notes",
-                "title": "Build host",
-                "description": "Where the build runs",
-                "body": "On the mini.",
-            },
-        },
+        {"name": "coffer__search_tools", "arguments": {"query": "anything", "top_k": 1}},
         "mcp-call-7",
     ).json()
     assert called["result"].get("isError") is not True, called
 
     calls = client.get("/api/v1/mcp/invocations", params={"trace_id": "mcp-call-7"}).json()
     [call] = calls["invocations"]
-    assert call["capability_key"] == "write"
+    assert call["capability_key"] == "search_tools"
     assert call["session_id"] == session
     assert call["trace_id"] == "mcp-call-7"
-
-    audit = client.get("/api/v1/audit", params={"trace_id": "mcp-call-7"}).json()["entries"]
-    assert audit, "the write the tool made is audited under the call's trace id"
-    assert {e["trace_id"] for e in audit} == {"mcp-call-7"}
-
-    _flush_logs()
-    lines = client.get("/api/v1/daemon/logs", params={"trace_id": "mcp-call-7"}).json()["records"]
-    assert lines
-    assert all(r["record"].get("session_id") == session for r in lines)
+    # ``coffer__search_tools`` writes no audit row and no log line, so only the
+    # invocation record carries the ids; the audit and log halves of this
+    # scenario are held by the REST tests around it.
 
 
 @pytest.mark.acceptance(
@@ -169,16 +154,19 @@ def test_an_mcp_calls_invocation_audit_row_and_log_share_one_trace_id(client: Te
 def test_the_command_line_filters_each_log_by_trace_id(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert client.post("/api/v1/knowledge/collections", json={"name": "notes"}).status_code == 201
+    # A request that audits, and an MCP call that is invoked and logged, under one id.
+    made = client.post(
+        "/api/v1/knowledge/collections",
+        json={"name": "notes"},
+        headers={TRACE_HEADER: "cli-trace-3"},
+    )
+    assert made.status_code == 201, made.text
     session = _mcp(client, None, "initialize", {}, "init-2").headers["mcp-session-id"]
     _mcp(
         client,
         session,
         "tools/call",
-        {
-            "name": "coffer__write",
-            "arguments": {"collection": "notes", "title": "T", "description": "D", "body": "B"},
-        },
+        {"name": "coffer__search_tools", "arguments": {"query": "anything", "top_k": 1}},
         "cli-trace-3",
     )
     _flush_logs()

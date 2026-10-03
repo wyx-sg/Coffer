@@ -1,5 +1,5 @@
-"""HTTP surface for the one ``memory`` kind (spec memory "Cover memory
-management on REST and the CLI").
+"""HTTP surface for the one ``memory`` kind (spec memory "Manage memory in the
+web UI").
 
 List partitions, notes and retirements, show one note with the entries behind
 it, walk a partition's own directory and read a file out of it, run a sync (an
@@ -20,15 +20,14 @@ identity-is-the-uid-inside-the-file). The only name a caller supplies is
 ``path``, inside an already-identified partition, which is a filesystem path
 and nothing else.
 
-Seven route modules, mounted in order. They are split by *subject*, not by size:
+Six route modules, mounted in order. They are split by *subject*, not by size:
 ``partition_routes`` owns the list and the two passes that rewrite the tree,
 ``note_routes`` and ``file_routes`` are the two read families over one
 partition, ``hook_routes`` (one fire of the memory hook) is the one whose
 caller is an agent rather than a person,
-``trigger_routes`` holds the authored guards, and ``stats_routes`` the two
-delivery views of the Memory page, and ``reading_routes`` when the agents' memory
-was last read. Each declares the same prefix, tags and token
-dependency — as ``surfaces/http/mcp/``'s modules do.
+``stats_routes`` the two delivery views of the Memory page, and
+``reading_routes`` when the agents' memory was last read. Each declares the
+same prefix, tags and token dependency — as ``surfaces/http/mcp/``'s modules do.
 """
 
 from fastapi import APIRouter
@@ -39,14 +38,12 @@ from coffer.surfaces.http.memory.note_routes import router as _note_router
 from coffer.surfaces.http.memory.partition_routes import router as _partition_router
 from coffer.surfaces.http.memory.reading_routes import router as _reading_router
 from coffer.surfaces.http.memory.stats_routes import router as _stats_router
-from coffer.surfaces.http.memory.trigger_routes import router as _trigger_router
 
 routers: tuple[APIRouter, ...] = (
     _partition_router,
     _note_router,
     _file_router,
     _hook_router,
-    _trigger_router,
     _stats_router,
     _reading_router,
 )

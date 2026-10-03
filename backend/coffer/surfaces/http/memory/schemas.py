@@ -141,6 +141,19 @@ class NoteOut(NoteSummaryOut):
 
     body: str
     origins: list[OriginOut]
+    #: sha256 hex of the note file's bytes as read; hand it back as
+    #: ``expected_fingerprint`` to save an edit ("Edit a memory in the web UI
+    #: or on disk").
+    fingerprint: str = ""
+
+
+class NoteSave(BaseModel):
+    """A note's new body, from the web UI's editor. The frontmatter is kept."""
+
+    body: str = Field(min_length=1)
+    #: The ``fingerprint`` the editor's read carried. A note changed since is
+    #: refused with 409 ``MEMORY_NOTE_CONFLICT``.
+    expected_fingerprint: str = Field(min_length=1)
 
 
 class RetiredNoteOut(BaseModel):

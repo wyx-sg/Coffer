@@ -45,17 +45,17 @@ Most of the time you do not create refs by hand. The dialogs that ask for a secr
 
 | Where | How the ref is cited |
 | --- | --- |
-| stdio MCP server | `coffer mcp add … --secret ENV_VAR=<ref>` — becomes an environment variable of the server process |
-| HTTP MCP server | `coffer mcp add … --secret Header-Name=<ref>` — becomes a request header; the secret is the header's whole value |
-| Adopting an agent's MCP entry | `coffer adopt mcp <agent>:<entry> --secret KEY=<ref>` — Coffer stores the entry's current value under `<ref>` |
-| Model provider | `coffer provider add … --secret-ref <ref>` |
+| stdio MCP server | An environment variable row set to **Secret** in the **Add server** or **Edit** dialog — becomes an environment variable of the server process |
+| HTTP MCP server | A header row set to **Secret** in the same dialogs — becomes a request header; the secret is the header's whole value |
+| Adopting an agent's MCP entry | **Import from your agents** in the **Add server** dialog — Coffer stores the entry's current value under a generated ref |
+| Model provider | the **API key** field of **Add provider** |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |
-| Sync remote | `coffer sync remote set … --secret-ref <ref>` |
+| Sync remote | the push secret on the **Sync** page |
 | A command you run, a skill, an env file | `coffer://secret/<name>`, for a standalone secret stored as `secret/<name>` — see [Secrets](/guides/secrets) |
 
 Registering a resource that cites a ref the store does not hold fails, naming the missing secret, and nothing is saved.
 
-Several resources may cite the same ref, but a ref already sent to one place goes to a second place only after you approve it in the desktop app. A value you store and then cite when you register a resource is used at once, because you just supplied it. Citing a secret already in use from a new resource, or changing where a resource sends one (a stdio server's command, an HTTP server's URL, the sync remote's URL), saves the change and holds the secret: the command prints `waiting for approval in the Coffer app` and exits `9`. See [Secrets → Approvals](/guides/secrets#approvals).
+Several resources may cite the same ref, but a ref already sent to one place goes to a second place only after you approve it in the desktop app. A value you store and then cite when you register a resource is used at once, because you just supplied it. Citing a secret already in use from a new resource, or changing where a resource sends one (a stdio server's command, an HTTP server's URL, the sync remote's URL), saves the change and holds the secret: it waits for your approval in the desktop app. See [Secrets → Approvals](/guides/secrets#approvals).
 
 ## List and inspect
 
@@ -83,11 +83,7 @@ The list shows every ref the store holds and every ref a registered resource cit
 
 It decrypts nothing and is not audited. `--json` gives the same data, with the approved and pending destinations of each ref. The [Secrets page](/guides/secrets#the-secrets-page) in the web UI shows the same list.
 
-```sh
-coffer secret get github/token          # [redacted] — a presence check, not audited
-```
-
-`get` only tells you whether a value is stored: it prints `[redacted]`, or exits `4` when the ref is missing. No option prints the value. To see or copy one, choose **Reveal value…** on the [Secrets page](/guides/secrets#the-secrets-page) in the desktop app, which asks for Touch ID or your login password each time.
+No command prints a value. A row of the [Secrets page](/guides/secrets#the-secrets-page) says whether a value is stored. To see or copy one, choose **Reveal value…** on the [Secrets page](/guides/secrets#the-secrets-page) in the desktop app, which asks for Touch ID or your login password each time.
 
 ## Rotate a secret
 
@@ -97,25 +93,15 @@ Store a new value under the same ref:
 printf '%s' "$NEW_TOKEN" | coffer secret set github/token
 ```
 
-The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. For a provider, `coffer provider edit <name> --secret <value>` does the same through the provider's own ref. On the Secrets page, the row's **Replace value…** does it for any ref.
+The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. On the Secrets page, the row's **Replace value…** does it for any ref.
 
 Replacing a value that something already receives — or any standalone `secret/<name>` — waits for your approval in the desktop app, because swapping a channel's bot token for someone else's, say, would redirect your conversations. Until you approve, the old value stays in use and the new one waits encrypted; `set` prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. A new ref, or one nothing receives, is stored at once.
 
 ## Delete a secret
 
-```sh
-coffer secret rm github/token           # asks first; --force skips the prompt
-```
+On the [Secrets page](/guides/secrets#the-secrets-page), choose **Delete…** on the row; it asks first. Deletion is refused while any resource still cites the ref, or while a skill's files cite a standalone secret's `coffer://secret/<name>`: for a ref still in use, the dialog lists what uses it, by kind and current name, each with a link to its page, instead of deleting.
 
-Deletion is refused while any resource still cites the ref, or while a skill's files cite a standalone secret's `coffer://secret/<name>`, and the message names each one by kind and current name:
-
-```text
-secret 'github/token' is still used by: mcp_server 'github'; detach or delete those resources before deleting the secret
-```
-
-On the Secrets page, **Delete…** on the row does the same, and for a ref still in use it lists what uses it, each with a link to its page, instead of deleting.
-
-You rarely need this command: deleting a resource releases the refs nothing else cites (standalone `secret/` names are never released this way). Deleting a ref forgets the destinations it was approved for, so a new value stored under the same ref later is treated as a new secret. Deleting a ref that does not exist succeeds and does nothing.
+You rarely need to delete by hand: deleting a resource releases the refs nothing else cites (standalone `secret/` names are never released this way). Deleting a ref forgets the destinations it was approved for, so a new value stored under the same ref later is treated as a new secret. Deleting a ref that does not exist succeeds and does nothing.
 
 ## Where the master key lives
 
@@ -140,15 +126,7 @@ In a development build you can still choose between the file and the OS keychain
 | Prompts | none | macOS may ask to allow access once per daemon start |
 | Protects against | — | someone who copies `~/.coffer/` without your keychain |
 
-**Web UI:** **Settings › Security**, the **Encryption** section. Toggle **Store master key in OS keychain**, then **Move key** in the confirmation.
-
-**CLI:**
-
-```sh
-coffer config get secrets.storage       # file
-coffer config set secrets.storage keychain
-coffer config set secrets.storage file
-```
+Open **Settings › Security**, the **Encryption** section. Toggle **Store master key in OS keychain**, then **Move key** in the confirmation.
 
 A move writes the key to its destination and reads it back before removing the source, so an interruption leaves the key where it was. Every stored secret stays readable in both directions, and the move is audited as `master_key_relocated`. The key can be moved but not rotated: Coffer does not re-encrypt the store under a new key. A signed release refuses to move its key out of the Keychain.
 
@@ -176,26 +154,20 @@ In a development build the key is also simply the file `~/.coffer/master.key` (o
 
 ## Carry the key to another machine
 
-[Vault sync](/guides/vault-sync) can carry secrets to your other machines, but only as ciphertext, and only when you turn it on (`coffer sync remote set <url> --with-secret`, or **Include encrypted secrets** on the Sync page). The master key is never pushed under any setting. A machine that receives ciphertext without the key reports those refs as locked rather than failing quietly.
+[Vault sync](/guides/vault-sync) can carry secrets to your other machines, but only as ciphertext, and only when you turn it on (**Include encrypted secrets** on the Sync page). The master key is never pushed under any setting. A machine that receives ciphertext without the key reports those refs as locked rather than failing quietly.
 
 To let a second machine decrypt them, move the key yourself, over a channel you trust:
 
-1. On machine A, back up the key in the desktop app (above), and note its fingerprint (`coffer sync key fingerprint`).
+1. On machine A, back up the key in the desktop app (above), and note its fingerprint (**Key fingerprint** on **Settings › Security**).
 2. Copy the backup file to machine B.
-3. On machine B:
+3. On machine B, use **Import a master key** on **Settings › Security**, in the app or a browser, choose the file and type the passphrase; the **Key in the file** must read *same* as the fingerprint of machine A. Then delete the copied file.
 
-   ```sh
-   coffer sync key import ~/coffer-master-key.cfk   # asks for the passphrase
-   coffer sync key fingerprint     # must match machine A
-   rm ~/coffer-master-key.cfk
-   ```
-
-Or use **Import a master key** on **Settings › Security**, in the app or a browser. Importing needs no presence check — whoever holds the file and its passphrase already holds the key. A bare key (a development build's `master.key`) imports without a passphrase. The running daemon uses the imported key at once. A key you replace is first backed up to a `master.key.bak-*` file, wherever it was kept (in a development build that includes the OS keychain, where the imported key then replaces it). The **Sync** page offers **Import key** as well, and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a backup beside it: a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release.
+ Importing needs no presence check — whoever holds the file and its passphrase already holds the key. A bare key (a development build's `master.key`) imports without a passphrase. The running daemon uses the imported key at once. A key you replace is first backed up to a `master.key.bak-*` file, wherever it was kept (in a development build that includes the OS keychain, where the imported key then replaces it). The **Sync** page offers **Import key** as well, and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a backup beside it: a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release.
 
 ## What never gets logged
 
 - Secret values never appear in plaintext in the vault, in `runs.db`, in log files, in the audit log, or in the MCP invocation log.
-- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; presence checks (`get`) and listings are not audited.
+- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".
 - An HTTP upstream's connection errors are reported by exception type only, so a URL or header carrying a secret is not echoed into a message.
@@ -204,11 +176,11 @@ Or use **Import a master key** on **Settings › Security**, in the app or a bro
 
 | Error | Meaning | Fix |
 | --- | --- | --- |
-| `MASTER_KEY_MISSING` at startup | Ciphertext exists but no usable key was found | Import your key backup with `coffer sync key import <file>`, or in a development build restore `~/.coffer/master.key` (or the keychain entry). |
+| `MASTER_KEY_MISSING` at startup | Ciphertext exists but no usable key was found | Import your key backup with **Import a master key** on **Settings › Security**, or in a development build restore `~/.coffer/master.key` (or the keychain entry). |
 | `SECRET_LOCKED` at startup | The keychain could not be read — it is locked or the prompt was dismissed | Unlock the keychain and start the daemon again. |
 | `SECRET_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
 | `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
-| `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before, or replaces a value in use | Approve it in the desktop app; `coffer secret approvals` lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before, or replaces a value in use | Approve it in the desktop app; the approvals dialog lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `PRESENCE_GRANT_INVALID` | A reveal, key backup or approval was attempted outside the desktop app | Do it in the desktop app. |
 | An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>`. |
 

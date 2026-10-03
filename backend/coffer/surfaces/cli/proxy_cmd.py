@@ -9,17 +9,14 @@ nothing but the token on stdout.
 
 from __future__ import annotations
 
-import json as _json
-
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._resolve import resolve_ref
 
-app = typer.Typer(help="Inspect the local model proxy and its per-agent tokens")
+app = typer.Typer(help="The local model proxy's per-agent tokens", hidden=True)
 
 
-@app.command("token")
+@app.command("token", hidden=True)
 def token(
     agent_uid: str = typer.Option(..., "--agent-uid", help="The agent whose token to print"),
 ) -> None:
@@ -37,35 +34,6 @@ def token(
             raise typer.Exit(4)
         r.raise_for_status()
     typer.echo(r.json()["token"])
-
-
-@app.command("rotate")
-def rotate(ref: str = typer.Argument(..., help="Agent name or uid")) -> None:
-    """Replace an agent's local proxy token; the old one stops working at once."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        agent = resolve_ref(c, "agent", ref, verbose=False)
-        r = c.post(f"/proxy/tokens/{agent['uid']}/rotate")
-        _cli_client.check(r, verbose=False)
-    typer.echo(f"rotated the proxy token of {agent['name']}")
-
-
-@app.command("status")
-def status_(json: bool = typer.Option(False, "--json", help="Machine-readable output")) -> None:
-    """Show whether the model proxy is running, where, and how often it restarted."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/proxy/status")
-        _cli_client.check(r, verbose=False)
-    data = r.json()
-    if json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    typer.echo(f"running: {'yes' if data['running'] else 'no'}")
-    typer.echo(f"port: {data['port']}")
-    for key in ("pid", "version", "restarts", "revision", "last_error"):
-        if data.get(key) is not None:
-            typer.echo(f"{key}: {data[key]}")
 
 
 __all__ = ["app"]

@@ -5,7 +5,7 @@ description: Every environment variable, daemon-config.json key, experimental-fe
 
 # Configuration
 
-This page lists every knob that changes how Coffer behaves: environment variables, the keys of `~/.coffer/daemon-config.json`, the experimental-feature switches, and the runtime settings you change from **Settings** or the CLI. It is for operators and contributors who need the exact name, default and effect of a setting.
+This page lists every knob that changes how Coffer behaves: environment variables, the keys of `~/.coffer/daemon-config.json`, the experimental-feature switches, and the runtime settings you change from **Settings**. It is for operators and contributors who need the exact name, default and effect of a setting.
 
 Coffer keeps configuration in five places, and each one exists for a reason:
 
@@ -57,7 +57,7 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 
 ### Storage locations
 
-The vault, local state, content and derived state have no per-tree override: every one of them is resolved from `$HOME` when it is needed, and `coffer path` prints the roots. The variables below move only the history database, the model proxy's spool and the logs. They exist mainly so tests and development setups never touch a real home; to run a daemon against a different home, set `HOME`.
+The vault, local state, content and derived state have no per-tree override: every one of them is resolved from `$HOME` when it is needed. The variables below move only the history database, the model proxy's spool and the logs. They exist mainly so tests and development setups never touch a real home; to run a daemon against a different home, set `HOME`.
 
 | Name | Default | Effect |
 | --- | --- | --- |
@@ -122,12 +122,12 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 
 | Key | Type | Default | Effect | Changed with |
 | --- | --- | --- | --- | --- |
-| `port` | integer 1024–65535, or `null` | `8000` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | `coffer config set daemon.port <port>`, `coffer config unset daemon.port` |
+| `port` | integer 1024–65535, or `null` | `8000` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | **Settings › Daemon → Port**, or `coffer config set daemon.port <port>` and `coffer config unset daemon.port` when the daemon cannot start |
 | `proxy_port` | integer 1024–65535, or `null` | `8001` | The port the [local model proxy](/architecture/model-proxy) binds on `127.0.0.1`, and the one projected into agents' configs. An invalid value is ignored with a warning and the default applies. Takes effect when the proxy next starts. | edit the file |
-| `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
+| `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
-| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features**, `coffer config set feature.<key> on\|off` |
-| `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices**, `coffer config set prices.refresh on\|off` |
+| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features** |
+| `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices** |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
@@ -144,15 +144,15 @@ The registry holds four features, in this order:
 | `sync` | Vault sync | `/api/v1/sync` |
 | `models` | Model providers (with its Usage tab) and the local model proxy | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` |
 
-Everything else is always on, including conversations and channels. Any other key is not a feature: `coffer config set feature.<key>` reports an unknown setting, and `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
+Everything else is always on, including conversations and channels. Any other key is not a feature: `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
 
-While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`, and the CLI prints the command that switches it on. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
+While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`; switch it on in **Settings → Features**. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
 
 ### How a feature's state is decided
 
 Highest precedence first:
 
-1. **Pin** — an entry in `COFFER_FEATURES` for the daemon process. A pinned feature cannot be changed from the UI or CLI (`409 FEATURE_PINNED`).
+1. **Pin** — an entry in `COFFER_FEATURES` for the daemon process. A pinned feature cannot be changed from the UI (`409 FEATURE_PINNED`).
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
 3. **Default** — off, for every feature in every build.
 
@@ -166,58 +166,49 @@ A comma-separated list of `key=value` entries. `on`, `true` and `1` switch a fea
 COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 ```
 
-### Commands
-
-```sh
-coffer config list feature.             # every feature, its state, and what decided it (feature.knowledge, feature.memory, feature.sync, feature.models)
-coffer config set feature.<key> on      # switch on, at once; <key> is knowledge, memory, sync or models
-coffer config set feature.<key> off
-coffer config unset feature.<key>       # back to off
-```
-
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.
 
 ## Runtime settings
 
-These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) and are changed from **Settings** in the web UI or desktop app, or from the CLI. Settings marked *synced* travel to other machines through [vault sync](/guides/vault-sync).
+These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) and are changed from **Settings** in the web UI or desktop app. Settings marked *synced* travel to other machines through [vault sync](/guides/vault-sync).
 
 ### Settings → General
 
-| Setting | Default | Effect | CLI | Stored in |
-| --- | --- | --- | --- | --- |
-| **Default rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | — | browser `localStorage` (`coffer.pageSize`) |
-| **Preferred editor** | System default | The app or command Coffer opens managed files with. | — | browser `localStorage` (`coffer.preferredEditor`) |
-| **Start at login** | off | Installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. | `coffer daemon service install`, `uninstall`, `status` | the plist file |
-| **Experimental features** (Settings → Features) | off | See [Experimental features](#experimental-features). | `coffer config set feature.<key>` | `daemon-config.json` |
+| Setting | Default | Effect | Stored in |
+| --- | --- | --- | --- |
+| **Default rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | browser `localStorage` (`coffer.pageSize`) |
+| **Preferred editor** | System default | The app or command Coffer opens managed files with. | browser `localStorage` (`coffer.preferredEditor`) |
+| **Start at login** | off | Installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. | the plist file |
+| **Experimental features** (Settings → Features) | off | See [Experimental features](#experimental-features). | `daemon-config.json` |
 
 ### Settings › General → Coffer's model
 
-The internal engine settings are one vault document, `state/settings/internal-engine.json`, and all of them are *synced*. You can also edit the file by hand; an absent file means every default. Each one is a `coffer config` key; `coffer config list engine.` prints them with their current values and defaults.
+The internal engine settings are one vault document, `state/settings/internal-engine.json`, and all of them are *synced*. You can also edit the file by hand; an absent file means every default.
 
-| Setting | Default | Effect | CLI |
-| --- | --- | --- | --- |
-| **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. | `coffer config set engine.provider <connection>`, `coffer config set engine.model <model>`, `coffer config unset engine.model` |
-| **Time limit per call** | `60` s | How long one call to Coffer's own model may take. | `coffer config set engine.timeout <s>`, `coffer config unset engine.timeout` |
-| **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. | `coffer config set transcribe.provider <connection>`, `coffer config set transcribe.model <model>`, `coffer config unset transcribe.model` |
-| **Upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer config set engine.upkeep.aggregate.enabled on\|off`, `coffer config set engine.upkeep.aggregate.interval <s>` |
-| **Upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer config set engine.upkeep.distil.…` |
-| **Upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
-| **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. | `coffer config set prices.refresh on\|off`, `coffer config unset prices.refresh` |
-| Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer config set engine.curate_owner this\|<machine id>`, `coffer config unset engine.curate_owner` |
+| Setting | Default | Effect |
+| --- | --- | --- |
+| **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. |
+| **Time limit per call** | `60` s | How long one call to Coffer's own model may take. |
+| **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. |
+| **Upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. |
+| **Upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. |
+| **Upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. |
+| **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. |
+| Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. |
 
-Upkeep intervals have a floor of 60 seconds; `coffer config unset engine.upkeep.<pass>.interval` returns a pass to its default. `coffer daemon status` shows the passes in flight.
+Upkeep intervals have a floor of 60 seconds. `coffer daemon status` shows the passes in flight.
 
 ### Sync remote
 
-The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, set on the **Sync** page (**Setup**) or with `coffer sync remote set`. See [Vault sync](/guides/vault-sync).
+The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, set on the **Sync** page (**Setup**). See [Vault sync](/guides/vault-sync).
 
-| Setting | Default | Effect | CLI |
-| --- | --- | --- | --- |
-| **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused. | `coffer sync remote set --interval <s>` |
-| **Push secret** | none | The secret holding the push token. | `coffer sync remote set --secret-ref <ref>` |
-| Username | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. | `coffer sync remote set --username <name>` |
-| **Include encrypted secrets** | off | Commit and push `vault/secret/` (ciphertext only, never the key). | `coffer sync remote set --with-secret`, `--without-secret` |
-| **Sync automatically** | on | Off pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. | `coffer sync remote pause`, `resume` |
+| Setting | Default | Effect |
+| --- | --- | --- |
+| **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused. |
+| **Push secret** | none | The secret holding the push token. |
+| Username | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. |
+| **Include encrypted secrets** | off | Commit and push `vault/secret/` (ciphertext only, never the key). |
+| **Sync automatically** | on | Off pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. |
 
 ### Settings → Data
 
@@ -231,21 +222,14 @@ Retention policies decide how long rows are kept. The retention worker prunes on
 | **Auto-archive idle chats** | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
 | **Delete archived chats** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
 
-The key is the suffix of the `coffer config` key `retention.<key>`; both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
-
-```sh
-coffer config list retention.
-coffer config set retention.audit_log 90
-coffer config set retention.mcp_invocations forever
-coffer log prune
-```
+Both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
 
 ### Settings → Security
 
-| Setting | Default | Effect | CLI |
-| --- | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. | `coffer config set secrets.storage file\|keychain` |
-| Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target, and so does a new value for a secret in use. When off, both are approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). | `coffer config set secrets.require_approval on\|off` |
+| Setting | Default | Effect |
+| --- | --- | --- |
+| **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. |
+| Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target, and so does a new value for a secret in use. When off, both are approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
 
 ## Related
 

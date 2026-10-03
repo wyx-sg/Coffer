@@ -5,7 +5,7 @@ description: Every task-oriented guide to Coffer in one place, grouped by what y
 
 # Guides
 
-One page per task. Each guide shows the CLI command and the place in the app. They assume Coffer is installed and the daemon is running. If it is not, start with [Install](/start/install) and the [Quickstart](/start/quickstart); for the vocabulary the guides use, read [Core concepts](/start/concepts).
+One page per task. Each guide shows the place in the app, and a command only where the command line carries the job. They assume Coffer is installed and the daemon is running. If it is not, start with [Install](/start/install) and the [Quickstart](/start/quickstart); for the vocabulary the guides use, read [Core concepts](/start/concepts).
 
 ## Agents and tools
 

@@ -1,5 +1,5 @@
 """Wire shapes of ``/api/v1/clis/{command}/interface`` (spec skill-manager
-"Serve required commands on REST, the command line and the web")."""
+"Serve required commands on REST and the web")."""
 
 from __future__ import annotations
 
