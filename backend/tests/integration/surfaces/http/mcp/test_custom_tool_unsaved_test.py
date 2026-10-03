@@ -62,7 +62,14 @@ def test_a_request_of_an_unsaved_group_is_tested_without_its_secret(
     daemon: BoundaryDaemon, api: FakeHttpApi, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _allow_loopback(monkeypatch)
-    out = _unsaved(daemon, api.base_url, headers={"Accept": "application/json"})
+    out = _unsaved(
+        daemon,
+        api.base_url,
+        headers=[
+            {"name": "Accept", "value": "application/json"},
+            {"name": "Authorization", "secret": "billing-token"},
+        ],
+    )
     assert out["ok"] is True and out["status"] == 200 and out["failure"] is None
     seen = api.seen[-1]
     assert seen.path == "/services/web/health"

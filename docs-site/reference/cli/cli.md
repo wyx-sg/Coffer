@@ -1,12 +1,12 @@
 ---
 title: coffer cli
-description: "Add and check command-line tools, and read their interface"
+description: "Add and check command-line tools"
 pageClass: cli-ref
 ---
 
 # coffer cli
 
-Add and check command-line tools, and read their interface
+Add and check command-line tools
 
 ```sh
 coffer cli [OPTIONS] COMMAND [ARGS]...
@@ -22,7 +22,7 @@ This page matches what `coffer cli --help` prints. Add `--help` to any command b
 | [`cli add`](#cli-add) | Add a command-line tool by hand; no skill is needed. |
 | [`cli edit`](#cli-edit) | Change a tool you added by hand (only the options you give change). |
 | [`cli rm`](#cli-rm) | Remove a tool you added by hand. |
-| [`cli show`](#cli-show) | Show one command-line tool: where it is, its version, login state and its interface — the options and subcommands its own --help lists. |
+| [`cli show`](#cli-show) | Show one command-line tool: where it is, its version, login state and what needs it. |
 | [`cli check`](#cli-check) | Probe the required commands again (or one of them). |
 | [`cli prompt`](#cli-prompt) | Print the prompt to give your agent for a command that needs you. |
 
@@ -103,12 +103,12 @@ coffer cli rm [OPTIONS] COMMAND
 
 ## cli show
 
-Show one command-line tool: where it is, its version, login state and its interface — the options and subcommands its own --help lists.
+Show one command-line tool: where it is, its version, login state and what needs it.
 
 <p class="cli-label">Synopsis</p>
 
 ```sh
-coffer cli show [OPTIONS] COMMAND [SUBCOMMAND]...
+coffer cli show [OPTIONS] COMMAND
 ```
 
 <p class="cli-label">Arguments and options</p>
@@ -116,9 +116,6 @@ coffer cli show [OPTIONS] COMMAND [SUBCOMMAND]...
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `COMMAND` <span class="cli-chip">argument</span> | text | required | The command, e.g. gh |
-| `[SUBCOMMAND]...` <span class="cli-chip">argument</span> | text (variadic) |  | Show one subcommand |
-| `--tree` <span class="cli-chip">option</span> | flag |  | Every command of the tool, one per line |
-| `--refresh` <span class="cli-chip">option</span> | flag |  | Read the tool's help again |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 
 ## cli check

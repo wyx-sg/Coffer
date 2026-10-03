@@ -7,7 +7,7 @@ description: 把 HTTP API 变成智能体可调用的工具——导入 OpenAPI 
 
 **自定义工具**就是 Coffer 替智能体发出的一个 HTTP 请求。不需要编写或运行 MCP 服务器：你描述这个请求——方法、路径、请求头、请求体和参数——每当智能体调用该工具时，Coffer 的网关就发出它，并在发出时加上你的 API 密钥。在智能体看来，自定义工具和任何 MCP 服务器的工具完全一样。
 
-自定义工具放在**分组**里。一个分组就是一个 API：它有一个智能体看作前缀的名字、一个 base URL、一个用于认证的密钥，以及一个默认生效范围。分组里的每个工具在 base URL 后面接上自己的路径。
+自定义工具放在**分组**里。一个分组就是一个 API：它有一个智能体看作前缀的名字、一个 base URL、一组请求头（其中可以有引用已存储密钥的），以及一个默认生效范围。分组里的每个工具在 base URL 后面接上自己的路径。
 
 ```mermaid
 flowchart LR
@@ -90,9 +90,9 @@ coffer tool op add deploy rollback --method POST \
 
 ## 密钥与批准 {#secrets-and-approval}
 
-认证请求头的值就是你选择的密钥；Coffer 在工具自己的请求头之后把它加到每个请求上，所以没有工具能替换它。密钥从不出现在工具的描述或参数里，从不出现在智能体收到的内容里——响应里回显的密钥会显示为 `***`——也从不出现在任何日志里。
+分组的请求头是名字加值。值可以是普通文本，也可以是一个保存**整段**请求头值的已存储密钥：存 `Bearer <token>`，而不是只存 token，因为 Coffer 不会在它前面拼任何东西。Coffer 在工具自己的请求头之后把每个密钥请求头加到每个请求上，所以没有工具能替换它们。密钥从不出现在工具的描述或参数里，从不出现在智能体收到的内容里——响应里回显的密钥会显示为 `***`——也从不出现在任何日志里。
 
-把已存储的密钥发给一个分组，等于把它发到一个新地方，所以分组第一次使用它时，该密钥**会等待你在 Coffer 桌面应用里批准**（见[密钥 → 审批](/zh/guides/secrets#approvals)）。批准之前，分组显示*等待批准*，它的调用什么都不发送。修改分组的 base URL 或认证请求头会再次请求批准。`coffer tool add` 和 `coffer tool edit` 会打印 "waiting for approval in the Coffer app" 并以 `9` 退出，或用 `--wait` 等待。
+把已存储的密钥发给一个分组，等于把它发到一个新地方，所以分组第一次使用它时，该密钥**会等待你在 Coffer 桌面应用里批准**（见[密钥 → 审批](/zh/guides/secrets#approvals)）。批准之前，分组显示*等待批准*，它的调用什么都不发送。修改分组的 base URL 或某个密钥请求头会再次请求批准。`coffer tool add --secret-header Authorization=<密钥>` 和 `coffer tool edit` 会打印 "waiting for approval in the Coffer app" 并以 `9` 退出，或用 `--wait` 等待。
 
 ## 修改数据的工具 {#tools-that-change-data}
 

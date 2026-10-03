@@ -1,7 +1,7 @@
 // src/components/custom-tools/ToolArgumentsField.tsx — the tool's arguments: the top-level properties of its
 // input schema, one row each (name, type, required, the description agents read).
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -96,19 +96,22 @@ export function ToolArgumentsField({ args, onChange }: Props) {
                 aria-label={t("customTools.editor.removeArgument")}
                 onClick={() => onChange(args.filter((_, j) => j !== i))}
               >
-                <X aria-hidden />
+                <Trash2 aria-hidden />
               </Button>
             </div>
           ))}
         </div>
       ) : null}
-      <button
+      <Button
         type="button"
-        className="w-fit text-xs font-label text-accent-text hover:underline"
+        variant="link"
+        size="sm"
+        className="h-auto w-fit px-0 py-0.5"
         onClick={() => onChange([...args, emptyArg()])}
       >
+        <Plus aria-hidden />
         {t("customTools.editor.addArgument")}
-      </button>
+      </Button>
     </div>
   );
 }

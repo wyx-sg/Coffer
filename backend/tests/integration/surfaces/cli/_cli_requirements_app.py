@@ -14,7 +14,7 @@ from starlette.testclient import TestClient
 
 from coffer.application.skill.cli_requirements import CommandProbePort
 from coffer.surfaces.http import cli_wiring
-from tests.support.cli_requirements import FAKE_MACHINE, FakeCommandProbe, FakeHelpRunner
+from tests.support.cli_requirements import FAKE_MACHINE, FakeCommandProbe
 
 from ._real_app import boot
 
@@ -24,7 +24,6 @@ class CliDaemon:
     client: TestClient
     probe: CommandProbePort
     root: pathlib.Path
-    help_runner: FakeHelpRunner
 
     def add_skill(self, name: str, requires: str) -> str:
         """Import a skill whose SKILL.md declares ``requires`` (YAML list
@@ -45,13 +44,10 @@ def boot_cli_daemon(
     monkeypatch: pytest.MonkeyPatch,
     *,
     probe: CommandProbePort | None = None,
-    help_runner: FakeHelpRunner | None = None,
 ) -> Iterator[CliDaemon]:
     fake_probe: CommandProbePort = probe or FakeCommandProbe()
     build_probe: Callable[[], CommandProbePort] = lambda: fake_probe  # noqa: E731
-    runner = help_runner or FakeHelpRunner()
     monkeypatch.setattr(cli_wiring, "build_command_probe", build_probe)
-    monkeypatch.setattr(cli_wiring, "build_help_runner", lambda: runner)
     monkeypatch.setattr(cli_wiring, "machine_label", lambda: FAKE_MACHINE)
     for client in boot(tmp_path, monkeypatch):
-        yield CliDaemon(client, fake_probe, tmp_path, runner)
+        yield CliDaemon(client, fake_probe, tmp_path)

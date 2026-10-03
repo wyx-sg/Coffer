@@ -7,7 +7,7 @@ description: Turn an HTTP API into tools your agents call — import an OpenAPI 
 
 A **custom tool** is one HTTP request that Coffer makes for your agents. There is no MCP server to write or run: you describe the request — method, path, headers, body and arguments — and Coffer's gateway makes it whenever an agent calls the tool, adding your API key on the way out. Agents see custom tools exactly like the tools of any MCP server.
 
-Custom tools live in **groups**. A group is one API: it has a name that agents see as a prefix, one base URL, one secret for authentication and a default reach. Each tool in it adds its own path to the base URL.
+Custom tools live in **groups**. A group is one API: it has a name that agents see as a prefix, one base URL, a list of headers (some of which may hold a stored secret) and a default reach. Each tool in it adds its own path to the base URL.
 
 ```mermaid
 flowchart LR
@@ -90,9 +90,9 @@ A request of a group that is **not saved yet** is tested without its secret: a s
 
 ## Secrets and approval
 
-The auth header's value is the secret you chose; Coffer adds it to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
+A group header is a name and a value. The value is plain text, or a stored secret that holds the **whole** header value: store `Bearer <token>`, not the token alone, because Coffer puts nothing in front of it. Coffer adds each secret header to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
 
-Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or its auth header asks again. `coffer tool add` and `coffer tool edit` print "waiting for approval in the Coffer app" and exit `9`, or wait with `--wait`.
+Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or a secret header asks again. `coffer tool add --secret-header Authorization=<secret>` and `coffer tool edit` print "waiting for approval in the Coffer app" and exit `9`, or wait with `--wait`.
 
 ## Tools that change data
 

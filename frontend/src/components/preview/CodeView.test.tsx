@@ -14,6 +14,15 @@ describe("CodeView", () => {
     expect(container.querySelector(".cm-content")?.textContent).toContain('model = "gpt-5.5"');
   });
 
+  test("wrap folds long lines instead of scrolling sideways", () => {
+    const long = "word ".repeat(200);
+    const plain = render(<CodeView value={long} filename="a.txt" />);
+    expect(plain.container.querySelector(".cm-lineWrapping")).toBeNull();
+    plain.unmount();
+    const wrapped = render(<CodeView value={long} filename="a.txt" wrap />);
+    expect(wrapped.container.querySelector(".cm-lineWrapping")).toBeTruthy();
+  });
+
   test("Cmd/Ctrl+F opens the find widget", () => {
     const { container } = render(<CodeView value="hello world" filename="a.txt" />);
     expect(screen.queryByRole("search")).not.toBeInTheDocument();

@@ -702,91 +702,6 @@ paths:
       summary: Check Cli
       tags:
       - clis
-  /api/v1/clis/{command}/interface:
-    get:
-      description: |-
-        The interface read from the tool's help, as kept for this version of
-        it. Never runs the tool: ``not_read`` until a POST reads it.
-      operationId: get_cli_interface_api_v1_clis__command__interface_get
-      parameters:
-      - in: path
-        name: command
-        required: true
-        schema:
-          title: Command
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CliInterfaceOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Get Cli Interface
-      tags:
-      - clis
-    post:
-      description: |-
-        Run the tool's help — ``--help``, ``-h`` and each subcommand's, nothing
-        else — and keep the tree. May take up to 30 seconds.
-      operationId: read_cli_interface_api_v1_clis__command__interface_post
-      parameters:
-      - in: path
-        name: command
-        required: true
-        schema:
-          title: Command
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CliInterfaceOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Cli Interface
-      tags:
-      - clis
   /api/v1/skills:
     get:
       operationId: list_skills_api_v1_skills_get
@@ -819,6 +734,57 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: List Skills
+      tags:
+      - skills
+  /api/v1/skills/bulk-delete:
+    post:
+      description: |-
+        Delete each skill in turn; one that is refused never stops the others,
+        and every skill gets its own result.
+      operationId: bulk_delete_skills_api_v1_skills_bulk_delete_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillBulkDeleteIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillBulkDeleteOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Bulk Delete Skills
       tags:
       - skills
   /api/v1/skills/import:
@@ -1291,6 +1257,13 @@ paths:
         schema:
           title: Uid
           type: string
+      - in: query
+        name: keep_foreign_copies
+        required: false
+        schema:
+          default: false
+          title: Keep Foreign Copies
+          type: boolean
       - in: header
         name: x-coffer-token
         required: false
@@ -1308,7 +1281,11 @@ paths:
           - type: 'null'
           title: X-Coffer-Actor
       responses:
-        '204':
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillDeleteOut'
           description: Successful Response
         '422':
           content:
@@ -2077,181 +2054,6 @@ components:
           title: Title
       title: CliEditIn
       type: object
-    CliHelpArgumentOut:
-      properties:
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        name:
-          title: Name
-          type: string
-        required:
-          title: Required
-          type: boolean
-      required:
-      - name
-      - description
-      - required
-      title: CliHelpArgumentOut
-      type: object
-    CliHelpNodeOut:
-      description: |-
-        One command of the tool: the tool itself (empty ``path``) or a
-        subcommand. ``raw`` is the help as the tool printed it.
-      properties:
-        arguments:
-          items:
-            $ref: '#/components/schemas/CliHelpArgumentOut'
-          title: Arguments
-          type: array
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        error:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Error
-        options:
-          items:
-            $ref: '#/components/schemas/CliHelpOptionOut'
-          title: Options
-          type: array
-        path:
-          items:
-            type: string
-          title: Path
-          type: array
-        raw:
-          title: Raw
-          type: string
-        structured:
-          title: Structured
-          type: boolean
-        subcommands:
-          items:
-            $ref: '#/components/schemas/CliHelpSubcommandOut'
-          title: Subcommands
-          type: array
-        truncated:
-          title: Truncated
-          type: boolean
-        usage:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Usage
-      required:
-      - path
-      - usage
-      - description
-      - subcommands
-      - options
-      - arguments
-      - raw
-      - structured
-      - error
-      - truncated
-      title: CliHelpNodeOut
-      type: object
-    CliHelpOptionOut:
-      properties:
-        default:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Default
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        metavar:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Metavar
-        names:
-          items:
-            type: string
-          title: Names
-          type: array
-        required:
-          title: Required
-          type: boolean
-      required:
-      - names
-      - metavar
-      - description
-      - default
-      - required
-      title: CliHelpOptionOut
-      type: object
-    CliHelpSubcommandOut:
-      properties:
-        name:
-          title: Name
-          type: string
-        summary:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Summary
-      required:
-      - name
-      - summary
-      title: CliHelpSubcommandOut
-      type: object
-    CliInterfaceOut:
-      description: |-
-        ``not_read`` carries no nodes: nothing has been run for this version of
-        the tool yet (a GET never runs it; POST reads it).
-      properties:
-        discovered_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Discovered At
-        incomplete:
-          title: Incomplete
-          type: boolean
-        message:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Message
-        nodes:
-          items:
-            $ref: '#/components/schemas/CliHelpNodeOut'
-          title: Nodes
-          type: array
-        status:
-          enum:
-          - not_read
-          - ok
-          - unavailable
-          - no_help
-          title: Status
-          type: string
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-      required:
-      - status
-      - message
-      - version
-      - discovered_at
-      - incomplete
-      - nodes
-      title: CliInterfaceOut
-      type: object
     CliListOut:
       properties:
         items:
@@ -2619,6 +2421,20 @@ components:
       - prompt
       title: HandoffOut
       type: object
+    KeptCopyOut:
+      description: An agent's folder a delete left where it was.
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        path:
+          title: Path
+          type: string
+      required:
+      - agent_name
+      - path
+      title: KeptCopyOut
+      type: object
     LinkMode:
       description: How a binding's target was realised on disk.
       enum:
@@ -2716,6 +2532,75 @@ components:
       - link_mode
       title: SkillBindingOut
       type: object
+    SkillBulkDeleteIn:
+      properties:
+        keep_foreign_copies:
+          default: false
+          title: Keep Foreign Copies
+          type: boolean
+        uids:
+          items:
+            type: string
+          minItems: 1
+          title: Uids
+          type: array
+      required:
+      - uids
+      title: SkillBulkDeleteIn
+      type: object
+    SkillBulkDeleteOut:
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/SkillBulkDeleteResult'
+          title: Results
+          type: array
+      required:
+      - results
+      title: SkillBulkDeleteOut
+      type: object
+    SkillBulkDeleteResult:
+      properties:
+        deleted:
+          title: Deleted
+          type: boolean
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        error_details:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Error Details
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        kept_copies:
+          items:
+            $ref: '#/components/schemas/KeptCopyOut'
+          title: Kept Copies
+          type: array
+        name:
+          title: Name
+          type: string
+        uid:
+          title: Uid
+          type: string
+      required:
+      - uid
+      - name
+      - deleted
+      - kept_copies
+      - error_code
+      - error_message
+      - error_details
+      title: SkillBulkDeleteResult
+      type: object
     SkillCommitOut:
       properties:
         id:
@@ -2780,6 +2665,17 @@ components:
       required:
       - keep
       title: SkillCopyResolveRequest
+      type: object
+    SkillDeleteOut:
+      properties:
+        kept_copies:
+          items:
+            $ref: '#/components/schemas/KeptCopyOut'
+          title: Kept Copies
+          type: array
+      required:
+      - kept_copies
+      title: SkillDeleteOut
       type: object
     SkillFileChangeOut:
       properties:
@@ -3040,6 +2936,16 @@ components:
             $ref: '#/components/schemas/SkillSecretRequirementOut'
           title: Requires Secrets
           type: array
+        requires_skills:
+          items:
+            $ref: '#/components/schemas/SkillSkillRequirementOut'
+          title: Requires Skills
+          type: array
+        requires_tools:
+          items:
+            $ref: '#/components/schemas/SkillToolRequirementOut'
+          title: Requires Tools
+          type: array
         scope:
           anyOf:
           - $ref: '#/components/schemas/ScopeOut'
@@ -3089,6 +2995,8 @@ components:
       - bindings
       - requires
       - requires_secrets
+      - requires_tools
+      - requires_skills
       - source_status
       title: SkillOut
       type: object
@@ -3143,6 +3051,36 @@ components:
       - name
       - is_set
       title: SkillSecretRequirementOut
+      type: object
+    SkillSkillRequirementOut:
+      description: One skill this one loads (``metadata.requires``).
+      properties:
+        delivered_to_same_agents:
+          title: Delivered To Same Agents
+          type: boolean
+        found:
+          title: Found
+          type: boolean
+        missing_agent_names:
+          items:
+            type: string
+          title: Missing Agent Names
+          type: array
+        name:
+          title: Name
+          type: string
+        uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Uid
+      required:
+      - name
+      - uid
+      - found
+      - delivered_to_same_agents
+      - missing_agent_names
+      title: SkillSkillRequirementOut
       type: object
     SkillSourceStatusOut:
       description: What this machine last learned about a Git-imported skill's source.
@@ -3317,6 +3255,44 @@ components:
       - binary
       - truncated
       title: SkillTextVersionOut
+      type: object
+    SkillToolRequirementOut:
+      description: |-
+        One MCP server or custom-tool group the skill's SKILL.md says it calls
+        (``requires: {tools: [...]}``), with its state now. Only names Coffer has
+        are listed; an unknown one is skipped with a warning on the CLIs list.
+      properties:
+        kind:
+          enum:
+          - mcp_server
+          - custom_tools
+          title: Kind
+          type: string
+        name:
+          title: Name
+          type: string
+        status:
+          enum:
+          - healthy
+          - 'off'
+          - failing
+          title: Status
+          type: string
+        uid:
+          title: Uid
+          type: string
+        why:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Why
+      required:
+      - name
+      - uid
+      - kind
+      - status
+      - why
+      title: SkillToolRequirementOut
       type: object
     SkillUpdateApplyRequest:
       properties:

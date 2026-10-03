@@ -1,9 +1,10 @@
 // frontend/src/components/mcp/EditMcpServerDialog.test.tsx
-// The edit dialog: fields over the stored config, the Secret | Plain rows with
-// the stored-secret picker, Replace, and Test on the unsaved form.
+// The edit dialog: fields over the stored config, the shared header / env rows
+// (plain text, a stored secret, a new secret), Test on the unsaved form, and a
+// failed save that stays in the dialog with Retry.
 import { useState } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EditMcpServerDialog } from "./EditMcpServerDialog";
 import type { components } from "@/lib/api/types";
@@ -25,7 +26,8 @@ const getApiClientMock = vi.mocked(getApiClient);
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
-const OWN = "gh.GITHUB_TOKEN";
+/** The ref Coffer minted for this server's key, as an older server holds it. */
+const OWN = "mcp_server/0123456789abcdef0123456789abcdef/GITHUB_TOKEN";
 
 const stdioResource: ResourceOut = {
   uid: "u-github",
@@ -45,6 +47,7 @@ const stdioResource: ResourceOut = {
     },
   },
   enabled: true,
+  delivery: null,
   toggleable: true,
   secrets_readable_by_local_processes: false,
   created_at: "2026-05-21T00:00:00Z",
@@ -125,8 +128,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(secretsApi.list).mockResolvedValue({
     refs: [
-      { ref: OWN, present: true },
-      { ref: "secret/GITHUB_PAT", present: true },
+      { ref: OWN, present: true, locked: false, bindings: [], cited_by: [], mentioned_by_skills: [] },
+      {
+        ref: "secret/github-pat",
+        present: true,
+        locked: false,
+        bindings: [],
+        cited_by: [],
+        mentioned_by_skills: [],
+      },
     ],
   } as never);
 });
@@ -143,17 +153,15 @@ describe("EditMcpServerDialog", () => {
       "-y @modelcontextprotocol/server-github",
     );
     expect(screen.getByLabelText("Working directory")).toHaveValue("/tmp/gh");
-    // A stored secret shows its key, Secret pressed, "Stored" — never a value.
+    // A chosen secret shows its name, never a value; a plain row shows its text.
     const keys = screen.getAllByLabelText("Environment name");
     expect(keys.map((k) => (k as HTMLInputElement).value)).toEqual(["GITHUB_TOKEN", "LOG_LEVEL"]);
-    const kind = screen.getByRole("group", { name: "How GITHUB_TOKEN is kept" });
-    expect(within(kind).getByRole("button", { name: "Secret" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(await screen.findByText("Stored")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Replace" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "GITHUB_TOKEN: secret GITHUB_TOKEN" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Value of LOG_LEVEL")).toHaveValue("debug");
     expect(screen.getByLabelText("Start timeout")).toHaveValue(30);
+    expect(screen.getByLabelText("Request timeout")).toHaveValue(120);
   });
 
   test("saves the fields over the stored config, keeping every key the form does not show", async () => {
@@ -178,7 +186,7 @@ describe("EditMcpServerDialog", () => {
     expect(body.config.transport).not.toHaveProperty("cwd");
     expect(body.config.request_timeout_seconds).toBe(45);
     expect(body.config.spawn_timeout_seconds).toBe(30);
-    // Kept as it was: no value was typed, so nothing is written.
+    // The same secret is still chosen: nothing is written.
     expect(api.POST).not.toHaveBeenCalled();
   });
 
@@ -196,70 +204,34 @@ describe("EditMcpServerDialog", () => {
     });
   });
 
-  test("opened for a secret, the first stored one is ready to replace", () => {
-    client();
-    openDialog(stdioResource, "secret");
-    expect(screen.getByLabelText("New value of GITHUB_TOKEN")).toHaveFocus();
-  });
-
-  test("Replace writes the new value through the same ref, BEFORE the resource PATCH", async () => {
+  test("a plain value stored in Coffer is written before the PATCH and cited by name", async () => {
     const api = client();
     openDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
-    const input = screen.getByLabelText("New value of GITHUB_TOKEN");
-    expect(input).toHaveFocus();
-    fireEvent.change(input, { target: { value: "new-secret-token" } });
+    fireEvent.click(screen.getByRole("button", { name: /add variable/i }));
+    const keys = screen.getAllByLabelText("Environment name");
+    fireEvent.change(keys[keys.length - 1], { target: { value: "API_TOKEN" } });
+    fireEvent.change(screen.getByLabelText("Value of API_TOKEN"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Store it in Coffer?" }));
     save();
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     expect(api.order).toEqual(["POST:/secrets", "PATCH:/resources/{uid}"]);
-    expect(api.POST.mock.calls[0][1].body).toEqual({ ref: OWN, value: "new-secret-token" });
-    expect(api.PATCH).toHaveBeenCalledWith(
-      "/resources/{uid}",
-      expect.objectContaining({ params: { path: { uid: "u-github" } } }),
-    );
-    expect(patchBody(api.PATCH).config.transport.secret_refs).toEqual({ GITHUB_TOKEN: OWN });
-  });
-
-  test("picking a Secrets-page secret cites secret/<name> and writes no value", async () => {
-    const api = client();
-    openDialog();
-    const trigger = await screen.findByRole("combobox", { name: "Stored secret for GITHUB_TOKEN" });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: "GITHUB_PAT" }));
-    save();
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.POST.mock.calls[0][1].body).toEqual({ ref: "secret/api_token", value: "abc" });
     expect(patchBody(api.PATCH).config.transport.secret_refs).toEqual({
-      GITHUB_TOKEN: "secret/GITHUB_PAT",
+      GITHUB_TOKEN: OWN,
+      API_TOKEN: "secret/api_token",
     });
   });
 
-  test("switching a row to Plain moves it to env and drops its ref", async () => {
-    const api = client();
-    openDialog();
-    const kind = screen.getByRole("group", { name: "How GITHUB_TOKEN is kept" });
-    fireEvent.click(within(kind).getByRole("button", { name: "Plain" }));
-    fireEvent.change(screen.getByLabelText("Value of GITHUB_TOKEN"), {
-      target: { value: "public" },
-    });
-    save();
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    const transport = patchBody(api.PATCH).config.transport;
-    expect(transport.env).toEqual({ GITHUB_TOKEN: "public", LOG_LEVEL: "debug" });
-    expect(transport.secret_refs).toEqual({});
-  });
-
-  test("Add variable adds a Plain row; the trash removes one", () => {
+  test("Add variable adds a plain row; the trash removes one", () => {
     client();
     openDialog();
     fireEvent.click(screen.getByRole("button", { name: /add variable/i }));
     expect(screen.getAllByLabelText("Environment name")).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: "Remove GITHUB_TOKEN" }));
-    expect(screen.queryByText("Stored")).not.toBeInTheDocument();
     expect(screen.getAllByLabelText("Environment name")).toHaveLength(2);
   });
 
-  test("Test runs the unsaved form with typed secrets and shows the outcome", async () => {
+  test("Test runs the unsaved form and shows the outcome in a neutral block", async () => {
     const api = client();
     testResult(api, {
       ok: true,
@@ -268,42 +240,88 @@ describe("EditMcpServerDialog", () => {
       resource_count: null,
       prompt_count: 0,
     });
-    openDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
-    fireEvent.change(screen.getByLabelText("New value of GITHUB_TOKEN"), {
-      target: { value: "typed" },
-    });
+    openDialog(httpResource);
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
-    expect(
-      await screen.findByText("Test passed in 1.4 s · 26 tools, 0 resources, 0 prompts"),
-    ).toBeInTheDocument();
+    const block = await screen.findByTestId("add-test-result");
+    expect(block).toHaveTextContent("Test passed in 1.4 s · 26 tools, 0 resources, 0 prompts");
+    expect(block).toHaveClass("bg-surface-sunken");
     expect(screen.getByRole("button", { name: "Test again" })).toBeInTheDocument();
     const [path, opts] = testCall(api) as [string, { body: Record<string, unknown> }];
     expect(path).toBe("/resources/mcp_server/test-config");
-    expect(opts.body.secret_values).toEqual({ GITHUB_TOKEN: "typed" });
-    expect(opts.body.transport).not.toHaveProperty("secret_refs");
-    expect(opts.body.transport).not.toHaveProperty("secret_refs");
-    expect(opts.body.transport).toMatchObject({ command: "npx", env: { LOG_LEVEL: "debug" } });
+    expect(opts.body.transport).toMatchObject({ url: "https://a.example/mcp" });
+    expect(api.PATCH).not.toHaveBeenCalled();
   });
 
-  test("a failed test says why, and that nothing was saved", async () => {
+  test("a new secret travels in secret_values for the test only", async () => {
+    const api = client();
+    testResult(api, { ok: true, latency_ms: 100, tool_count: 1 });
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: /add variable/i }));
+    const keys = screen.getAllByLabelText("Environment name");
+    fireEvent.change(keys[keys.length - 1], { target: { value: "API_TOKEN" } });
+    fireEvent.change(screen.getByLabelText("Value of API_TOKEN"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Store it in Coffer?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    await screen.findByTestId("add-test-result");
+    const [, opts] = testCall(api) as [string, { body: Record<string, unknown> }];
+    expect(opts.body.secret_values).toEqual({ API_TOKEN: "abc" });
+    expect(opts.body.transport).toMatchObject({ secret_refs: { GITHUB_TOKEN: OWN } });
+    expect(api.POST.mock.calls.some((c) => c[0] === "/secrets")).toBe(false);
+  });
+
+  test("a failed test says why and that nothing was saved", async () => {
     const api = client();
     testResult(api, {
       ok: false,
       latency_ms: 3000,
-      error_code: "stored_secret_not_released",
-      error_message: "A stored secret is released only to a server that is added and approved.",
+      error_code: "connect_failed",
+      error_message: "mcp.example:443 isn't accepting connections.",
+      stderr_tail: [],
+    });
+    openDialog(httpResource);
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    expect(
+      await screen.findByText("Test failed after 3.0 s · couldn't connect"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/isn't accepting connections\. Nothing was saved\./)).toBeInTheDocument();
+    expect(screen.getByTestId("add-test-result")).toHaveClass("bg-danger-soft");
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+
+  test("a server that needs a variable offers to add it", async () => {
+    const api = client();
+    testResult(api, {
+      ok: false,
+      latency_ms: 1800,
+      error_code: "exited",
+      exit_code: 1,
+      tool_count: 0,
+      stderr_tail: ["Error: GITLAB_PERSONAL_ACCESS_TOKEN is required"],
     });
     openDialog();
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
     expect(
-      await screen.findByText("Test failed after 3.0 s · stored secret not released"),
+      await screen.findByText(/It needs GITLAB_PERSONAL_ACCESS_TOKEN\. Add it under Environment/),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/released only to a server .* Nothing was saved\./),
-    ).toBeInTheDocument();
-    const [, opts] = testCall(api) as [string, { body: { transport: object } }];
-    expect(opts.body.transport).toMatchObject({ secret_refs: { GITHUB_TOKEN: OWN } });
-    expect(api.PATCH).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Add the variable" }));
+    const keys = screen.getAllByLabelText("Environment name") as HTMLInputElement[];
+    expect(keys[keys.length - 1].value).toBe("GITLAB_PERSONAL_ACCESS_TOKEN");
+  });
+
+  test("a failed save stays in the dialog, edits intact, and Save becomes Retry", async () => {
+    const api = client();
+    api.PATCH.mockResolvedValueOnce({
+      data: undefined,
+      error: { error: { code: "INTERNAL_ERROR", message: "The daemon didn't answer." } },
+      response: new Response(null, { status: 500 }),
+    });
+    openDialog();
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Repos" } });
+    save();
+    expect(await screen.findByText("Couldn't save gh")).toBeInTheDocument();
+    expect(screen.getByText(/Your edits are still here/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toHaveValue("Repos");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
   });
 });

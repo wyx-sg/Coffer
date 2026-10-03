@@ -18,6 +18,8 @@ export function FolderPickerField({
   inputId,
   clearable = false,
   typeable = false,
+  icon,
+  invalid = false,
 }: {
   value: string | null;
   onChange: (path: string | null) => void;
@@ -26,12 +28,16 @@ export function FolderPickerField({
   inputId?: string;
   clearable?: boolean;
   typeable?: boolean;
+  icon?: React.ReactNode;
+  invalid?: boolean;
 }) {
   return (
     <PickerField
       inputId={inputId}
       ariaLabel={ariaLabel}
       value={value}
+      icon={icon}
+      invalid={invalid}
       placeholder={placeholder}
       onClear={clearable ? () => onChange(null) : undefined}
       onType={typeable ? (text) => onChange(text || null) : undefined}

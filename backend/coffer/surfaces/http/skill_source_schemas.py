@@ -84,6 +84,34 @@ class SkillSecretRequirementOut(BaseModel):
     is_set: bool
 
 
+class SkillToolRequirementOut(BaseModel):
+    """One MCP server or custom-tool group the skill's SKILL.md says it calls
+    (``requires: {tools: [...]}``), with its state now. Only names Coffer has
+    are listed; an unknown one is skipped with a warning on the CLIs list."""
+
+    name: str
+    #: The server's or group's uid, for the link to its page.
+    uid: str
+    kind: Literal["mcp_server", "custom_tools"]
+    #: ``off`` when it is switched off, ``failing`` when its last connection
+    #: test failed, ``healthy`` otherwise.
+    status: Literal["healthy", "off", "failing"]
+    why: str | None
+
+
+class SkillSkillRequirementOut(BaseModel):
+    """One skill this one loads (``metadata.requires``)."""
+
+    name: str
+    #: The skill's uid; null when no skill by that name is in the library.
+    uid: str | None
+    found: bool
+    #: Every agent this skill is delivered to also gets the required skill.
+    delivered_to_same_agents: bool
+    #: The agents that get this skill but not the required one.
+    missing_agent_names: list[str]
+
+
 class SkillSourceStatusOut(BaseModel):
     """What this machine last learned about a Git-imported skill's source."""
 

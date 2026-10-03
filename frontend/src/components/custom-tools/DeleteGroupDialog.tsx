@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { agentTypeLabel } from "@/lib/agents/display";
+import { groupSecrets } from "./headerRows";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useDeleteCustomToolGroup } from "@/lib/hooks/useCustomTools";
 
@@ -28,9 +29,14 @@ export function DeleteGroupDialog({ group, open, onOpenChange, onDeleted }: Prop
         ? names[0]
         : `${names.slice(0, -1).join(", ")}${t("customTools.editor.and")}${names[names.length - 1]}`;
   const body = t("customTools.deleteGroup.body", { count: group.tools.length, agents: who });
-  const secret = group.auth?.secret
-    ? t("customTools.deleteGroup.secretStays", { secret: group.auth.secret })
-    : t("customTools.deleteGroup.historyStays");
+  const secrets = groupSecrets(group);
+  const secret =
+    secrets.length > 0
+      ? t("customTools.deleteGroup.secretStays", {
+          count: secrets.length,
+          secret: secrets.join(", "),
+        })
+      : t("customTools.deleteGroup.historyStays");
 
   return (
     <ConfirmDialog

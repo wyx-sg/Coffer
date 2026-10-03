@@ -3,14 +3,20 @@
 // box"). Nothing is saved until Add: every card's name is the one it will keep
 // and can be corrected here, a name over 24 characters (or taken, or repeated
 // in the batch) holds the Add button, and one reach choice covers the batch.
-import { useState } from "react";
+// A batch that only partly went in stays open (board Mcp-Add-ReviewPartial): the
+// added rows say Added, a refused one says why and its name can be changed, and
+// Add N server(s) tries only those; Close ends it.
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useSecretChoices } from "@/components/secret/useSecretChoices";
+import { defaultSecretName } from "@/components/secret/secretValue";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
 import type { FailedServer, NewServer, ReachIntent } from "@/lib/mcp/importMcpServers";
 import { missingSecretValues } from "@/lib/mcp/importMcpServers";
+import { rowsFromParsed } from "@/lib/mcp/serverRows";
 import { nameSendable } from "./nameProblem";
 import { ReachPick } from "./ReachPick";
 import { ReviewCard } from "./ReviewCard";
@@ -24,7 +30,9 @@ interface Props {
   /** Why servers of the last attempt were not added. */
   failures: FailedServer[];
   pending: boolean;
+  /** Back to the paste box; once some servers are added it is Close instead. */
   onBack: () => void;
+  onClose: () => void;
   onSubmit: (servers: NewServer[], reach: ReachIntent) => void;
 }
 
@@ -33,11 +41,25 @@ interface Row {
   include: boolean;
 }
 
-export function ReviewStep({ initial, taken, added, failures, pending, onBack, onSubmit }: Props) {
+export function ReviewStep({ initial, taken, added, failures, pending, onBack, onClose, onSubmit }: Props) {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<Row[]>(() =>
-    initial.map((server) => ({ server, include: true })),
+  const { names: secretNames } = useSecretChoices();
+  const [rows, setRows] = useState<Row[]>(() => {
+    // One set across the batch, so two servers' API_KEY never share a name.
+    const names = new Set(secretNames);
+    return initial.map((server) => ({
+      server: { ...server, env: rowsFromParsed(server.env, names) },
+      include: true,
+    }));
+  });
+  const newNames = useMemo(
+    () =>
+      new Set(
+        rows.flatMap((r) => r.server.env.flatMap((e) => (e.value.kind === "new" ? [e.value.name] : []))),
+      ),
+    [rows],
   );
+  const nameSecret = (key: string) => defaultSecretName(key, new Set([...secretNames, ...newNames]));
   const [reach, setReach] = useState<ReachIntent>({ mode: "everywhere" });
   const patch = (i: number, next: Partial<Row>) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...next } : r)));
@@ -64,7 +86,11 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
 
   return (
     <>
-      <p className="text-sm font-label text-text">{t("mcp.add.found", { count: rows.length })}</p>
+      <p className="text-sm font-label text-text">
+        {added.size > 0
+          ? t("mcp.add.addedOf", { done: added.size, total: rows.length })
+          : t("mcp.add.found", { count: rows.length })}
+      </p>
       <div className="max-h-[50vh] overflow-y-auto border-b border-border-subtle pr-1">
         {rows.map((row, i) => {
           const failure = failureOf(row.server.name);
@@ -77,17 +103,18 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
               added={added.has(row.server.name)}
               taken={takenFor(i)}
               error={failure && !failure.nameTaken ? failure.message : undefined}
+              nameSecret={nameSecret}
               onInclude={(include) => patch(i, { include })}
               onChange={(server) => patch(i, { server })}
             />
           );
         })}
       </div>
-      <ReachPick value={reach} onChange={setReach} busy={pending} />
+      <ReachPick value={reach} onChange={setReach} busy={pending} scope="batch" />
       <p className="text-xs text-text-muted">{t("mcp.add.reviewFootnote")}</p>
       <DialogFooter>
-        <Button variant="outline" onClick={onBack} disabled={pending}>
-          {t("mcp.add.back")}
+        <Button variant="ghost" onClick={added.size > 0 ? onClose : onBack} disabled={pending}>
+          {added.size > 0 ? t("common.close") : t("mcp.add.back")}
         </Button>
         <Button
           disabled={pending || blocked || pendingRows.length === 0}

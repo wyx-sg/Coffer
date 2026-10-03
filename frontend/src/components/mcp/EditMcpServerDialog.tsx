@@ -1,19 +1,20 @@
 // frontend/src/components/mcp/EditMcpServerDialog.tsx
-// Edit an MCP server (boards Mcp-Edit / Mcp-EditStdio). Controlled: the detail
-// header renders the Edit button. The name is shown fixed — it prefixes every
-// tool name agents see, so the daemon refuses to change it (409
-// NAME_IMMUTABLE). The description (only you see it), how the server is reached
-// (URL, or command + arguments + working directory), its Environment / Headers
-// rows — each Secret or Plain, a Secret one citing a stored secret or taking a
-// new value — and its timeouts are fields; every other key of the stored
-// config is kept as it was (editMcpServerSave.ts `configTextFrom`).
+// Edit an MCP server (boards Mcp-Edit / Mcp-EditStdio / Mcp-Edit-SaveFailed).
+// Controlled: the detail header renders the Edit button. The name is shown fixed
+// — it prefixes every tool name agents see, so the daemon refuses to change it
+// (409 NAME_IMMUTABLE). The description (only you see it), how the server is
+// reached (URL, or command + arguments + working directory), its Environment /
+// Headers rows (plain text, or a secret from Coffer) and its timeouts are
+// fields; every other key of the stored config is kept as it was
+// (editMcpServerSave.ts `configTextFrom`).
 //
-// "Test" runs the unsaved form (useMcpConfigTest) and saves nothing. Secrets
-// are written before the PATCH, and a replaced secret that waits for approval
-// says so once saved (useSaveMcpServerEdit).
+// "Test" runs the unsaved form (useMcpConfigTest) and saves nothing. New secrets
+// are written before the PATCH, and one that waits for approval says so once
+// saved (useSaveMcpServerEdit). A failed save stays here as a danger-soft block
+// with the edits intact, and Save becomes Retry.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Play, RefreshCw } from "lucide-react";
+import { CircleAlert, Play, RefreshCw } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -32,12 +33,12 @@ import { translateApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 import { useMcpConfigTest } from "@/lib/hooks/useMcpAddFlow";
 import { useSaveMcpServerEdit } from "@/lib/hooks/useMcpServerMutations";
-import type { ParsedEnvVar } from "@/lib/mcp/pasteParse";
+import type { KeyValueSecretRow } from "@/components/secret/secretValue";
 import { shellSplit } from "@/lib/mcp/shellTokens";
-import { KeyValueRows } from "./add/KeyValueRows";
-import { ConfigTestResult } from "./env/ConfigTestResult";
+import { AddTestResult } from "./add/AddTestResult";
+import { EnvRowsField } from "./env/EnvRowsField";
 import { configTestBodyOf } from "./env/configTestBody";
-import { rowsOf } from "@/lib/mcp/envRows";
+import { rowsOf } from "@/lib/mcp/serverRows";
 import { TransportInputs, WorkingDirInput } from "./env/TransportInputs";
 import { ServerTimeoutFields } from "./ServerTimeoutFields";
 import { timeoutsOf, type Timeouts } from "@/lib/mcp/serverTimeouts";
@@ -56,14 +57,8 @@ interface Props {
 const quote = (a: string) =>
   a === "" || /[\s'"\\$`]/.test(a) ? `'${a.replace(/'/g, `'\\''`)}'` : a;
 
-/** The rows the dialog opens with; with `focus`, the first own stored secret
- *  starts in Replace (its typed-value input, which a blank value leaves as is). */
-function initialRows(resource: ResourceOut, focus: Props["focus"]): ParsedEnvVar[] {
-  const rows = rowsOf(resource.config, transportFieldsOf(resource.config).plain);
-  if (focus !== "secret") return rows;
-  const i = rows.findIndex((r) => r.storedRef);
-  return rows.map((r, j) => (j === i ? { ...r, ref: null } : r));
-}
+const initialRows = (resource: ResourceOut): KeyValueSecretRow[] =>
+  rowsOf(resource.config, transportFieldsOf(resource.config).plain);
 
 export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Props) {
   const { t } = useTranslation();
@@ -73,7 +68,8 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
   const [command, setCommand] = useState("");
   const [argsText, setArgsText] = useState("");
   const [cwd, setCwd] = useState("");
-  const [rows, setRows] = useState<ParsedEnvVar[] | null>(null);
+  const [rows, setRows] = useState<KeyValueSecretRow[] | null>(null);
+  const [focusRow, setFocusRow] = useState<number | undefined>();
   const [timeouts, setTimeouts] = useState<Timeouts>(() => timeoutsOf(resource.config));
   const [testedKey, setTestedKey] = useState<string | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -89,7 +85,9 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
     setCommand(f.command);
     setArgsText(f.args.map(quote).join(" "));
     setCwd(f.cwd);
-    setRows(initialRows(resource, focus));
+    const loaded = initialRows(resource);
+    setRows(loaded);
+    setFocusRow(focus === "secret" ? loaded.findIndex((r) => r.value.kind !== "plain") : undefined);
     setTimeouts(timeoutsOf(resource.config));
     setTestedKey(null);
     setTestError(null);
@@ -127,7 +125,7 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
     setTestError(null);
     let body;
     try {
-      body = configTestBodyOf(resource.name, resource.config, form, timeouts, t);
+      body = configTestBodyOf(resource.name, resource.config, form, timeouts);
     } catch (e) {
       setTestError(e instanceof Error ? e.message : String(e));
       return;
@@ -137,10 +135,17 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
   };
   const result = test.data && testedKey === formKey ? test.data : null;
   const busy = save.isPending || test.isPending;
+  /** "Add the variable": a row for what the server said it needs. */
+  const addVariable = (key: string) => {
+    const at = (rows ?? []).findIndex((r) => r.key === key);
+    if (at >= 0) return setFocusRow(at);
+    setRows([...(rows ?? []), { key, value: { kind: "plain", value: "" } }]);
+    setFocusRow((rows ?? []).length);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-[620px] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-[640px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("mcp.edit.title", { name: resource.name })}</DialogTitle>
           <DialogDescription>{t("mcp.edit.subtitle")}</DialogDescription>
@@ -167,16 +172,7 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
             onArgs={setArgsText}
           />
           {rows !== null ? (
-            <KeyValueRows
-              idPrefix="edit-row"
-              label={http ? t("mcp.add.headers") : t("mcp.add.env")}
-              keyPlaceholder={http ? "Authorization" : "API_KEY"}
-              addLabel={http ? t("mcp.env.addHeader") : t("mcp.env.addVariable")}
-              rows={rows}
-              onChange={setRows}
-              storedSecrets
-              focusRow={focus === "secret" ? rows.findIndex((r) => r.storedRef) : undefined}
-            />
+            <EnvRowsField http={http} rows={rows} onChange={setRows} focusRow={focusRow} />
           ) : null}
           {http ? null : <WorkingDirInput value={cwd} onChange={setCwd} />}
           <ServerTimeoutFields
@@ -185,7 +181,15 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
             idPrefix="edit-timeout"
             showSpawn={!http}
           />
-          {result ? <ConfigTestResult result={result} /> : null}
+          {result ? (
+            <AddTestResult
+              result={result}
+              transport={http ? "http" : "stdio"}
+              server={resource.name}
+              editing
+              onAddVariable={addVariable}
+            />
+          ) : null}
           {testError || test.error ? (
             <Alert variant="error">
               <AlertDescription>
@@ -194,9 +198,15 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
             </Alert>
           ) : null}
           {save.error ? (
-            <Alert variant="error">
-              <AlertDescription>{translateApiError(t, save.error)}</AlertDescription>
-            </Alert>
+            <div role="alert" className="flex flex-col gap-1 rounded-lg bg-danger-soft p-3">
+              <p className="flex items-center gap-2 text-sm font-label text-text">
+                <CircleAlert aria-hidden className="size-4 shrink-0 text-danger" />
+                {t("mcp.edit.saveFailed", { name: resource.name })}
+              </p>
+              <p className="pl-6 text-xs leading-snug text-text-muted">
+                {translateApiError(t, save.error)} {t("mcp.edit.saveFailedBody")}
+              </p>
+            </div>
           ) : null}
         </div>
         <DialogFooter className="sm:justify-between">
@@ -209,11 +219,15 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
                 : t("mcp.edit.test")}
           </Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={save.isPending}>
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={save.isPending}>
               {t("common.cancel")}
             </Button>
             <Button onClick={onSave} disabled={busy || invalid}>
-              {save.isPending ? t("common.saving") : t("common.save")}
+              {save.isPending
+                ? t("common.saving")
+                : save.error
+                  ? t("common.retry")
+                  : t("common.save")}
             </Button>
           </div>
         </DialogFooter>

@@ -1,4 +1,5 @@
 // frontend/src/lib/hooks/useMcpServerMutations.test.tsx
+import type { KeyValueSecretRow } from "@/lib/secretValue";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,7 +33,7 @@ const SERVER = {
   command: "npx",
   args: [] as string[],
   url: "",
-  env: [] as { key: string; value: string; isSecret: boolean }[],
+  env: [] as KeyValueSecretRow[],
 };
 
 describe("useImportMcpServers", () => {

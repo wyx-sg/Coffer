@@ -7,17 +7,10 @@
 // its URI, each with the page it opens (spec web-ui "Manage stored secrets on
 // the Secrets page").
 import type { Approval, SecretRef } from "@/lib/api/secret";
+import { SECRET_PREFIX, isValidSecretName } from "@/lib/secretValue";
 
-/** The store namespace standalone secrets live under. */
-export const SECRET_PREFIX = "secret/";
+export { SECRET_PREFIX, isValidSecretName };
 
-/** One segment of letters, digits, `.`, `_` and `-`, at most 64 characters
- *  (spec secret "Resolve standalone secrets into one child with coffer run"). */
-const NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
-
-export function isValidSecretName(name: string): boolean {
-  return NAME_RE.test(name) && name !== "." && name !== "..";
-}
 
 /** The name of a standalone secret, or null for a resource's own ref. */
 function standaloneName(ref: string): string | null {

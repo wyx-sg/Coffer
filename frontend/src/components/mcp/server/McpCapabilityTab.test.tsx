@@ -58,6 +58,12 @@ describe("McpCapabilityTab", () => {
     expect(screen.queryByRole("button", { name: /Show \d+ more/ })).toBeNull();
   });
 
+  test("the toolbar counts what is on, and Prompts says where they show up", () => {
+    renderTab("prompt", 4);
+    expect(screen.getByTestId("mcp-caps-on")).toHaveTextContent(/\d+ of 4 on/);
+    expect(screen.getByText(/slash-command menu/)).toBeInTheDocument();
+  });
+
   acceptance("mcp-gateway", "a server's resources and prompts are listed in full", () => {
     renderTab("prompt", 120);
     expect(rowCount()).toBe(50);
@@ -66,7 +72,7 @@ describe("McpCapabilityTab", () => {
     expect(rowCount()).toBe(120);
     expect(screen.getByTestId("mcp-caps-shown")).toHaveTextContent("Showing 120 of 120");
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Search" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Search prompts" }), {
       target: { value: "p119" },
     });
     expect(rowCount()).toBe(1);

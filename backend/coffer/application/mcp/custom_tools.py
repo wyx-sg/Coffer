@@ -50,22 +50,29 @@ KIND = "mcp_server"
 UNSET: Any = object()
 
 
-def secret_name_of(transport: HttpApiTransport) -> str | None:
-    """The Secrets-page name the group's auth header is bound to."""
-    ref = transport.secret_ref
-    if ref is None:
-        return None
+def secret_name_of(ref: str) -> str:
+    """The Secrets-page name a header's secret ref points at."""
     return standalone_name(ref) or ref
 
 
-def _bind(fields: dict[str, Any], auth_header: str | None, secret: str | None) -> None:
-    """Point ``secret_refs`` at the named secret for the auth header."""
-    if secret is None or auth_header is None:
-        fields["secret_refs"] = {}
-        return
-    if not is_valid_secret_name(secret):
-        raise ConfigValidationError(f"{secret!r} is not a secret name")
-    fields["secret_refs"] = {auth_header: secret_ref(secret)}
+def split_headers(rows: list[dict[str, Any]]) -> tuple[dict[str, str], dict[str, str]]:
+    """Header rows ``{name, value | secret}`` -> ``(plain headers, secret_refs)``.
+
+    A secret holds the whole header value, so a row carries a value or a
+    secret, never both."""
+    plain: dict[str, str] = {}
+    refs: dict[str, str] = {}
+    for row in rows:
+        name, value, secret = row["name"], row.get("value"), row.get("secret")
+        if value is not None and secret is not None:
+            raise ConfigValidationError(f"header {name!r} has a value and a secret")
+        if secret is not None:
+            if not is_valid_secret_name(secret):
+                raise ConfigValidationError(f"{secret!r} is not a secret name")
+            refs[name] = secret_ref(secret)
+        else:
+            plain[name] = value or ""
+    return plain, refs
 
 
 def _validated(fields: dict[str, Any]) -> HttpApiTransport:
@@ -127,26 +134,22 @@ class CustomToolService:
         name: str,
         description: str | None,
         base_url: str,
-        headers: dict[str, str],
-        auth_header: str | None,
-        auth_prefix: str,
-        secret: str | None,
+        headers: list[dict[str, Any]],
         timeout_seconds: int,
         agents: list[str] | None,
         tools: list[dict[str, Any]],
         source: dict[str, Any] | None,
         actor: str,
     ) -> GroupView:
+        plain, refs = split_headers(headers)
         fields: dict[str, Any] = {
             "base_url": base_url,
-            "headers": headers,
-            "auth_header": auth_header,
-            "auth_prefix": auth_prefix,
+            "headers": plain,
+            "secret_refs": refs,
             "timeout_seconds": timeout_seconds,
             "tools": tools,
             "source": source,
         }
-        _bind(fields, auth_header, secret)
         transport = _validated(fields)
         config = MCPServerConfig(transport=transport).model_dump(mode="json")
         created = await self._resources.register(KIND, name, config, actor, description)
@@ -162,25 +165,18 @@ class CustomToolService:
         description: Any = UNSET,
         base_url: Any = UNSET,
         headers: Any = UNSET,
-        auth_header: Any = UNSET,
-        auth_prefix: Any = UNSET,
-        secret: Any = UNSET,
         timeout_seconds: Any = UNSET,
     ) -> GroupView:
         resource, transport = await self.group(name)
         fields = transport.model_dump(mode="json")
         for key, value in (
             ("base_url", base_url),
-            ("headers", headers),
-            ("auth_header", auth_header),
-            ("auth_prefix", auth_prefix),
             ("timeout_seconds", timeout_seconds),
         ):
             if value is not UNSET:
                 fields[key] = value
-        if auth_header is not UNSET or secret is not UNSET:
-            current = secret_name_of(transport)
-            _bind(fields, fields.get("auth_header"), current if secret is UNSET else secret)
+        if headers is not UNSET:
+            fields["headers"], fields["secret_refs"] = split_headers(headers)
         await self._write(resource, _validated(fields), actor, description=description)
         return await self.view(name)
 
@@ -269,7 +265,7 @@ class CustomToolService:
         self,
         *,
         base_url: str,
-        headers: dict[str, str],
+        headers: list[dict[str, Any]],
         timeout_seconds: int,
         raw_tool: dict[str, Any],
         arguments: dict[str, Any],
@@ -281,10 +277,12 @@ class CustomToolService:
         base URL was typed into a form, so the runner checks it against the
         SSRF guard. Nothing is saved or logged.
         """
+        # A secret header is left out: an unsaved group has no approved binding.
+        plain, _ = split_headers(headers)
         transport = _validated(
             {
                 "base_url": base_url,
-                "headers": headers,
+                "headers": plain,
                 "timeout_seconds": timeout_seconds,
                 "tools": [],
                 "secret_refs": {},
@@ -326,4 +324,4 @@ class CustomToolService:
         return self._clock()
 
 
-__all__ = ["UNSET", "CustomToolService", "secret_name_of", "validated_tool"]
+__all__ = ["UNSET", "CustomToolService", "secret_name_of", "split_headers", "validated_tool"]

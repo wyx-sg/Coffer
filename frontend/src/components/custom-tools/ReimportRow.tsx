@@ -1,39 +1,52 @@
-// src/components/custom-tools/ReimportRow.tsx — one change in Re-import's list: + Add, ~ Changed or
-// − Removed, the tool and its request, and what the change means.
+// src/components/custom-tools/ReimportRow.tsx — one change in Re-import's list: a tick for an operation to add
+// (a write starts unticked), the tool and its request, and its + Add / ~ Modify / − Remove chip. Choosing the
+// row opens its spec text on the right.
 import { useTranslation } from "react-i18next";
 
+import { OpChip } from "@/components/change-preview/OpChip";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { ReimportItem } from "@/lib/customTools/reimport";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  kind: "add" | "change" | "remove";
-  name: string;
-  request: string;
-  note: string;
+  item: ReimportItem;
+  selected: boolean;
+  /** Add rows only. */
+  ticked?: boolean;
+  onTick?: (on: boolean) => void;
+  onSelect: () => void;
 }
 
-const TONE = {
-  add: "bg-success-soft text-success",
-  change: "bg-chip text-text-muted",
-  remove: "bg-danger-soft text-danger",
-} as const;
-
-export function ReimportRow({ kind, name, request, note }: Props) {
+export function ReimportRow({ item, selected, ticked = false, onTick, onSelect }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="grid min-h-9 grid-cols-[92px_minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2.5 border-t border-border-subtle px-2.5 py-1">
-      <span
-        className={cn(
-          "inline-flex h-5 w-fit items-center rounded-sm px-[7px] text-2xs font-semibold",
-          TONE[kind],
-        )}
+    <div
+      className={cn(
+        "flex min-h-9 items-center gap-2 rounded-md px-2 py-1",
+        selected ? "bg-surface-raised ring-1 ring-border" : "hover:bg-surface-hover",
+      )}
+    >
+      {item.op === "add" ? (
+        <Checkbox
+          checked={ticked}
+          aria-label={t("customTools.reimport.add", { name: item.name })}
+          onChange={(e) => onTick?.(e.target.checked)}
+        />
+      ) : (
+        <span className="size-[15px] shrink-0" aria-hidden />
+      )}
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onSelect}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
-        {t(`customTools.reimport.kind.${kind}`)}
-      </span>
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate font-mono text-xs text-text">{name}</span>
-        <span className="truncate font-mono text-2xs text-text-muted">{request}</span>
-      </span>
-      <span className="text-xs text-text-muted">{note}</span>
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="truncate font-mono text-xs text-text">{item.name}</span>
+          <span className="truncate font-mono text-2xs text-text-muted">{item.request}</span>
+        </span>
+        <OpChip op={item.op} size="sm" />
+      </button>
     </div>
   );
 }

@@ -21,10 +21,15 @@
 // - CLIs count the required commands (not a tool added by hand that nothing needs) that are missing, too old or not logged
 //   in, from the CLIs list itself (the rows the attention list reports as
 //   kind `cli`, which is why that kind is not counted twice below).
+// - Skills count what the Skills page itself lists as needing the person —
+//   skills with a problem plus folders no skill claims — from the skills list,
+//   so the badge and the library's "Needs attention" group never disagree.
+//   Until that list has answered the attention list's own count stands.
 // - Knowledge has no signal: items waiting in a collection's inbox are the
 //   Inbox node's count in the tree, never a sidebar badge (design decision 15).
 import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
 import { useClis } from "@/lib/hooks/useClis";
+import { useSkillsAttentionCount } from "@/lib/hooks/useSkillsAttention";
 import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
 
 /** @ui-only derived view; never crosses the wire. */
@@ -62,10 +67,15 @@ export function useAttentionSignals(): AttentionSignals {
   const attention = useAttention({ refetchInterval: ATTENTION_POLL_MS });
   const sync = useSyncAttention();
   const clis = useClis();
+  const skillsCount = useSkillsAttentionCount();
   const signals: Record<string, AttentionSignal | undefined> = attention.data
     ? countByEntry(attention.data.items ?? [])
     : {};
   if (sync) signals["/sync"] = { count: 1 };
+  if (skillsCount !== null) {
+    if (skillsCount > 0) signals["/skills"] = { count: skillsCount };
+    else delete signals["/skills"];
+  }
   // A tool added by hand that nothing requires is a plain status, not a need.
   const clisNeedingYou = (clis.data?.items ?? []).filter(
     (cli) =>

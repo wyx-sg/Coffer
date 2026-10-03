@@ -39,6 +39,8 @@ interface Props {
   selected: SkillOut[];
   onClearSelection: () => void;
   onAdd: (source: SkillAddSource) => void;
+  /** Check copies, from the selection pane's "Check copies of N skills". */
+  onCheckCopies: () => void;
   onDeleted: () => void;
 }
 
@@ -52,7 +54,7 @@ export function SkillsReadingPane(props: Props) {
       <SkillSelectionPane
         skills={props.selected}
         builtin={skills.filter((s) => s.builtin).map((s) => s.name)}
-        onDone={props.onClearSelection}
+        onCheckCopies={props.onCheckCopies}
       />
     );
   }

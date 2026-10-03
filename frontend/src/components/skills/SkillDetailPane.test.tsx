@@ -25,7 +25,7 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/skills")>()),
   skillsApi: {
     list: vi.fn(async () => ({ items: h.skills })),
-    remove: vi.fn(async () => undefined),
+    remove: vi.fn(async () => ({ kept_copies: [] })),
     filesTree: vi.fn(),
     fileContent: vi.fn(),
     writeFileContent: vi.fn(),
@@ -127,14 +127,8 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
   renderSkillsPage("/skills/hello");
   // The open skill's pane waits on the library and the skill's detail.
   const tabs = await screen.findAllByRole("tab", {}, { timeout: 5_000 });
-  expect(tabs.map((t) => t.textContent?.replace(/\s*·.*$/, ""))).toEqual([
-    "Files",
-    "Delivery",
-    "Requires",
-    "History",
-  ]);
-  // Files counts the folder's files.
-  await waitFor(() => expect(screen.getByRole("tab", { name: "Files" })).toHaveTextContent("· 2"));
+  // No counts in the tab labels.
+  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires", "History"]);
   expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();
   // SKILL.md is open and rendered, not raw.
@@ -203,6 +197,9 @@ acceptance("skill-manager", "the delivery tab shows each agent's copy", async ()
   const second = screen.getByTestId("skill-delivery-codex");
   expect(second).toHaveTextContent("Not delivered");
   expect(second).toHaveTextContent("Not ticked.");
+  // Read-only: who gets the skill is the Reach button's, so no switches here.
+  expect(screen.queryByRole("switch")).toBeNull();
+  expect(screen.queryByRole("button", { name: /Deliver to all|Remove from all/ })).toBeNull();
 });
 
 acceptance("skill-manager", "a skill's requires tab links each command", async () => {
@@ -215,11 +212,10 @@ acceptance("skill-manager", "a skill's requires tab links each command", async (
     }),
   ];
   renderSkillsPage("/skills/hello/requires");
-  const jq = await screen.findByRole("link", { name: /^jq/ });
+  const [jq, gh] = await screen.findAllByRole("link", { name: "View in CLIs" });
   expect(jq).toHaveAttribute("href", "/clis/jq");
-  const gh = screen.getByRole("link", { name: /^gh/ });
   expect(gh).toHaveAttribute("href", "/clis/gh");
-  expect(screen.getByRole("tab", { name: "Requires" })).toHaveTextContent("· 2");
+  expect(screen.getByRole("tab", { name: "Requires" })).not.toHaveTextContent("·");
   fireEvent.click(gh);
   // The route for /clis/:command renders in the Skills page's place.
   expect(await screen.findByText("cli page")).toBeInTheDocument();
@@ -231,14 +227,14 @@ acceptance(
   async () => {
     h.skills = [BUILTIN_SKILL, makeSkill()];
     renderSkillsPage("/skills/coffer-guide");
-    const header = (await screen.findByRole("heading", { name: "coffer-guide", level: 2 }))
-      .parentElement as HTMLElement;
+    const header = (await screen.findByRole("heading", { name: "coffer-guide", level: 2 })).closest(
+      "header",
+    ) as HTMLElement;
     expect(within(header).getByTestId("skill-builtin-badge")).toHaveTextContent("Built-in");
     fireEvent.click(within(header).getByRole("button", { name: "More actions for coffer-guide" }));
     expect(await screen.findByRole("menuitem", { name: "Delete…" })).toBeDisabled();
-    expect(screen.getByTestId("skill-builtin-banner")).toHaveTextContent(
-      "Coffer writes this skill itself",
-    );
+    // No info banner for it: the Built-in badge says so.
+    expect(screen.queryByTestId("skill-builtin-banner")).not.toBeInTheDocument();
     // Its row wears the mark too, and has no box: it is never part of a bulk action.
     const list = screen.getByTestId("skill-library");
     expect(within(list).getByTestId("skill-builtin-badge")).toBeInTheDocument();
@@ -267,18 +263,36 @@ describe("SkillDetailPane", () => {
     await waitFor(() => expect(where.url).toBe("/skills/hello"));
   });
 
-  test("the header shows name, master path, source and when it changed", async () => {
+  test("the header shows name, state pill, source type, master path and when it changed — no description", async () => {
     renderSkillsPage("/skills/hello");
     expect(await screen.findByTestId("skill-master-path")).toHaveTextContent(
       "~/.coffer/skills/hello",
     );
+    expect(screen.getByTestId("skill-detail-source")).toHaveTextContent("Folder");
     expect(screen.getByText(/^Updated /)).toBeInTheDocument();
+    const header = screen
+      .getByRole("heading", { name: "hello", level: 2 })
+      .closest("header") as HTMLElement;
+    expect(within(header).getByText("In use")).toBeInTheDocument();
+    // The description is SKILL.md's, not the header's.
+    expect(screen.queryByText("Say hello nicely.", { selector: "header *" })).toBeNull();
+  });
+
+  test("an off skill's pill says Off", async () => {
+    h.skills = [makeSkill({ enabled: false })];
+    renderSkillsPage("/skills/hello");
+    const header = (await screen.findByRole("heading", { name: "hello", level: 2 })).closest(
+      "header",
+    ) as HTMLElement;
+    // The pill and the Reach button both say Off.
+    expect(within(header).getAllByText("Off")).toHaveLength(2);
   });
 
   test("Delete asks first, then removes the skill and returns to the library", async () => {
     renderSkillsPage("/skills/hello");
-    const header = (await screen.findByRole("heading", { name: "hello", level: 2 }))
-      .parentElement as HTMLElement;
+    const header = (await screen.findByRole("heading", { name: "hello", level: 2 })).closest(
+      "header",
+    ) as HTMLElement;
     fireEvent.click(within(header).getByRole("button", { name: "More actions for hello" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete hello?" });

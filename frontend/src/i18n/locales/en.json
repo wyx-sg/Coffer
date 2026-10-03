@@ -46,7 +46,7 @@
       "remove": "Remove"
     },
     "whatWillHappen": "What will happen",
-    "changesHeading": "Changes",
+    "changesHeading": "Changes · {{count}}",
     "reassurance": "Only the lines shown change. Everything else in each file is left as it is.",
     "diffLabel": "Changes to {{path}}",
     "computing": "Comparing with each agent’s files…",
@@ -84,6 +84,7 @@
       "applying": "Applying",
       "pending": "Waiting"
     },
+    "summaryCofferOnly": "{{changes}} in Coffer",
     "summaryWithCoffer": "{{changes}} in {{agents}} and Coffer"
   },
   "common": {
@@ -111,7 +112,6 @@
     "showPassword": "Show",
     "hidePassword": "Hide",
     "dateTimeFormatHint": "YYYY-MM-DD HH:mm:ss",
-    "secretKeepBlank": "Leave blank to keep the current value",
     "discardChanges": {
       "title": "Discard unsaved changes?",
       "body": "Your edits to this file will be lost.",
@@ -218,12 +218,6 @@
     "title": "MCP servers",
     "subtitle": "MCP servers Coffer runs and serves to your agents through one endpoint.",
     "addServer": "Add server",
-    "status": {
-      "all": "All"
-    },
-    "cols": {
-      "reach": "Reach"
-    },
     "titleField": {
       "label": "Title",
       "hint": "Shown in place of the name wherever this is listed. Leave empty to show the name.",
@@ -261,7 +255,6 @@
       "dialogTitle": "Add MCP server",
       "subtitle": "Coffer runs it and serves its tools to the agents you choose, through one endpoint.",
       "pasteLabel": "Paste a config, a command or a URL",
-      "review": "Review",
       "chooseType": "Or choose a type",
       "type": {
         "stdio": "Command (stdio)",
@@ -291,12 +284,9 @@
       "urlHelp": "Streamable HTTP only.",
       "env": "Environment",
       "headers": "Headers",
-      "rowKey": "{{label}} name",
       "rowValue": "Value of {{key}}",
-      "removeRow": "Remove {{key}}",
       "secret": "Secret",
       "secretFor": "{{key}} is a secret",
-      "secretValue": "Secret value",
       "secretMissing": "Enter the value of {{key}}; it goes to the keychain.",
       "secretLine": "{{key}} looks like a secret — it goes to the keychain, the config keeps only its name.",
       "addServer": "Add server",
@@ -320,9 +310,7 @@
       "toastFailing": "{{name}} added, but its test failed: {{error}} See its page.",
       "toastAddedMany_one": "Added {{count}} server",
       "toastAddedMany_other": "Added {{count}} servers",
-      "toastPartial": "Added {{done}} of {{total}} servers — {{names}} wasn't added: {{reason}}",
       "approvalTitle": "Waiting for approval",
-      "approvalBody": "Added. The secrets of {{names}} take effect once they are approved in the Coffer app.",
       "openApprovals": "Open approvals",
       "descriptionPlaceholder": "Optional — a note for yourself",
       "test": {
@@ -337,14 +325,35 @@
         "stderrLines_other": "stderr · {{count}} lines",
         "show": "Show",
         "hide": "Hide",
-        "failed": "Test failed after {{seconds}} s",
-        "failedExited": "Test failed after {{seconds}} s · the process exited with code {{code}}",
         "exitedBody": "It stopped before listing any tools. The last lines it printed on stderr:",
         "stderrIntro": "The last lines it printed on stderr:",
-        "storedSecret": "A stored secret ({{keys}}) is released only to a server that is added and approved, so it is tested after Add. Nothing was saved."
+        "storedSecret": "A stored secret ({{keys}}) is released only to a server that is added and approved, so it is tested after Add. Nothing was saved.",
+        "needs": "It needs {{key}}. Add it under Environment, then test again.",
+        "addVariable": "Add the variable"
       },
-      "toastTested_one": "{{name}} added. Tested: {{count}} tool. Available to {{reach}}.",
-      "toastTested_other": "{{name}} added. Tested: {{count}} tools. Available to {{reach}}."
+      "toastTested_one": "Added {{name}} · Test passed · {{count}} tool for {{reach}}",
+      "toastTested_other": "Added {{name}} · Test passed · {{count}} tools for {{reach}}",
+      "reachHelp": "Who can call its tools. You can change it later.",
+      "reachHelpBatch": "For every server added here. You can change each one later.",
+      "testingBackground": "testing in the background",
+      "addedOf": "{{done}} of {{total}} added",
+      "partialSub_one": "{{added}} is added. {{tail}}",
+      "partialSub_other": "{{added}} are added. {{tail}}",
+      "renameTail_one": "Rename {{names}} to add it too.",
+      "renameTail_other": "Rename {{names}} to add them too.",
+      "approval": {
+        "sub_one": "{{names}} is added. One of its secrets needs an approval before it can start.",
+        "sub_other": "{{names}} are added. Their secrets need an approval before they can start.",
+        "head_one": "{{keys}} waits for approval",
+        "head_other": "{{keys}} wait for approval",
+        "body_one": "Coffer holds the value until you approve it. Until then {{names}} shows under Needs attention and agents can't call its tools.",
+        "body_other": "Coffer holds the value until you approve it. Until then {{names}} show under Needs attention and agents can't call its tools.",
+        "added": "Added · {{reach}}",
+        "secret": "secret",
+        "waiting": "Waiting for approval"
+      },
+      "toastTestedOff_one": "Added {{name}} · Test passed · {{count}} tool",
+      "toastTestedOff_other": "Added {{name}} · Test passed · {{count}} tools"
     },
     "import": {
       "title": "Review import",
@@ -379,44 +388,37 @@
       "cwd": "Working directory",
       "cwdPlaceholder": "~ (your home folder)",
       "cwdHelp": "Optional. The folder Coffer starts the command in.",
-      "stored": "Stored",
-      "replace": "Replace",
       "test": "Test",
       "testAgain": "Test again",
       "testing": "Testing…",
-      "testPassed": "Test passed in {{seconds}} s · {{tools}} tools, {{resources}} resources, {{prompts}} prompts",
       "testFailed": "Test failed after {{seconds}} s · {{reason}}",
       "nothingSaved": "Nothing was saved.",
       "testReason": {
         "url_refused": "URL refused",
         "spawn_failed": "couldn't start",
-        "exited": "exited with code {{code}}",
+        "exited": "the process exited with code {{code}}",
         "timeout": "timed out",
         "initialize_failed": "MCP handshake failed",
         "connect_failed": "couldn't connect",
         "stored_secret_not_released": "stored secret not released",
         "unsupported_transport": "unsupported transport",
-        "other": "error"
+        "other": "error",
+        "auth_rejected": "credentials rejected"
       },
       "errSecretNeedsValue": "Enter a value for \"{{name}}\" or pick a stored secret.",
-      "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it.",
-      "errInvalidConfig": "The stored configuration could not be read."
+      "errInvalidConfig": "The stored configuration could not be read.",
+      "saveFailed": "Couldn't save {{name}}",
+      "saveFailedBody": "Your edits are still here and nothing was changed."
     },
     "env": {
-      "plain": "Plain",
-      "kindFor": "How {{key}} is kept",
-      "newValueOf": "New value of {{key}}",
-      "storedSecretFor": "Stored secret for {{key}}",
-      "useStored": "Use stored",
-      "newValue": "New value…",
-      "missing": "Missing",
       "addVariable": "Add variable",
       "addHeader": "Add header",
-      "hint": "Secret values stay in Coffer's keychain; the agent's config never holds them."
+      "hint": "Secret values stay in Coffer's keychain; the agent's config never holds them.",
+      "none": "None yet."
     },
     "timeouts": {
       "spawn": "Start timeout",
-      "spawnHint": "5–120 s",
+      "spawnHint": "5–120 s for the server to start and list its tools.",
       "request": "Request timeout",
       "requestHint": "5–1800 s for one call.",
       "unit": "s"
@@ -476,10 +478,8 @@
       "agentsSubject": "Agents",
       "showStderr": "Show stderr",
       "hideStderr": "Hide stderr",
-      "testExit": " · exit code {{code}} after listing",
-      "testListed": "Listed {{tools}} tools, {{resources}} resources, {{prompts}} prompts — the same set agents see now. Nothing to update.",
-      "offBodyAgents": "Coffer doesn't start it for any session. Turning it on gives it back to {{agents}}, the agents you chose last time.",
-      "launcherBodyWho": "Coffer starts this server with {{runner}}, which isn't found on this machine — {{who}} can't call {{tools}} until it is. Hand the install to an agent, then test again.",
+      "offBodyAgents": "Turning it on gives it back to {{agents}}.",
+      "launcherBodyWho": "Coffer starts {{name}} with {{runner}}, which isn’t found on this machine, so {{who}} can’t call {{tools}} until it is. Hand the install to an agent, then test again.",
       "failingBodyWho": "{{who}} can't call {{tools}} until it answers again.",
       "lastSuccessAt": "Last successful call {{at}}.",
       "colTool": "Tool",
@@ -490,51 +490,32 @@
       "seenAs": "Agents see it as",
       "characters_one": "{{count}} character",
       "characters_other": "{{count}} characters",
-      "toolUse": "{{calls}} calls · {{errors}} errors in 24 h",
       "lastCall": "Last call {{at}}",
       "noCallsTool": "No calls in the last 24 hours",
       "mostCalled": "Most-called tools",
-      "fromCacheAt": "From the last successful connection, at {{at}}. Your switches still apply when it comes back.",
+      "fromCacheAt": "From the last successful connection, at {{at}}.",
       "listedWhenRan": "Listed when it last ran, {{ago}}.",
       "listedSaved": "Listed when it last ran. Your switches still apply.",
       "noToolsYet": "Coffer hasn't listed its tools yet — it lists them once the server answers.",
       "showAllInTools": "Show all {{count}} in Tools",
-      "allTools": "All tools",
       "showingOf": "Showing {{shown}} of {{total}}",
       "showMore": "Show {{count}} more",
-      "filterCaps": "Search",
-      "mostBehindSearchValue": "Most behind search",
-      "listedAndBehind": "{{listed}} listed · {{behind}} by search",
       "stoppedAtCoffer": "Every call stopped at Coffer: no secret to send.",
       "noCallsWhileLauncherMissing": "No calls reach it while its launcher is missing.",
       "resources": {
         "col": "Resource",
-        "use": "Reads 24 h",
-        "note": "From the last successful connection, {{ago}}. Agents read a resource only when it is on.",
-        "noteCached": "Listed when it last ran. Agents read a resource only when it is on."
+        "use": "Reads 24 h"
       },
       "prompts": {
         "col": "Prompt",
         "use": "Uses 24 h",
-        "note": "Prompts show up in each agent's slash-command menu while they are on.",
+        "note": "Prompts show up in each agent’s slash-command menu while they are on.",
         "arguments": "arguments: {{names}}"
       },
-      "secrets": {
-        "title": "Secrets",
-        "header": "Header",
-        "env": "Environment variable",
-        "secret": "Secret",
-        "missing": "Missing",
-        "stored": "Stored",
-        "lastSuccess": "Last success",
-        "never": "No successful call yet"
-      },
-      "agents": "Agents",
       "allOff": "All off",
       "allOn": "All on",
       "behindSearch": "Behind search",
       "bulkLabel": "Selected MCP servers",
-      "selectAll": "Select all shown servers",
       "calledBy": "Called by",
       "calls_one": "call",
       "calls_other": "calls",
@@ -545,15 +526,12 @@
       "configCopied": "Config copied — it carries secret names only, never their values.",
       "delete": {
         "title": "Delete {{name}}?",
-        "description": "This can’t be undone. Agents lose access at their next tool call.",
-        "toolsLabel": "Tools",
-        "toolsGone_one": "{{count}} tool disappears from {{agents}}",
-        "toolsGone_other": "{{count}} tools disappear from {{agents}}",
-        "toolsGoneAny": "Its tools disappear from {{agents}}",
-        "secretLabel": "Secret",
-        "secretStays": "{{name}} stays in Secrets",
-        "footnote": "Past calls stay in Activity.",
-        "confirm": "Delete server"
+        "footnote": "This can’t be undone. To stop it for a while, turn it off instead.",
+        "confirm": "Delete server",
+        "body": "{{agents}} lose {{tools}} on their next call. Its call history stays in Activity.",
+        "bodyNone": "Its call history stays in Activity.",
+        "alsoSecret": "Also delete the secret",
+        "secretOnlyHere": "No other server uses it."
       },
       "deleteManyTitle_one": "Delete {{count}} server?",
       "deleteManyTitle_other": "Delete {{count}} servers?",
@@ -579,25 +557,19 @@
       "lastSuccess": "Last successful call {{at}}, {{tool}}.",
       "launcherTitle": "{{runner}} isn't found on this machine",
       "listed": "Listed",
-      "listedDirectly": "Listed directly",
       "log": {
-        "gaveUp": "{{took}}, then gave up",
         "agent": "Called by",
         "all": "All",
         "calls": "Calls",
         "callsFootnote": "Coffer records who called what and how it went — never the arguments or the result.",
-        "callsTab": "Calls · {{count}}",
         "errorLines": "Errors",
         "errors": "Errors · {{count}}",
         "everything": "Everything",
         "logFootnote": "What the server printed on stderr and how Coffer started and stopped it. Newest first.",
-        "logTab": "Server log",
-        "noLogHttp": "A Streamable HTTP server runs somewhere else, so Coffer has no log of its own for it. Its calls are on the Calls tab.",
         "notStarted": "Coffer hasn't started this server on this Mac yet.",
         "nothing": "Nothing to show.",
         "openFile": "Open log file",
         "result": "Result",
-        "session": "Session",
         "show": "Show",
         "status": {
           "ok": "OK",
@@ -605,23 +577,25 @@
           "timeout": "Timed out",
           "denied": "Denied"
         },
-        "subtitle": "{{calls}} calls · {{errors}} errors in the last 24 hours",
-        "subtitleHttp": "Streamable HTTP · reached over the network",
-        "subtitleStdio": "stdio · started by Coffer for each agent session",
+        "subtitleStdio": "stdio · what it printed on stderr and how Coffer started and stopped it, newest first",
         "time": "Time",
-        "title": "{{name}} · Calls and server log",
+        "title": "{{name}} · Server log",
         "took": "Took",
-        "tool": "Tool"
+        "tool": "Tool",
+        "error": "Error",
+        "server": "Server",
+        "started": "Started",
+        "viewServerLog": "View server log"
       },
       "menu": {
         "copyConfig": "Copy config as JSON",
         "delete": "Delete…",
         "label": "More actions for {{name}}",
-        "log": "Calls and server log"
+        "log": "Server log",
+        "turnOff": "Turn off"
       },
-      "mostBehindSearch": "most behind search",
       "noCalls": "No calls in the last 24 hours.",
-      "offBody": "Coffer doesn't start it for any session. Turning it on gives it back to the agents you chose last time.",
+      "offBody": "Turning it on gives it back to the agents you chose last time.",
       "offTitle": "Off — no agent can use it",
       "openInActivity": "View in Activity",
       "reason": {
@@ -630,9 +604,8 @@
         "launcher": "{{runner}} isn't found on this machine",
         "secret": "Secret missing · {{secret}}"
       },
-      "replaceSecret": "Replace secret",
-      "secretBody": "The {{key}} setting points to it, but no value is stored on this Mac — secrets don't travel with the vault. Add it and Coffer uses it on the next call. Agents never see it.",
-      "secretTitle": "The secret {{secret}} isn't in this Mac's keychain",
+      "secretBody": "Secrets don’t travel with a restored vault. Add it and Coffer uses it on the next call.",
+      "secretTitle": "{{key}} isn’t in this Mac’s keychain",
       "state": {
         "failing": "Failing",
         "launcherMissing": "Launcher missing",
@@ -641,20 +614,12 @@
         "unknown": "Not checked yet",
         "off": "Off"
       },
-      "stored": "Stored",
-      "storedValue": "Reach is set on this Mac only",
       "summaryUnavailable": "The last 24 hours couldn't be read.",
       "test": "Test",
-      "testAgain": "Test again",
       "testFailed": "Test failed after {{took}}",
-      "testPassed": "Test passed in {{took}}",
-      "testPassedBody": "It answered; its tools are the set agents see now.",
       "testing": "Testing…",
-      "tieringTitle": "{{listed}} of its {{total}} tools are listed to agents; {{behind}} are behind search",
-      "tieringBody": "Your servers offer {{catalogue}} tools together. Coffer lists {{budget}} directly — the ones agents called most, at least one per server — so agents aren't flooded. Agents find the rest with coffer__search_tools and call them by name. Every tool that is on still works.",
       "toolCount_one": "{{count}} tool",
       "toolCount_other": "{{count}} tools",
-      "toolsReachAgents": "Tools reach agents",
       "transport": {
         "stdio": "stdio",
         "http": "Streamable HTTP",
@@ -670,6 +635,42 @@
         "foundTitle_other": "Your agents already use {{count}} MCP servers",
         "foundBody": "Import them and Coffer runs them for every agent you choose. Each one is removed from the agent's own config, so it isn't started twice.",
         "reviewImport": "Review and import"
+      },
+      "clearSelection": "Clear selection",
+      "selectedTitle_one": "{{count}} server selected",
+      "selectedTitle_other": "{{count}} servers selected",
+      "selectedBody": "{{names}}. Set who can use them or delete them from the bar above the list; coffer can’t be selected.",
+      "turnOffMany": "Turn off {{count}} servers",
+      "turnedOff": "{{name}} turned off",
+      "testPassedToast_one": "Test passed · {{count}} tool",
+      "testPassedToast_other": "Test passed · {{count}} tools",
+      "viewErrors": "View errors",
+      "addSecret": "Add secret",
+      "secretBodyWorked": "Secrets don’t travel with a restored vault. Last worked {{at}}, on your other Mac. Add it and Coffer uses it on the next call.",
+      "last24hSub": "Calls your agents made to {{name}}, and how many failed.",
+      "last24hSubBuiltin": "Calls your agents made to {{name}}.",
+      "offLastCall": "No calls while off. Last call {{at}}, by {{agent}}.",
+      "offNoCalls": "No calls while off.",
+      "mostCalledSub": "What agents call most on {{name}}, busiest first.",
+      "lastCallBy": "Last call {{at}} by {{agent}}",
+      "nOfMOn": "{{on}} of {{total}} on",
+      "searchResources": "Search resources",
+      "searchPrompts": "Search prompts",
+      "requires": {
+        "title": "Requires",
+        "sub": "Worked out from the server’s command and settings.",
+        "cli": "CLI",
+        "secret": "Secret",
+        "foundVersion": "Found · {{version}}",
+        "viewClis": "View in CLIs",
+        "viewSecrets": "View in Secrets",
+        "status": {
+          "found": "Found",
+          "not_found": "Not found",
+          "set": "Set",
+          "missing": "Missing",
+          "waiting_approval": "Waiting for approval"
+        }
       }
     },
     "builtin": {
@@ -678,20 +679,14 @@
       "subline_one": "Served by the daemon · {{count}} tool",
       "subline_other": "Served by the daemon · {{count}} tools",
       "servedBy": "Served by the Coffer daemon",
-      "reach": "All connected agents",
-      "fixedTitle": "Can’t be edited or removed — it is how agents reach your other servers",
-      "fixedBody": "Coffer serves this endpoint itself. Every agent connected to Coffer gets it, and through it the tools of the servers you add on this page. It has no settings to change.",
-      "status": "Status",
-      "statusValue": "Healthy · answered {{at}}",
+      "reach": "All agents",
       "mostCalled": "Most-called tools",
       "allTools": "All tools",
-      "alwaysOnHelp": "These tools are always on.",
       "colTool": "Tool",
       "colCalls": "Calls 24 h",
-      "seenAs_one": "Agents see it as {{last}}.",
-      "seenAs_other": "Agents see them as {{names}} and {{last}}.",
       "noResources": "Coffer’s own server offers no resources.",
-      "noPrompts": "Coffer’s own server offers no prompts."
+      "noPrompts": "Coffer’s own server offers no prompts.",
+      "alwaysOnSee": "Always on; agents see them as {{names}}."
     }
   },
   "audit": {
@@ -2602,15 +2597,16 @@
     }
   },
   "skills": {
-    "subtitle": "Skills Coffer manages: one master folder, linked into each agent you choose.",
+    "subtitle": "Skills Coffer keeps in one master folder and delivers to the agents you choose, as a link or a copy.",
     "builtinBadge": "Built-in",
     "title": "Skills",
     "add": "Add skill",
     "searchPlaceholder": "Filter skills",
     "selectAll": "Select all shown skills",
     "group": {
+      "attention": "Needs attention",
       "inUse": "In use",
-      "unused": "Unused",
+      "off": "Off",
       "builtin": "Built-in"
     },
     "detail": {
@@ -2625,46 +2621,68 @@
       "source": {
         "builtin": "Written by Coffer"
       },
-      "builtinBanner": {
-        "title": "Coffer writes this skill itself",
-        "body": "It is regenerated at every start, so its files are read-only and it can’t be deleted. You can still turn it off or narrow which agents get it."
-      },
       "todayAt": "today at {{time}}",
       "regenerated": "Regenerated {{when}}",
       "pinned": "pinned",
-      "masterMissing": "master missing"
+      "masterMissing": "master missing",
+      "sourceType": {
+        "folder": "Folder",
+        "archive": "Archive",
+        "git": "Git"
+      },
+      "status": {
+        "inUse": "In use",
+        "off": "Off",
+        "masterMissing": "Master missing",
+        "folderInWay": "Folder in the way",
+        "commandMissing": "Command missing",
+        "commandNotReady": "Command not ready",
+        "toolOff": "Tool off",
+        "secretMissing": "Secret missing",
+        "sourceUnreachable": "Source unreachable"
+      }
     },
     "files": {
       "tree": "Files",
-      "binary": "Binary file ({{size}} bytes)",
-      "truncated": "Content truncated — showing the start of the file.",
       "editorLabel": "Contents of {{path}}",
       "viewLabel": "Show as",
       "preview": "Preview",
       "source": "Source",
-      "openDefault": "Open in default app",
-      "moreFor": "More for {{path}}",
-      "binaryTitle": "Binary file · {{size}}",
-      "binaryBody": "Coffer shows text files only. Open it in its own app.",
-      "truncatedTitle": "Showing the first {{size}}",
-      "truncatedBody": "The file is too large to show or edit here. Open it in your editor to see the rest; agents still get all of it.",
+      "binaryTitle": "Can’t preview binary file",
       "unsaved": "Unsaved changes",
-      "saveKey": "⌘S to save",
       "notSaved": "Not saved",
-      "conflictTitle": "This file changed on disk after you opened it",
-      "conflictBody": "It was rewritten outside this editor. Your edit wasn't saved."
+      "conflictTitle": "{{file}} changed on disk after you opened it",
+      "conflictBody": "Something outside Coffer rewrote it. Your edit is still here, not saved. Compare the two and choose which to keep.",
+      "unsavedDot": "Unsaved changes",
+      "wrap": "Wrap lines",
+      "truncatedBar": "Showing the first {{shown}} of {{total}} · read-only here",
+      "lockBuiltin": "Written by Coffer — read-only",
+      "lockNotMine": "Not in your library — read-only",
+      "compare": "Compare…",
+      "copyMine": "Copy my text",
+      "discardTitle": "Discard your edit to {{file}}?",
+      "discardBody": "You changed {{file}} in {{owner}} and haven’t saved it. Leaving now throws the edit away; agents keep the saved version.",
+      "discardConfirm": "Discard edit",
+      "keepEditing": "Keep editing"
     },
     "checkCopies": "Check copies",
-    "offMark": "Off",
-    "updateAvailable": "Update available",
-    "sourceUnreachable": "Source unreachable",
     "bulk": {
       "label": "Selected skills",
       "deleteTitle_one": "Delete {{count}} skill?",
       "deleteTitle_other": "Delete {{count}} skills?",
-      "deleteBody": "Deletes the master folders of {{names}} and removes their links from every agent that has them. There is no undo.",
+      "deleteBody": "Deletes the master folders of {{names}} and removes their links from every agent that has them.",
       "deleteConfirm_one": "Delete {{count}} skill",
-      "deleteConfirm_other": "Delete {{count}} skills"
+      "deleteConfirm_other": "Delete {{count}} skills",
+      "done_one": "Deleted {{count}} skill",
+      "done_other": "Deleted {{count}} skills",
+      "partialTitle": "Deleted {{ok}} of {{total}}",
+      "partialLead_one": "{{deleted}} is deleted. {{name}} isn’t:",
+      "partialLead_other": "{{deleted}} are deleted. {{name}} isn’t:",
+      "partialTail_one": "is a regular folder now, not Coffer’s link, so Coffer won’t remove it. Delete {{name}} and leave that folder to {{agent}}, or cancel and review the edit first.",
+      "partialTail_other": "is a regular folder now, not Coffer’s link, so Coffer won’t remove it. Delete {{name}} and leave that folder to {{agent}}, or cancel and review the edit first. {{count}} skills were refused in all.",
+      "keepOne": "Delete {{name}}, keep {{agent}}’s folder",
+      "keepMany_one": "Delete {{count}} skill, keep its folder",
+      "keepMany_other": "Delete {{count}} skills, keep their folders"
     },
     "firstRun": {
       "title": "No skills yet",
@@ -2679,17 +2697,6 @@
     "delivery": {
       "checkAgain": "Check again",
       "checking": "Checking…",
-      "allOn": "Deliver to all",
-      "allOff": "Remove from all",
-      "switchLabel": "Deliver to {{agent}}",
-      "delivering": "Delivering…",
-      "removing": "Removing…",
-      "toast": {
-        "on": "Delivered to {{agent}}",
-        "off": "Removed from {{agent}}",
-        "allOn": "Delivered to every agent",
-        "allOff": "Removed from every agent"
-      },
       "state": {
         "linked": "Linked",
         "copied": "Copied, not linked",
@@ -2697,7 +2704,7 @@
       },
       "hint": {
         "linked": "Link to the master. Edits in Coffer reach it at once.",
-        "copied": "Links aren't allowed in {{dir}} on this machine, so Coffer copied the folder. The copy follows the master folder at the next repair pass."
+        "copied": "Links aren’t allowed in {{dir}} on this Mac, so Coffer keeps a copy and refreshes it after every edit in Coffer."
       },
       "reason": {
         "skillOff": "The skill is off.",
@@ -2709,9 +2716,18 @@
       "drift": {
         "missing_link": "The link is gone. Coffer puts it back on its next pass.",
         "tampered_link": "The link points somewhere else. Coffer points it back on its next pass.",
-        "replaced_with_regular": "A real folder at {{path}}, not Coffer's link.",
+        "replaced_with_regular": "A regular folder now, not Coffer’s link.",
         "missing_master": "Its master folder is gone.",
         "orphan_master": "A folder Coffer doesn't know."
+      },
+      "intro": "Where each agent’s copy of {{name}} stands.",
+      "checked": "Checked {{when}}.",
+      "driftWord": {
+        "missing_link": "Link missing",
+        "tampered_link": "Points elsewhere",
+        "replaced_with_regular": "Edited copy",
+        "missing_master": "Master missing",
+        "orphan_master": "Not in your library"
       }
     },
     "driftKind": {
@@ -2722,28 +2738,50 @@
       "orphan_master": "Not in your library"
     },
     "requires": {
-      "declared": "declared in SKILL.md",
-      "openClis": "Open CLIs",
       "emptyTitle": "Nothing required",
-      "emptyBody": "This skill's SKILL.md declares no commands or secrets under requires:.",
+      "emptyBody": "This skill’s SKILL.md declares no commands, secrets, tools or skills.",
       "commandsTitle": "Commands",
       "secretsTitle": "Secrets",
       "secretSet": "Set",
       "secretMissing": "secret {{name}} is not set",
       "openSecrets": "Open Secrets",
-      "secretsFootnote": "The skill is still delivered. You set a secret on the Secrets page; Coffer never shows its value here.",
-      "footnote": "The skill is still delivered. Hand a command that needs you to your agent, then Check again.",
       "loadFailed": "Couldn't check the commands this skill requires",
       "found": "Found",
       "outdated": "{{version}}, needs ≥ {{min}}",
       "unknown": "Not checked yet",
-      "openInClis": "Open in CLIs",
       "state": {
         "missing": "Not installed",
         "logged_out": "Not logged in",
         "ready": "Found",
         "outdated": "Too old"
-      }
+      },
+      "commandsIntro": "Command-line tools the skill runs, declared in SKILL.md under <code>requires: commands</code>.",
+      "secretsIntro": "Coffer secrets the skill reads, declared in SKILL.md under <code>requires: secrets</code>. Only names are shown.",
+      "toolsIntro": "MCP servers and custom tools the skill calls, declared in SKILL.md under <code>tools:</code>.",
+      "skillsIntro": "Other skills this one loads, declared in SKILL.md under <code>metadata.requires</code>.",
+      "checkedAgo": "Checked on this Mac {{when}}.",
+      "needsAtLeast": "Needs ≥ {{min}}",
+      "viewInClis": "View in CLIs",
+      "viewInSecrets": "View in Secrets",
+      "viewInSkills": "View in Skills",
+      "viewInTools": {
+        "mcp_server": "View in MCP servers",
+        "custom_tools": "View in Custom tools"
+      },
+      "toolsTitle": "Tools",
+      "skillsTitle": "Skills",
+      "toolKind": {
+        "mcp_server": "MCP server",
+        "custom_tools": "Custom tools"
+      },
+      "toolState": {
+        "healthy": "Healthy",
+        "off": "Off",
+        "failing": "Failing"
+      },
+      "skillMissing": "Not in your library",
+      "skillDelivered": "Delivered to the same agents",
+      "skillNotDelivered": "Not delivered to {{agents}}"
     },
     "history": {
       "title": "No versions yet",
@@ -2752,49 +2790,61 @@
       "builtinBody": "Its files are rebuilt from the running build at every start, so there is no earlier version to go back to.",
       "failedTitle": "Couldn’t read this skill’s history",
       "listLabel": "Versions",
-      "changedFiles": "Changed files",
-      "count_one": "{{count}} version",
-      "count_other": "{{count}} versions",
       "current": "Current",
-      "filesChanged_one": "{{count}} file changed",
-      "filesChanged_other": "{{count}} files changed",
       "versionLabel": "The chosen version",
-      "restoredFrom": "restored {{version}}",
       "noFiles": "This version changed no file of the skill.",
       "noTextChange": "No text change (a binary file, or only its mode).",
-      "restore": "Restore this version",
-      "confirmTitle": "Restore this version?",
-      "confirmBody": "The skill’s folder goes back to version {{version}}: every file as it was then, and files added since are removed. It is saved as a new version, so you can restore the current one again afterwards.",
-      "restored": "Restored version {{version}}",
-      "unchanged": "The skill already matches this version",
-      "status": {
-        "added": "added",
-        "modified": "modified",
-        "removed": "removed"
+      "restore": "Restore this version…",
+      "from": "From",
+      "to": "To",
+      "start": "Start",
+      "what": {
+        "restored": "Restored the version of {{date}}",
+        "restoredHash": "Restored version {{version}}",
+        "added": "Added {{file}}",
+        "removed": "Removed {{file}}",
+        "edited": "Edited {{file}}",
+        "changed": "Changed {{file}}",
+        "files_one": "Changed {{count}} file",
+        "files_other": "Changed {{count}} files"
+      },
+      "note": {
+        "restored": "Coffer put back the version of {{date}}.",
+        "agent": "{{agent}} changed this skill’s files through Coffer.",
+        "disk_one": "You changed {{file}} in your own editor; Coffer kept it as a version.",
+        "disk_other": "You changed {{count}} files in your own editor; Coffer kept them as a version.",
+        "user_one": "You edited {{file}} in Coffer’s editor.",
+        "user_other": "You edited {{count}} files in Coffer.",
+        "current": "This is the current version."
       }
     },
     "copies": {
-      "title": "Check agents’ copies",
-      "body": "Compares every agent's copy of every skill with the library.",
+      "title": "Check copies",
       "checking": "Checking every agent’s copy…",
       "checkAgain": "Check again",
       "repair": "Repair",
-      "summary_one": "Checked just now · {{count}} finding, {{fixed}} fixed by Coffer.",
-      "summary_other": "Checked just now · {{count}} findings, {{fixed}} fixed by Coffer.",
       "allMatchTitle": "Every copy matches the library",
       "allMatchBody": "Each agent’s copy of every skill is what Coffer delivered.",
-      "repaired": "Re-linked by Coffer",
       "needsYou": "Needs you",
       "library": "Library",
       "repairHint": "Coffer repairs a missing link on its own. It never overwrites a folder it didn't make, and never picks between two versions — those wait for you.",
-      "leftAlone": "Left alone · needs you",
       "about": {
         "missing_link": "The link at {{path}} is gone. Repair puts it back.",
         "tampered_link": "{{path}} points somewhere else. Repair points it back at the library.",
         "replaced_with_regular": "A real folder, not Coffer's link. Coffer won't overwrite it.",
         "missing_master": "Its library folder was removed outside Coffer.",
         "orphan_master": "A folder in the skills store that Coffer doesn't know."
-      }
+      },
+      "meta": "Every agent’s copy of every skill, compared with the library",
+      "checkedNow": "checked just now",
+      "fixedGroup": "Fixed by Coffer",
+      "fixedTitle": "Link put back",
+      "fixed": {
+        "missing_link": "The link had gone missing; Coffer put it back.",
+        "tampered_link": "The link pointed elsewhere; Coffer pointed it back at the library."
+      },
+      "open": "Open",
+      "openSkill": "Open skill"
     },
     "review": "Review…",
     "row": {
@@ -2803,25 +2853,31 @@
       "needsMissing": "Needs {{command}} · not installed",
       "needsLogin": "Needs {{command}} · not logged in",
       "needsNewer": "Needs a newer {{command}}",
-      "needsSecret": "Needs secret {{name}} · not set"
+      "needsSecret": "Needs secret {{name}} · not set",
+      "needsTool": "Needs {{name}} · {{state}}",
+      "sourceUnreachable": "Git source unreachable",
+      "updateAvailable": "Update available · Git"
     },
     "selection": {
       "title_one": "{{count}} skill selected",
       "title_other": "{{count}} skills selected",
-      "body": "{{names}}. Set who gets them together, or delete them.",
-      "builtin": "{{names}} can't be selected.",
-      "delete_one": "Delete {{count}} skill…",
-      "delete_other": "Delete {{count}} skills…"
+      "builtin": "{{names}} can’t be selected",
+      "body_one": "{{names}}. Set who gets it or delete it from the bar above the list",
+      "body_other": "{{names}}. Set who gets them or delete them from the bar above the list",
+      "checkCopies_one": "Check copies of {{count}} skill",
+      "checkCopies_other": "Check copies of {{count}} skills"
     },
     "delete": {
       "title": "Delete {{name}}?",
       "body_one": "Deletes the master folder and removes its link from the agent that has it: {{agents}}.",
       "body_other": "Deletes the master folder and removes its link from the {{count}} agents that have it: {{agents}}.",
       "bodyNone": "Deletes the master folder. No agent has it now.",
-      "noUndo": "There is no undo.",
+      "noUndo": "This can’t be undone from here. History keeps the files, so you can add it back from a version.",
       "confirm": "Delete skill",
-      "failedTitle": "Couldn't delete {{name}}",
-      "notOurs": "is no longer a Coffer link, so Coffer won't remove it. Restore it from master first, or delete that folder yourself. Nothing else was changed."
+      "refusedTitle": "Nothing was deleted",
+      "refusedBody": "is a regular folder now, not Coffer’s link — {{agent}} changed it. Coffer only removes what it made. Delete the skill and leave that folder to {{agent}}, or cancel and review the edit first.",
+      "keepFolder": "Delete, keep {{agent}}’s folder",
+      "done": "Deleted {{name}}"
     },
     "menu": {
       "label": "More actions for {{name}}",
@@ -2831,8 +2887,6 @@
     },
     "banner": {
       "masterTitle": "The master folder is gone",
-      "masterBodyOn": "{{path}} was removed outside Coffer. Agents can't load it until it is back — but its settings are still here.",
-      "masterBodyOff": "{{path}} was removed outside Coffer. No agent has it now, because it is off — but its settings are still here.",
       "folderTitle": "Coffer left {{agent}}'s folder alone — it needs you",
       "folderBody": "Coffer found a folder at {{path}} where {{name}}'s link should be. Compare the two and choose which one to keep.",
       "requiresMissing_one": "{{count}} command this skill needs is missing",
@@ -2841,104 +2895,158 @@
       "requiresLogin_other": "{{count}} aren't logged in",
       "requiresOld_one": "{{count}} is too old",
       "requiresOld_other": "{{count}} are too old",
-      "requiresMissingPart_one": "{{commands}} is not installed",
-      "requiresMissingPart_other": "{{commands}} are not installed",
+      "requiresMissingPart_one": "{{commands}} isn’t installed",
+      "requiresMissingPart_other": "{{commands}} aren’t installed",
       "requiresLoginPart_one": "{{commands}} isn't logged in",
       "requiresLoginPart_other": "{{commands}} aren't logged in",
       "requiresOldPart_one": "{{commands}} is older than the skill needs",
       "requiresOldPart_other": "{{commands}} are older than the skill needs",
       "secretsTitle_one": "{{count}} secret this skill needs is not set",
       "secretsTitle_other": "{{count}} secrets this skill needs are not set",
-      "unreachableTitle": "Can't reach {{repo}}",
+      "unreachableTitle": "Can’t reach {{repo}}",
       "unreachableBody": "Last check at {{time}}: {{error}} The skill keeps working from its pinned copy; only updates are paused.",
       "updateTitle": "An update is available from {{repo}}",
       "updateBody_one": "{{ref}} moved {{count}} commit past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until you review it.",
       "updateBody_other": "{{ref}} moved {{count}} commits past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until you review it.",
       "reviewUpdate": "Review update…",
       "defaultBranch": "The default branch",
-      "repoTop": "the repository"
+      "repoTop": "the repository",
+      "masterBody": "{{path}} was removed outside Coffer. Its reach and History are still here; the last version is from {{when}}.",
+      "masterBodyNoHistory": "{{path}} was removed outside Coffer. Its reach is still here, but no earlier version is left to put back.",
+      "requiresBody": "{{name}} is still delivered, but its steps stop at the first call to a command that isn’t ready. Hand the install and the login to an agent, then check again.",
+      "tool": {
+        "off": "{{tool}} is off, so {{name}} can’t call it",
+        "failing": "{{tool}} is failing, so {{name}} can’t rely on it"
+      },
+      "toolBody": {
+        "mcp_server": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} MCP server is off. Turning it on takes effect for every agent at once.",
+        "custom_tools": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} tool group is off. Turning it on takes effect for every agent at once."
+      },
+      "openTool": "Open {{tool}}",
+      "unreachablePrompt": "Coffer can’t reach the Git repository {{url}} that the skill {{name}} was imported from. Last error: {{error}}\n\nCheck whether this machine’s network, VPN or git credentials can reach that repository (for example with `git ls-remote {{url}}`), fix what blocks it, and tell me what you changed. Don’t change the skill itself."
     },
     "copy": {
       "title": ": a folder is in the way in {{agent}}",
-      "subtitle": "{{path}} is a real folder, not Coffer's link. Coffer left it alone.",
+      "subtitle": "{{path}} is a real folder, not Coffer’s link. Coffer left it alone at start.",
       "choiceLabel": "Which one to keep",
-      "master": "Replace it with Coffer's link",
+      "master": "Replace it with Coffer’s link",
       "masterHelp": "Moves the folder to ~/.coffer/content/backup/ first, then links the master. Nothing is lost.",
       "agent": "Adopt this folder",
       "agentHelpAlone": "Makes its files the master.",
-      "askAgent": "Not sure which to keep? An agent can compare them and tell you.",
       "inCoffer": "{{path}} in Coffer",
       "same": "The folder holds the same files as the master.",
-      "note": "The diff shows the change to the side you are not keeping.",
-      "confirmMaster": "Replace with link",
-      "confirmAgent": "Update {{name}} in Coffer",
+      "confirmMaster": "Replace with Coffer’s link",
+      "confirmAgent": "Adopt this folder",
       "agentHelp_one": "Makes its files the master, so {{agents}} gets them too.",
-      "agentHelp_other": "Makes its files the master, so {{agents}} get them too."
+      "agentHelp_other": "Makes its files the master, so {{agents}} get them too.",
+      "happenMasterAgent": "Its folder moves to ~/.coffer/content/backup/{{name}} and Coffer’s link takes its place.",
+      "happenMasterOthers": "Nothing changes; it already gets the master.",
+      "happenAgentCoffer": "{{name}} takes {{agent}}’s files. Today’s master is kept in History.",
+      "happenAgentOthers": "Gets the files at once through its link.",
+      "happenAgentAgent": "Its folder becomes Coffer’s link again.",
+      "captionMaster": "The diff shows the change to the side you are not keeping: {{agent}}’s folder → the master.",
+      "captionAgent": "The diff shows the change to the side you are not keeping: the master → {{agent}}’s folder.",
+      "failed": "Couldn’t settle this folder"
     },
     "missing": {
-      "label": "What to do with the missing master",
-      "restore": "Restore it from History",
-      "restoreUnavailable": "No earlier version of this folder is in the vault's history.",
-      "remove": "Delete the skill",
-      "removeHelp": "Deletes {{name}} from your library, with its settings.",
-      "restoreConfirm": "Restore {{name}}",
-      "removeConfirm": "Delete {{name}}…",
-      "restoreHelp": "Put back the version from {{when}}, as a new version.",
-      "askAgent": "An agent can look for a copy to put back."
+      "restoreButton": "Restore from History",
+      "deleteButton": "Delete skill…",
+      "restored": "Restored {{name}} from History",
+      "emptyTitle": "No files to show",
+      "emptyBody": "The folder they lived in is gone. Restore it to see and edit them again, or look at any version in History.",
+      "openHistory": "Open History"
     },
     "orphan": {
       "section": "Not in your library",
-      "row": "Folder in ~/.coffer/vault/skills",
-      "valid": "has a valid SKILL.md",
-      "invalid": "no valid SKILL.md",
+      "row": "Folder in ~/.coffer/skills · no agent gets it",
+      "valid": "Valid SKILL.md",
+      "invalid": "No valid SKILL.md",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
-      "body": "This folder is in Coffer's skills store, but not in your library — it was copied in by hand or left behind by an interrupted import. No agent gets it.",
-      "add": "Add to library…",
+      "body": "It is in Coffer’s skills store but not in your library — copied in by hand, or left by an interrupted import. Add it to give it reach and history, or delete it.",
+      "add": "Add to library",
       "delete": "Delete folder…",
       "deleteTitle": "Delete the folder {{name}}?",
       "deleteBody": "Coffer moves it out of the skills store into ~/.coffer/content/backup/.",
       "deleteConfirm": "Delete folder",
       "gone": "No folder named “{{name}}” is outside your library",
-      "askAgent": "Not sure what it is? An agent can look at it and tell you which to choose."
+      "bannerTitle": "No agent gets this folder"
     },
     "source": {
-      "change": "Change source…",
-      "since": "since {{time}}"
+      "change": "Change source…"
     },
     "changeSource": {
       "title": "Change source of {{name}}",
-      "now": "Now:",
-      "noteTitle": "Nothing is replaced yet",
-      "noteBody": "Coffer clones the new source and shows the change against your current version first. The name stays {{name}}.",
+      "now": "Now",
       "check": "Check source",
       "checking": "Checking…",
-      "take": "Change to {{commit}}"
+      "take": "Change to {{commit}}",
+      "noteForm": "Nothing is replaced yet.",
+      "note": "The current version stays in History.",
+      "refHelp": "Leave empty for the default branch.",
+      "pathHelp": "Where SKILL.md is. Leave empty when it is at the top.",
+      "cofferTakes": "Replaces {{name}}’s files with the source at {{to}}.",
+      "done": "{{name}} now follows {{repo}}",
+      "failed": "Couldn’t change the source"
     },
     "update": {
-      "whatWillHappen": "What will happen",
-      "coffer": "Coffer.",
-      "cofferMoves": "Moves {{name}} from {{from}} to {{to}}.",
       "agentSees": "Sees the new files at once through its link.",
-      "commitsLine_one": "{{count}} commit: {{subjects}}.",
-      "commitsLine_other": "{{count}} commits: {{subjects}}.",
-      "note": "Only {{name}} changes.",
+      "note": "Only {{name}} changes. You can restore the pinned version from History.",
       "bothSides": " changed on both sides",
-      "conflictNote": "Your edits are listed below."
+      "cofferMoves_one": "Moves {{name}} from {{from}} to {{to}} ({{count}} commit). The pinned version stays in History.",
+      "cofferMoves_other": "Moves {{name}} from {{from}} to {{to}} ({{count}} commits). The pinned version stays in History.",
+      "done": "Updated {{name}} to {{commit}}",
+      "failed": "Couldn’t apply the update"
     },
     "addReach": {
       "availableTo": "Available to",
-      "availableHint": "{{count}} of {{total}} agents · you can change it any time"
+      "help": "Agents that get this skill. You can change it later."
+    },
+    "choice": {
+      "note": "Nothing is written until you choose."
+    },
+    "checkingCopies": "Checking…",
+    "checkCopiesHint": "Compare every agent’s copy with its master",
+    "fileConflict": {
+      "title": "{{file}} changed on both sides",
+      "subtitle": "You edited it in Coffer; something outside Coffer rewrote it.",
+      "choose": "Which side to keep",
+      "keepMine": "Keep my edit",
+      "keepMineHelp": "Saves your text over the file. The version on disk stays in History.",
+      "takeDisk": "Take the version on disk",
+      "takeDiskHelp": "Reloads the file and drops your edit. Copy your text first if you still need it.",
+      "saveMine": "Save my edit",
+      "useDisk": "Use the version on disk",
+      "captionMine": "The diff shows the change to the side you are not keeping: the version on disk → your edit.",
+      "captionDisk": "The diff shows the change to the side you are not keeping: your edit → the version on disk.",
+      "failed": "Couldn’t save {{file}}"
+    },
+    "restore": {
+      "title": "Restore the version of {{date}}",
+      "coffer": "Writes the {{date}} files as a new version on top of today’s. Nothing in History is removed.",
+      "agent": "Sees the restored files at once through its link.",
+      "confirm_one": "Restore {{count}} file",
+      "confirm_other": "Restore {{count}} files",
+      "failed": "Couldn’t restore this version",
+      "loading": "Comparing with the current files…",
+      "note": "You can come back to today’s version the same way.",
+      "same": "The skill already matches this version.",
+      "toast": "Restored the version of {{date}}"
+    },
+    "conflict": {
+      "cofferTake": "Moves {{name}} to {{to}}. Your edits are replaced and kept in History.",
+      "cofferKeep": "{{name}} stays pinned at {{pinned}} with your edits.",
+      "agentTake": "Sees the new files at once through its link.",
+      "agentKeep": "Nothing changes; it keeps getting your version.",
+      "captionTake": "The diff shows the change to the side you are not keeping: your version → the update.",
+      "captionKeep": "The diff shows the change to the side you are not keeping: the update → your version."
     }
   },
   "vault": {
     "writer": {
       "user": "You",
-      "disk": "Edited on disk",
-      "agent": "An agent",
       "daemon": "Coffer",
-      "curation": "Curation",
-      "sync": "Sync"
+      "sync": "Git"
     }
   },
   "knowledge": {
@@ -3078,8 +3186,6 @@
       "reload": "Reload",
       "copyMine": "Copy my text",
       "copyFailed": "Couldn't copy your text",
-      "compareTitle": "On disk now, against your text",
-      "compareBody": "Lines marked − are only on disk; lines marked + are only in your text.",
       "editStands": "Your edit stands: items curated later go around it, never over it.",
       "unsaved": "Unsaved changes",
       "notSaved": "Not saved",
@@ -4057,13 +4163,32 @@
     "everywhereSub": "Including agents you add later",
     "restrictedSub": "Only the ones ticked below",
     "countOf": "{{selected}} of {{total}} agents",
-    "machineLocal": "Reach is set on this machine only — it is not synced, so each machine you use sets its own.",
     "choicesLabel": "Reach",
-    "setReach": "Set reach…",
-    "everywhere": "Every agent",
-    "restricted": "Only selected agents",
-    "agentCount_one": "{{count}} agent",
-    "agentCount_other": "{{count}} agents",
+    "setReach": "Reach",
+    "off": "Off",
+    "everywhere": "All agents",
+    "restricted": "Chosen agents",
+    "inherited": "Same as the group",
+    "inheritedSub": "Follows the group’s agents",
+    "filterAgents": "Filter agents",
+    "noMatch": "No agent matches.",
+    "applying": "Applying…",
+    "saved": "Saved",
+    "failed": "Failed",
+    "untick": "Untick {{name}}",
+    "apply": "Apply",
+    "bulkTitle": "Reach for {{count}} selected",
+    "bulkCount": "{{count}} of {{total}}",
+    "bulkNothing": "Nothing to change",
+    "bulkOff": "Turns off {{count}}",
+    "bulkAll": "Reach changes for {{count}}",
+    "bulkChanges_one": "{{count}} change",
+    "bulkChanges_other": "{{count}} changes",
+    "bulkGets": "{{name}} gets {{count}} more",
+    "bulkLoses": "{{name}} loses {{count}}",
+    "bulkPartial": "Applied to {{ok}} of {{total}}",
+    "bulkNone": "Nothing was applied",
+    "bulkPartialBody": "{{names}} couldn’t be updated: {{reason}}",
     "noneSelected": "No agent selected",
     "dormant": "No agent selected — dormant. This stays added but reaches nobody until at least one agent is selected.",
     "noAgents": "No agents added yet.",
@@ -4977,16 +5102,9 @@
     }
   },
   "customTools": {
-    "subtitle": "HTTP API requests your agents call as tools.",
+    "subtitle": "HTTP API requests Coffer makes for your agents, in groups that share a base URL and a secret.",
     "title": "Custom tools",
     "pendingApprovalSaved": "Saved. The secret waits for approval in the Coffer app before calls can use it.",
-    "health": {
-      "failing": "Failing",
-      "attention": "Needs attention",
-      "healthy": "Healthy",
-      "idle": "Idle",
-      "off": "Off"
-    },
     "list": {
       "toolCount_one": "{{count}} tool",
       "toolCount_other": "{{count}} tools",
@@ -4997,7 +5115,7 @@
         "off": "Off"
       },
       "secretMissing": "Secret missing · {{secret}}",
-      "approvalPending": "Waiting for approval · {{secret}}",
+      "approvalPending": "Waiting for approval",
       "lastCallFailed": "Last call failed",
       "hostTools_one": "{{host}} · {{count}} tool",
       "hostTools_other": "{{host}} · {{count}} tools",
@@ -5020,8 +5138,9 @@
       "change": "Change",
       "handSummary": "Base URL and auth come from the group",
       "importSummary": "Each operation you pick becomes one tool in the new group",
-      "groupPicked": "Picked in the first step. Change it there.",
-      "addTo": "Add to {{group}}"
+      "addTo": "Add to {{group}}",
+      "into": "into {{group}}",
+      "newGroupTag": "new group"
     },
     "ways": {
       "importTitle": "Import an OpenAPI spec",
@@ -5031,10 +5150,9 @@
       "handTitle": "Add one request by hand",
       "handBody": "Method, URL template, headers, body template and arguments.",
       "handPoint1": "You set the base URL and auth",
-      "handPoint2": "Test it before you save"
+      "handPoint2": "Test it before you add it"
     },
     "fields": {
-      "group": "Group",
       "groupName": "Group name",
       "groupNameHelp": "Agents see {{prefix}}. Lowercase, digits and -; up to 24 characters; fixed later.",
       "spec": "Spec",
@@ -5043,23 +5161,15 @@
       "specFile": "File",
       "baseUrl": "Base URL",
       "baseUrlHelp": "Each request's path is added to it.",
-      "authHeader": "Auth header",
-      "headerName": "Header name",
-      "headerPrefix": "Prefix before the secret",
-      "prefixPlaceholder": "Bearer",
-      "secret": "Secret",
-      "noSecret": "No secret",
-      "secretHelpBefore": "From the ",
-      "secretHelpLink": "Secrets",
-      "secretHelpAfter": " page. Coffer adds it to every call.",
       "availableTo": "Available to",
-      "availableToHelp": "The default for every tool in the group; a tool can override it.",
-      "secretHelpAfterAgents": " page. Coffer adds it to every call; agents never see it."
+      "availableToHelp": "The default for every tool in the group; one tool can be given to fewer agents.",
+      "headers": "Headers",
+      "headersHelp": "Coffer adds these to every call; secret values stay in Coffer's keychain and agents never see them."
     },
     "import": {
       "title": "Import an OpenAPI spec",
       "step1": "Step 1 of 2 · spec and operations.",
-      "step2": "Step 2 of 2 · review. Nothing is saved until you create the group.",
+      "step2": "Step 2 of 2 · review. Only these {{count}} operations become tools; nothing is saved until you create the group.",
       "load": "Load",
       "loading": "Loading…",
       "reload": "Reload",
@@ -5070,9 +5180,7 @@
       "browse": "Browse…",
       "fileHelp": "JSON or YAML, up to 5 MB.",
       "tooLarge": "That file is larger than 5 MB.",
-      "authFromSpec": "From the spec's security scheme.",
       "review": "Review tools",
-      "reviewNote": "Only ticked operations become tools. Go Back to pick one; Re-import later keeps your choices.",
       "create_one": "Create group with {{count}} tool",
       "create_other": "Create group with {{count}} tools",
       "groupNameHelp": "Agents see {{prefix}}. Fixed later.",
@@ -5093,28 +5201,54 @@
       "groupTitle": "Group",
       "name": "Name",
       "skipped": "Skipped · {{count}}",
-      "moreSkipped": "and {{count}} more you didn't pick"
+      "moreSkipped": "and {{count}} more you didn't pick",
+      "headersHelpSpec": "Filled from the spec's security scheme. Secret values stay in Coffer's keychain; agents never see them.",
+      "none": "None",
+      "noHeaders": "No headers",
+      "line": "line {{line}}",
+      "unreachable": "Couldn't reach {{host}}: {{reason}}. Check the URL, your network, VPN or proxy.",
+      "reason": {
+        "dns": "the host name couldn't be resolved",
+        "refused": "connection refused",
+        "timeout": "the request timed out",
+        "unreachable": "the host couldn't be reached"
+      },
+      "noArguments": "no arguments",
+      "arguments_one": "{{count}} argument, {{names}}",
+      "arguments_other": "{{count}} arguments, {{names}}",
+      "changes": "changes data",
+      "reads": "reads data",
+      "noSource": "This operation has no text to show from the spec."
     },
     "newGroup": {
       "title": "New group",
-      "subtitle": "A group shares one base URL, one auth and a default reach.",
+      "subtitle": "A group shares one base URL, one auth header and who can use its tools.",
       "create": "Create group"
     },
     "group": {
       "imported": "Imported from OpenAPI",
       "byHand": "Requests added by hand",
+      "noCalls": "no calls in 24 h",
+      "noCallsOff": "no calls while off",
+      "callsLine": "{{calls}}, {{errors}} in 24 h",
       "calls_one": "{{count}} call",
       "calls_other": "{{count}} calls",
       "errors_one": "{{count}} error",
       "errors_other": "{{count}} errors",
-      "in24h": "in 24 h",
       "openActivity": "View in Activity",
-      "help": "A group is one set of HTTP API tools that shares a base URL, an auth header bound to a secret, and a default reach. Agents see each tool as <group>__<tool>; Coffer adds the secret when it makes the call, so it never reaches them.",
       "edit": "Edit group",
       "delete": "Delete group",
       "deleteTitle": "Delete {{name}}?",
       "deleteMenu": "Delete group…",
       "more": "More actions for {{name}}"
+    },
+    "state": {
+      "healthy": "Healthy",
+      "idle": "Idle",
+      "failing": "Failing",
+      "off": "Off",
+      "secretMissing": "Secret missing",
+      "waiting": "Waiting for approval"
     },
     "alert": {
       "missingTitle": "Secret {{secret}} isn't in Secrets",
@@ -5122,36 +5256,46 @@
       "missingBody_other": "Its {{count}} tools that are on fail until it's back. Add it on the Secrets page, or point the group at another secret.",
       "addSecret": "Add secret",
       "chooseAnother": "Choose another",
-      "pendingTitle": "Secret {{secret}} waits for approval",
-      "pendingBody": "Approve it in the Coffer app; until then its tools can't use it."
+      "pendingTitle": "{{secret}} waits for approval",
+      "pendingBody": "Coffer holds the value until you approve it. Until then calls to this group's tools fail.",
+      "openApprovals": "Open approvals",
+      "failingTitle": "Calls to {{host}} are failing",
+      "failingBody": "The last call got an error, so agents get an error from this group's tools.",
+      "failingBodyAt": "The last call got an error, so agents get an error from this group's tools. Last call {{time}}.",
+      "offTitle": "Off — no agent can use it",
+      "offBody_one": "Turning it on gives its {{count}} tool that is on back to the agents it reaches.",
+      "offBody_other": "Turning it on gives its {{count}} tools that are on back to the agents it reaches.",
+      "turnOn": "Turn on"
     },
     "definition": {
       "title": "Definition",
+      "description": "How Coffer makes each call; the secret never reaches your agents.",
       "agentsSee": "Agents see",
       "auth": "Auth",
+      "timeout": "Timeout",
+      "timeoutValue": "{{seconds}} s per call",
       "noAuth": "No auth header",
-      "missing": "Missing",
-      "waiting": "Waiting",
       "spec": "Spec",
-      "fetched": "fetched {{date}}",
-      "secretWord": "secret"
+      "fetched": "fetched {{date}}"
     },
     "tools": {
       "allOn": "All on",
       "allOff": "All off",
+      "countOn": "{{on}} of {{total}} on",
       "switch": "On",
       "switchTool": "Turn {{name}} on or off",
       "colTool": "Tool · request",
       "colCalls": "Calls 24 h",
       "colErrors": "Errors",
       "changesData": "Changes data",
-      "groupDefault": "Group default",
-      "override": "Override",
-      "on": "On",
       "off": "Off",
       "empty": "No tools in this group yet.",
       "addRequest": "Add request",
       "heading": "Tools",
+      "description": "Each tool is one request; agents see {{prefix}}.",
+      "groupGives": "{{group}} gives it to {{agents}}",
+      "reachFootnote": "To stop it for every agent, turn its switch off in the table.",
+      "reachOf": "Available to: {{name}}",
       "edit": "Edit {{name}}"
     },
     "editor": {
@@ -5180,21 +5324,15 @@
       "enumValues": "Values, comma-separated",
       "removeArgument": "Remove argument",
       "addArgument": "Add argument",
-      "enabled": "Tool on",
       "delete": "Delete tool",
       "deleteTitle": "Delete {{name}}?",
       "deleteBody": "Agents stop seeing it. Its calls stay in Activity.",
-      "onlyThisTool": "Only for this tool",
-      "reachFollows": "Follows the group, which gives it to {{count}} of {{total}} agents.",
-      "reachOverrides": "The group gives it to {{count}} of {{total}} agents; this tool overrides that.",
       "and": " and ",
       "requestHelpAdd": "Added to {{url}}.",
       "requestHelpArgs": "Added to {{url}}. {{holes}} come from the arguments.",
       "changesDataHelpShort": "On for POST, PUT, PATCH and DELETE. Agents get it as the tool's read-only or destructive hint.",
       "fromGroup": "from the group",
-      "addHeaderThis": "Add header for this request",
-      "reachFollowsAll": "Follows the group, which gives it to every agent.",
-      "reachOverridesAll": "The group gives it to every agent; this tool overrides that."
+      "addHeaderThis": "Add header for this request"
     },
     "test": {
       "title": "Test",
@@ -5202,7 +5340,12 @@
       "run": "Run",
       "runAgain": "Run again",
       "running": "Running…",
-      "summary": "{{status}} in {{ms}} ms · {{size}} {{kind}}",
+      "summary": "{{status}} · {{duration}} · {{size}} {{kind}}",
+      "summaryCut": "{{status}} · {{duration}} · {{size}} {{kind}}, cut short",
+      "response": "Response",
+      "responseType": "Response · {{type}}",
+      "changeTimeout": "Change timeout",
+      "changeValue": "Change value",
       "notRun": "Not run yet. Fill in the arguments and press Run.",
       "noteUnsaved": {
         "save": "Runs once without the secret — it is sent only once the group is saved; nothing is saved until you press Save.",
@@ -5216,13 +5359,13 @@
       },
       "hint": {
         "request": "{{reason}}",
-        "timeout": "Coffer stopped waiting after the group's {{seconds}} s timeout. Run again, or raise the timeout in Edit group.",
-        "connect": "Coffer couldn't open a connection. If you use a VPN or proxy, check it reaches {{host}}, then run again.",
+        "timeout": "Coffer stopped waiting after {{group}}'s {{seconds}} s timeout. If the API is only slow, raise the timeout; if it should answer quickly, hand it to an agent to find out why. Nothing was saved.",
+        "connect": "Coffer couldn't open a connection from this Mac{{detail}}. If you use a VPN or proxy, check it reaches {{host}}, then run again. Nothing was saved.",
         "blocked": "Before a group is saved, Coffer tests a base URL only when it resolves to a public address. Add the tool, then test it from the group.",
-        "rejected": "The API rejected {{secret}}. If it has expired, replace it on the Secrets page; every tool in {{group}} uses the same secret.",
-        "httpError": "The API answered with an error. Check the path and arguments; nothing was saved."
+        "rejected": "The API rejected {{secret}}. If it has expired, change its value; every tool in {{group}} uses the same secret.",
+        "httpError": "The API answered with an error; its response is below. Check the path and the argument values, then run again. Nothing was saved."
       },
-      "cutShort": "Response cut short at {{size}}",
+      "cutShort": "Cut short at {{size}}.",
       "cutShortBody": "Agents get the same first {{size}}. Narrow the request with arguments, or return less from the API.",
       "note": {
         "save": "Runs once; nothing is saved until you press Save.",
@@ -5246,49 +5389,36 @@
     "reimport": {
       "action": "Re-import",
       "title": "Re-import {{name}}",
-      "subtitle": "From {{location}}, fetched just now. Nothing changes until you apply.",
+      "subtitle": "From {{location}}, fetched just now.",
       "file": "The spec file",
       "fileHelp": "This group was imported from a file: choose it again.",
       "reading": "Reading the spec…",
       "noChange": "The spec has no operations to add and no tools to remove.",
-      "subtitleFile": "Choose {{location}} again. Nothing changes until you apply.",
-      "changes_one": "{{count}} change",
-      "changes_other": "{{count}} changes",
-      "addRead": "Reads data — becomes a tool, on",
-      "addWrite": "Changes data — listed but not ticked",
-      "newRequired_one": "New required argument {{names}}",
-      "newRequired_other": "New required arguments {{names}}",
-      "requestChanged": "Its request changed",
+      "subtitleFile": "Choose {{location}} again.",
       "gone": "Gone from the spec — agents lose it",
-      "kind": {
-        "add": "+ Add",
-        "change": "~ Changed",
-        "remove": "− Removed"
-      },
       "apply_one": "Apply {{count}} change",
       "apply_other": "Apply {{count}} changes",
       "kept_one": "{{count}} tool is unchanged and keeps its switch and reach.",
-      "kept_other": "{{count}} tools are unchanged and keep their switch and reach."
+      "kept_other": "{{count}} tools are unchanged and keep their switch and reach.",
+      "summary_one": "{{count}} change in {{name}}",
+      "summary_other": "{{count}} changes in {{name}}",
+      "willAddRead": "<b>{{name}}</b> becomes a tool, on.",
+      "willAddWrite": "<b>{{name}}</b> changes data, so it isn't added unless you tick it.",
+      "willRequire_one": "<b>{{name}}</b> gets a new required argument, {{names}}.",
+      "willRequire_other": "<b>{{name}}</b> gets new required arguments, {{names}}.",
+      "willChange": "<b>{{name}}</b>'s request changed.",
+      "willRemove": "<b>{{name}}</b> is gone from the spec; agents lose it.",
+      "add": "Add {{name}}",
+      "afterApply": "After you apply, agents must pass {{names}}; calls that leave it out get a 400 from the API.",
+      "noOldText": "The spec text from before isn't kept for this import, so there is no diff."
     },
     "firstRun": {
-      "title": "Turn any HTTP API into tools",
-      "body": "A custom tool is one HTTP request that Coffer makes for your agents — no MCP server to run. Tools live in groups: a group has a name agents see as a prefix, one base URL, one secret for auth and a default reach.",
-      "importBody": "Pick operations from a spec; the import becomes a group.",
-      "importPoint": "Re-import to update",
+      "title": "No custom tools yet",
+      "body": "A custom tool is one HTTP request Coffer makes for your agents — no MCP server to run. Tools live in groups that share a base URL, one secret and who can use them.",
+      "importBody": "Pick operations from a URL or a file; the import becomes a group.",
+      "importPoint": "Re-import later to pick up changes.",
       "handBody": "Method, URL template, headers, body and arguments.",
-      "handPoint": "Starts a new group; add more requests later"
-    },
-    "reach": {
-      "countOf": "{{count}} of {{total}} agents"
-    },
-    "auth": {
-      "custom": "Custom header…",
-      "scheme": {
-        "bearer": "Bearer token (HTTP)",
-        "token": "Token (Authorization: Token)",
-        "basic": "Basic (HTTP)",
-        "apiKey": "API key (X-API-Key header)"
-      }
+      "handPoint": "Starts a new group; test it before you add it."
     },
     "request": {
       "title": "Add a request",
@@ -5298,25 +5428,28 @@
       "body_one": "Its {{count}} tool stops working for {{agents}} on their next call.",
       "body_other": "Its {{count}} tools stop working for {{agents}} on their next call.",
       "noAgents": "every agent",
-      "secretStays": "The secret {{secret}} stays on the Secrets page; call history stays in Activity.",
+      "secretStays_one": "The secret {{secret}} stays on the Secrets page; call history stays in Activity.",
+      "secretStays_other": "The secrets {{secret}} stay on the Secrets page; call history stays in Activity.",
       "historyStays": "Call history stays in Activity.",
       "undo": "This can't be undone. To stop it for a while, turn the group off instead."
+    },
+    "viewer": {
+      "wrap": "Wrap lines"
     }
   },
   "clis": {
-    "subtitle": "Command-line tools your skills and MCP servers need, problems first.",
+    "subtitle": "Command-line tools your skills and MCP servers need. Coffer checks them; an agent installs them and logs them in.",
     "title": "CLIs",
-    "addTool": "Add a command-line tool",
+    "addTool": "Add CLI",
     "checkAgain": "Check again",
     "checking": "Checking…",
-    "checkedAgo": "Checked {{when}}",
     "status": {
       "missing": "Not found",
       "outdated": "Too old",
       "logged_out": "Not logged in",
       "ready": "Ready"
     },
-    "search": "Filter commands",
+    "search": "Filter CLIs",
     "notOnPath": "Not on PATH",
     "needs": "needs ≥ {{version}}",
     "unknownVersion": "Unknown version",
@@ -5328,130 +5461,146 @@
     "skillCount_one": "{{count}} skill",
     "skillCount_other": "{{count}} skills",
     "warnings": {
-      "title": "Some requires: entries were skipped",
-      "line": "{{skill}}: {{message}}"
+      "line_one": "{{count}} <code>requires:</code> entry in a skill couldn’t be read",
+      "line_other": "{{count}} <code>requires:</code> entries in skills couldn’t be read",
+      "view": "View"
     },
     "empty": {
       "title": "No command-line tools yet",
-      "description": "Add a tool by hand, or let a skill list the commands it needs under requires: in its SKILL.md. Either way it shows up here with its version, login state and full list of commands.",
+      "description": "They show up here when a skill lists them under <code>requires:</code> in its SKILL.md, or when an MCP server starts with one. You can also add one by hand.",
       "docs": "How requires: works",
       "docsUrl": "https://wyx-sg.github.io/Coffer/guides/clis#declare-what-a-skill-needs"
     },
     "detail": {
-      "subtitle_one": "{{title}} · needed by {{count}} skill",
-      "subtitle_other": "{{title}} · needed by {{count}} skills",
       "notFound": "Couldn't open this command",
       "sections": {
-        "command": "Command",
-        "login": "Login",
+        "machine": "On this machine",
         "neededBy": "Needed by"
       },
+      "machineNote": "What Coffer found when it last checked, {{when}}.",
+      "today": "today at {{time}}",
+      "onDate": "{{date}} at {{time}}",
       "foundAt": "Found at",
       "version": "Version",
-      "state": "State",
-      "subtitleNeeded": "{{title}} · needed by {{needed}}",
+      "login": "Login",
+      "checkedWith": "· checked with",
+      "neededByNote": "The skills and MCP servers that call it. Open one to see why.",
+      "neededByNothing": "No skill or MCP server requires it — you added it by hand, so it stays listed until you remove it.",
+      "cols": {
+        "name": "Name",
+        "kind": "Kind",
+        "needs": "Needs"
+      },
       "kind": {
         "server": "MCP server",
         "skill": "Skill"
       },
       "startsWith": "starts with {{launcher}}",
-      "subtitleAdded": "{{title}} · added by you",
-      "addedByYou": "Added by you"
+      "neededBy": "needed by {{needed}}",
+      "addedByYou": "added by you"
     },
     "add": {
-      "title": "Add a command-line tool",
-      "body": "Name a command, or give the path of an executable. No skill is needed.",
-      "editTitle": "Edit command-line tool",
-      "editBody": "Change what Coffer knows about it. The command stays the same.",
+      "title": "Add CLI",
+      "body": "Name a command, or the path to an executable.",
+      "editTitle": "Edit {{command}}",
+      "editBody": "Change what Coffer checks for this tool.",
       "command": "Command",
       "commandPlaceholder": "jq, or /opt/tools/bin/jq",
+      "fixed": "Fixed — Coffer finds the tool by it.",
       "looking": "Looking…",
       "foundAt": "Found at",
-      "notFound": "{{command}} isn't on this machine yet. You can still add it.",
+      "version": "version",
+      "notFound": "{{command}} isn’t on this machine yet. You can still add it — it shows as Not found until an agent installs it.",
       "alreadyAdded": "{{command}} is already added.",
-      "alsoRequired": "A skill or MCP server already needs it.",
+      "alsoRequired": "Already listed — a skill or MCP server needs it. Adding it keeps it listed even if they stop.",
       "titleField": "Title",
+      "titlePlaceholder": "Shown under the command",
       "minVersion": "Minimum version",
       "description": "Description",
+      "descriptionPlaceholder": "What it’s for, in a sentence",
       "loginCheck": "Login check",
-      "loginCheckHint": "A command line that starts with the tool and exits 0 when you are logged in, like gh auth status. It runs only when you press Check again.",
-      "submit": "Add"
+      "loginCheckHint": "Exits 0 when you’re logged in. Runs when you press Check again.",
+      "submit": "Add",
+      "addFailed": "Couldn’t add {{command}}",
+      "editFailed": "Couldn’t save {{command}}"
     },
-    "kind": {
-      "added": "Added"
-    },
-    "tabs": {
-      "overview": "Overview",
-      "commands": "Commands"
+    "menu": {
+      "label": "More actions for {{command}}"
     },
     "remove": {
       "action": "Remove",
       "title": "Remove {{command}}?",
-      "body": "Coffer stops listing it. The tool itself stays installed.",
+      "body": "Coffer stops checking {{command}} and drops it from this list. The tool stays installed on this machine.",
       "bodyStays": "A skill or MCP server still needs it, so it stays listed; only the entry you added goes.",
       "pending": "Removing…",
       "failed": "Couldn’t remove {{command}}"
     },
-    "commands": {
-      "search": "Filter this tool's commands",
-      "noMatch": "No command matches",
-      "treeLabel": "Commands of {{command}}",
-      "copyLine": "Copy {{line}}",
-      "fold": "Fold {{name}}",
-      "unfold": "Unfold {{name}}",
-      "reading": "Reading the tool's help…",
-      "loadFailed": "Couldn't load the commands",
-      "readFailed": "Couldn't read the commands",
-      "readAgain": "Read again",
-      "unavailable": "Not found on this machine",
-      "unavailableBody": "{{command}} isn't on the PATH, so there is no help to read.",
-      "noHelpTitle": "No help to read",
-      "summary_one": "{{count}} command · read {{when}}",
-      "summary_other": "{{count}} commands · read {{when}}",
-      "incomplete": "Some commands are not listed: the tree stops at three levels, 200 commands or 30 seconds.",
-      "showRaw": "Raw help",
-      "hideRaw": "Hide raw help",
-      "rawTitle": "Raw help",
-      "truncated": "The help was cut at 256 KB.",
-      "noHelp": "No help printed: {{reason}}",
-      "usage": "Usage",
-      "subcommands": "Commands",
-      "arguments": "Arguments",
-      "options": "Options",
-      "required": "required",
-      "noOptions": "No options",
-      "cols": {
-        "option": "Option",
-        "description": "Description",
-        "default": "Default"
-      }
-    },
     "banner": {
       "outdated_one": "{{command}} {{found}} is older than {{skills}} needs",
       "outdated_other": "{{command}} {{found}} is older than {{skills}} need",
-      "body": "{{skills}} will fail at the step that calls {{command}}.",
-      "outdatedBody_one": "It needs {{command}} ≥ {{version}}.",
-      "outdatedBody_other": "They need {{command}} ≥ {{version}}.",
-      "missing": "{{command}} isn't installed — {{needed}} affected",
-      "logged_out": "{{command}} isn't logged in — {{needed}} affected",
-      "serversBody": "{{servers}} can't start.",
-      "bothBody_one": "{{servers}} can't start, and {{skills}} fails at the step that calls {{command}}.",
-      "bothBody_other": "{{servers}} can't start, and {{skills}} fail at the step that calls {{command}}."
+      "missing": "{{command}} isn’t found on this machine",
+      "logged_out": "{{command}} isn’t logged in",
+      "outdatedBody_one": "{{skills}} needs {{command}} ≥ {{version}} and fails at the step that calls it.",
+      "outdatedBody_other": "{{skills}} need {{command}} ≥ {{version}} and fail at the step that calls it.",
+      "skillsBody_one": "{{skills}} fails at the step that calls {{command}}.",
+      "skillsBody_other": "{{skills}} fail at the step that calls {{command}}.",
+      "serversBody": "{{servers}} can’t start.",
+      "bothBody_one": "{{servers}} can’t start, and {{skills}} fails at the step that calls {{command}}.",
+      "bothBody_other": "{{servers}} can’t start, and {{skills}} fail at the step that calls {{command}}.",
+      "loginFailed": "{{check}} didn’t succeed at {{time}}.",
+      "hand": {
+        "missing": "Hand the install to an agent, then check again.",
+        "outdated": "Hand the update to an agent, then check again.",
+        "logged_out": "Hand the login to an agent, then check again."
+      }
     },
     "list": {
-      "needsYou": "Needs you",
+      "needsAttention": "Needs attention",
       "ready": "Ready",
       "outdatedLine": "{{version}} · needs ≥ {{min}}",
-      "loggedInLine": "{{version}} · logged in",
-      "missingServersLine_one": "Not found · {{servers}} needs it",
-      "missingServersLine_other": "Not found · {{servers}} need it"
+      "loggedIn": "logged in",
+      "addedByYou": "added by you",
+      "needLine_one": "{{lead}} · {{who}} needs it",
+      "needLine_other": "{{lead}} · {{who}} need it",
+      "missingServersLine": "Not found · {{servers}} can’t start"
     },
-    "serverCount_one": "{{count}} server",
-    "serverCount_other": "{{count}} servers",
     "mcpServerCount_one": "{{count}} MCP server",
     "mcpServerCount_other": "{{count}} MCP servers",
-    "countPair": "{{servers}} · {{skills}}",
+    "listPair": "{{servers}}, {{skills}}",
     "neededPair": "{{servers}} and {{skills}}"
+  },
+  "secretField": {
+    "placeholder": "Choose a secret, or paste a new value",
+    "hint": "Kept in Coffer’s Secrets; the agent’s config gets a reference, never the value.",
+    "newBadge": "New · saved on Add",
+    "missing": "Missing",
+    "menu": "Secrets",
+    "list": "Stored secrets",
+    "filter": "Filter secrets",
+    "noMatch": "No secret matches.",
+    "usedBy": "used by {{count}}",
+    "newSecret": "New secret…",
+    "changeValue": "Change {{name}}’s value…",
+    "plain": "Type a plain value",
+    "rename": "Name of the new secret",
+    "pick": "Choose a secret for {{label}}",
+    "chosen": "{{label}}: secret {{name}}",
+    "dialog": {
+      "title": "New secret",
+      "taken": "{{name}} already exists. Pick another name."
+    }
+  },
+  "secretRows": {
+    "value": "Value",
+    "valueOf": "Value of {{key}}",
+    "keyOf": "{{label}} name",
+    "pick": "Choose a secret for {{key}}",
+    "pickTitle": "Use a stored secret",
+    "remove": "Remove {{key}}",
+    "addVariable": "Add variable",
+    "readsFrom": "reads from",
+    "storeHint": "This looks like a secret.",
+    "storeIt": "Store it in Coffer?"
   },
   "secrets": {
     "title": "Secrets",
@@ -6281,9 +6430,8 @@
     "archive": {
       "label": "Archive",
       "choose": "Choose file…",
-      "chooseAnother": "Choose another file",
       "empty": "A .zip or .skill file — or drop one on this dialog",
-      "meta": "{{ext}} · {{size}} · or drop another file to replace it"
+      "meta": "{{ext}} · {{size}} · or drop another file on this dialog"
     },
     "git": {
       "url": "Repository URL",
@@ -6295,10 +6443,9 @@
       "pathPlaceholder": "Top of the repository",
       "clone": "Clone",
       "cloning": "Cloning…",
-      "cloningLine": "Cloning {{url}}…",
+      "cloningLine": "Cloning {{repo}}…",
       "retry": "Retry",
-      "pathHelp": "Where SKILL.md is. Leave empty when it is at the top.",
-      "unreachable": "Couldn't reach {{host}} — check the URL or your network."
+      "pathHelp": "Where SKILL.md is. Empty means the top."
     },
     "found": {
       "top": "Found SKILL.md at the top level",
@@ -6318,21 +6465,24 @@
       "taken": "Already in your library.",
       "protected": "Coffer's own built-in skill has this name, so it can't be replaced.",
       "takenTitle": "You already have a skill named {{name}}",
-      "takenBody": "Replacing it swaps the master folder for this version and re-links it to every agent that has it.",
+      "takenBody": "The name comes from its SKILL.md, so there can be only one {{name}}. Replacing it swaps the master folder for this version and re-links it to every agent that has it; an edited copy in an agent is replaced too, and your current version stays in History. To keep yours, cancel.",
       "validFolder": "Valid skill folder",
       "replacing": "Replacing yours",
-      "takenNote": "The name comes from its SKILL.md and can't change, so there is only one {{name}}. To keep yours as it is, cancel."
+      "pinned": "Pinned",
+      "defaultBranch": "default branch"
     },
     "refusal": {
-      "title": "This can't be added as a skill",
-      "noSkillMd": "No SKILL.md found",
-      "noSkillMdBody": "SKILL.md must be at the top or one folder down. Nothing was added.",
-      "unsafe": "The archive has unsafe entries",
+      "noSkillMdIn": "No SKILL.md in {{file}}. Coffer looks at the top level and one folder down.",
+      "noSkillMdTop": "No SKILL.md at the top of this folder. There is one in",
+      "useFolder": "Use that folder",
       "unsafeBody": "Nothing was unpacked. These entries could write outside the archive or link elsewhere:",
       "tooLarge": "Larger than the 50 MB skill limit",
-      "unreachable": "Couldn't reach the repository",
+      "cloneFailed": "Couldn't clone {{repo}}",
+      "gitSaid": "Git said:",
+      "cloneHint": "Check the URL, your network, VPN or proxy.",
+      "cloneHintHandoff": "Check the URL, your network, VPN or proxy — or hand it to an agent.",
       "gitMissing": "Git isn't installed on this machine",
-      "gitMissingBody": "Adding a skill from a Git repository needs git. Hand installing it to your agent, then try again.",
+      "gitMissingBody": "Adding a skill from a Git repository needs git. Hand the install to an agent, then retry.",
       "entries": "Offending entries",
       "problem": {
         "absolute_path": "absolute path",
@@ -6343,67 +6493,30 @@
       }
     },
     "source": {
-      "title": "Source",
-      "checkNow": "Check now",
       "checking": "Checking…",
-      "repository": "Repository",
-      "folder": "Folder",
-      "folderTop": "Top of the repository",
       "pinned": "Pinned",
       "defaultBranch": "default branch",
-      "status": "Status",
-      "notChecked": "Not checked yet",
-      "upToDate": "Up to date",
-      "checkedAt": "checked {{time}}",
-      "updateAvailable": "Update available",
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files"
+      "checkedAt": "Checked at {{time}}",
+      "on": "on",
+      "checkAgain": "Check again"
     },
     "update": {
       "title": "Update {{name}}",
       "loading": "Preparing the update…",
       "upToDate": "Already up to date",
       "upToDateBody": "{{name}} is at the newest commit of its source.",
-      "commitsLabel": "Commits in this update",
-      "changes": "Changes · {{count}}",
-      "noChanges": "No files change.",
-      "diffLabel": "Changes to {{path}}",
-      "binary": "Binary file — no diff shown.",
-      "noDiff": "No line changes.",
-      "truncated": "The diff is cut short; the whole file is updated.",
-      "notNow": "Not now",
-      "apply": "Update to {{commit}}",
-      "applying": "Updating…"
+      "apply": "Update to {{commit}}"
     },
     "conflict": {
       "title": "{{name}} changed on both sides",
       "body": "You edited it here since the pinned {{pinned}}, and the update {{to}} changes it too.",
-      "localEditsLabel": "Files you edited",
       "keep": "Keep my edits",
       "keepHelp": "Stays pinned at {{pinned}} with your change. Coffer tells you again when there is a newer update.",
       "take": "Take the update",
-      "takeHelp": "Moves to {{to}}. Your edits are replaced.",
-      "compare": "Compare",
-      "back": "Back",
-      "confirmTitle": "Discard your edits?",
-      "confirmBody": "Taking {{to}} replaces your edits to {{name}} with the update.",
-      "merge": "Merge with an agent",
-      "mergeHelp": "Your agent merges the update into your edits. Then you record it with I merged it.",
-      "mergeBody": "Hand this to your agent: it merges {{to}} into your edits in {{name}}'s master folder and shows you the diff. When the files look right, choose I merged it.",
-      "merged": "I merged it",
-      "mergedTitle": "Record the merge?",
-      "mergedBody": "Coffer pins {{name}} to {{to}} and keeps its master folder's files as they are now. Check your agent's diff first."
+      "takeHelp": "Moves to {{to}}. Your edits are replaced and kept in History."
     },
     "compare": {
-      "files": "Files to compare",
-      "local": "Local",
-      "pinned": "Pinned",
-      "incoming": "New",
-      "binary": "Binary file",
-      "missing": "Not in this version",
-      "truncated": "cut short"
+      "binary": "Binary file"
     }
   },
   "handoff": {

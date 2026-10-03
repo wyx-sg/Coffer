@@ -37,6 +37,8 @@ interface Props {
   onType?: (value: string) => void;
   /** The chosen value no longer resolves (e.g. the folder was moved). */
   invalid?: boolean;
+  /** A glyph at the start of the field (the folder icon of Foundations 0.2.04). */
+  icon?: React.ReactNode;
 }
 
 export function PickerField({
@@ -48,22 +50,33 @@ export function PickerField({
   onClear,
   onType,
   invalid = false,
+  icon,
 }: Props) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2">
-      <Input
-        id={inputId}
-        aria-label={ariaLabel}
-        aria-invalid={invalid || undefined}
-        className="min-w-0 truncate font-mono text-xs"
-        placeholder={placeholder}
-        value={value ?? ""}
-        readOnly={!onType}
-        onChange={onType ? (e) => onType(e.target.value) : undefined}
-        spellCheck={onType ? false : undefined}
-        autoComplete={onType ? "off" : undefined}
-      />
+      <div className="relative min-w-0 flex-1">
+        {icon ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-text-muted"
+          >
+            {icon}
+          </span>
+        ) : null}
+        <Input
+          id={inputId}
+          aria-label={ariaLabel}
+          aria-invalid={invalid || undefined}
+          className={`min-w-0 truncate font-mono text-xs${icon ? " pl-8" : ""}`}
+          placeholder={placeholder}
+          value={value ?? ""}
+          readOnly={!onType}
+          onChange={onType ? (e) => onType(e.target.value) : undefined}
+          spellCheck={onType ? false : undefined}
+          autoComplete={onType ? "off" : undefined}
+        />
+      </div>
       {action}
       {onClear && value ? (
         <Button type="button" variant="ghost" size="sm" onClick={onClear}>

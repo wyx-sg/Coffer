@@ -57,6 +57,11 @@ export function argsFromSchema(schema: Schema): ArgRow[] {
   });
 }
 
+/** The names of a schema's top-level arguments, in order. */
+export function argumentNames(schema: Schema): string[] {
+  return Object.keys(asObject(schema.properties));
+}
+
 export function emptyArg(): ArgRow {
   return {
     name: "",

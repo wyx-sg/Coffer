@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from coffer.application.skill.cli_requirements import ToolStatesPort
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.source_service import SkillSourceService
 
@@ -62,3 +63,18 @@ def set_skill_secret_presence(secret_set: Callable[[str], bool] | None) -> None:
 def get_skill_secret_presence() -> Callable[[str], bool] | None:
     """For the read model; ``None`` in a graph built without the secret store."""
     return _skill_secret_presence
+
+
+_skill_tool_states: ToolStatesPort | None = None
+
+
+def set_skill_tool_states(states: ToolStatesPort | None) -> None:
+    """Called by the composition root once on startup: the MCP servers and
+    custom-tool groups by name, for the tools a skill declares it requires."""
+    global _skill_tool_states
+    _skill_tool_states = states
+
+
+def get_skill_tool_states() -> ToolStatesPort | None:
+    """For the read model; ``None`` in a graph built without the MCP kind."""
+    return _skill_tool_states

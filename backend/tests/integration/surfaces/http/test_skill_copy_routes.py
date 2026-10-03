@@ -184,3 +184,126 @@ def test_master_missing_is_on_the_read_model(c: TestClient, tmp_path: pathlib.Pa
     assert skill["master_missing"] is False
     shutil.rmtree(default_master_root() / "pdf")
     assert c.get(f"/api/v1/skills/{skill['uid']}").json()["master_missing"] is True
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a skill is deleted and the agent's own folder kept"
+)
+def test_delete_can_keep_the_agents_own_folder(c: TestClient, tmp_path: pathlib.Path) -> None:
+    _claude, claude_dir = _agent(c, tmp_path, "claude_code")
+    _codex, codex_dir = _agent(c, tmp_path, "codex")
+    skill = _import(c, _skill(tmp_path / "src" / "pdf", "pdf"))
+    _in_the_way(codex_dir / "pdf", "codex text")
+
+    r = c.delete(f"/api/v1/skills/{skill['uid']}", params={"keep_foreign_copies": "true"})
+    assert r.status_code == 200, r.text
+    [kept] = r.json()["kept_copies"]
+    assert kept["path"] == str(codex_dir / "pdf") and kept["agent_name"]
+    assert not (default_master_root() / "pdf").exists()
+    assert not (claude_dir / "pdf").exists() and not (claude_dir / "pdf").is_symlink()
+    assert "codex text" in (codex_dir / "pdf" / "SKILL.md").read_text()
+    assert c.get(f"/api/v1/skills/{skill['uid']}").status_code == 404
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a bulk delete reports each skill")
+def test_bulk_delete_reports_each_skill(c: TestClient, tmp_path: pathlib.Path) -> None:
+    _uid, skills_dir = _agent(c, tmp_path, "claude_code")
+    pdf = _import(c, _skill(tmp_path / "src" / "pdf", "pdf"))
+    notes = _import(c, _skill(tmp_path / "src" / "release-notes", "release-notes"))
+    link = skills_dir / "pdf"
+    _in_the_way(link, "agent text")
+    uids = [pdf["uid"], notes["uid"]]
+
+    first = c.post("/api/v1/skills/bulk-delete", json={"uids": uids})
+    assert first.status_code == 200, first.text
+    by_name = {r["name"]: r for r in first.json()["results"]}
+    assert by_name["release-notes"]["deleted"] is True
+    refused = by_name["pdf"]
+    assert refused["deleted"] is False and refused["error_code"] == "SKILL_COPY_NOT_OURS"
+    assert refused["error_details"]["path"] == str(link)
+    assert (default_master_root() / "pdf").is_dir()
+
+    again = c.post(
+        "/api/v1/skills/bulk-delete", json={"uids": [pdf["uid"]], "keep_foreign_copies": True}
+    ).json()["results"]
+    assert again[0]["deleted"] is True and again[0]["kept_copies"][0]["path"] == str(link)
+    assert "agent text" in (link / "SKILL.md").read_text()
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a reach change reports delivery per agent")
+def test_scope_change_reports_delivery_per_agent(c: TestClient, tmp_path: pathlib.Path) -> None:
+    claude, _claude_dir = _agent(c, tmp_path, "claude_code")
+    codex, codex_dir = _agent(c, tmp_path, "codex")
+    skill = _import(c, _skill(tmp_path / "src" / "pdf", "pdf"))
+    # Codex already holds a real folder where the link would go.
+    (codex_dir / "pdf").unlink(missing_ok=True)
+    _skill(codex_dir / "pdf", "pdf", "codex text")
+
+    r = c.put(f"/api/v1/resources/{skill['uid']}/scope", json={"scope": None})
+    assert r.status_code == 200, r.text
+    rows = {d["agent_uid"]: d for d in r.json()["delivery"]}
+    assert rows[claude]["ok"] is True and rows[claude]["reason"] is None
+    assert rows[codex]["ok"] is False and rows[codex]["reason"]
+    agent = c.get(f"/api/v1/resources/{claude}").json()
+    assert (
+        c.put(f"/api/v1/resources/{claude}/scope", json={"scope": None}).json()["delivery"] is None
+    )
+    assert agent["kind"] == "agent"
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="the read model says what state each declared tool is in"
+)
+def test_requires_tools_and_skills_reach_the_read_model(
+    c: TestClient, tmp_path: pathlib.Path
+) -> None:
+    _agent_uid, _dir = _agent(c, tmp_path, "claude_code")
+    _agent2, _dir2 = _agent(c, tmp_path, "codex")
+    stdio = {"transport": {"type": "stdio", "command": "echo"}}
+    group = {"transport": {"type": "http_api", "base_url": "https://billing.example"}}
+    github = c.post(
+        "/api/v1/resources", json={"kind": "mcp_server", "name": "github", "config": stdio}
+    ).json()
+    c.post("/api/v1/resources", json={"kind": "mcp_server", "name": "billing-api", "config": group})
+    c.post(f"/api/v1/resources/{github['uid']}/disable")
+    evidence = _import(c, _skill(tmp_path / "src" / "coffer-evidence", "coffer-evidence"))
+    c.put(
+        f"/api/v1/resources/{evidence['uid']}/scope",
+        json={"scope": {"agents": [_agent_uid]}},
+    )
+    folder = tmp_path / "src" / "triage"
+    _skill(folder, "triage")
+    (folder / "SKILL.md").write_text(
+        "---\nname: triage\ndescription: Triage.\nrequires:\n"
+        "  tools: [github, billing-api, ghost]\nmetadata:\n  requires: [coffer-evidence]\n---\nx\n",
+        encoding="utf-8",
+    )
+    triage = _import(c, folder)
+
+    got = c.get(f"/api/v1/skills/{triage['uid']}").json()
+    assert [(t["name"], t["kind"], t["status"]) for t in got["requires_tools"]] == [
+        ("github", "mcp_server", "off"),
+        ("billing-api", "custom_tools", "healthy"),
+    ]
+    [dep] = got["requires_skills"]
+    assert dep["found"] is True and dep["uid"] == evidence["uid"]
+    assert dep["delivered_to_same_agents"] is False and len(dep["missing_agent_names"]) == 1
+    warnings = c.get("/api/v1/clis").json()["warnings"]
+    assert any("ghost" in w["message"] and w["skill_name"] == "triage" for w in warnings)
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="a folder whose skill is one folder down names that folder when it cannot be added",
+)
+def test_staging_a_folder_names_its_one_sub_folder_candidate(
+    c: TestClient, tmp_path: pathlib.Path
+) -> None:
+    top = tmp_path / "changelog-main"
+    inner = _skill(top / "skill", "changelog")
+    (inner / "latest").symlink_to(tmp_path)  # leaves the folder: cannot be copied
+    r = c.post("/api/v1/skills/stage/folder", json={"path": str(top)})
+    assert r.status_code == 422, r.text
+    details = r.json()["error"]["details"]
+    assert details["candidate_folder"] == "skill"
+    assert details["candidate_path"] == str(inner.resolve())

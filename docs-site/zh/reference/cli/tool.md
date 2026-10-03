@@ -21,7 +21,7 @@ coffer tool [OPTIONS] COMMAND [ARGS]...
 | [`tool list`](#tool-list) | List every custom-tool group, failing ones first. |
 | [`tool show`](#tool-show) | Show one group: its definition, its last 24 hours and its tools. |
 | [`tool add`](#tool-add) | Create a group, empty or imported from an OpenAPI document. |
-| [`tool edit`](#tool-edit) | Change a group's description, base URL, headers, auth or timeout (its name is fixed). |
+| [`tool edit`](#tool-edit) | Change a group's description, base URL, headers or timeout (its name is fixed). |
 | [`tool rm`](#tool-rm) | Remove a group and all its tools. |
 | [`tool reimport`](#tool-reimport) | Read the group's OpenAPI source again: preview what it adds and removes, then apply. |
 | [`tool enable`](#tool-enable) | Switch a custom-tool group on. |
@@ -88,10 +88,8 @@ coffer tool add [OPTIONS] NAME
 | `NAME` <span class="cli-chip">参数</span> | text | 必填 | Group name (the agents' prefix; fixed, ≤24 chars) |
 | `--base-url` <span class="cli-chip">选项</span> | text |  | Every tool's path is added to it |
 | `--description` <span class="cli-chip">选项</span> | text |  |  |
-| `--header` <span class="cli-chip">选项</span> | text（可重复） |  | Static header KEY=VALUE (repeatable) |
-| `--auth-header` <span class="cli-chip">选项</span> | text |  | e.g. Authorization |
-| `--auth-prefix` <span class="cli-chip">选项</span> | text |  | e.g. "Bearer " |
-| `--secret` <span class="cli-chip">选项</span> | text |  | Secrets-page name for the auth header |
+| `--header` <span class="cli-chip">选项</span> | text（可重复） |  | Header NAME=VALUE (repeatable) |
+| `--secret-header` <span class="cli-chip">选项</span> | text（可重复） |  | Header NAME=SECRET whose whole value is a Secrets-page secret (repeatable) |
 | `--timeout` <span class="cli-chip">选项</span> | integer | `30` | Per-request timeout in seconds (1-300) |
 | `--agents` <span class="cli-chip">选项</span> | text |  | Only these agents (a,b) |
 | `--openapi` <span class="cli-chip">选项</span> | text |  | Import from an OpenAPI URL or file |
@@ -101,7 +99,7 @@ coffer tool add [OPTIONS] NAME
 
 ## tool edit
 
-Change a group's description, base URL, headers, auth or timeout (its name is fixed).
+Change a group's description, base URL, headers or timeout (its name is fixed).
 
 Moving the base URL or binding another secret waits for approval in the Coffer app before the secret is sent there.
 
@@ -118,12 +116,9 @@ coffer tool edit [OPTIONS] NAME
 | `NAME` <span class="cli-chip">参数</span> | text | 必填 | Group name |
 | `--description` <span class="cli-chip">选项</span> | text |  |  |
 | `--base-url` <span class="cli-chip">选项</span> | text |  |  |
-| `--header` <span class="cli-chip">选项</span> | text（可重复） |  | Static header KEY=VALUE (repeatable) |
-| `--clear-headers` <span class="cli-chip">选项</span> | 开关 |  | Drop every static header first |
-| `--auth-header` <span class="cli-chip">选项</span> | text |  |  |
-| `--auth-prefix` <span class="cli-chip">选项</span> | text |  |  |
-| `--secret` <span class="cli-chip">选项</span> | text |  | Secrets-page name for the auth header |
-| `--clear-auth` <span class="cli-chip">选项</span> | 开关 |  | Remove the auth header |
+| `--header` <span class="cli-chip">选项</span> | text（可重复） |  | Header NAME=VALUE (repeatable) |
+| `--secret-header` <span class="cli-chip">选项</span> | text（可重复） |  | Header NAME=SECRET whose whole value is a Secrets-page secret (repeatable) |
+| `--clear-headers` <span class="cli-chip">选项</span> | 开关 |  | Drop every header first |
 | `--timeout` <span class="cli-chip">选项</span> | integer |  | Per-request timeout (1-300) |
 | `--wait` <span class="cli-chip">选项</span> | 开关 |  | Wait for approval in the Coffer app instead of exiting |
 

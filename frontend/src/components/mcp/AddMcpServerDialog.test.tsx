@@ -161,11 +161,10 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(value("Name")).toBe("github");
     expect(value("Command")).toBe("npx");
     expect(value("Arguments")).toBe("-y @modelcontextprotocol/server-github");
+    // The token looks like a secret: it becomes a new one, kept by name.
     expect(
-      within(screen.getByRole("group", { name: "How GITHUB_TOKEN is kept" })).getByRole("button", {
-        name: "Secret",
-      }),
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByRole("button", { name: "GITHUB_TOKEN: secret github_token" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent(/^github$/));
@@ -174,6 +173,8 @@ describe("AddMcpServerDialog — paste box", () => {
     };
     expect(register.config.transport.args).toEqual(["-y", "@modelcontextprotocol/server-github"]);
     expect(calls.map((c) => c[0]).slice(0, 2)).toEqual(["/secrets", "/resources"]);
+    expect(posts("/secrets")[0][1]?.body).toEqual({ ref: "secret/github_token", value: "ghp_x" });
+    expect(register.config.transport.secret_refs).toEqual({ GITHUB_TOKEN: "secret/github_token" });
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(1));
   });
 
@@ -204,15 +205,9 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(value("Command")).toBe("uvx");
     expect(value("Arguments")).toBe("docs-mcp --verbose");
     expect(
-      within(screen.getByRole("group", { name: "How DOCS_TOKEN is kept" })).getByRole("button", {
-        name: "Secret",
-      }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      within(screen.getByRole("group", { name: "How REGION is kept" })).getByRole("button", {
-        name: "Secret",
-      }),
-    ).toHaveAttribute("aria-pressed", "false");
+      screen.getByRole("button", { name: "DOCS_TOKEN: secret docs_token" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Value of REGION")).toHaveValue("eu");
   });
 
   acceptance("web-ui", "unreadable input offers a manual type choice", async () => {
@@ -389,10 +384,8 @@ describe("AddMcpServerDialog — form", () => {
     );
     await continueWhenRead();
     expect(
-      within(screen.getByRole("group", { name: "How Authorization is kept" })).getByRole("button", {
-        name: "Secret",
-      }),
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByRole("button", { name: "Authorization: secret authorization" }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("api"));
 
@@ -400,9 +393,11 @@ describe("AddMcpServerDialog — form", () => {
     const transport = (posts("/resources")[0][1]?.body as { config: { transport: Http } }).config
       .transport;
     expect(transport.headers).toEqual({ "X-Region": "us-east" });
-    const ref = transport.secret_refs.Authorization;
-    expect(ref).toMatch(/^mcp_server\/[0-9a-f]{32}\/Authorization$/);
-    expect(posts("/secrets")[0][1]?.body).toEqual({ ref, value: "Bearer abc" });
+    expect(transport.secret_refs).toEqual({ Authorization: "secret/authorization" });
+    expect(posts("/secrets")[0][1]?.body).toEqual({
+      ref: "secret/authorization",
+      value: "Bearer abc",
+    });
   });
 
   test("a bearer_token_env_var header asks for its value and sends no empty secret", async () => {
@@ -417,12 +412,16 @@ describe("AddMcpServerDialog — form", () => {
     await continueWhenRead();
     expect(screen.getByText(/Enter the value of Authorization/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add server" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("New value of Authorization"), {
+    fireEvent.change(screen.getByLabelText("Value of Authorization"), {
       target: { value: "Bearer t0k" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
+    // What the paste flagged secret is stored in Coffer, not left as plain text.
     await waitFor(() => expect(posts("/secrets")).toHaveLength(1));
-    expect(posts("/secrets")[0][1]?.body?.value).toBe("Bearer t0k");
+    expect(posts("/secrets")[0][1]?.body).toEqual({
+      ref: "secret/authorization",
+      value: "Bearer t0k",
+    });
   });
 
   test("a secret held for approval (202) is said before the dialog lets go", async () => {
@@ -432,8 +431,11 @@ describe("AddMcpServerDialog — form", () => {
     paste("GITHUB_TOKEN=ghp_x npx -y @modelcontextprotocol/server-github");
     await continueWhenRead();
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
-    expect(await screen.findByText("Waiting for approval")).toBeInTheDocument();
+    expect(await screen.findByText("GITHUB_TOKEN waits for approval")).toBeInTheDocument();
+    expect(screen.getByText(/github is added\. One of its secrets needs an approval/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open approvals" })).toBeInTheDocument();
+    // Done is the only way on.
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("github"));
   });
@@ -510,7 +512,7 @@ acceptance("web-ui", "the add form tests the unsaved server before Add server", 
   paste("GITHUB_TOKEN=ghp_x npx -y @modelcontextprotocol/server-github");
   await continueWhenRead();
   fireEvent.click(screen.getByRole("button", { name: "Test" }));
-  expect(await screen.findByText("Test passed in 1.4 s")).toBeInTheDocument();
+  expect(await screen.findByTestId("add-test-result")).toHaveTextContent("Test passed in 1.4 s");
   expect(screen.getByText("list_issues")).toBeInTheDocument();
   const tested = calls.find(([path]) => path === "/resources/mcp_server/test-config");
   expect(tested?.[1]?.body).toMatchObject({
@@ -520,4 +522,95 @@ acceptance("web-ui", "the add form tests the unsaved server before Add server", 
   // Testing saved nothing: no registration and no secret written.
   expect(calls.some(([path]) => path === "/resources" || path === "/secrets")).toBe(false);
   expect(screen.getByRole("button", { name: "Test again" })).toBeInTheDocument();
+});
+
+describe("AddMcpServerDialog — footers and failures", () => {
+  test("the form has Test, Cancel and Add server, no Back; Change goes back to the paste box", async () => {
+    renderDialog();
+    paste("npx -y @modelcontextprotocol/server-github");
+    await continueWhenRead();
+    expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add server" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    expect(screen.getByLabelText("Paste a config, a command or a URL")).toHaveValue(
+      "npx -y @modelcontextprotocol/server-github",
+    );
+  });
+
+  test("a server that needs a variable offers to add it under Environment", async () => {
+    postOverride = (path) =>
+      path === "/resources/mcp_server/test-config"
+        ? {
+            data: {
+              ok: false,
+              latency_ms: 1800,
+              error_code: "exited",
+              exit_code: 1,
+              tool_count: 0,
+              stderr_tail: ["Error: GITLAB_PERSONAL_ACCESS_TOKEN is required"],
+            },
+            error: undefined,
+          }
+        : undefined;
+    renderDialog();
+    paste("npx -y @modelcontextprotocol/server-gitlab");
+    await continueWhenRead();
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    const block = await screen.findByTestId("add-test-result");
+    expect(block).toHaveTextContent("Test failed after 1.8 s · the process exited with code 1");
+    expect(block).toHaveTextContent(
+      "It needs GITLAB_PERSONAL_ACCESS_TOKEN. Add it under Environment, then test again.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add the variable" }));
+    const keys = screen.getAllByLabelText("Environment name") as HTMLInputElement[];
+    expect(keys[keys.length - 1].value).toBe("GITLAB_PERSONAL_ACCESS_TOKEN");
+  });
+
+  test("a batch that only partly went in stays on the review; Add retries only the refused one", async () => {
+    postOverride = (path, init) =>
+      path === "/resources" && init?.body?.name === "docs-search"
+        ? {
+            data: undefined,
+            error: { error: { code: "RESOURCE_ALREADY_EXISTS", message: "exists" } },
+            response: new Response(null, { status: 409 }),
+          }
+        : undefined;
+    renderDialog();
+    paste(
+      JSON.stringify({
+        mcpServers: {
+          notion: { command: "npx", args: ["notion-mcp"] },
+          figma: { url: "https://mcp.figma.com/mcp" },
+          "docs-search": { command: "uvx", args: ["docs-search-mcp"] },
+        },
+      }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Review 3 servers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add 3 servers" }));
+
+    // Still open: what went in says Added, the refused one says why, and the
+    // button offers only that one.
+    expect(await screen.findByText("2 of 3 added")).toBeInTheDocument();
+    expect(
+      screen.getByText("notion and figma are added. Rename docs-search to add it too."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Added")).toHaveLength(2);
+    expect(screen.getAllByText("testing in the background")).toHaveLength(2);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(2);
+    const retry = screen.getByRole("button", { name: "Add 1 server" });
+
+    postOverride = null;
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "docs" } });
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(posts("/resources").map((c) => c[1]?.body?.name)).toEqual([
+      "notion",
+      "figma",
+      "docs-search",
+      "docs",
+    ]);
+  });
 });

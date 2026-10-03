@@ -62,7 +62,7 @@ describe("AddCliDialog", () => {
     });
     renderDialog();
     type("Command", "ghost");
-    expect(await screen.findByText(/ghost isn't on this machine yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/ghost isn’t on this machine yet/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
   });
 
@@ -76,7 +76,9 @@ describe("AddCliDialog", () => {
     });
     renderDialog();
     type("Command", "jq");
-    expect(await screen.findByText("A skill or MCP server already needs it.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Already listed — a skill or MCP server needs it/),
+    ).toBeInTheDocument();
   });
 
   test("sends only what was filled in, then closes and reports the command", async () => {
@@ -107,6 +109,10 @@ describe("AddCliDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText("That command-line tool is already added")).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    // The failure stays in the dialog and the primary button becomes Retry.
+    expect(screen.getByText("Couldn’t add jq")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
   });
 
   test("editing keeps the command fixed and sends the fields as a change", async () => {
@@ -120,6 +126,8 @@ describe("AddCliDialog", () => {
     });
     expect(screen.getByLabelText("Command")).toBeDisabled();
     expect(screen.getByLabelText("Command")).toHaveValue("demo");
+    expect(screen.getByText("Fixed — Coffer finds the tool by it.")).toBeInTheDocument();
+    expect(screen.getByText("Edit demo")).toBeInTheDocument();
     expect(screen.getByLabelText("Login check")).toHaveValue("demo auth");
     expect(api.preview).not.toHaveBeenCalled();
     type("Title", "");

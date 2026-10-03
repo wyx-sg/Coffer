@@ -63,10 +63,8 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | ----------------- | ------------------------ | --------------------------------------------------------------------------------------- |
 | `type`            | `Literal["http_api"]`    | discriminator                                                                           |
 | `base_url`        | `pydantic.HttpUrl`       | `http`/`https`, no query or fragment; each tool's path is appended                      |
-| `headers`         | `dict[str, str]`         | static group headers; no `{argument}` hole; same secret regex as `env`                  |
-| `auth_header`     | `str \| None`            | the header the secret goes in, e.g. `Authorization`                                     |
-| `auth_prefix`     | `str`                    | prepended to the secret's value, e.g. `Bearer `                                         |
-| `secret_refs` | `dict[str, str]`         | at most `{auth_header: ref}`; the API binds a Secrets-page name as `secret/<name>`      |
+| `headers`         | `dict[str, str]`         | plain header values; no `{argument}` hole; same secret regex as `env`                   |
+| `secret_refs`     | `dict[str, str]`         | `{header name: ref}`: headers whose whole value is a stored secret (no prefix); a header name appears once across `headers` and `secret_refs` |
 | `timeout_seconds` | `int`                    | default `30`; range `1–300`; per request                                                |
 | `source`          | `OpenApiSource \| None`  | where an import came from: `kind` (`url`/`file`), `location`, `title`, `version`, `fetched_at`, `skipped` operation keys |
 | `tools`           | `list[HttpApiTool]`      | unique names                                                                            |
@@ -85,6 +83,7 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | `enabled`       | `bool`                  | the tool's switch — travels with the config, like capability toggles         |
 | `changes_data`  | `bool \| None`          | `None` follows the method (on for all but GET); drives the MCP annotations   |
 | `operation`     | `str \| None`           | `"<METHOD> <path>"` of the imported operation, for re-import                 |
+| `source_text`   | `str \| None`           | the operation's text in the imported spec (at most 20 000 characters), so a re-import can show what changed |
 
 A tool's **reach override** is not in the config: reach is machine-local, so it
 is `local/tool-reach.json` (below).

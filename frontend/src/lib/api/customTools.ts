@@ -4,8 +4,8 @@
 // generated from `surfaces/http/mcp/custom_tool_schemas.py` (design
 // add-http-custom-tools §9). A group is addressed by its fixed NAME; its
 // enable/disable and reach go through the kind-agnostic resource routes by its
-// uid (`lib/api/resources.ts`, `lib/api/scope.ts`). A group's secret travels by
-// its Secrets-page name, never as a ref or a value.
+// uid (`lib/api/resources.ts`, `lib/api/scope.ts`). A group's header rows hold a plain
+// value or a Secrets-page name (the secret is the whole header value), never a ref.
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
@@ -18,7 +18,8 @@ export type CustomToolGroupPatch = Schemas["CustomToolGroupPatch"];
 export type CustomTool = Schemas["CustomToolOut"];
 export type CustomToolIn = Schemas["CustomToolIn"];
 export type CustomToolPatch = Schemas["CustomToolPatch"];
-export type CustomToolAuthIn = Schemas["CustomToolAuthIn"];
+export type CustomToolHeaderIn = Schemas["CustomToolHeaderIn"];
+export type CustomToolHeaderOut = Schemas["CustomToolHeaderOut"];
 export type CustomToolTestOut = Schemas["CustomToolTestOut"];
 export type CustomToolUnsavedTestIn = Schemas["CustomToolUnsavedTestIn"];
 export type OpenApiReadIn = Schemas["OpenApiReadIn"];

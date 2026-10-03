@@ -1,5 +1,5 @@
 // src/test/cliFixtures.ts — CliOut rows for the CLIs page, detail page and Requires tab tests.
-import type { Cli, CliHelpNode, CliInterface } from "@/lib/api/clis";
+import type { Cli } from "@/lib/api/clis";
 
 const CHECKED = new Date(Date.now() - 2 * 60_000).toISOString();
 
@@ -93,75 +93,3 @@ export const DEMO_ADDED = cli({
   version: "3.0.0",
   needed_by: [],
 });
-
-export function helpNode(path: string[], over: Partial<CliHelpNode> = {}): CliHelpNode {
-  return {
-    path,
-    usage: null,
-    description: null,
-    subcommands: [],
-    options: [],
-    arguments: [],
-    raw: "",
-    structured: true,
-    error: null,
-    truncated: false,
-    ...over,
-  };
-}
-
-/** `demo` with two subcommands: init (one option) and run (one argument). */
-export const DEMO_INTERFACE: CliInterface = {
-  status: "ok",
-  message: null,
-  version: "3.0.0",
-  discovered_at: "2026-10-02T10:00:00Z",
-  incomplete: false,
-  nodes: [
-    helpNode([], {
-      usage: "demo [OPTIONS] COMMAND [ARGS]...",
-      description: "A demo tool.",
-      raw: "A demo tool.\n\nUsage: demo [OPTIONS] COMMAND [ARGS]...\n",
-      subcommands: [
-        { name: "init", summary: "Set things up" },
-        { name: "run", summary: "Run it" },
-      ],
-      options: [
-        {
-          names: ["-v", "--verbose"],
-          metavar: null,
-          description: "Be loud.",
-          default: null,
-          required: false,
-        },
-      ],
-    }),
-    helpNode(["init"], {
-      usage: "demo init [OPTIONS]",
-      raw: "Usage: demo init [OPTIONS]\n",
-      options: [
-        {
-          names: ["--force"],
-          metavar: null,
-          description: "Overwrite what is there",
-          default: "false",
-          required: false,
-        },
-      ],
-    }),
-    helpNode(["run"], {
-      usage: "demo run TARGET",
-      raw: "Usage: demo run TARGET\n",
-      arguments: [{ name: "TARGET", description: "What to run", required: true }],
-    }),
-  ],
-};
-
-export const NOT_READ: CliInterface = {
-  status: "not_read",
-  message: null,
-  version: "3.0.0",
-  discovered_at: null,
-  incomplete: false,
-  nodes: [],
-};

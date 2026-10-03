@@ -1,30 +1,34 @@
 // frontend/src/components/skills/SkillLibrary.tsx
 // The left pane of the Skills page: the library of managed skills, laid out
-// like the MCP servers list. A filter field (name + description); under it the
-// Reach filter and Check copies; then the
-// skills grouped In use (reaches at least one agent), Unused (off, or limited
-// to nobody) and, last, Built-in (what Coffer ships), a count on each heading.
-// Every filter applies to the built-in rows too. While rows are ticked the
-// selection bar (SkillsBulkBar) takes the filters' place and every row shows
-// its checkbox; otherwise a row shows it on hover. Built-in rows have no
-// checkbox and select-all skips them. Only managed skills are here — an
-// agent's own skills live on that agent's Skills tab.
+// like the MCP servers list (canvas 4.3 SkillsList). A filter field (name +
+// description) with Check copies beside it on the same row; then the skills
+// grouped Needs attention (a problem — lib/skills/attention.ts), In use
+// (reaches at least one agent), Off (switched off, or limited to nobody) and,
+// last, Built-in (what Coffer ships), a count on each heading; then the
+// folders no skill claims (SkillOrphanList). The filter applies to the
+// built-in rows too. While rows are ticked the selection bar (SkillsBulkBar)
+// takes the filter's place and every row shows its checkbox; otherwise a row
+// shows it on hover. Built-in rows have no checkbox and select-all skips
+// them. Only managed skills are here — an agent's own skills live on that
+// agent's Skills tab.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
-import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
+import type { Cli } from "@/lib/api/clis";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useClis } from "@/lib/hooks/useClis";
+import { skillProblems } from "@/lib/skills/attention";
 import { GROUP_ORDER, skillGroup, type SkillGroup } from "@/lib/skills/groups";
-import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
+
+const NO_CLIS: readonly Cli[] = [];
 
 interface Props {
   skills: SkillOut[];
@@ -68,24 +72,22 @@ export function SkillLibrary({
 }: Props) {
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
-  const clis = useClis().data?.items ?? [];
+  const clis = useClis().data?.items ?? NO_CLIS;
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<ReachFilterValue>("all");
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const out: Record<SkillGroup, SkillOut[]> = { inUse: [], unused: [], builtin: [] };
+    const out: Record<SkillGroup, SkillOut[]> = { attention: [], inUse: [], off: [], builtin: [] };
     for (const s of skills) {
-      if (!matchesReach(filter, s)) continue;
       if (q && !`${s.name} ${s.description}`.toLowerCase().includes(q)) continue;
-      out[skillGroup(s)].push(s);
+      out[skillGroup(s, skillProblems(s, clis, drift).length > 0)].push(s);
     }
     return out;
-  }, [skills, query, filter]);
+  }, [skills, query, clis, drift]);
   const shown = GROUP_ORDER.reduce((n, g) => n + groups[g].length, 0);
 
   // What select-all covers: the listed skills the filters show, never a built-in one.
-  const visibleUids = [...groups.inUse, ...groups.unused].map((s) => s.uid);
+  const visibleUids = [...groups.attention, ...groups.inUse, ...groups.off].map((s) => s.uid);
   const allVisiblePicked = visibleUids.length > 0 && visibleUids.every((u) => picked.has(u));
   const toggleAll = (on: boolean) => {
     const next = new Set(picked);
@@ -115,23 +117,24 @@ export function SkillLibrary({
           />
         ) : (
           <>
-            <SearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder={t("skills.searchPlaceholder")}
-              ariaLabel={t("skills.searchPlaceholder")}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <ReachFilter value={filter} onChange={setFilter} compact />
+            <div className="flex items-center gap-1">
+              <SearchInput
+                className="min-w-0 flex-1"
+                value={query}
+                onChange={setQuery}
+                placeholder={t("skills.searchPlaceholder")}
+                ariaLabel={t("skills.searchPlaceholder")}
+              />
               <Button
                 variant="ghost"
                 size="sm"
-                className="ml-auto"
+                className="shrink-0"
+                title={t("skills.checkCopiesHint")}
                 onClick={onCheckCopies}
                 disabled={checkingCopies}
               >
                 <RefreshCw aria-hidden className={checkingCopies ? "animate-spin" : undefined} />
-                {t("skills.checkCopies")}
+                {checkingCopies ? t("skills.checkingCopies") : t("skills.checkCopies")}
               </Button>
             </div>
           </>
@@ -144,14 +147,7 @@ export function SkillLibrary({
         ) : isLoading ? (
           <ListLoadingRows />
         ) : shown === 0 && skills.length > 0 ? (
-          <ListNoMatch
-            kind="skills"
-            query={query}
-            onClear={() => {
-              setQuery("");
-              setFilter("all");
-            }}
-          />
+          <ListNoMatch kind="skills" query={query} onClear={() => setQuery("")} />
         ) : (
           <div data-testid="skill-library">
             {GROUP_ORDER.map((group) => {

@@ -4,15 +4,12 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-type CalloutTint = "ok" | "err" | "warn" | "off" | "info";
+type CalloutTint = "err" | "warn" | "off";
 
 const TINT: Record<CalloutTint, { box: string; icon: string }> = {
-  ok: { box: "bg-success-soft", icon: "text-success" },
   err: { box: "bg-danger-soft", icon: "text-danger" },
   warn: { box: "bg-warning-soft", icon: "text-warning" },
   off: { box: "bg-surface-sunken", icon: "text-text-muted" },
-  // Tiering is information, not a status: the accent's soft fill.
-  info: { box: "bg-accent-soft", icon: "text-accent-text" },
 };
 
 interface Props {

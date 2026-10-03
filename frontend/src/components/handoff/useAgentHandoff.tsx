@@ -1,6 +1,6 @@
 // src/components/handoff/useAgentHandoff.tsx — the two hand-off verbs, for a surface that lays them out itself.
 //
-// `AgentHandoff` renders them as two buttons; a dense surface with no room for
+// `AgentHandoff` renders them as one split button; a dense surface with no room for
 // two (an Overview "Needs you" row) puts them in its ⋯ menu instead. Either
 // way the verbs are the same: copy the daemon's prompt as given, or open the
 // draft (New conversation) with the prompt in its composer —
@@ -14,7 +14,6 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useCopyText } from "@/lib/hooks/useCopyText";
 
 export interface AgentHandoffControls {
-  copied: boolean;
   copy: () => void;
   /** Whether a managed agent is available to ask. */
   canAsk: boolean;
@@ -24,11 +23,10 @@ export interface AgentHandoffControls {
 
 export function useAgentHandoff(prompt: string): AgentHandoffControls {
   const navigate = useNavigate();
-  const { copied, copy } = useCopyText();
+  const { copy } = useCopyText();
   const { data: agents = [] } = useAgentProviders();
   const agentKey = defaultDraftAgent(agents);
   return {
-    copied,
     copy: () => copy(prompt),
     canAsk: agentKey !== "",
     ask: () => openHandoffDraft(navigate, { agentKey, cwd: null, prompt }),

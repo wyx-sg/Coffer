@@ -1,5 +1,5 @@
 // src/components/custom-tools/NewGroupStep.tsx — the new group a hand-made request goes into: name, base
-// URL, auth and default reach. Create group moves on to its first request; nothing is saved until Add.
+// URL, headers and default reach. Create group moves on to its first request; nothing is saved until Add.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { agentPrefix } from "@/lib/customTools/groups";
 import { isGroupName } from "@/lib/customTools/drafts";
 import type { GroupDraft } from "./addFlow";
-import { AuthFields } from "./AuthFields";
-import { DraftReachField } from "./DraftReachField";
 import { FormField } from "./FormField";
+import { GroupHeaderRows } from "./GroupHeaderRows";
+import { GroupReachField } from "./GroupReachField";
 import { useGroupNameError } from "./useGroupNameError";
 
 interface Props {
@@ -63,23 +63,24 @@ export function NewGroupStep({ group, onGroup, taken, ...actions }: Props) {
             onChange={(e) => onGroup({ ...group, baseUrl: e.target.value })}
           />
         </FormField>
-        <AuthFields value={group.auth} onChange={(auth) => onGroup({ ...group, auth })} />
-        <FormField
-          label={t("customTools.fields.availableTo")}
+        <GroupHeaderRows
+          rows={group.headers}
+          onChange={(headers) => onGroup({ ...group, headers })}
+          help={t("customTools.fields.headersHelp")}
+          group={group.name}
+        />
+        <GroupReachField
+          value={group.reach}
+          onChange={(reach) => onGroup({ ...group, reach })}
           help={t("customTools.fields.availableToHelp")}
-        >
-          <DraftReachField
-            value={group.agents}
-            onChange={(agents) => onGroup({ ...group, agents })}
-          />
-        </FormField>
+        />
       </div>
       <DialogFooter className="sm:justify-between">
         <Button variant="outline" onClick={actions.onBack}>
           {t("customTools.add.back")}
         </Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={actions.onCancel}>
+          <Button variant="ghost" onClick={actions.onCancel}>
             {t("common.cancel")}
           </Button>
           <Button disabled={!ready} onClick={actions.onCreate}>

@@ -27,7 +27,7 @@ requires that is not set").
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
@@ -48,6 +48,7 @@ from coffer.domain.skill.cli_status import (
     status_of,
 )
 from coffer.domain.skill.requirements import requirements_from_skill_md
+from coffer.domain.skill.tool_state import ToolState, resolve_tools
 
 
 class CommandProbePort(Protocol):
@@ -56,11 +57,6 @@ class CommandProbePort(Protocol):
     def locate(self, command: str) -> str | None: ...
 
     def version(self, path: str) -> str | None: ...
-
-    def fingerprint(self, path: str) -> str | None:
-        """What identifies this build of the file (its size and mtime), so a
-        reinstalled tool is read again; ``None`` when it cannot be read."""
-        ...
 
     def login_ok(self, argv: Sequence[str]) -> bool | None:
         """Exit 0 → ``True``, any other exit → ``False``, could not run or
@@ -85,6 +81,12 @@ class McpLaunchersPort(Protocol):
     """The enabled stdio MCP servers and the launcher each starts with."""
 
     async def stdio_launchers(self) -> Sequence[ServerLauncher]: ...
+
+
+class ToolStatesPort(Protocol):
+    """The MCP servers and custom-tool groups Coffer has, by name."""
+
+    async def tool_states(self) -> Mapping[str, ToolState]: ...
 
 
 class DeclaredToolsPort(Protocol):
@@ -147,12 +149,14 @@ class CliRequirementService:
         declared: DeclaredToolsPort | None = None,
         paths: CliPathsPort | None = None,
         secret_set: Callable[[str], bool] | None = None,
+        tools: ToolStatesPort | None = None,
         clock: Callable[[], datetime] = _now,
     ) -> None:
         self._skills = skills
         #: Whether a secret NAME is in the store; ``None`` when not wired.
         self._secret_set = secret_set
         self._servers = servers
+        self._tools = tools
         self._declared = declared
         self._paths = paths
         self._probe = probe
@@ -181,9 +185,6 @@ class CliRequirementService:
         """Drop the cached probe: the declaration or the tool changed."""
         self._cache.pop(command, None)
 
-    def fingerprint(self, path: str) -> str | None:
-        return self._probe.fingerprint(path)
-
     async def missing_secrets(self) -> tuple[MissingSecret, ...]:
         """Every (skill, secret) whose declared secret is not set, by skill
         then in declared order. Read afresh on each call: a presence check is
@@ -205,12 +206,18 @@ class CliRequirementService:
     async def _required(self) -> tuple[list[RequiredCommand], list[SkillWarning]]:
         parsed: list[SkillRequirements] = []
         warnings: list[SkillWarning] = []
+        known = await self._tools.tool_states() if self._tools else None
         for doc in await self._skills.skill_documents():
             if doc.text is None:
                 continue
             result = requirements_from_skill_md(doc.text)
             parsed.append(SkillRequirements(doc.uid, doc.name, result.requirements))
             warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in result.warnings)
+            if known is not None:
+                # A tool name Coffer does not have is skipped, and counted
+                # with the other ``requires:`` entries that could not be read.
+                _found, unknown = resolve_tools(result.tools, known)
+                warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in unknown)
         servers = await self._servers.stdio_launchers() if self._servers else ()
         added = self._declared.all() if self._declared else ()
         return aggregate(parsed, servers, added), warnings
@@ -289,4 +296,5 @@ __all__ = [
     "SkillDocument",
     "SkillDocumentsPort",
     "SkillWarning",
+    "ToolStatesPort",
 ]

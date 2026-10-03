@@ -1,11 +1,10 @@
 // src/components/reach/ReachButton.tsx — ReachControl's one trigger: the current reach as its label, with the chosen agents' badges.
 //
 // Foundations-Reach "Button": h26, a secondary look, 12/550, a 12px chevron.
-// The label IS the reach and stays the button's whole accessible name — the
-// badges and the Disabled dot beside it are decoration (aria-hidden), because
-// the words already say what they show. "Every agent" shows no badges (it is a
-// rule, not a list); a restricted reach shows one sm badge per chosen agent, in
-// Agents-page order; Disabled shows a neutral dot before the word.
+// "Off" and "All agents" are words (Off with a neutral dot); a chosen list is
+// the agent badges ALONE — one sm badge per agent, in Agents-page order, and
+// never a count. The badges are marks, so the button's accessible name is the
+// agent names joined, unless the caller names it.
 //
 // A plain <button>, not ui/Button: that one resizes every descendant svg, which
 // would redraw the agent marks at chevron size.
@@ -24,8 +23,9 @@ interface ReachBadgeAgent {
 }
 
 interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
-  /** The live reach; `null` for the bulk bar, which names an action instead. */
-  live: ReachMode | null;
+  /** The live reach; `null` for the bulk bar, which names an action instead;
+   *  "inherited" for an item that follows its group. */
+  live: ReachMode | "inherited" | null;
   label: string;
   /** The chosen agents, drawn as badges only while the reach is restricted. */
   chosen: ReachBadgeAgent[];
@@ -38,6 +38,7 @@ export const ReachButton = forwardRef<HTMLButtonElement, Props>(function ReachBu
   ref,
 ) {
   const badges = live === "restricted" ? sortAgents(chosen) : [];
+  const name = props["aria-label"] ?? (label === "" ? badges.map((a) => a.name).join(", ") : label);
   return (
     <button
       ref={ref}
@@ -51,9 +52,10 @@ export const ReachButton = forwardRef<HTMLButtonElement, Props>(function ReachBu
         className,
       )}
       {...props}
+      aria-label={label === "" || props["aria-label"] ? name : undefined}
     >
       {badges.length > 0 ? (
-        <span aria-hidden className="mr-2 inline-flex items-center gap-[3px]">
+        <span aria-hidden className="mr-1 inline-flex items-center gap-[3px]">
           {badges.map((agent) => (
             <AgentBadge
               key={agent.uid}
@@ -68,7 +70,7 @@ export const ReachButton = forwardRef<HTMLButtonElement, Props>(function ReachBu
       {live === "disabled" ? (
         <span aria-hidden className="mr-1.5 size-[7px] shrink-0 rounded-full bg-neutral" />
       ) : null}
-      <span className="px-px">{label}</span>
+      {label === "" ? null : <span className="px-px">{label}</span>}
       <ChevronDown aria-hidden className="ml-1 size-3 shrink-0 text-text-subtle" />
     </button>
   );

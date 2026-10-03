@@ -4,11 +4,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
-import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { sectionGroups } from "@/lib/customTools/groups";
-import type { ReachFilterValue } from "@/lib/reachFilter";
 import { GroupRow } from "./GroupRow";
 
 interface Props {
@@ -24,8 +22,7 @@ interface Props {
 export function GroupList({ groups, loading, error, onRetry, selected, onOpen }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
-  const [reach, setReach] = useState<ReachFilterValue>("all");
-  const sections = sectionGroups(groups, filter, reach);
+  const sections = sectionGroups(groups, filter);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
@@ -35,21 +32,13 @@ export function GroupList({ groups, loading, error, onRetry, selected, onOpen }:
         placeholder={t("customTools.list.filter")}
         ariaLabel={t("customTools.list.filter")}
       />
-      <ReachFilter value={reach} onChange={setReach} />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
         {error ? (
           <ListLoadError kind="customTools" error={error} onRetry={() => onRetry?.()} />
         ) : loading ? (
           <ListLoadingRows />
         ) : sections.length === 0 ? (
-          <ListNoMatch
-            kind="customTools"
-            query={filter}
-            onClear={() => {
-              setFilter("");
-              setReach("all");
-            }}
-          />
+          <ListNoMatch kind="customTools" query={filter} onClear={() => setFilter("")} />
         ) : (
           sections.map(({ section, groups: inSection }) => (
             <section key={section} aria-label={t(`customTools.list.section.${section}`)}>

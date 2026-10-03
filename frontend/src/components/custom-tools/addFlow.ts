@@ -1,6 +1,8 @@
 // src/components/custom-tools/addFlow.ts — the state the Add custom tool flow carries from step to step.
+import type { KeyValueSecretRow } from "@/components/secret/secretValue";
 import type { OpenApiReading } from "@/lib/api/customTools";
-import { DEFAULT_AUTH, type AuthDraft } from "@/lib/customTools/drafts";
+import type { Scope } from "@/lib/api/scope";
+import type { ReachMode } from "@/lib/reach/reachState";
 
 /** The two ways into a new group. There is no script type (deferred past 1.0). */
 export type AddWay = "import" | "hand";
@@ -21,14 +23,22 @@ export interface AddStart {
 /** The spec an import reads: a URL, or a file's text. */
 export type SpecMode = "url" | "file";
 
+/** The reach a new group starts with: the standard control's mode, and the agents ticked. */
+export interface ReachDraft {
+  mode: ReachMode;
+  scope: Scope | null;
+}
+
+export const EVERY_AGENT: ReachDraft = { mode: "everywhere", scope: null };
+
 /** The group being made, as the steps fill it in. Nothing of it is saved
  *  until the flow's last button. */
 export interface GroupDraft {
   name: string;
   baseUrl: string;
-  auth: AuthDraft;
-  /** The group's reach: agent uids, or `null` for every agent. */
-  agents: string[] | null;
+  /** Headers every call sends, a secret only from Coffer. */
+  headers: KeyValueSecretRow[];
+  reach: ReachDraft;
 }
 
 export interface ImportDraft {
@@ -42,7 +52,7 @@ export interface ImportDraft {
 }
 
 export function newGroupDraft(name = ""): GroupDraft {
-  return { name, baseUrl: "", auth: { ...DEFAULT_AUTH }, agents: null };
+  return { name, baseUrl: "", headers: [], reach: EVERY_AGENT };
 }
 
 export function newImportDraft(): ImportDraft {
@@ -52,4 +62,9 @@ export function newImportDraft(): ImportDraft {
 /** The operations picked by default: the ones that do not change data. */
 export function defaultPicks(reading: OpenApiReading): string[] {
   return reading.operations.filter((op) => (op.tool.method ?? "GET") === "GET").map((op) => op.key);
+}
+
+/** The rows a spec's security scheme pre-fills: one row named for its header, no value yet. */
+export function headerRowsFromSpec(authHeader: string | null): KeyValueSecretRow[] {
+  return authHeader ? [{ key: authHeader, value: { kind: "plain", value: "" } }] : [];
 }

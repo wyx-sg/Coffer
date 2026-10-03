@@ -55,6 +55,5 @@ export const clisKey = ["clis"] as const;
  *  and no rename exists that could strand the entry. */
 export const cliKey = (command: string) => ["clis", command] as const;
 /** What was read from one tool's help; extends the tool's key. */
-export const cliInterfaceKey = (command: string) => ["clis", command, "interface"] as const;
 /** What a typed name or path finds, for the Add dialog. */
 export const cliPreviewKey = (command: string) => ["clis", "preview", command] as const;

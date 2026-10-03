@@ -7,7 +7,7 @@
 // memory store).
 //
 // A file's leading YAML frontmatter is shown as METADATA above the body — a
-// compact key / value list in small muted type — never rendered as body text
+// key / value grid (mono 11 keys in a 96 column, 12 values; Foundations 0.6.03) — never rendered as body text
 // (spec memory "Present a partition as its memories"). Rendered raw,
 // the fences became rules and `origins:` became a bullet list that read as if
 // it were part of the note. Done once here so every Markdown preview gets it.
@@ -41,12 +41,12 @@ function FrontmatterList({ entries }: { entries: FrontmatterEntry[] }) {
   return (
     <dl
       data-testid="markdown-frontmatter"
-      className="mb-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 border-b border-border pb-3 text-xs text-muted-foreground"
+      className="mb-4 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-b border-border-subtle pb-3"
     >
       {entries.map(({ key, value }) => (
         <div key={key} className="contents">
-          <dt className="font-medium">{key}</dt>
-          <dd className="min-w-0 whitespace-pre-wrap break-words">
+          <dt className="font-mono text-2xs leading-[18px] text-text-subtle">{key}</dt>
+          <dd className="min-w-0 whitespace-pre-wrap break-words text-xs leading-[18px] text-text">
             {Array.isArray(value) ? (
               <ul className="space-y-0.5">
                 {value.map((item, i) => (

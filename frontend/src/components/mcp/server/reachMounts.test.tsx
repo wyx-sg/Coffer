@@ -75,10 +75,10 @@ acceptance("web-ui", "row, header and selection bar mount the same reach control
             onEdit={vi.fn()}
             onOpenLog={vi.fn()}
             onCopyConfig={vi.fn()}
-            onTurn={vi.fn()}
+            onTurnOff={vi.fn()}
             onDelete={vi.fn()}
           />
-          <McpServersBulkBar servers={[FILES]} allChecked onToggleAll={vi.fn()} onDone={vi.fn()} />
+          <McpServersBulkBar servers={[FILES]} onDone={vi.fn()} />
         </MemoryRouter>
       </TooltipProvider>
     </QueryClientProvider>,
@@ -88,9 +88,8 @@ acceptance("web-ui", "row, header and selection bar mount the same reach control
   const panelOf = (button: HTMLElement) => {
     fireEvent.click(button);
     const radios = screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent);
-    const machineLine = screen.getByTestId("reach-machine-local").textContent;
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-    return { radios, machineLine };
+    return { radios };
   };
 
   // The row reads its reach; it is a link into the pane, not a second control.
@@ -99,16 +98,15 @@ acceptance("web-ui", "row, header and selection bar mount the same reach control
   expect(within(row).queryByTestId("scope-control")).toBeNull();
 
   const headerButton = within(screen.getByTestId("scope-control")).getByRole("button");
-  expect(headerButton).toHaveTextContent(/^every agent$/i);
+  expect(headerButton).toHaveTextContent(/^all agents$/i);
   const bulkButton = within(screen.getByTestId("bulk-reach-control")).getByRole("button");
 
   const fromHeader = panelOf(headerButton);
   const fromBulk = panelOf(bulkButton);
   expect(fromHeader.radios).toEqual([
     expect.stringMatching(/^off$/i),
-    expect.stringMatching(/every agent/i),
-    expect.stringMatching(/only selected agents/i),
+    expect.stringMatching(/^all agents$/i),
+    expect.stringMatching(/^chosen agents$/i),
   ]);
-  expect(fromHeader.machineLine).toBeTruthy();
   expect(fromBulk).toEqual(fromHeader);
 });

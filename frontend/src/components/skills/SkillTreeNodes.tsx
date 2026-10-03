@@ -1,16 +1,27 @@
 // frontend/src/components/skills/SkillTreeNodes.tsx
-// The rows of a skill folder's file tree: a folder toggles open and shut, a
-// file selects itself. `flat` is the Files tab's form (canvas 4.3.01) — no
-// root row, SKILL.md first, then folders, then the other files, with a dot on
-// the file that has unsaved edits; the unmanaged preview keeps the root row.
+// The rows of a skill folder's file tree (canvas 4.3.12, Foundations 0.6.04):
+// no root row, SKILL.md first, then folders, then the other files. A row is the
+// shared tree row (knowledge/navRow.ts) — a folder's name in the sans face and
+// a file's in the mono face, 16px an indent a level, the open file filled. A
+// file with unsaved edits wears a 7px accent dot at its right; in a read-only
+// folder every file wears a lock there instead.
 import { useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Image } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Lock } from "lucide-react";
 
+import {
+  NAV_CHEVRON,
+  NAV_FOLDER,
+  NAV_ICON,
+  NAV_NAME,
+  NAV_ROW,
+  NAV_ROW_ACTIVE,
+  NAV_ROW_IDLE,
+  navIndent,
+} from "@/components/knowledge/navRow";
 import type { SkillFileNode } from "@/lib/api/skills";
 import { sortSkillNodes } from "@/lib/skills/tree";
 import { cn } from "@/lib/utils";
-
-const IMAGE = /\.(png|jpe?g|gif|svg|webp|ico)$/i;
 
 interface NodeProps {
   node: SkillFileNode;
@@ -19,8 +30,8 @@ interface NodeProps {
   onSelectFile: (path: string) => void;
   /** The file whose draft is unsaved, marked with a dot. */
   dirtyPath?: string | null;
-  isRoot?: boolean;
-  flat?: boolean;
+  /** Every file is read-only: each wears a lock. */
+  readOnly?: boolean;
 }
 
 export function SkillTreeNode({
@@ -29,15 +40,17 @@ export function SkillTreeNode({
   selectedPath,
   onSelectFile,
   dirtyPath = null,
-  isRoot = false,
-  flat = false,
+  readOnly = false,
 }: NodeProps) {
-  // Root + its immediate children start expanded so the tree is useful at a glance.
-  const [expanded, setExpanded] = useState(depth < 2);
-  const indent = { paddingLeft: `${depth * 0.9 + 0.5}rem` };
-  const children = flat ? sortSkillNodes(node.children ?? []) : (node.children ?? []);
+  const { t } = useTranslation();
+  // The folders on the way to the open file start open, the rest shut.
+  const [expanded, setExpanded] = useState(
+    depth < 1 || Boolean(selectedPath?.startsWith(`${node.path}/`)),
+  );
+  const indent = navIndent(depth);
 
   if (node.type === "dir") {
+    const children = sortSkillNodes(node.children ?? []);
     return (
       <li>
         <button
@@ -45,22 +58,24 @@ export function SkillTreeNode({
           onClick={() => setExpanded((v) => !v)}
           style={indent}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-1.5 rounded-item py-1.5 pr-2 text-left font-mono text-xs transition-colors hover:bg-surface-hover"
+          className={cn(NAV_ROW, NAV_ROW_IDLE)}
         >
+          <span className={NAV_CHEVRON}>
+            {expanded ? (
+              <ChevronDown className="size-3" aria-hidden />
+            ) : (
+              <ChevronRight className="size-3" aria-hidden />
+            )}
+          </span>
           {expanded ? (
-            <ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
+            <FolderOpen className={NAV_ICON} aria-hidden />
           ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+            <Folder className={NAV_ICON} aria-hidden />
           )}
-          {expanded ? (
-            <FolderOpen className="size-3.5 shrink-0 text-text-subtle" />
-          ) : (
-            <Folder className="size-3.5 shrink-0 text-text-subtle" />
-          )}
-          <span className="truncate">{isRoot ? node.name || "/" : node.name}</span>
+          <span className={NAV_FOLDER}>{node.name}</span>
         </button>
         {expanded && children.length > 0 ? (
-          <ul className="space-y-0.5">
+          <ul className="flex flex-col gap-px">
             {children.map((child) => (
               <SkillTreeNode
                 key={child.path}
@@ -69,7 +84,7 @@ export function SkillTreeNode({
                 selectedPath={selectedPath}
                 onSelectFile={onSelectFile}
                 dirtyPath={dirtyPath}
-                flat={flat}
+                readOnly={readOnly}
               />
             ))}
           </ul>
@@ -78,24 +93,27 @@ export function SkillTreeNode({
     );
   }
 
-  const Icon = IMAGE.test(node.name) ? Image : FileText;
+  const active = selectedPath === node.path;
   return (
     <li>
       <button
         type="button"
         onClick={() => onSelectFile(node.path)}
         style={indent}
-        aria-current={selectedPath === node.path ? "true" : undefined}
-        className={cn(
-          "flex w-full items-center gap-1.5 rounded-item py-1.5 pr-2 text-left font-mono text-xs transition-colors",
-          selectedPath === node.path ? "bg-surface-selected text-text" : "hover:bg-surface-hover",
-        )}
+        aria-current={active ? "true" : undefined}
+        className={cn(NAV_ROW, active ? NAV_ROW_ACTIVE : NAV_ROW_IDLE)}
       >
-        <span className="size-3.5 shrink-0" />
-        <Icon className="size-3.5 shrink-0 text-text-subtle" />
-        <span className="min-w-0 flex-1 truncate">{node.name}</span>
+        <span className={NAV_CHEVRON} />
+        <FileText className={NAV_ICON} aria-hidden />
+        <span className={cn(NAV_NAME, active && "font-label")}>{node.name}</span>
         {dirtyPath === node.path ? (
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning" />
+          <span
+            role="img"
+            aria-label={t("skills.files.unsavedDot")}
+            className="size-[7px] shrink-0 rounded-full bg-accent"
+          />
+        ) : readOnly ? (
+          <Lock className="size-[13px] shrink-0 text-text-subtle" aria-hidden />
         ) : null}
       </button>
     </li>

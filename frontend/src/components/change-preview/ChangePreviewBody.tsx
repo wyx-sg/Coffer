@@ -4,7 +4,6 @@ import { useRef, useState, type ReactNode } from "react";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Section, SectionStack } from "@/components/Section";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChangeSummary } from "./ChangeSummary";
@@ -79,18 +78,21 @@ function Review({
     <>
       <ChangeSummary items={items} />
       <div className="grid grid-cols-[330px_minmax(0,1fr)] items-start gap-5">
-        <SectionStack className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-3">
           {lead}
           <WhatWillHappen summaries={summaries} />
-          <Section title={t("changePreview.changesHeading")} gap="snug">
+          <section className="flex flex-col gap-1">
+            <h3 className="text-2xs font-semibold text-text-subtle">
+              {t("changePreview.changesHeading", { count: items.length })}
+            </h3>
             <ChangeTargetList
               items={items}
               mode="review"
               selectedId={selectedId}
               onSelect={select}
             />
-          </Section>
-        </SectionStack>
+          </section>
+        </div>
         <div className="flex min-w-0 flex-col gap-2.5">
           {diffs.map((item) => (
             <FileDiff

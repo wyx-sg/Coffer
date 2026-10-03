@@ -1,4 +1,4 @@
-// src/components/handoff/AgentHandoff.test.tsx — Copy prompt, and Ask an agent opening the draft.
+// src/components/handoff/AgentHandoff.test.tsx — Ask an agent opening the draft, and Copy prompt in its menu.
 //
 // Real QueryClientProvider; only the agent-providers api is mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { readHandoffState } from "@/lib/conversations/handoff";
 import { AgentHandoff } from "./AgentHandoff";
 
@@ -27,12 +28,14 @@ function renderHandoff(available: boolean) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/clis/jq"]}>
-        <Routes>
-          <Route path="/clis/:command" element={<AgentHandoff prompt={PROMPT} />} />
-          <Route path="/conversations/new" element={<Draft />} />
-        </Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/clis/jq"]}>
+          <Routes>
+            <Route path="/clis/:command" element={<AgentHandoff prompt={PROMPT} />} />
+            <Route path="/conversations/new" element={<Draft />} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -44,11 +47,12 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentHandoff", () => {
-  test("Copy prompt copies the prompt as given", async () => {
+  test("the ▾ menu's Copy prompt copies the prompt as given and says so in a toast", async () => {
     renderHandoff(true);
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More ways to hand it off" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Copy prompt/ }));
     expect(writeText).toHaveBeenCalledWith(PROMPT);
-    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(await screen.findByText("Prompt copied")).toBeInTheDocument();
   });
 
   test("Ask an agent opens the draft with the prompt, no dialog first", async () => {

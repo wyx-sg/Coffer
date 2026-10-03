@@ -52,7 +52,7 @@ _DOC = {
 def test_operations_become_draft_tools_with_holes_and_a_body_argument():
     r = read_openapi(_DOC, source_url="https://billing.example/specs/openapi.json")
     assert r.base_url == "https://billing.example/v2"
-    assert (r.auth_header, r.auth_prefix) == ("X-Api-Key", "")
+    assert r.auth_header == "X-Api-Key"
     tools = {op.key: op.tool for op in r.operations}
     get = tools["GET /nodes/{id}"]
     assert get.name == "get_node" and get.path == "/nodes/{id}?depth={depth}"

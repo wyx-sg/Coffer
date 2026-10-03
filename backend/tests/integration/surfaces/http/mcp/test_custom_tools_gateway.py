@@ -87,7 +87,7 @@ def test_a_call_sends_the_rendered_request_with_the_secret(
     assert text_of(result).startswith("HTTP 200 OK")
     seen = api.seen[-1]
     assert (seen.method, seen.path) == ("GET", "/v2/invoices/a%2Fb")
-    assert seen.headers["authorization"] == f"Bearer {SECRET_VALUE}"
+    assert seen.headers["authorization"] == SECRET_VALUE
     rows = invocations(daemon, group["uid"], expect=1)
     assert [(r["capability_key"], r["status"]) for r in rows] == [("get_invoice", "ok")]
     assert "a/b" not in json.dumps(rows) and SECRET_VALUE not in json.dumps(rows)
@@ -244,7 +244,7 @@ def test_binding_a_stored_secret_waits_for_approval(daemon: BoundaryDaemon, api:
     daemon.approve(group["pending_approvals"][0])
     assert get_group(daemon, "billing")["secret_state"] == "present"
     Agent(daemon, CLAUDE).call("billing__list_invoices")
-    assert api.seen[-1].headers["authorization"] == f"Bearer {SECRET_VALUE}"
+    assert api.seen[-1].headers["authorization"] == SECRET_VALUE
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="moving a group's base URL asks again")

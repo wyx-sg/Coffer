@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.delivery_reports import delivery_of
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
 from coffer.surfaces.http.feature_dependencies import kind_enabled, require_kind_enabled
 from coffer.surfaces.http.schemas import (
@@ -243,4 +244,7 @@ async def update_resource_scope(
     # (ResourceService.update_scope, ADR: per-agent-resource-scope).
     await _reachable(svc, uid)
     scope = body.scope.to_domain() if body.scope is not None else None
-    return _to_out(await svc.update_scope(uid, scope, actor=actor), svc)
+    updated = await svc.update_scope(uid, scope, actor=actor)
+    out = _to_out(updated, svc)
+    out.delivery = await delivery_of(updated)
+    return out

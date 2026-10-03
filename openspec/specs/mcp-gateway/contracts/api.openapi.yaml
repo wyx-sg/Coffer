@@ -1654,51 +1654,6 @@ components:
       - from_cache
       title: CapabilityListOut
       type: object
-    CustomToolAuthIn:
-      properties:
-        header:
-          default: Authorization
-          title: Header
-          type: string
-        prefix:
-          default: ''
-          title: Prefix
-          type: string
-        secret:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Secret
-      title: CustomToolAuthIn
-      type: object
-    CustomToolAuthOut:
-      properties:
-        header:
-          title: Header
-          type: string
-        prefix:
-          title: Prefix
-          type: string
-        secret:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Secret
-        secret_state:
-          enum:
-          - none
-          - present
-          - missing
-          - pending_approval
-          title: Secret State
-          type: string
-      required:
-      - header
-      - prefix
-      - secret
-      - secret_state
-      title: CustomToolAuthOut
-      type: object
     CustomToolGroupIn:
       properties:
         agents:
@@ -1708,10 +1663,6 @@ components:
             type: array
           - type: 'null'
           title: Agents
-        auth:
-          anyOf:
-          - $ref: '#/components/schemas/CustomToolAuthIn'
-          - type: 'null'
         base_url:
           title: Base Url
           type: string
@@ -1721,10 +1672,10 @@ components:
           - type: 'null'
           title: Description
         headers:
-          additionalProperties:
-            type: string
+          items:
+            $ref: '#/components/schemas/CustomToolHeaderIn'
           title: Headers
-          type: object
+          type: array
         name:
           title: Name
           type: string
@@ -1761,10 +1712,6 @@ components:
       type: object
     CustomToolGroupOut:
       properties:
-        auth:
-          anyOf:
-          - $ref: '#/components/schemas/CustomToolAuthOut'
-          - type: 'null'
         base_url:
           title: Base Url
           type: string
@@ -1787,10 +1734,10 @@ components:
           title: Failures 24H
           type: integer
         headers:
-          additionalProperties:
-            type: string
+          items:
+            $ref: '#/components/schemas/CustomToolHeaderOut'
           title: Headers
-          type: object
+          type: array
         health:
           enum:
           - failing
@@ -1818,6 +1765,11 @@ components:
           items:
             type: string
           title: Pending Approvals
+          type: array
+        pending_secrets:
+          items:
+            type: string
+          title: Pending Secrets
           type: array
         scope:
           anyOf:
@@ -1860,7 +1812,6 @@ components:
       - enabled
       - base_url
       - headers
-      - auth
       - timeout_seconds
       - scope
       - source
@@ -1868,6 +1819,7 @@ components:
       - health_reason
       - secret_state
       - pending_approvals
+      - pending_secrets
       - calls_24h
       - failures_24h
       - last_call_at
@@ -1877,12 +1829,8 @@ components:
       title: CustomToolGroupOut
       type: object
     CustomToolGroupPatch:
-      description: 'A partial change to a group; ``auth: null`` removes the auth header.'
+      description: A partial change to a group; ``headers`` replaces the whole list.
       properties:
-        auth:
-          anyOf:
-          - $ref: '#/components/schemas/CustomToolAuthIn'
-          - type: 'null'
         base_url:
           anyOf:
           - type: string
@@ -1895,9 +1843,9 @@ components:
           title: Description
         headers:
           anyOf:
-          - additionalProperties:
-              type: string
-            type: object
+          - items:
+              $ref: '#/components/schemas/CustomToolHeaderIn'
+            type: array
           - type: 'null'
           title: Headers
         timeout_seconds:
@@ -1908,6 +1856,58 @@ components:
           - type: 'null'
           title: Timeout Seconds
       title: CustomToolGroupPatch
+      type: object
+    CustomToolHeaderIn:
+      description: |-
+        One group header row: a plain value, or a stored secret that holds the
+        WHOLE value (no ``Bearer`` prefix is put around it). Send one of the two.
+      properties:
+        name:
+          title: Name
+          type: string
+        secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret
+        value:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Value
+      required:
+      - name
+      title: CustomToolHeaderIn
+      type: object
+    CustomToolHeaderOut:
+      properties:
+        name:
+          title: Name
+          type: string
+        secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret
+        secret_state:
+          enum:
+          - none
+          - present
+          - missing
+          - pending_approval
+          title: Secret State
+          type: string
+        value:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Value
+      required:
+      - name
+      - value
+      - secret
+      - secret_state
+      title: CustomToolHeaderOut
       type: object
     CustomToolIn:
       description: One tool as a request writes it — and as an OpenAPI reading drafts it.
@@ -1960,6 +1960,11 @@ components:
         path:
           title: Path
           type: string
+        source_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Text
       required:
       - name
       - path
@@ -2132,11 +2137,34 @@ components:
         name:
           title: Name
           type: string
+        new_end_line:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: New End Line
         new_required:
           items:
             type: string
           title: New Required
           type: array
+        new_start_line:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: New Start Line
+        new_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: New Text
+        old_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Old Text
+        operation:
+          title: Operation
+          type: string
         path:
           title: Path
           type: string
@@ -2149,6 +2177,11 @@ components:
       - path
       - new_required
       - request_changed
+      - operation
+      - old_text
+      - new_text
+      - new_start_line
+      - new_end_line
       title: CustomToolReimportChangeOut
       type: object
     CustomToolReimportIn:
@@ -2291,8 +2324,8 @@ components:
       description: |-
         A request tested before its group exists: the group's settings inline.
 
-        No secret travels: an unsaved group has no approved binding, so the test
-        is sent without the auth header.
+        No secret travels: an unsaved group has no approved binding, so a secret
+        header row is left out of the test.
       properties:
         arguments:
           additionalProperties: true
@@ -2302,10 +2335,10 @@ components:
           title: Base Url
           type: string
         headers:
-          additionalProperties:
-            type: string
+          items:
+            $ref: '#/components/schemas/CustomToolHeaderIn'
           title: Headers
-          type: object
+          type: array
         timeout_seconds:
           default: 30
           maximum: 300.0
@@ -2708,6 +2741,45 @@ components:
       - transport
       title: McpConfigTestIn
       type: object
+    McpRequirementOut:
+      description: One thing a server needs from this machine, worked out from its config.
+      properties:
+        kind:
+          enum:
+          - cli
+          - secret
+          title: Kind
+          type: string
+        name:
+          title: Name
+          type: string
+        secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret
+        status:
+          enum:
+          - found
+          - not_found
+          - set
+          - missing
+          - waiting_approval
+          title: Status
+          type: string
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - kind
+      - name
+      - status
+      - version
+      - secret
+      title: McpRequirementOut
+      type: object
     McpServerLogLineOut:
       properties:
         at:
@@ -2827,6 +2899,11 @@ components:
           - type: string
           - type: 'null'
           title: Missing Secret Ref
+        requires:
+          items:
+            $ref: '#/components/schemas/McpRequirementOut'
+          title: Requires
+          type: array
         status:
           enum:
           - healthy
@@ -2847,6 +2924,7 @@ components:
       - missing_secret
       - missing_secret_ref
       - handoff
+      - requires
       title: McpServerStatusOut
       type: object
     McpTestHttpIn:
@@ -3038,6 +3116,10 @@ components:
         key:
           title: Key
           type: string
+        source:
+          anyOf:
+          - $ref: '#/components/schemas/OpenApiSourceTextOut'
+          - type: 'null'
         summary:
           anyOf:
           - type: string
@@ -3055,6 +3137,7 @@ components:
       - summary
       - tag
       - tool
+      - source
       title: OpenApiOperationOut
       type: object
     OpenApiReadIn:
@@ -3085,9 +3168,6 @@ components:
           - type: string
           - type: 'null'
           title: Auth Header
-        auth_prefix:
-          title: Auth Prefix
-          type: string
         base_url:
           anyOf:
           - type: string
@@ -3127,7 +3207,6 @@ components:
       - version
       - base_url
       - auth_header
-      - auth_prefix
       - source_kind
       - location
       - operations
@@ -3203,6 +3282,24 @@ components:
       - fetched_at
       - skipped
       title: OpenApiSourceOut
+      type: object
+    OpenApiSourceTextOut:
+      description: An operation's text in the document, for the viewer beside the list.
+      properties:
+        end_line:
+          title: End Line
+          type: integer
+        start_line:
+          title: Start Line
+          type: integer
+        text:
+          title: Text
+          type: string
+      required:
+      - start_line
+      - end_line
+      - text
+      title: OpenApiSourceTextOut
       type: object
     ToolCallCountOut:
       properties:

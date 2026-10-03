@@ -1,6 +1,5 @@
 // frontend/src/lib/hooks/useSkills.ts — TanStack Query bindings for skills.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
@@ -13,7 +12,6 @@ import {
 } from "@/lib/api/queryKeys";
 import { skillsApi } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
-import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /** Shared onError → toast handler for the single-use skill mutations. */
 function useSkillToastError() {
@@ -29,29 +27,38 @@ export function useSkills() {
   });
 }
 
-/** Delete a skill. No toast: the confirmation renders a refusal inline (an
- *  agent's copy that is no longer Coffer's link) and stays open on it. */
+/** Delete a skill. No toast here: the confirmation renders a refusal inline (an
+ *  agent's copy that is no longer Coffer's link) and stays open on it, offering
+ *  to delete and keep that folder (`keepForeignCopies`). */
 export function useRemoveSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (uid: string) => skillsApi.remove(uid),
-    onSuccess: (_d, uid) => {
-      qc.removeQueries({ queryKey: [...skillsKey, uid] });
+    mutationFn: (vars: { uid: string; keepForeignCopies?: boolean }) =>
+      vars.keepForeignCopies ? skillsApi.remove(vars.uid, true) : skillsApi.remove(vars.uid),
+    onSuccess: (_d, vars) => {
+      qc.removeQueries({ queryKey: [...skillsKey, vars.uid] });
       void qc.invalidateQueries({ queryKey: skillsKey });
     },
   });
 }
 
-/** Delete several skills behind one confirmation: every delete is attempted,
- *  one summary toast says how many landed (see `useBulkMutate`). */
-export function useBulkRemoveSkills() {
-  const bulk = useBulkMutate({ invalidate: [skillsKey] });
-  const { run } = bulk;
-  const removeAll = useCallback(
-    (skills: { uid: string }[]) => run(skills, (s) => skillsApi.remove(s.uid)),
-    [run],
-  );
-  return { run: removeAll, isPending: bulk.isPending };
+/** Delete several skills behind one confirmation (POST /skills/bulk-delete).
+ *  No toast: the dialog says how many went and which were refused, and offers
+ *  to delete those and keep the agents' folders. */
+export function useBulkDeleteSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { uids: string[]; keepForeignCopies?: boolean }) =>
+      vars.keepForeignCopies
+        ? skillsApi.bulkDelete(vars.uids, true)
+        : skillsApi.bulkDelete(vars.uids),
+    onSuccess: (out) => {
+      for (const r of out.results) {
+        if (r.deleted) qc.removeQueries({ queryKey: [...skillsKey, r.uid] });
+      }
+      void qc.invalidateQueries({ queryKey: skillsKey });
+    },
+  });
 }
 
 /** Write a skill file's content, conditional on the fingerprint the read
@@ -180,17 +187,6 @@ export function useKeepSkillEdits() {
       skillsApi.keepMine(vars.uid, vars.commit),
     onSuccess: () => void qc.invalidateQueries({ queryKey: skillsKey }),
     onError,
-  });
-}
-
-/** Record that the update was merged into the local edits (spec skill-manager
- * "Record an update merged into local edits"). */
-export function useMarkSkillMerged() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { uid: string; commit: string }) =>
-      skillsApi.markMerged(vars.uid, vars.commit),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: skillsKey }),
   });
 }
 

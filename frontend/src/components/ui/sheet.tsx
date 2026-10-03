@@ -1,5 +1,6 @@
 // src/components/ui/sheet.tsx
-// Drawer over @radix-ui/react-dialog: scrim, a raised full-height panel on the right, header / scrolling body / footer band.
+// Drawer over @radix-ui/react-dialog: scrim, a raised panel on the right, header / scrolling body / footer band.
+// Scrim and panel start below the 44px title bar (Foundations 0.4.02), so the window controls stay usable.
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
@@ -20,7 +21,7 @@ const SheetContent = React.forwardRef<
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         className={cn(
-          "fixed inset-0 z-dialog bg-scrim",
+          "fixed inset-x-0 bottom-0 top-11 z-dialog bg-scrim",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-base",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-fast",
         )}
@@ -28,7 +29,7 @@ const SheetContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed inset-y-0 right-0 z-dialog flex w-full max-w-[640px] flex-col bg-surface-raised text-sm text-text shadow-overlay outline-none",
+          "fixed bottom-0 right-0 top-11 z-dialog flex w-full max-w-[640px] flex-col bg-surface-raised text-sm text-text shadow-overlay outline-none",
           "data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:duration-slow data-[state=open]:ease-out",
           "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-fast data-[state=closed]:ease-in",
           className,

@@ -573,48 +573,16 @@ export interface components {
             /** Tools */
             tools: components["schemas"]["MCPToolView"][];
         };
-        /** CustomToolAuthIn */
-        CustomToolAuthIn: {
-            /**
-             * Header
-             * @default Authorization
-             */
-            header?: string;
-            /**
-             * Prefix
-             * @default
-             */
-            prefix?: string;
-            /** Secret */
-            secret?: string | null;
-        };
-        /** CustomToolAuthOut */
-        CustomToolAuthOut: {
-            /** Header */
-            header: string;
-            /** Prefix */
-            prefix: string;
-            /** Secret */
-            secret: string | null;
-            /**
-             * Secret State
-             * @enum {string}
-             */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
-        };
         /** CustomToolGroupIn */
         CustomToolGroupIn: {
             /** Agents */
             agents?: string[] | null;
-            auth?: components["schemas"]["CustomToolAuthIn"] | null;
             /** Base Url */
             base_url: string;
             /** Description */
             description?: string | null;
             /** Headers */
-            headers?: {
-                [key: string]: string;
-            };
+            headers?: components["schemas"]["CustomToolHeaderIn"][];
             /** Name */
             name: string;
             source?: components["schemas"]["OpenApiSourceIn"] | null;
@@ -633,7 +601,6 @@ export interface components {
         };
         /** CustomToolGroupOut */
         CustomToolGroupOut: {
-            auth: components["schemas"]["CustomToolAuthOut"] | null;
             /** Base Url */
             base_url: string;
             /** Calls 24H */
@@ -650,9 +617,7 @@ export interface components {
             /** Failures 24H */
             failures_24h: number;
             /** Headers */
-            headers: {
-                [key: string]: string;
-            };
+            headers: components["schemas"]["CustomToolHeaderOut"][];
             /**
              * Health
              * @enum {string}
@@ -666,6 +631,8 @@ export interface components {
             name: string;
             /** Pending Approvals */
             pending_approvals: string[];
+            /** Pending Secrets */
+            pending_secrets: string[];
             /** Scope */
             scope: string[] | null;
             /**
@@ -688,20 +655,44 @@ export interface components {
         };
         /**
          * CustomToolGroupPatch
-         * @description A partial change to a group; ``auth: null`` removes the auth header.
+         * @description A partial change to a group; ``headers`` replaces the whole list.
          */
         CustomToolGroupPatch: {
-            auth?: components["schemas"]["CustomToolAuthIn"] | null;
             /** Base Url */
             base_url?: string | null;
             /** Description */
             description?: string | null;
             /** Headers */
-            headers?: {
-                [key: string]: string;
-            } | null;
+            headers?: components["schemas"]["CustomToolHeaderIn"][] | null;
             /** Timeout Seconds */
             timeout_seconds?: number | null;
+        };
+        /**
+         * CustomToolHeaderIn
+         * @description One group header row: a plain value, or a stored secret that holds the
+         *     WHOLE value (no ``Bearer`` prefix is put around it). Send one of the two.
+         */
+        CustomToolHeaderIn: {
+            /** Name */
+            name: string;
+            /** Secret */
+            secret?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /** CustomToolHeaderOut */
+        CustomToolHeaderOut: {
+            /** Name */
+            name: string;
+            /** Secret */
+            secret: string | null;
+            /**
+             * Secret State
+             * @enum {string}
+             */
+            secret_state: "none" | "present" | "missing" | "pending_approval";
+            /** Value */
+            value: string | null;
         };
         /**
          * CustomToolIn
@@ -742,6 +733,8 @@ export interface components {
             operation?: string | null;
             /** Path */
             path: string;
+            /** Source Text */
+            source_text?: string | null;
         };
         /** CustomToolOut */
         CustomToolOut: {
@@ -828,8 +821,18 @@ export interface components {
             method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
             /** Name */
             name: string;
+            /** New End Line */
+            new_end_line: number | null;
             /** New Required */
             new_required: string[];
+            /** New Start Line */
+            new_start_line: number | null;
+            /** New Text */
+            new_text: string | null;
+            /** Old Text */
+            old_text: string | null;
+            /** Operation */
+            operation: string;
             /** Path */
             path: string;
             /** Request Changed */
@@ -894,8 +897,8 @@ export interface components {
          * CustomToolUnsavedTestIn
          * @description A request tested before its group exists: the group's settings inline.
          *
-         *     No secret travels: an unsaved group has no approved binding, so the test
-         *     is sent without the auth header.
+         *     No secret travels: an unsaved group has no approved binding, so a secret
+         *     header row is left out of the test.
          */
         CustomToolUnsavedTestIn: {
             /** Arguments */
@@ -905,9 +908,7 @@ export interface components {
             /** Base Url */
             base_url: string;
             /** Headers */
-            headers?: {
-                [key: string]: string;
-            };
+            headers?: components["schemas"]["CustomToolHeaderIn"][];
             /**
              * Timeout Seconds
              * @default 30
@@ -1154,6 +1155,28 @@ export interface components {
             /** Transport */
             transport: components["schemas"]["McpTestStdioIn"] | components["schemas"]["McpTestHttpIn"];
         };
+        /**
+         * McpRequirementOut
+         * @description One thing a server needs from this machine, worked out from its config.
+         */
+        McpRequirementOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cli" | "secret";
+            /** Name */
+            name: string;
+            /** Secret */
+            secret: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "found" | "not_found" | "set" | "missing" | "waiting_approval";
+            /** Version */
+            version: string | null;
+        };
         /** McpServerLogLineOut */
         McpServerLogLineOut: {
             /** At */
@@ -1213,6 +1236,8 @@ export interface components {
             missing_secret: string | null;
             /** Missing Secret Ref */
             missing_secret_ref: string | null;
+            /** Requires */
+            requires: components["schemas"]["McpRequirementOut"][];
             /**
              * Status
              * @enum {string}
@@ -1348,6 +1373,7 @@ export interface components {
         OpenApiOperationOut: {
             /** Key */
             key: string;
+            source: components["schemas"]["OpenApiSourceTextOut"] | null;
             /** Summary */
             summary: string | null;
             /** Tag */
@@ -1370,8 +1396,6 @@ export interface components {
         OpenApiReadOut: {
             /** Auth Header */
             auth_header: string | null;
-            /** Auth Prefix */
-            auth_prefix: string;
             /** Base Url */
             base_url: string | null;
             /** Location */
@@ -1426,6 +1450,18 @@ export interface components {
             title: string | null;
             /** Version */
             version: string | null;
+        };
+        /**
+         * OpenApiSourceTextOut
+         * @description An operation's text in the document, for the viewer beside the list.
+         */
+        OpenApiSourceTextOut: {
+            /** End Line */
+            end_line: number;
+            /** Start Line */
+            start_line: number;
+            /** Text */
+            text: string;
         };
         /** ToolCallCountOut */
         ToolCallCountOut: {

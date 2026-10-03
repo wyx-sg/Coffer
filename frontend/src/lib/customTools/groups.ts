@@ -2,7 +2,6 @@
 // `mcp_server` is a group, how groups are sectioned by health, and short labels.
 import type { StatusTone } from "@/lib/statusTone";
 import type { CustomTool, CustomToolGroup, GroupHealth, HttpMethod } from "@/lib/api/customTools";
-import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
 
 /** The transport a custom-tool group's `mcp_server` carries. */
 const HTTP_API_TRANSPORT = "http_api";
@@ -45,24 +44,19 @@ function sectionOf(health: GroupHealth): GroupSection {
   return SECTION_OF[health];
 }
 
-/** The groups matching `filter` (name, host or a tool name) and `reach`, split into the
- *  sections that have any, failing first. */
+/** The groups matching `filter` (name, host or a tool name), split into the sections that
+ *  have any, failing first. */
 export function sectionGroups(
   groups: readonly CustomToolGroup[],
   filter: string,
-  reach: ReachFilterValue = "all",
 ): { section: GroupSection; groups: CustomToolGroup[] }[] {
   const q = filter.trim().toLowerCase();
   const matching = groups.filter(
     (g) =>
-      matchesReach(reach, {
-        enabled: g.enabled,
-        scope: g.scope === null ? null : { agents: g.scope },
-      }) &&
-      (!q ||
-        g.name.toLowerCase().includes(q) ||
-        hostOf(g.base_url).toLowerCase().includes(q) ||
-        g.tools.some((tool) => tool.name.toLowerCase().includes(q))),
+      !q ||
+      g.name.toLowerCase().includes(q) ||
+      hostOf(g.base_url).toLowerCase().includes(q) ||
+      g.tools.some((tool) => tool.name.toLowerCase().includes(q)),
   );
   const sorted = [...matching].sort(
     (a, b) => HEALTH_RANK[a.health] - HEALTH_RANK[b.health] || a.name.localeCompare(b.name),
@@ -71,6 +65,14 @@ export function sectionGroups(
     section,
     groups: sorted.filter((g) => sectionOf(g.health) === section),
   })).filter((s) => s.groups.length > 0);
+}
+
+/** What a group's header pill and banner say: its health, with the two secret problems told apart. */
+export type GroupState = "healthy" | "idle" | "failing" | "off" | "secretMissing" | "waiting";
+
+export function groupState(group: Pick<CustomToolGroup, "health" | "secret_state">): GroupState {
+  if (group.health !== "attention") return group.health;
+  return group.secret_state === "pending_approval" ? "waiting" : "secretMissing";
 }
 
 /** The status tone a group's health reads in. */

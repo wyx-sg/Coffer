@@ -1,30 +1,21 @@
 // frontend/src/components/reach/BulkReachActions.test.tsx
 //
-// The bulk half of the reach control: each choice writes the SAME state to
-// EVERY selected row, and partial failure is reported rather than swallowed.
-// The old bar offered Enable/Disable only, which could not express the state the
-// rows themselves could be in.
-//
-// Its button cannot state a current reach the way a row's does — a mixed
-// selection has none — so it names the action instead, opens with nothing
-// chosen, and writes nothing at all if the user picks nothing.
-//
-// Every request it fans out is addressed by the row's UID alone; the `kind` a
-// row carries never reaches the wire, it only says which list key the batch
-// refreshes. The fixtures keep uid and name unalike so an assertion that
-// reached for the label would fail rather than coincide.
+// The reach choice over a table selection: a 340 popover with the same three
+// modes, a tri-state box per agent over the selection ("2 of 3", "→ 3 of 3"),
+// and — unlike one resource — a bulk change WAITS FOR APPLY. A partial failure
+// is written in the popover with Retry for the failed items only; it never
+// toasts.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 
 import { acceptance } from "@/test/acceptance";
-import { BulkReachActions } from "./BulkReachActions";
 import { ApiError } from "@/lib/api/errors";
+import { BulkReachActions } from "./BulkReachActions";
 
-/** The agents the machine knows: the uid a scope stores, and the name the
- *  pick-list rows are labelled by. */
 const CLAUDE = "u-agent-7f21";
+const CODEX = "u-agent-be04";
 
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
@@ -33,8 +24,8 @@ vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }))
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({
     data: [
-      { uid: "u-agent-7f21", name: "claude" },
-      { uid: "u-agent-be04", name: "codex" },
+      { uid: CLAUDE, name: "claude", type: "claude_code" },
+      { uid: CODEX, name: "codex", type: "codex" },
     ],
   })),
 }));
@@ -48,174 +39,165 @@ vi.mock("@/components/ui/toast", () => ({
 
 const { resourcesApi } = await import("@/lib/api/resources");
 const { scopeApi } = await import("@/lib/api/scope");
-const resources = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-const scope = scopeApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const disable = vi.mocked(resourcesApi.disable);
+const enable = vi.mocked(resourcesApi.enable);
+const put = vi.mocked(scopeApi.put);
 
-/** Two selected skills, by uid. They are labelled "writing" and "reviewing",
- *  which is what the table shows and what nothing below asserts on. */
-const WRITING_UID = "u-skill-4e8d";
-const REVIEWING_UID = "u-skill-0a13";
-
+// Claude reaches all three; Codex only the first.
 const ROWS = [
-  { kind: "skill", uid: WRITING_UID },
-  { kind: "skill", uid: REVIEWING_UID },
+  {
+    kind: "skill",
+    uid: "u-skill-a",
+    name: "frontend-design",
+    enabled: true,
+    scope: { agents: [CLAUDE, CODEX] },
+  },
+  { kind: "skill", uid: "u-skill-b", name: "pdf", enabled: true, scope: { agents: [CLAUDE] } },
+  {
+    kind: "skill",
+    uid: "u-skill-c",
+    name: "release-notes",
+    enabled: true,
+    scope: { agents: [CLAUDE] },
+  },
 ];
 
+let qc: QueryClient;
 function mount(props: Partial<Parameters<typeof BulkReachActions>[0]> = {}) {
   const onDone = vi.fn();
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
       <BulkReachActions rows={ROWS} onDone={onDone} {...props} />
     </QueryClientProvider>,
   );
-  return { onDone, qc };
+  return onDone;
 }
 
-/** The bulk bar's one button. */
 const trigger = () => within(screen.getByTestId("bulk-reach-control")).getByRole("button");
 const openPanel = () => fireEvent.click(trigger());
 const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
-const closePanel = () =>
-  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-/** One agent's row in the pick-list, by the NAME it is labelled with. */
-const agentRow = (name: string) => within(screen.getByTestId(`scope-agent-${name}`));
+const box = (name: string) =>
+  within(screen.getByTestId(`scope-agent-${name}`)).getByRole("checkbox") as HTMLInputElement;
+const apply = () => fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-/** Open the panel and pick one whole-value choice, which also closes it. */
-const pick = (label: RegExp) => {
-  openPanel();
-  fireEvent.click(choice(label));
-};
+afterEach(() => {
+  vi.clearAllMocks();
+  disable.mockResolvedValue(undefined as never);
+  enable.mockResolvedValue(undefined as never);
+  put.mockResolvedValue(undefined as never);
+});
+disable.mockResolvedValue(undefined as never);
+enable.mockResolvedValue(undefined as never);
+put.mockResolvedValue(undefined as never);
 
-afterEach(() => vi.clearAllMocks());
-
-describe("BulkReachActions", () => {
-  test("the button names the action, because a mixed selection has no state to name", async () => {
-    // In a row the label IS the current reach. Here it would have to pick one
-    // of the states the selection holds and misreport the rest.
+describe("the popover", () => {
+  test("the trigger is a Reach button; the popover is 340 wide with three unpicked modes", () => {
     mount();
-    expect(trigger()).toHaveTextContent(/set reach/i);
+    expect(trigger()).toHaveTextContent("Reach");
     openPanel();
-    for (const label of [/^off$/i, /every agent/i, /only selected agents/i]) {
-      expect(choice(label)).not.toBeChecked();
-    }
-  });
-
-  test("dismissing the panel without choosing writes nothing to any row", async () => {
-    const { onDone } = mount();
-    openPanel();
-    closePanel();
-    expect(resources.disable).not.toHaveBeenCalled();
-    expect(resources.enable).not.toHaveBeenCalled();
-    expect(scope.put).not.toHaveBeenCalled();
-    expect(onDone).not.toHaveBeenCalled();
-  });
-
-  test("Disabled disables every selected row by uid, and writes no scope", async () => {
-    resources.disable.mockResolvedValue(undefined);
-    const { onDone } = mount();
-
-    pick(/^off$/i);
-
-    await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
-    // The uid is the whole argument: the kind the row carries is for the
-    // invalidation, not for the route.
-    expect(resources.disable.mock.calls.map((c) => c[0]).sort()).toEqual(
-      [REVIEWING_UID, WRITING_UID].sort(),
-    );
-    expect(scope.put).not.toHaveBeenCalled();
-    await waitFor(() => expect(onDone).toHaveBeenCalled());
-  });
-
-  test("Everywhere enables each row and clears its scope", async () => {
-    resources.enable.mockResolvedValue(undefined);
-    scope.put.mockResolvedValue(undefined);
-    mount();
-
-    pick(/every agent/i);
-
-    await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
-    expect(resources.enable).toHaveBeenCalledTimes(2);
-    expect(scope.put.mock.calls.every((c) => c[1] === null)).toBe(true);
-  });
-
-  test("Restricted writes the SAME staged scope to every row, once", async () => {
-    resources.enable.mockResolvedValue(undefined);
-    scope.put.mockResolvedValue(undefined);
-    mount();
-
-    openPanel();
-    fireEvent.click(choice(/only selected agents/i));
-    // The panel opens on an EMPTY draft: a bulk write is a new intent, not an
-    // edit of whichever row happened to be first.
-    expect(agentRow("claude").getByRole("checkbox")).not.toBeChecked();
-
-    fireEvent.click(agentRow("claude").getByRole("checkbox"));
-    expect(scope.put).not.toHaveBeenCalled();
-
-    closePanel();
-    await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
-    // Ticked by name, written as a uid, addressed by a uid — both halves of
-    // the translation in one assertion.
-    expect(scope.put.mock.calls.map((c) => [c[0], c[1]])).toEqual([
-      [WRITING_UID, { agents: [CLAUDE] }],
-      [REVIEWING_UID, { agents: [CLAUDE] }],
+    expect(screen.getByRole("dialog")).toHaveClass("w-[340px]");
+    expect(screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([
+      "Off",
+      "All agents",
+      "Chosen agents",
     ]);
+    expect(
+      screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked),
+    ).toHaveLength(0);
+    expect(screen.getByText("Reach for 3 selected")).toBeInTheDocument();
   });
 
-  test("one failed row does not abort the rest, and the partial is reported", async () => {
-    resources.disable.mockImplementation((uid: string) =>
-      uid === WRITING_UID
-        ? Promise.reject(new ApiError("RESOURCE_NOT_FOUND", "gone"))
-        : Promise.resolve(undefined),
-    );
-    const { onDone } = mount();
-
-    pick(/^off$/i);
-
-    // Both attempted — allSettled, not Promise.all.
-    await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
-    // One summary toast, naming the split; never silence, never one per row.
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
-    expect(toastSuccess).not.toHaveBeenCalled();
-    // The selection still clears: the bar must not sit stuck with no message.
-    await waitFor(() => expect(onDone).toHaveBeenCalled());
-  });
-
-  test("a row that enables but fails its scope write counts as failed, not half-done", async () => {
-    resources.enable.mockResolvedValue(undefined);
-    scope.put.mockImplementation((uid: string) =>
-      uid === WRITING_UID
-        ? Promise.reject(new ApiError("VALIDATION_ERROR", "bad"))
-        : Promise.resolve(undefined),
-    );
+  test("shows each agent's count over the selection and a dash for 'some'", () => {
     mount();
-
-    pick(/every agent/i);
-
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    expect(
+      within(screen.getByTestId("scope-agent-claude")).getByText("3 of 3"),
+    ).toBeInTheDocument();
+    expect(within(screen.getByTestId("scope-agent-codex")).getByText("1 of 3")).toBeInTheDocument();
+    expect(box("claude")).toBeChecked();
+    expect(box("codex").indeterminate).toBe(true);
   });
 
-  test("all rows succeeding reports a single success summary", async () => {
-    resources.disable.mockResolvedValue(undefined);
+  test("clicking a partly-ticked agent cycles dash → ticked → empty → dash, old → new counts", () => {
     mount();
-
-    pick(/^off$/i);
-
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
-    expect(toastSuccess.mock.calls[0][0]).toMatch(/2 succeeded/i);
-    expect(toastError).not.toHaveBeenCalled();
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    const row = within(screen.getByTestId("scope-agent-codex"));
+    fireEvent.click(box("codex"));
+    expect(row.getByText(/1 of 3/)).toBeInTheDocument();
+    expect(row.getByText(/→ 3 of 3/)).toBeInTheDocument();
+    expect(screen.getByTestId("reach-summary")).toHaveTextContent("1 change · codex gets 2 more");
+    fireEvent.click(box("codex"));
+    expect(row.getByText(/→ 0 of 3/)).toBeInTheDocument();
+    fireEvent.click(box("codex"));
+    expect(row.queryByText(/→/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
-  test("the batch refreshes the generic lists plus the kind's own key, once each", async () => {
-    resources.disable.mockResolvedValue(undefined);
-    const { qc } = mount({ invalidate: [["skills"]] });
+  test("the list is dimmed and frozen until Chosen agents is picked", () => {
+    mount();
+    openPanel();
+    expect(box("codex")).toBeDisabled();
+  });
+});
+
+describe("Apply writes; nothing is written before it", () => {
+  test("Off turns off every selected item once Apply is pressed", async () => {
+    const onDone = mount();
+    openPanel();
+    fireEvent.click(choice(/^off$/i));
+    expect(disable).not.toHaveBeenCalled();
+    apply();
+    await waitFor(() => expect(disable).toHaveBeenCalledTimes(3));
+    expect(put).not.toHaveBeenCalled();
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(toastSuccess).toHaveBeenCalledOnce();
+  });
+
+  test("All agents skips items that already are, and clears the scope of the rest", async () => {
+    mount({ rows: [...ROWS, { kind: "skill", uid: "u-skill-d", enabled: true, scope: null }] });
+    openPanel();
+    fireEvent.click(choice(/^all agents$/i));
+    apply();
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(3));
+    expect(put.mock.calls.every((c) => c[1] === null)).toBe(true);
+    expect(put.mock.calls.map((c) => c[0])).not.toContain("u-skill-d");
+  });
+
+  test("Chosen agents writes each item's own new list, only where it changes", async () => {
+    mount();
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    fireEvent.click(box("codex")); // → ticked for all
+    apply();
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    const written = Object.fromEntries(put.mock.calls.map((c) => [c[0], c[1]]));
+    expect(written["u-skill-a"]).toBeUndefined(); // already reached Codex
+    expect(written["u-skill-b"]).toEqual({ agents: [CLAUDE, CODEX] });
+    expect(written["u-skill-c"]).toEqual({ agents: [CLAUDE, CODEX] });
+  });
+
+  test("Cancel drops every staged box and writes nothing", () => {
+    mount();
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    fireEvent.click(box("codex"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(put).not.toHaveBeenCalled();
+    openPanel();
+    expect(
+      screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked),
+    ).toHaveLength(0);
+  });
+
+  test("refreshes the generic lists and the kind's own once the batch settles", async () => {
+    mount({ invalidate: [["skills"]] });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
-
-    pick(/^off$/i);
-
+    openPanel();
+    fireEvent.click(choice(/^off$/i));
+    apply();
     await waitFor(() => expect(invalidate).toHaveBeenCalled());
     const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
     expect(keys).toContain(JSON.stringify(["resources"]));
@@ -228,27 +210,59 @@ acceptance(
   "web-ui",
   "a bulk reach write starts blank and reports failures in one summary",
   async () => {
-    resources.disable.mockImplementation((uid: string) =>
-      uid === REVIEWING_UID
-        ? Promise.reject(new ApiError("RESOURCE_NOT_FOUND", "gone"))
-        : Promise.resolve(undefined),
+    disable.mockImplementation((uid: string) =>
+      uid === "u-skill-c"
+        ? Promise.reject(new ApiError("RESOURCE_NOT_FOUND", "read-only"))
+        : Promise.resolve(undefined as never),
     );
-    mount();
+    const onDone = mount();
 
-    expect(trigger()).toHaveTextContent("Set reach…");
+    // Starts blank: the button names the action and no mode is picked.
+    expect(trigger()).toHaveTextContent("Reach");
     openPanel();
-    const radios = screen.getAllByRole("radio");
-    expect(radios).toHaveLength(3);
-    expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(0);
+    expect(
+      screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked),
+    ).toHaveLength(0);
 
     fireEvent.click(choice(/^off$/i));
+    apply();
 
-    await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
-    expect(resources.disable.mock.calls.map((c) => c[0]).sort()).toEqual(
-      [WRITING_UID, REVIEWING_UID].sort(),
-    );
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
+    // The failure is written in the popover — never a toast.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Applied to 2 of 3");
+    expect(alert).toHaveTextContent("release-notes");
+    expect(toastError).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+
+    // Retry resends the failed item only; success closes and clears the selection.
+    disable.mockResolvedValue(undefined as never);
+    disable.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(disable).toHaveBeenCalledTimes(1));
+    expect(disable).toHaveBeenCalledWith("u-skill-c");
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
   },
 );
+
+test("a scope that saved but could not be delivered to an agent is a failure of that item (4.3.31)", async () => {
+  put.mockImplementation(((uid: string) =>
+    Promise.resolve({
+      delivery:
+        uid === "u-skill-c"
+          ? [{ agent_uid: CODEX, agent_name: "codex", ok: false, reason: "~/.codex is read-only" }]
+          : [{ agent_uid: CODEX, agent_name: "codex", ok: true, reason: null }],
+    })) as never);
+  const onDone = mount();
+  openPanel();
+  fireEvent.click(choice(/chosen agents/i));
+  fireEvent.click(box("codex"));
+  apply();
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("Applied to 1 of 2");
+  expect(alert).toHaveTextContent("release-notes");
+  expect(alert).toHaveTextContent("~/.codex is read-only");
+  expect(toastError).not.toHaveBeenCalled();
+  expect(onDone).not.toHaveBeenCalled();
+});

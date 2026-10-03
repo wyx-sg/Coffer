@@ -1,6 +1,6 @@
-// src/components/clis/ClisList.tsx — the CLIs list pane: a filter ("/" focuses it), then Needs you and Ready.
+// src/components/clis/ClisList.tsx — the CLIs list pane: a filter ("/" focuses it), then Needs attention and Ready.
 //
-// Needs you holds the commands that are missing, too old or not logged in, in
+// Needs attention holds the commands that are missing, too old or not logged in, in
 // the daemon's order; Ready the rest. Each group carries its count. A row opens
 // `/clis/<command>` in the detail pane beside it.
 import { useState } from "react";
@@ -25,9 +25,9 @@ interface Props {
 export function ClisList({ items, loading, error, onRetry, selected, onOpen }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
-  const { needsYou, ready } = groupClis(items, filter);
+  const { needsAttention, ready } = groupClis(items, filter);
   const groups = [
-    { key: "needsYou", rows: needsYou },
+    { key: "needsAttention", rows: needsAttention },
     { key: "ready", rows: ready },
   ].filter((g) => g.rows.length > 0);
 

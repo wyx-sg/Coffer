@@ -1,4 +1,7 @@
-// src/components/mcp/server/McpTopTools.tsx — the Overview's "Most-called tools": the busiest few, with "Show all N in Tools" (design 4.1.02–4.1.06).
+// src/components/mcp/server/McpTopTools.tsx — the Overview's "Most-called tools": the busiest few by 24-hour calls, read-only, with "Show all N in Tools" (design 4.1.04–4.1.08).
+//
+// No switches here (they live on the Tools tab). While tiering hides some
+// tools the table adds a Listed / Behind search column.
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -7,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { components } from "@/lib/api/types";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPage";
-import { McpToolTable } from "./McpToolTable";
+import { TopToolsTable } from "./TopToolsTable";
 import type { ServerState } from "@/lib/mcp/serverState";
 import { busiestFirst, cacheNote, countsUsage, toolRows } from "./toolRows";
 
@@ -27,7 +30,7 @@ export function NoTools({ state, error }: { state: ServerState; error: unknown }
 }
 
 interface Props {
-  serverUid: string;
+  name: string;
   state: ServerState;
   detail: McpStatusDetail | null | undefined;
   capabilities: CapabilityListOut | undefined;
@@ -39,7 +42,7 @@ interface Props {
 }
 
 export function McpTopTools({
-  serverUid,
+  name,
   state,
   detail,
   capabilities,
@@ -55,28 +58,28 @@ export function McpTopTools({
   const fromCache = capabilities?.from_cache ?? false;
 
   return (
-    <Section title={t("mcp.page.mostCalled")} gap="snug" labelled>
+    <Section title={t("mcp.page.mostCalled")} gap="snug" labelled compact>
+      <p className="-mt-1 text-xs text-text-muted">
+        {fromCache && rows.length > 0
+          ? cacheNote(t, state, detail)
+          : t("mcp.page.mostCalledSub", { name })}
+      </p>
       {pending ? (
         <Skeleton className="h-24 w-full" />
       ) : rows.length === 0 ? (
         <NoTools state={state} error={error} />
       ) : (
         <>
-          {fromCache ? (
-            <p className="text-xs text-text-muted">{cacheNote(t, state, detail)}</p>
-          ) : null}
-          <McpToolTable
-            serverUid={serverUid}
+          <TopToolsTable
             rows={busiestFirst(rows).slice(0, SHOWN)}
             showListing={rows.some((r) => r.listing !== null)}
-            fromCache={fromCache}
             label={t("mcp.page.mostCalled")}
           />
           {rows.length > SHOWN ? (
             <Link
               to={toolsHref}
               state={location.state}
-              className="px-2 pt-1 text-xs text-accent hover:underline"
+              className="pt-1 text-xs font-label text-accent-text hover:underline"
             >
               {t("mcp.page.showAllInTools", { count: rows.length })}
             </Link>

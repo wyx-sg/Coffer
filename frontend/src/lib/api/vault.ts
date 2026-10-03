@@ -18,7 +18,6 @@ type Schemas = components["schemas"];
 
 export type VaultVersionOut = Schemas["VaultVersionOut"];
 export type VaultHistoryOut = Schemas["VaultHistoryOut"];
-export type VaultPathChangeOut = Schemas["VaultPathChangeOut"];
 export type VaultDiffOut = Schemas["VaultDiffOut"];
 export type VaultRestoreIn = Schemas["VaultRestoreIn"];
 export type VaultRestoreOut = Schemas["VaultRestoreOut"];

@@ -177,7 +177,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
 
         # delete
         r = c.delete(f"/api/v1/skills/{uid}")
-        assert r.status_code == 204
+        assert r.status_code == 200 and r.json() == {"kept_copies": []}
         assert not link.exists()
         r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 404

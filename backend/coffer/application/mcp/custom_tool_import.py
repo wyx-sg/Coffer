@@ -9,7 +9,7 @@ request, through the service's one write path.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from coffer.application.mcp.custom_tool_ports import OpenApiSourcePort
@@ -20,7 +20,7 @@ from coffer.domain.mcp.custom_tool_errors import (
     OpenApiFileNeeded,
     OpenApiUnreadable,
 )
-from coffer.domain.mcp.http_api import HttpApiTransport
+from coffer.domain.mcp.http_api import SOURCE_TEXT_LIMIT, HttpApiTransport
 from coffer.domain.mcp.openapi_import import (
     OpenApiError,
     OpenApiReading,
@@ -40,6 +40,13 @@ class ToolChange:
     path: str
     new_required: list[str]
     request_changed: bool
+    operation: str
+    #: The operation's text in the spec as last imported (``None`` for a tool
+    #: imported before Coffer kept it) and in the spec just read.
+    old_text: str | None
+    new_text: str | None
+    new_start_line: int | None
+    new_end_line: int | None
 
 
 def _required(schema: dict[str, object]) -> set[str]:
@@ -70,6 +77,11 @@ def changed_tools(transport: HttpApiTransport, reading: OpenApiReading) -> list[
                     path=fresh.tool.path,
                     new_required=new_required,
                     request_changed=request_changed,
+                    operation=fresh.key,
+                    old_text=tool.source_text,
+                    new_text=fresh.source.text if fresh.source else None,
+                    new_start_line=fresh.source.start_line if fresh.source else None,
+                    new_end_line=fresh.source.end_line if fresh.source else None,
                 )
             )
     return out
@@ -106,9 +118,24 @@ class CustomToolImporter:
     def _read(self, text: str, source_url: str | None, taken: set[str] | None) -> OpenApiReading:
         doc = self._source.parse(text)
         try:
-            return read_openapi(doc, source_url=source_url, taken_names=taken)
+            reading = read_openapi(doc, source_url=source_url, taken_names=taken)
         except OpenApiError as e:
             raise OpenApiUnreadable(str(e)) from e
+        spans = {
+            key: replace(span, text=span.text[:SOURCE_TEXT_LIMIT])
+            for key, span in self._source.locate(text).items()
+        }
+        operations = [
+            replace(
+                op,
+                source=spans[op.key],
+                tool=op.tool.model_copy(update={"source_text": spans[op.key].text}),
+            )
+            if op.key in spans
+            else op
+            for op in reading.operations
+        ]
+        return replace(reading, operations=operations)
 
     async def _reread(
         self, transport: HttpApiTransport, name: str, document: str | None

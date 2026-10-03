@@ -1,35 +1,36 @@
 // frontend/src/components/skills/SkillDetailPane.tsx
 // The open skill in the Skills page's reading pane (spec skill-manager "Cover
-// skill management on REST, the CLI and the web"): the header, the banners of
-// what needs the reader (SkillBanners), and four tabs in this order — Files ·
-// N (the default), Delivery, Requires · N, History (the master folder's
-// versions, from the vault's history). The Files tab carries the
-// built-in note or a Git skill's Source block above the files, and, when the
-// master folder is gone, the two ways forward instead of them. The page owns
-// the address (`/skills/<name>/<tab>`); this pane only renders the tab it is
-// given. It is loaded on first open (the Files tab pulls in the editor and the
-// Markdown pipeline).
+// skill management on REST, the CLI and the web", canvas 4.3 SkillHeader): the
+// header, the tab strip — Files (the default), Delivery, Requires, History,
+// never with counts — and, under the strip, the banners of what needs the
+// reader. Banners are split by owner: the master folder (SkillMasterBanner) and
+// what the skill depends on (SkillDependencyBanners) are drawn here, the Git
+// source's and the copies' are SkillBanners'. The Files tab carries a Git
+// skill's Source block above the files, or — when the master folder is gone —
+// an empty state that points at History. The page owns the address
+// (`/skills/<name>/<tab>`); this pane only renders the tab it is given. It is
+// loaded on first open (the Files tab pulls in the editor and the Markdown
+// pipeline).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Info } from "lucide-react";
 
 import { SkillBanners } from "@/components/skills/SkillBanners";
 import { SkillCopyDialog } from "@/components/skills/SkillCopyDialog";
+import { SkillDependencyBanners } from "@/components/skills/SkillDependencyBanners";
 import { SkillDeliveryTab } from "@/components/skills/SkillDeliveryTab";
 import { SkillDetailHeader } from "@/components/skills/SkillDetailHeader";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { SkillGitSourcePanel } from "@/components/skills/SkillGitSource";
 import { SkillHistoryTab } from "@/components/skills/SkillHistoryTab";
+import { SkillMasterBanner } from "@/components/skills/SkillMasterBanner";
 import { SkillMissingMaster } from "@/components/skills/SkillMissingMaster";
 import { SkillRequiresTab } from "@/components/skills/SkillRequiresTab";
 import { SkillUpdateDialog } from "@/components/skills/SkillUpdateDialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { useClis } from "@/lib/hooks/useClis";
-import { useSkillCopies, useSkillFiles } from "@/lib/hooks/useSkills";
-import { skillAttention } from "@/lib/skills/attention";
-import { countFiles } from "@/lib/skills/format";
+import { useSkillCopies } from "@/lib/hooks/useSkills";
+import { skillAttention, skillStatus } from "@/lib/skills/attention";
 import type { SkillTab } from "@/lib/skills/tabs";
 
 interface Props {
@@ -39,73 +40,61 @@ interface Props {
   onDeleted: () => void;
 }
 
-function Count({ n }: { n: number }) {
-  return n > 0 ? (
-    <span className="text-text-muted" aria-hidden>
-      · {n}
-    </span>
-  ) : null;
-}
+/** The attention kinds this pane draws itself; SkillBanners draws the rest. */
+const OWN_KINDS = new Set(["masterMissing", "requires", "toolOff", "secrets"]);
 
 export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
   const { t } = useTranslation();
   const copies = useSkillCopies();
   const clis = useClis().data?.items ?? [];
-  const files = useSkillFiles(skill.uid);
   const [reviewing, setReviewing] = useState<SkillDriftEntry | null>(null);
   const [updating, setUpdating] = useState(false);
 
   const attention = skillAttention(skill, clis, copies.data?.entries);
   const masterMissing = attention.some((a) => a.kind === "masterMissing");
+  const rest = attention.filter((a) => !OWN_KINDS.has(a.kind));
 
   return (
-    <div className="flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-[18px]">
       <SkillDetailHeader
         skill={skill}
-        masterMissing={masterMissing}
+        status={skillStatus(skill, attention)}
         onDeleted={onDeleted}
-      />
-
-      <SkillBanners
-        skill={skill}
-        items={attention}
-        onReviewCopy={setReviewing}
-        onReviewUpdate={() => setUpdating(true)}
       />
 
       <Tabs value={tab} onValueChange={onTabChange}>
         <TabsList>
-          <TabsTrigger value="files">
-            {t("skills.detail.tabs.files")}
-            <Count n={countFiles(files.data)} />
-          </TabsTrigger>
+          <TabsTrigger value="files">{t("skills.detail.tabs.files")}</TabsTrigger>
           <TabsTrigger value="delivery">{t("skills.detail.tabs.delivery")}</TabsTrigger>
-          <TabsTrigger value="requires">
-            {t("skills.detail.tabs.requires")}
-            <Count n={skill.requires.length} />
-          </TabsTrigger>
+          <TabsTrigger value="requires">{t("skills.detail.tabs.requires")}</TabsTrigger>
           <TabsTrigger value="history">{t("skills.detail.tabs.history")}</TabsTrigger>
         </TabsList>
 
+        {attention.length > 0 ? (
+          <div className="mt-4 flex flex-col gap-2.5">
+            {masterMissing ? <SkillMasterBanner skill={skill} onDeleted={onDeleted} /> : null}
+            <SkillDependencyBanners skill={skill} items={attention} />
+            <SkillBanners
+              skill={skill}
+              items={rest}
+              onReviewCopy={setReviewing}
+              onReviewUpdate={() => setUpdating(true)}
+            />
+          </div>
+        ) : null}
+
         <TabsContent value="files" className="flex flex-col gap-4">
           {masterMissing ? (
-            <SkillMissingMaster skill={skill} onDeleted={onDeleted} />
+            <SkillMissingMaster onOpenHistory={() => onTabChange("history")} />
           ) : (
             <>
-              {skill.builtin ? (
-                <Alert variant="info" data-testid="skill-builtin-banner">
-                  <Info aria-hidden />
-                  <AlertTitle>{t("skills.detail.builtinBanner.title")}</AlertTitle>
-                  <AlertDescription>{t("skills.detail.builtinBanner.body")}</AlertDescription>
-                </Alert>
-              ) : null}
               {skill.source.type === "git_import" ? <SkillGitSourcePanel skill={skill} /> : null}
               <SkillFileTree uid={skill.uid} owner={skill.name} builtin={skill.builtin} />
             </>
           )}
         </TabsContent>
         <TabsContent value="delivery">
-          <SkillDeliveryTab skill={skill} onReview={setReviewing} />
+          <SkillDeliveryTab skill={skill} />
         </TabsContent>
         <TabsContent value="requires">
           <SkillRequiresTab skill={skill} />

@@ -9,6 +9,7 @@ the kind-agnostic resource routes by the group's uid.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Response
 
@@ -27,6 +28,7 @@ from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolGroupListOut,
     CustomToolGroupOut,
     CustomToolGroupPatch,
+    CustomToolHeaderIn,
     CustomToolIn,
     CustomToolPatch,
     CustomToolReachIn,
@@ -52,6 +54,10 @@ _importer = Depends(get_custom_tool_importer)
 _actor = Depends(get_actor)
 
 
+def _header_rows(rows: list[CustomToolHeaderIn]) -> list[dict[str, Any]]:
+    return [r.model_dump() for r in rows]
+
+
 def _tool_dict(tool: CustomToolIn) -> dict[str, object]:
     return tool.model_dump(mode="json")
 
@@ -74,10 +80,7 @@ async def create_group(
         name=body.name,
         description=body.description,
         base_url=body.base_url,
-        headers=body.headers,
-        auth_header=body.auth.header if body.auth else None,
-        auth_prefix=body.auth.prefix if body.auth else "",
-        secret=body.auth.secret if body.auth else None,
+        headers=_header_rows(body.headers),
         timeout_seconds=body.timeout_seconds,
         agents=body.agents,
         tools=[_tool_dict(t) for t in body.tools],
@@ -99,7 +102,6 @@ async def read_openapi(
         version=r.version,
         base_url=r.base_url,
         auth_header=r.auth_header,
-        auth_prefix=r.auth_prefix,
         source_kind=result.kind,
         location=result.location,
         operations=[operation_out(op) for op in r.operations],
@@ -114,7 +116,7 @@ async def test_unsaved(
     """Run a request of a group not saved yet: no secret, SSRF-guarded, nothing kept."""
     o = await svc.test_unsaved(
         base_url=body.base_url,
-        headers=body.headers,
+        headers=_header_rows(body.headers),
         timeout_seconds=body.timeout_seconds,
         raw_tool=_tool_dict(body.tool),
         arguments=body.arguments,
@@ -136,17 +138,16 @@ async def update_group(
 ) -> CustomToolGroupOut:
     sent = body.model_fields_set
     kwargs: dict[str, object] = {}
-    for field in ("description", "base_url", "headers", "timeout_seconds"):
+    for field in ("description", "base_url", "timeout_seconds"):
         if field in sent:
             value = getattr(body, field)
             if value is None and field != "description":
                 raise ConfigValidationError(f"{field} cannot be cleared")
             kwargs[field] = value
-    if "auth" in sent:
-        auth = body.auth
-        kwargs["auth_header"] = auth.header if auth else None
-        kwargs["auth_prefix"] = auth.prefix if auth else ""
-        kwargs["secret"] = auth.secret if auth else None
+    if "headers" in sent:
+        if body.headers is None:
+            raise ConfigValidationError("headers cannot be cleared")
+        kwargs["headers"] = _header_rows(body.headers)
     view = await svc.update_group(name, actor=actor, **{k: kwargs.get(k, UNSET) for k in kwargs})
     return group_out(view)
 
@@ -240,6 +241,11 @@ async def preview_reimport(
                 path=c.path,
                 new_required=c.new_required,
                 request_changed=c.request_changed,
+                operation=c.operation,
+                old_text=c.old_text,
+                new_text=c.new_text,
+                new_start_line=c.new_start_line,
+                new_end_line=c.new_end_line,
             )
             for c in changes
         ],

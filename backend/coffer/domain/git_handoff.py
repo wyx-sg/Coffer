@@ -63,6 +63,30 @@ def git_update_handoff(machine: str, *, found: str, needed: str, needed_for: str
     )
 
 
+def git_clone_handoff(machine: str, *, url: str, message: str) -> str:
+    """The prompt asking the person's agent to find out why ``url`` cannot be
+    cloned from ``machine`` (network, VPN, proxy, credentials) and fix it."""
+    return render_handoff(
+        Handoff(
+            task=f"Please find out why git cannot clone {url} on this machine, and fix it.",
+            facts=(
+                f"This machine: {machine}.",
+                f"Coffer ran `git clone` for a skill source and git said: {message}",
+            ),
+            steps=(
+                "Check the URL, the network, any VPN or proxy, and the credentials git uses.",
+                f"When you are done, confirm `git ls-remote {url}` works.",
+                "Then tell me to retry in Coffer.",
+            ),
+        )
+    )
+
+
+def clone_failure_details(machine: str, *, url: str, message: str) -> dict[str, object]:
+    """The error ``details`` that carry the clone-failure hand-off."""
+    return {"handoff": {"prompt": git_clone_handoff(machine, url=url, message=message)}}
+
+
 def git_missing_details(machine: str, *, needed_for: str) -> dict[str, object]:
     """The error ``details`` that carry the install hand-off."""
     return {
@@ -73,6 +97,8 @@ def git_missing_details(machine: str, *, needed_for: str) -> dict[str, object]:
 
 __all__ = [
     "GIT_MISSING",
+    "clone_failure_details",
+    "git_clone_handoff",
     "git_install_handoff",
     "git_missing_details",
     "git_update_handoff",

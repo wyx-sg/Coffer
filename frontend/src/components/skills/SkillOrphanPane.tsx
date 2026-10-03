@@ -1,18 +1,20 @@
 // frontend/src/components/skills/SkillOrphanPane.tsx
-// One folder in the skills store that is not in the library (canvas 4.3.28):
-// where it is, whether its SKILL.md is valid and how many files it holds, why
-// no agent gets it, and the three things to do — Add to library… (registers
-// the folder in place, reach as for a fresh import), Reveal in Finder, and
-// Delete folder… (moved to ~/.coffer/content/backup/, confirmed first) — with
-// the drift finding's hand-off, which asks an agent to look at the folder and
-// say which of the two to press.
+// One folder in the skills store that is not in the library (canvas 4.3.03),
+// laid out like a skill: a header (folder tile, name, the "Not in your library"
+// pill, a meta line with where it is, whether its SKILL.md is valid and how
+// many files it holds, and Reveal in Finder on the right), then a banner that
+// says why no agent gets it and carries the two things to do — Add to library
+// (registers the folder in place, reach as for a fresh import) and Delete
+// folder… (moved to ~/.coffer/content/backup/, confirmed first). Adding or
+// deleting is the person's choice, so there is no hand-off.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Folder, FolderOpen, Plus, Trash2 } from "lucide-react";
+import { Folder, FolderOpen } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { SkillBannerFrame } from "@/components/skills/SkillBannerFrame";
+import { StatusPill } from "@/components/status/StatusPill";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -23,7 +25,6 @@ import {
   useRemoveSkillOrphan,
   useSkillOrphans,
 } from "@/lib/hooks/useSkillCopies";
-import { useSkillCopies } from "@/lib/hooks/useSkills";
 
 export function SkillOrphanPane({ name }: { name: string }) {
   const { t } = useTranslation();
@@ -35,10 +36,6 @@ export function SkillOrphanPane({ name }: { name: string }) {
   const remove = useRemoveSkillOrphan();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const orphan = orphans.data?.find((o) => o.name === name);
-  // The drift report's finding for this folder carries the hand-off.
-  const handoff = useSkillCopies().data?.entries.find(
-    (e) => e.kind === "orphan_master" && e.skill_name === name,
-  )?.handoff;
 
   if (!orphan) {
     return orphans.isPending ? null : (
@@ -48,51 +45,70 @@ export function SkillOrphanPane({ name }: { name: string }) {
   const facts = [
     orphan.valid ? t("skills.orphan.valid") : t("skills.orphan.invalid"),
     t("skills.orphan.files", { count: orphan.file_count }),
-  ].join(" · ");
+  ];
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border-subtle p-4">
-      <div className="flex items-start gap-3">
-        <span className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-warning-soft text-warning">
+    <div className="flex min-w-0 flex-col gap-[18px]">
+      <header className="flex min-w-0 items-center gap-3">
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-warning-soft text-warning">
           <Folder className="size-4" strokeWidth={1.75} aria-hidden />
         </span>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 className="font-mono text-lg font-bold">{orphan.name}</h2>
-          <p className="text-xs text-text-muted">
-            <span className="font-mono">{abbreviateHomePath(orphan.path)}</span> · {facts}
+        <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 className="min-w-0 truncate font-mono text-lg font-semibold">{orphan.name}</h2>
+            <StatusPill tone="warn" className="shrink-0">
+              {t("skills.orphan.section")}
+            </StatusPill>
+          </div>
+          <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-text-muted">
+            <span className="font-mono">{abbreviateHomePath(orphan.path)}</span>
+            {facts.map((fact) => (
+              <span key={fact} className="inline-flex items-center gap-1.5">
+                <span aria-hidden className="text-text-subtle">
+                  ·
+                </span>
+                {fact}
+              </span>
+            ))}
           </p>
         </div>
-      </div>
-      <p className="text-sm text-text-muted">{t("skills.orphan.body")}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          disabled={!orphan.valid || adopt.isPending}
-          onClick={() =>
-            adopt.mutate(orphan.name, {
-              onSuccess: (skill) => navigate(`/skills/${encodeURIComponent(skill.name)}`),
-            })
-          }
-        >
-          <Plus aria-hidden /> {t("skills.orphan.add")}
-        </Button>
         <Button
           variant="outline"
+          size="sm"
+          className="shrink-0"
           onClick={() =>
             void fs.reveal(orphan.path).catch(() => toast.error(t("fileActions.revealFailed")))
           }
         >
           <FolderOpen aria-hidden /> {t("fileActions.reveal")}
         </Button>
-        <Button variant="ghost" onClick={() => setConfirmDelete(true)}>
-          <Trash2 aria-hidden /> {t("skills.orphan.delete")}
-        </Button>
-      </div>
-      {handoff ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="text-xs text-text-muted">{t("skills.orphan.askAgent")}</span>
-          <AgentHandoff prompt={handoff.prompt} size="sm" />
-        </div>
-      ) : null}
+      </header>
+      <SkillBannerFrame
+        tone="warning"
+        testId="skill-orphan-banner"
+        title={t("skills.orphan.bannerTitle")}
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!orphan.valid || adopt.isPending}
+              onClick={() =>
+                adopt.mutate(orphan.name, {
+                  onSuccess: (skill) => navigate(`/skills/${encodeURIComponent(skill.name)}`),
+                })
+              }
+            >
+              {t("skills.orphan.add")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}>
+              {t("skills.orphan.delete")}
+            </Button>
+          </>
+        }
+      >
+        {t("skills.orphan.body")}
+      </SkillBannerFrame>
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -110,6 +126,6 @@ export function SkillOrphanPane({ name }: { name: string }) {
           })
         }
       />
-    </section>
+    </div>
   );
 }

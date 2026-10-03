@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
+from coffer.domain.mcp.openapi_import import OperationSource
 from coffer.domain.secrets import SecretApproval, SecretDestination
 
 
@@ -64,6 +65,10 @@ class OpenApiSourcePort(Protocol):
 
     def parse(self, text: str) -> Any:
         """JSON or YAML into a mapping; raises ``OpenApiUnreadable``."""
+        ...
+
+    def locate(self, text: str) -> dict[str, OperationSource]:
+        """Each operation's lines in the text, keyed ``"<METHOD> <path>"``."""
         ...
 
 

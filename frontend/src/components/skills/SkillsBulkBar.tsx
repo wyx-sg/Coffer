@@ -34,7 +34,13 @@ export function SkillsBulkBar({ skills, allChecked, onToggleAll, onDone }: Props
       onClear={onDone}
     >
       <BulkReachActions
-        rows={skills.map((s) => ({ kind: "skill", uid: s.uid }))}
+        rows={skills.map((s) => ({
+          kind: "skill",
+          uid: s.uid,
+          name: s.name,
+          enabled: s.enabled,
+          scope: s.scope,
+        }))}
         invalidate={[skillsKey]}
         onDone={onDone}
       />

@@ -9,7 +9,7 @@
 // step sends no request: it only reads text.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Globe, SquareTerminal } from "lucide-react";
+import { Check, Globe, SquareTerminal } from "lucide-react";
 
 import { StatusDot } from "@/components/status/StatusDot";
 import { Button } from "@/components/ui/button";
@@ -90,13 +90,8 @@ export function PasteStep({
         <div id="mcp-paste-result" aria-live="polite" className="min-h-4 text-xs">
           {line && result.kind === "servers" ? (
             <p className="flex items-center gap-2 text-text">
-              <StatusDot tone="ok" />
+              <Check aria-hidden className="size-3.5 shrink-0 text-success" />
               <span>{t(`mcp.paste.${line.key}`, line.params)}</span>
-              {servers.length > 1 ? (
-                <Button variant="link" size="sm" className="ml-auto h-auto px-0" onClick={go}>
-                  {t("mcp.add.review")}
-                </Button>
-              ) : null}
             </p>
           ) : null}
           {line && result.kind === "unreadable" ? (
@@ -140,7 +135,7 @@ export function PasteStep({
       </div>
 
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
         <Button disabled={servers.length === 0} onClick={go}>

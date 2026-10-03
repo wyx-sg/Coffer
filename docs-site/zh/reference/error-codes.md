@@ -93,7 +93,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `NOT_A_CUSTOM_TOOL_GROUP` | 404 | 该名字属于其他传输方式的 MCP 服务器，而不是自定义工具组。 | 用 `coffer mcp` 管理它，或用 `coffer tool list` 列出工具组。 |
 | `CUSTOM_TOOL_NOT_FOUND` | 404 | 该工具组中没有这个名字的工具。 | 用 `coffer tool show <group>` 列出它的工具。 |
 | `CUSTOM_TOOL_EXISTS` | 409 | 该工具组中已有同名工具。 | 换个名字，或编辑已有的工具。 |
-| `OPENAPI_UNREADABLE` | 422 | OpenAPI 文档无法获取、解析或读取：不是 JSON 或 YAML、不是 OpenAPI 3.x、大于 5 MiB，或者 URL 位于回环、私有或链路本地主机上。 | 修正文档，或把私有主机上的规范作为文件导入。 |
+| `OPENAPI_UNREADABLE` | 422 | OpenAPI 文档无法获取、解析或读取：不是 JSON 或 YAML（`details.line` 和 `details.column` 指出出错位置）、不是 OpenAPI 3.x、大于 5 MiB，或者 URL 位于回环、私有或链路本地主机上。 | 修正文档，或把私有主机上的规范作为文件导入。 |
+| `OPENAPI_UNREACHABLE` | 502 | OpenAPI URL 没有响应：主机名无法解析、连接被拒绝或超时。`details.reason` 为 `dns`、`refused`、`timeout` 或 `unreachable`，`details.handoff.prompt` 是交给 agent 的提示词。 | 检查 URL、网络、VPN 或代理，或把规范作为文件导入。 |
 | `NOT_IMPORTED_FROM_OPENAPI` | 409 | 对一个工具全部是手动添加的工具组请求了重新导入。 | 没有可重新导入的内容；请手动添加工具。 |
 | `OPENAPI_FILE_NEEDED` | 422 | 该工具组是从文件导入的，重新导入需要再次提供那个文件。 | 提供文件：`coffer tool reimport <group> --file <path>`。 |
 

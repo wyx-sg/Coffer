@@ -1,12 +1,10 @@
 """``coffer cli …`` — the command-line tools Coffer knows: the ones skills and MCP
 servers require, and the ones you add by hand (spec skill-manager "Serve
 required commands on REST, the command line and the web", "Declare a
-command-line tool without a skill", "Show a command-line tool's full
-interface").
+command-line tool without a skill").
 
 ``add``, ``edit`` and ``rm`` declare a tool by hand, with no skill. ``list`` and
-``show`` read ``/clis`` (``show`` also prints the interface read from the
-tool's own ``--help``); ``check`` probes again; ``prompt``
+``show`` read ``/clis``; ``check`` probes again; ``prompt``
 prints the hand-off prompt for a command that needs you — the text to give
 your agent, which installs or updates it (or helps you log in) the way that
 suits this machine. Coffer runs no install and no login itself.
@@ -21,12 +19,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from coffer.surfaces.cli import _cli_interface
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._kind_verbs import verbose_of
 from coffer.surfaces.cli._options import ExitCode
 
-app = typer.Typer(help="Add and check command-line tools, and read their interface")
+app = typer.Typer(help="Add and check command-line tools")
 _console = Console()
 
 
@@ -178,26 +175,18 @@ def rm(
 def show(
     ctx: typer.Context,
     command: str = typer.Argument(..., metavar="COMMAND", help="The command, e.g. gh"),
-    subcommand: list[str] = typer.Argument(  # noqa: B008
-        None, metavar="[SUBCOMMAND]...", help="Show one subcommand"
-    ),
-    tree: bool = typer.Option(False, "--tree", help="Every command of the tool, one per line"),
-    refresh: bool = typer.Option(False, "--refresh", help="Read the tool's help again"),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Show one command-line tool: where it is, its version, login state and
-    its interface — the options and subcommands its own --help lists."""
+    what needs it."""
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get(f"/clis/{command}")
         _cli_client.check(r, verbose=verbose)
         data = r.json()
-        iface: dict[str, Any] | None = None
-        if data["path"] is not None:
-            iface = _cli_interface.fetch(c, command, refresh=refresh, verbose=verbose)
     if output_json:
-        typer.echo(_json.dumps({**data, "interface": iface}, indent=2))
+        typer.echo(_json.dumps(data, indent=2))
         return
     typer.echo(f"command:     {data['command']}" + (f" ({data['title']})" if data["title"] else ""))
     if data["description"]:
@@ -217,25 +206,6 @@ def show(
         typer.echo(f"  - {n['skill_name']}{extra}{why}")
     for s in data["needed_by_servers"]:
         typer.echo(f"  - {s['server_name']} (MCP server, starts with {s['launcher']})")
-    if iface is not None:
-        _print_interface(command, iface, subcommand or [], tree=tree)
-
-
-def _print_interface(command: str, iface: dict[str, Any], path: list[str], *, tree: bool) -> None:
-    if iface["status"] != "ok":
-        typer.echo(f"interface:   {iface['message'] or iface['status']}")
-        return
-    if tree:
-        typer.echo("")
-        _cli_interface.print_tree(command, iface["nodes"])
-    else:
-        node = _cli_interface.find_node(iface["nodes"], path)
-        if node is None:
-            typer.echo(f"no subcommand {_cli_interface.command_line(command, path)}")
-            raise typer.Exit(int(ExitCode.NOT_FOUND))
-        _cli_interface.print_node(command, node)
-    if iface["incomplete"]:
-        typer.echo("(the tree was cut at the depth, size or time bound)", err=True)
 
 
 @app.command("check")

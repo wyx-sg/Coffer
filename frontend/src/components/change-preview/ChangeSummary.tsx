@@ -1,9 +1,14 @@
 // src/components/change-preview/ChangeSummary.tsx
-// The summary line: "4 changes in 2 agents" (or "… and Coffer") at 13/550, then one op chip per kind present with its number.
+// The summary line: "4 changes in 2 agents" (or "… and Coffer", or "2 changes in Coffer") at 13/550, then one op chip per kind present with its number.
 import { useTranslation } from "react-i18next";
 
 import { OpChip } from "./OpChip";
-import { OP_ORDER, countByOp, groupByAgent, type ChangeItem } from "@/lib/changePreview/changeCounts";
+import {
+  OP_ORDER,
+  countByOp,
+  groupByAgent,
+  type ChangeItem,
+} from "@/lib/changePreview/changeCounts";
 
 interface Props {
   items: readonly ChangeItem[];
@@ -19,10 +24,17 @@ export function ChangeSummary({ items }: Props) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="change-summary">
       <span className="text-sm font-label text-text">
-        {t(withCoffer ? "changePreview.summaryWithCoffer" : "changePreview.summary", {
-          changes: t("changePreview.changes", { count: items.length }),
-          agents: t("changePreview.agents", { count: agents }),
-        })}
+        {t(
+          withCoffer
+            ? agents === 0
+              ? "changePreview.summaryCofferOnly"
+              : "changePreview.summaryWithCoffer"
+            : "changePreview.summary",
+          {
+            changes: t("changePreview.changes", { count: items.length }),
+            agents: t("changePreview.agents", { count: agents }),
+          },
+        )}
       </span>
       {OP_ORDER.filter((op) => counts[op] > 0).map((op) => (
         <span key={op} className="inline-flex items-center gap-1.5" data-op-count={op}>

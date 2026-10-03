@@ -1,7 +1,6 @@
-"""Command-line tools added by hand, and the interface read from their help
-(spec skill-manager "Declare a command-line tool without a skill", "Show a
-command-line tool's full interface"), over the real app with the probe and the
-help runner faked at the composition root."""
+"""Command-line tools added by hand (spec skill-manager "Declare a
+command-line tool without a skill"), over the real app with the probe faked at
+the composition root."""
 
 from __future__ import annotations
 
@@ -12,7 +11,7 @@ from collections.abc import Iterator
 import pytest
 
 from coffer.infrastructure.vault.home import vault_root
-from tests.support.cli_requirements import DEMO_HELP, FakeCommand, FakeCommandProbe, FakeHelpRunner
+from tests.support.cli_requirements import FakeCommand, FakeCommandProbe
 
 from ._cli_requirements_app import CliDaemon, boot_cli_daemon
 
@@ -28,9 +27,7 @@ def probe() -> FakeCommandProbe:
 def daemon(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, probe: FakeCommandProbe
 ) -> Iterator[CliDaemon]:
-    yield from boot_cli_daemon(
-        tmp_path, monkeypatch, probe=probe, help_runner=FakeHelpRunner(dict(DEMO_HELP))
-    )
+    yield from boot_cli_daemon(tmp_path, monkeypatch, probe=probe)
 
 
 def _stored(tmp_path: pathlib.Path) -> dict[str, object]:
@@ -174,64 +171,3 @@ def test_an_absolute_path_names_the_command_and_stays_on_this_machine(
     assert "/fake/bin" not in json.dumps(_stored(tmp_path))
     local = (tmp_path / ".coffer" / "local" / "cli-paths.json").read_text(encoding="utf-8")
     assert json.loads(local) == {"tool": "/fake/bin/tool"}
-
-
-def test_the_interface_is_read_on_request_and_kept(daemon: CliDaemon) -> None:
-    daemon.client.post("/clis", json={"command": "demo"})
-    before = daemon.client.get("/clis/demo/interface").json()
-    assert before["status"] == "not_read" and before["nodes"] == []
-    assert daemon.help_runner.calls == []  # a read of the page runs nothing
-    read = daemon.client.post("/clis/demo/interface")
-    assert read.status_code == 200, read.text
-    body = read.json()
-    assert body["status"] == "ok" and not body["incomplete"]
-    assert [n["path"] for n in body["nodes"]] == [[], ["init"], ["run"]]
-    root = body["nodes"][0]
-    assert root["usage"] == "demo [OPTIONS] COMMAND [ARGS]..."
-    assert [s["name"] for s in root["subcommands"]] == ["init", "run"]
-    assert root["options"][0] == {
-        "names": ["-v", "--verbose"],
-        "metavar": None,
-        "description": "Be loud.",
-        "default": None,
-        "required": False,
-    }
-    assert "Usage: demo init" in body["nodes"][1]["raw"]
-    calls = len(daemon.help_runner.calls)
-    again = daemon.client.get("/clis/demo/interface").json()
-    assert again["status"] == "ok" and len(again["nodes"]) == 3
-    assert len(daemon.help_runner.calls) == calls  # served from what was kept
-
-
-def test_a_changed_tool_reads_as_not_read_again(
-    daemon: CliDaemon, probe: FakeCommandProbe, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    daemon.client.post("/clis", json={"command": "demo"})
-    daemon.client.post("/clis/demo/interface")
-    assert daemon.client.get("/clis/demo/interface").json()["status"] == "ok"
-    # a new build of the file: same path and version, different fingerprint
-    monkeypatch.setattr(probe, "fingerprint", lambda _path: "rebuilt")
-    assert daemon.client.get("/clis/demo/interface").json()["status"] == "not_read"
-    # a new version is a new key too
-    monkeypatch.undo()
-    daemon.client.post("/clis/demo/interface")
-    probe.commands["demo"].version = "4.0.0"
-    daemon.client.post("/clis/demo/check")
-    assert daemon.client.get("/clis/demo/interface").json()["status"] == "not_read"
-
-
-def test_the_interface_of_a_missing_or_unknown_tool(daemon: CliDaemon) -> None:
-    daemon.client.post("/clis", json={"command": "ghost"})
-    gone = daemon.client.get("/clis/ghost/interface").json()
-    assert gone["status"] == "unavailable" and "not found" in gone["message"]
-    assert daemon.client.post("/clis/ghost/interface").json()["status"] == "unavailable"
-    assert daemon.help_runner.calls == []
-    assert daemon.client.get("/clis/nothing/interface").status_code == 404
-
-
-def test_a_tool_with_no_help_says_so(daemon: CliDaemon, probe: FakeCommandProbe) -> None:
-    daemon.help_runner.texts.clear()
-    daemon.client.post("/clis", json={"command": "demo"})
-    body = daemon.client.post("/clis/demo/interface").json()
-    assert body["status"] == "no_help" and body["nodes"] == []
-    assert "printed nothing" in body["message"]

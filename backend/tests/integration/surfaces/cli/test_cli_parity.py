@@ -139,8 +139,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # on REST, the command line and the web"): read, probe again, and print
     # the hand-off prompt for the person's agent; `add`, `edit` and `rm`
     # declare a tool by hand, with no skill (spec skill-manager "Declare a
-    # command-line tool without a skill"), and `show` prints the interface
-    # read from the tool's help.
+    # command-line tool without a skill").
     "cli": {"list", "show", "check", "prompt", "add", "edit", "rm"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under

@@ -1,6 +1,6 @@
 // frontend/src/components/mcp/invocationsTabs.test.tsx
-// The server's tabs: the path names the open one, and each tab carries its
-// count (none for a kind the server has none of). What the Invocations tab
+// The server's tabs: the path names the open one, and no tab carries a count.
+// What the Invocations tab
 // reads is pinned in server/McpCallsLog.test.tsx.
 import { expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -17,7 +17,6 @@ function renderAt(path: string) {
           element={
             <McpServerDetailTabs
               basePath="/mcp-servers/srv"
-              counts={{ tools: 26, resources: 0, prompts: 3 }}
               overview={<p>overview pane</p>}
               tools={<p>tools pane</p>}
               resources={<p>resources pane</p>}
@@ -37,10 +36,9 @@ test("the Invocations tab in the path shows the invocations pane", () => {
   expect(screen.queryByText("overview pane")).not.toBeInTheDocument();
 });
 
-test("each tab carries its count, and none for a kind the server has none of", () => {
+test("no tab carries a count", () => {
   renderAt("/mcp-servers/srv");
-  expect(screen.getByRole("tab", { name: "Tools" })).toHaveTextContent("Tools· 26");
-  expect(screen.getByRole("tab", { name: "Resources" })).toHaveTextContent(/^Resources$/);
-  expect(screen.getByRole("tab", { name: "Prompts" })).toHaveTextContent("· 3");
+  for (const name of ["Overview", "Tools", "Resources", "Prompts", "Invocations"])
+    expect(screen.getByRole("tab", { name })).toHaveTextContent(new RegExp(`^${name}$`));
   expect(screen.getByText("overview pane")).toBeInTheDocument();
 });

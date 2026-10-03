@@ -1,12 +1,16 @@
 // frontend/src/components/skills/SkillMissingMaster.test.tsx
-// A skill whose master folder is gone offers Restore from the vault's
-// history: the newest version that still had files, put back as a folder
-// restore (a new version); with no such version, Restore can't be chosen.
+// A skill whose master folder is gone: the Files tab is an empty state that
+// points at History, and the banner offers Restore from the vault's history —
+// the newest version that still had files, put back as a folder restore (a new
+// version); with no such version, Restore is disabled.
 import { expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
+import { SkillMasterBanner } from "@/components/skills/SkillMasterBanner";
 import { SkillMissingMaster } from "@/components/skills/SkillMissingMaster";
+import { ToastProvider } from "@/components/ui/toast";
 import "@/i18n";
 import { makeSkill } from "@/test/skillsPageKit";
 
@@ -20,7 +24,11 @@ function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <SkillMissingMaster skill={makeSkill({ name: "hello" })} onDeleted={() => {}} />
+      <MemoryRouter>
+        <ToastProvider>
+          <SkillMasterBanner skill={makeSkill({ name: "hello" })} onDeleted={() => {}} />
+        </ToastProvider>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -55,10 +63,9 @@ test("restore puts back the newest version that still had files", async () => {
     ],
   });
   mount();
-  const restore = await screen.findByRole("radio", { name: /Restore it from History/ });
+  const restore = await screen.findByRole("button", { name: /Restore from History/ });
   await waitFor(() => expect(restore).not.toBeDisabled());
   fireEvent.click(restore);
-  fireEvent.click(screen.getByRole("button", { name: /Restore/ }));
   await waitFor(() =>
     expect(vaultApi.restore).toHaveBeenCalledWith({
       path: "skills/hello/",
@@ -66,4 +73,22 @@ test("restore puts back the newest version that still had files", async () => {
       expected_fingerprint: null,
     }),
   );
+});
+
+test("with no earlier version Restore is disabled", async () => {
+  vi.mocked(vaultApi.history).mockResolvedValue({
+    path: "skills/hello/",
+    next_cursor: null,
+    versions: [],
+  });
+  mount();
+  expect(await screen.findByRole("button", { name: /Restore from History/ })).toBeDisabled();
+});
+
+test("the Files tab explains the empty folder and opens History", () => {
+  const onOpenHistory = vi.fn();
+  render(<SkillMissingMaster onOpenHistory={onOpenHistory} />);
+  expect(screen.getByText("No files to show")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Open History" }));
+  expect(onOpenHistory).toHaveBeenCalled();
 });

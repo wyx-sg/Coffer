@@ -1,6 +1,6 @@
-// src/components/mcp/server/McpToolsTab.tsx — the open server's Tools tab: All tools · N of M on, Search tools, All on · All off, the table (design 4.1.25, 4.1.06).
+// src/components/mcp/server/McpToolsTab.tsx — the open server's Tools tab: Search tools, N of M on, All on · All off, the table (design 4.1.10).
 //
-// The same table as the Overview's, every tool in the server's own order,
+// Every tool in the server's own order, with its switch,
 // rendered 50 at a time ("Showing N of M", Show more) while the search runs over
 // all of them. The toolbar's menu sets the exposure of the filtered tools. A list rebuilt
 // from the saved switches (the server could not be reached) says so: the
@@ -9,8 +9,7 @@ import { useState } from "react";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { useTranslation } from "react-i18next";
 
-import { Section } from "@/components/Section";
-import { SearchInput } from "@/components/SearchInput";
+import { CapabilityToolbar } from "./CapabilityToolbar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { mcpCapabilitiesKey, mcpTieringKey } from "@/lib/api/queryKeys";
@@ -90,43 +89,22 @@ export function McpToolsTab({
     );
 
   return (
-    <Section
-      title={t("mcp.page.allTools")}
-      gap="snug"
-      actions={
-        <span className="inline-flex items-center gap-1">
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={t("mcp.page.searchTools")}
-            ariaLabel={t("mcp.page.searchTools")}
-            className="w-48"
-          />
-          {tiering?.enabled ? (
+    <div className="flex flex-col gap-3">
+      <CapabilityToolbar
+        placeholder={t("mcp.page.searchTools")}
+        query={query}
+        onQueryChange={setQuery}
+        on={on}
+        total={rows.length}
+        busy={bulk.isPending}
+        onAllOn={() => setAll("enable")}
+        onAllOff={() => setAll("disable")}
+        extra={
+          tiering?.enabled ? (
             <ActionMenu label={t("mcp.exposure.bulk")} actions={exposureActions} />
-          ) : null}
-          <Button
-            variant="link"
-            size="sm"
-            disabled={bulk.isPending || rows.length === 0 || on === rows.length}
-            onClick={() => setAll("enable")}
-          >
-            {t("mcp.page.allOn")}
-          </Button>
-          <span aria-hidden className="text-text-subtle">
-            ·
-          </span>
-          <Button
-            variant="link"
-            size="sm"
-            disabled={bulk.isPending || on === 0}
-            onClick={() => setAll("disable")}
-          >
-            {t("mcp.page.allOff")}
-          </Button>
-        </span>
-      }
-    >
+          ) : null
+        }
+      />
       {pending ? (
         <Skeleton className="h-40 w-full" />
       ) : rows.length === 0 ? (
@@ -161,6 +139,6 @@ export function McpToolsTab({
           ) : null}
         </>
       )}
-    </Section>
+    </div>
   );
 }

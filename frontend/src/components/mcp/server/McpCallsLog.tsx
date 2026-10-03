@@ -1,10 +1,10 @@
-// src/components/mcp/server/McpCallsLog.tsx — one server's calls in the last 24 hours: the drawer's Calls tab and the Invocations tab (design 4.1.09, 4.1.22, 4.1.28).
+// src/components/mcp/server/McpCallsLog.tsx — one server's calls in the last 24 hours: the Invocations tab (design 4.1.13).
 //
-// All or Errors · N, one agent or all, "Last 24 hours"; rows Time · Tool ·
-// Called by · Result · Took, newest first, the chosen one (the newest by
-// default) opened below with its result, duration and session. The
-// invocation log records who called what and how it went — never the
-// arguments or the result — and the footnote says so.
+// All or Errors · N, an Agent filter, "Last 24 hours"; rows Time · Tool ·
+// Called by · Result · Took, newest first. A row opens its call in a 640
+// drawer (McpCallDrawer). The invocation log records who called what and how
+// it went — never the arguments or the result — and the drawer's footnote says
+// so. The pane can own the Errors filter (its banner's "View errors" sets it).
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,24 +22,44 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentOut } from "@/lib/api/agents";
 import { useMcpInvocations } from "@/lib/hooks/useMcpInvocations";
 import { cn } from "@/lib/utils";
-import { McpCallDetail } from "./McpCallDetail";
+import { McpCallDrawer } from "./McpCallDrawer";
 import { callTone, seconds, shortTime } from "@/lib/mcp/serverState";
 
 const ALL = "all";
 
+export type CallsFilter = "all" | "errors";
+
 interface Props {
   serverUid: string;
+  serverName: string;
+  transport: "stdio" | "http" | "unknown";
   agents: readonly AgentOut[];
   /** The built-in `coffer` server, whose calls are read from the cross-server list. */
   builtin?: boolean;
+  /** The Errors filter, when the pane owns it. */
+  only?: CallsFilter;
+  onOnlyChange?: (only: CallsFilter) => void;
+  /** View server log, from a stdio call's drawer. */
+  onViewLog?: () => void;
 }
 
-export function McpCallsLog({ serverUid, agents, builtin = false }: Props) {
+export function McpCallsLog({
+  serverUid,
+  serverName,
+  transport,
+  agents,
+  builtin = false,
+  only: ownedOnly,
+  onOnlyChange,
+  onViewLog,
+}: Props) {
   const { t } = useTranslation();
   // Fixed at mount: the list shows "the last 24 hours" as of opening it.
   const [since] = useState(() => new Date(Date.now() - 24 * 3600_000).toISOString());
   const calls = useMcpInvocations({ serverUid, limit: 200, since, builtin });
-  const [only, setOnly] = useState<"all" | "errors">("all");
+  const [localOnly, setLocalOnly] = useState<CallsFilter>("all");
+  const only = ownedOnly ?? localOnly;
+  const setOnly = onOnlyChange ?? setLocalOnly;
   const [agent, setAgent] = useState<string>(ALL);
   const [openId, setOpenId] = useState<number | null>(null);
 
@@ -54,7 +74,7 @@ export function McpCallsLog({ serverUid, agents, builtin = false }: Props) {
   const errors = all.filter((r) => r.status !== "ok").length;
   const agentOf = (uid: string | null) => agents.find((a) => a.uid === uid);
   const nameOf = (uid: string | null) => agentOf(uid)?.display_name ?? t("mcp.page.unknownSession");
-  const open = rows.find((r) => r.id === openId) ?? rows[0] ?? null;
+  const open = rows.find((r) => r.id === openId) ?? null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -69,8 +89,8 @@ export function McpCallsLog({ serverUid, agents, builtin = false }: Props) {
           ]}
         />
         <Select value={agent} onValueChange={setAgent}>
-          <SelectTrigger className="w-40" aria-label={t("mcp.page.log.agent")}>
-            <SelectValue />
+          <SelectTrigger className="w-36" aria-label={t("mcp.page.log.agent")}>
+            <SelectValue>{agent === ALL ? t("mcp.page.log.agent") : nameOf(agent)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>{t("agentBadge.allAgents")}</SelectItem>
@@ -111,6 +131,13 @@ export function McpCallsLog({ serverUid, agents, builtin = false }: Props) {
                       r.id === open?.id && "bg-surface-selected",
                     )}
                     onClick={() => setOpenId(r.id)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setOpenId(r.id);
+                      }
+                    }}
                   >
                     <td className="px-2 py-2 tabular-nums">{shortTime(r.timestamp)}</td>
                     <td className="py-2 font-mono">{r.capability_key}</td>
@@ -125,10 +152,10 @@ export function McpCallsLog({ serverUid, agents, builtin = false }: Props) {
                       <span
                         className={cn(
                           "inline-flex items-center gap-1.5",
-                          r.status === "ok" ? "text-text" : "text-danger",
+                          r.status === "ok" ? "text-text-muted" : "text-danger",
                         )}
                       >
-                        <StatusDot tone={callTone(r.status)} />
+                        {r.status === "ok" ? null : <StatusDot tone={callTone(r.status)} />}
                         {t(`mcp.page.log.status.${r.status}`)}
                       </span>
                     </td>
@@ -140,8 +167,17 @@ export function McpCallsLog({ serverUid, agents, builtin = false }: Props) {
           </table>
         </div>
       )}
-      {open ? <McpCallDetail call={open} agentName={nameOf(open.agent_uid)} /> : null}
-      {!open ? <p className="text-xs text-text-muted">{t("mcp.page.log.callsFootnote")}</p> : null}
+      <McpCallDrawer
+        call={open}
+        agentName={open ? nameOf(open.agent_uid) : ""}
+        serverName={serverName}
+        transport={transport}
+        onClose={() => setOpenId(null)}
+        onViewLog={() => {
+          setOpenId(null);
+          onViewLog?.();
+        }}
+      />
     </div>
   );
 }

@@ -22,6 +22,7 @@ vi.mock("@/components/mcp/CapabilityList", () => ({
   CapabilityList: ({ type }: { type: string }) => <div>{`capability list: ${type}`}</div>,
 }));
 vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkills: vi.fn(() => ({ data: [], isPending: false, error: null })),
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -65,6 +66,8 @@ const SKILL: SkillOut = {
   bindings: [],
   requires: [],
   requires_secrets: [],
+  requires_tools: [],
+  requires_skills: [],
   source_status: null,
 };
 
@@ -87,7 +90,6 @@ function ServerTabs({ name }: { name: string }) {
   return (
     <McpServerDetailTabs
       basePath={`/mcp-servers/${name}`}
-      counts={{}}
       overview={<div>server overview</div>}
       tools={<div>server tools</div>}
       resources={null}
@@ -145,7 +147,6 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
     "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
       basePath="/mcp-servers/srv"
-      counts={{}}
       overview={<div>server overview</div>}
       tools={<div>server tools</div>}
       resources={null}
@@ -197,7 +198,6 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
     "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
       basePath="/mcp-servers/srv"
-      counts={{}}
       overview={<div>npx -y srv</div>}
       tools={<div>server tools</div>}
       resources={null}

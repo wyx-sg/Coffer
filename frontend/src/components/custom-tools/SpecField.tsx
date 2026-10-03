@@ -7,10 +7,11 @@ import { Check, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { translateApiError } from "@/lib/api/errors";
 import type { OpenApiReading } from "@/lib/api/customTools";
 import { cn } from "@/lib/utils";
 import type { SpecMode } from "./addFlow";
+import { isUnreachable } from "@/lib/customTools/specErrors";
+import { SpecError } from "./SpecError";
 
 /** The largest document the daemon reads. */
 export const MAX_SPEC_BYTES = 5 * 1024 * 1024;
@@ -30,6 +31,8 @@ interface Props {
   loading: boolean;
   reading: OpenApiReading | null;
   error: unknown;
+  /** The file's text, to show the lines around a parse failure. */
+  fileText?: string;
 }
 
 export function SpecField(props: Props) {
@@ -74,16 +77,19 @@ export function SpecField(props: Props) {
             id={`${id}-spec`}
             className="flex-1 font-mono"
             value={url}
+            aria-invalid={error && mode === "url" ? true : undefined}
             placeholder="https://"
             onChange={(e) => props.onUrl(e.target.value)}
           />
           <Button variant="outline" disabled={loading || url.trim() === ""} onClick={props.onLoad}>
-            {reading && !loading ? <RotateCw aria-hidden /> : null}
+            {reading && !loading && !error ? <RotateCw aria-hidden /> : null}
             {loading
               ? t("customTools.import.loading")
-              : reading
-                ? t("customTools.import.reload")
-                : t("customTools.import.load")}
+              : isUnreachable(error)
+                ? t("common.retry")
+                : reading
+                  ? t("customTools.import.reload")
+                  : t("customTools.import.load")}
           </Button>
         </div>
       ) : (
@@ -111,9 +117,15 @@ export function SpecField(props: Props) {
         </div>
       )}
       {error ? (
-        <p role="alert" className="text-xs text-danger">
-          {t("customTools.import.readFailed", { reason: translateApiError(t, error) })}
-        </p>
+        <SpecError
+          error={error}
+          url={url}
+          file={
+            mode === "file" && props.fileText
+              ? { name: props.fileName, text: props.fileText }
+              : undefined
+          }
+        />
       ) : loading ? (
         <p className="text-xs text-text-muted">{t("customTools.import.fetching")}</p>
       ) : reading ? (

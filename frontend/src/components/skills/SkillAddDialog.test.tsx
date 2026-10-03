@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/errors";
 import type { SkillStaging, StagedSkill } from "@/lib/api/skills";
 import { acceptance } from "@/test/acceptance";
@@ -68,19 +69,21 @@ function renderDialog(props: Partial<Parameters<typeof SkillAddDialog>[0]> = {})
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/skills"]}>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <>
-                <SkillAddDialog open onOpenChange={onOpenChange} {...props} />
-                <Where />
-              </>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/skills"]}>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <>
+                  <SkillAddDialog open onOpenChange={onOpenChange} {...props} />
+                  <Where />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
   return { onOpenChange };
@@ -246,7 +249,7 @@ describe("SkillAddDialog", () => {
     );
     renderDialog();
     uploadArchive();
-    expect(await screen.findByText("The archive has unsafe entries")).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing was unpacked/)).toBeInTheDocument();
     expect(screen.getByText("../evil.sh")).toBeInTheDocument();
     expect(screen.getByText("symbolic link")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add skill" })).toBeDisabled();
@@ -261,7 +264,63 @@ describe("SkillAddDialog", () => {
     );
     renderDialog();
     uploadArchive();
-    expect(await screen.findByText(/must be at the top or one folder down/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "No SKILL.md in skills.zip. Coffer looks at the top level and one folder down.",
+      ),
+    ).toBeInTheDocument();
+    // The drop zone already has Choose file…, so no second button offers another file.
+    expect(screen.queryByRole("button", { name: "Choose another file" })).not.toBeInTheDocument();
+  });
+
+  test("a folder whose skill is one level down offers to use that folder", async () => {
+    api.stageFolder
+      .mockRejectedValueOnce(
+        new ApiError("SKILL_INVALID", "scripts/latest links outside the folder", {
+          reason: "symlink",
+          candidate_folder: "skill",
+          candidate_path: "/Users/me/changelog-main/skill",
+        }),
+      )
+      .mockResolvedValueOnce(stage([staged()], "folder"));
+    renderDialog();
+    fireEvent.change(screen.getByLabelText("Folder"), {
+      target: { value: "/Users/me/changelog-main" },
+    });
+    fireEvent.blur(screen.getByLabelText("Folder"));
+    expect(await screen.findByText("skill/")).toBeInTheDocument();
+    expect(screen.getByText("scripts/latest links outside the folder")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add skill" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Use that folder" }));
+    await waitFor(() =>
+      expect(api.stageFolder).toHaveBeenLastCalledWith("/Users/me/changelog-main/skill"),
+    );
+    expect(await screen.findByText("Valid skill folder")).toBeInTheDocument();
+  });
+
+  test("a Git source names the pinned branch and commit", async () => {
+    api.stageGit.mockResolvedValue({
+      ...stage([staged({ name: "pdf" })], "git"),
+      ref: "main",
+      commit: "3f9c2a1b8d0e",
+      subpath: "pdf",
+    });
+    renderDialog({ initialSource: "git" });
+    fireEvent.change(screen.getByLabelText("Repository URL"), { target: { value: "https://x/y" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clone" }));
+    expect(await screen.findByText("Found SKILL.md in pdf/")).toBeInTheDocument();
+    expect(screen.getByText("main · 3f9c2a1")).toBeInTheDocument();
+  });
+
+  test("a Git name conflict offers Replace or Cancel, with no rename", async () => {
+    api.stageGit.mockResolvedValue(stage([staged({ name: "pdf", taken: true })], "git"));
+    renderDialog({ initialSource: "git" });
+    fireEvent.change(screen.getByLabelText("Repository URL"), { target: { value: "https://x/y" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clone" }));
+    expect(await screen.findByText("You already have a skill named pdf")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Replace pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.queryByText(/rename/i)).not.toBeInTheDocument();
   });
 
   test("Available to defaults to every agent and writes nothing extra", async () => {
@@ -275,17 +334,24 @@ describe("SkillAddDialog", () => {
     await screen.findByText("Found SKILL.md at the top level");
     expect(screen.getByText("Available to", { selector: "label" })).toBeInTheDocument();
     expect(within(screen.getByTestId("skill-add-reach")).getByRole("button")).toHaveTextContent(
-      "Every agent",
+      "All agents",
     );
     fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
     await waitFor(() => expect(api.confirmStage).toHaveBeenCalled());
     expect(vi.mocked(resourcesApi.disable)).not.toHaveBeenCalled();
   });
 
-  test("a failed clone shows git's message and offers Retry", async () => {
+  test("a failed clone is a problem block with the hand-off, and Retry", async () => {
+    const prompt = "Find out why git cannot clone https://x/y.";
     api.stageGit
       .mockRejectedValueOnce(
-        new ApiError("SKILL_SOURCE_UNREACHABLE", "fatal: repository 'https://x/y' not found"),
+        new ApiError(
+          "SKILL_SOURCE_UNREACHABLE",
+          "git clone failed: fatal: Could not resolve host: x",
+          {
+            handoff: { prompt },
+          },
+        ),
       )
       .mockResolvedValueOnce(stage([staged()], "git"));
     renderDialog({ initialSource: "git" });
@@ -294,9 +360,11 @@ describe("SkillAddDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clone" }));
     await waitFor(() => expect(api.stageGit).toHaveBeenCalled());
     expect(api.stageGit).toHaveBeenCalledWith({ url: "https://x/y", ref: "main", path: null });
-    expect(
-      await screen.findByText("Couldn't reach x — check the URL or your network."),
-    ).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Couldn't clone y")).toBeInTheDocument();
+    expect(within(alert).getByText("Could not resolve host: x")).toBeInTheDocument();
+    expect(within(alert).getByText(/or hand it to an agent/)).toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Found SKILL.md at the top level")).toBeInTheDocument();
   });

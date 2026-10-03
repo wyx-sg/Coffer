@@ -8,8 +8,9 @@
 // your agents opens the change preview of the daemon's import plan instead of
 // this dialog. Adding registers each server, then writes its secrets, then its
 // reach (importMcpServers.ts). One server added → its page, where it is tested once;
-// several → stay, toast, test each in the background. A secret the daemon
-// holds for approval (202) is said before the dialog lets go.
+// several → stay open, test each in the background, and a batch that only partly
+// went in stays on the review (board 4.1.26). A secret the daemon holds for
+// approval (202) is said before the dialog lets go (board 4.1.29).
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -22,13 +23,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgentDirectMcpEntries } from "@/lib/hooks/useAgentDirectMcpEntries";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useImportMcpServers, useTestAddedServers } from "@/lib/hooks/useMcpServerMutations";
 import { useResources } from "@/lib/hooks/useResources";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
-import { ApprovalStep } from "./add/ApprovalStep";
+import { ApprovalStep, type AddedServer } from "./add/ApprovalStep";
+import { addedList, reachPhrase } from "./add/addedSummary";
+import { headingOf } from "./add/addHeading";
 import { ImportFromAgents, toastImport } from "./add/ImportFromAgents";
 import { PasteStep } from "./add/PasteStep";
 import { ReviewStep } from "./add/ReviewStep";
@@ -47,7 +49,7 @@ type Step =
   | { kind: "form"; server: ParsedServer; seq: number }
   | { kind: "review"; servers: ParsedServer[]; seq: number }
   | { kind: "importAgents" }
-  | { kind: "approval"; names: string[]; then: { added: Added; reach: ReachIntent } | null };
+  | { kind: "approval"; added: AddedServer[]; then: { added: Added; reach: ReachIntent } | null };
 
 interface Added {
   name: string;
@@ -64,7 +66,7 @@ const emptyServer = (transportType: "stdio" | "http"): ParsedServer => ({
 });
 
 export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [step, setStep] = useState<Step>({ kind: initialMode });
@@ -93,16 +95,6 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
   }, [open, initialMode]);
   const setOpen = (next: boolean) => onOpenChange(next);
 
-  const reachPhrase = (reach: ReachIntent) => {
-    if (reach.mode === "everywhere") return t("mcp.add.reachAll");
-    if (reach.mode === "disabled") return t("mcp.add.reachOff");
-    const names = reach.agents.map((uid) => {
-      const a = agents?.find((x) => x.uid === uid);
-      return a ? agentTypeLabel(a.type ?? a.name) : uid;
-    });
-    return names.length > 0 ? names.join(", ") : t("mcp.add.reachOff");
-  };
-
   /** One server added: close, open its page, test it once and toast the result. */
   const finishOne = (added: Added, reach: ReachIntent) => {
     onOpenChange(false);
@@ -111,7 +103,13 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
       if (r.status === "fulfilled" && r.value.ok) {
         const tools = r.value.tool_count ?? 0;
         toast.success(
-          t("mcp.add.toastTested", { name: added.name, count: tools, reach: reachPhrase(reach) }),
+          reach.mode === "disabled"
+            ? t("mcp.add.toastTestedOff", { name: added.name, count: tools })
+            : t("mcp.add.toastTested", {
+                name: added.name,
+                count: tools,
+                reach: reachPhrase(t, reach, agents),
+              }),
         );
       } else {
         const error =
@@ -131,35 +129,26 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
         onSuccess: (report) => {
           setFailures(report.failed);
           const fresh = report.created.filter((c) => !before.has(c.name));
+          const approval = () =>
+            setStep({
+              kind: "approval",
+              added: addedList(t, batch, report, reach, agents),
+              then: single && report.created[0] ? { added: report.created[0], reach } : null,
+            });
           if (single) {
             const one = report.created[0];
             if (!one) return;
-            if (report.awaitingApproval.length > 0) {
-              setStep({
-                kind: "approval",
-                names: report.awaitingApproval,
-                then: { added: one, reach },
-              });
-            } else finishOne(one, reach);
+            if (report.awaitingApproval.length > 0) approval();
+            else finishOne(one, reach);
             return;
           }
           void testAdded(fresh.map((c) => c.uid));
-          if (report.failed.length > 0) {
-            const first = report.failed[0];
-            toast.info(
-              t("mcp.add.toastPartial", {
-                done: report.created.length,
-                total: report.created.length + report.failed.length,
-                names: report.failed.map((f) => f.name).join(", "),
-                reason: first.message,
-              }),
-            );
-            return;
-          }
+          // Some were refused: stay on the review — the added rows say Added, the
+          // refused ones say why — instead of a toast that would vanish.
+          if (report.failed.length > 0) return;
           toast.success(t("mcp.add.toastAddedMany", { count: report.created.length }));
-          if (report.awaitingApproval.length > 0) {
-            setStep({ kind: "approval", names: report.awaitingApproval, then: null });
-          } else onOpenChange(false);
+          if (report.awaitingApproval.length > 0) approval();
+          else onOpenChange(false);
         },
       },
     );
@@ -172,12 +161,7 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
     else setStep({ kind: "review", servers: found, seq: seq.current });
   };
 
-  const heading =
-    step.kind === "review"
-      ? { title: t("mcp.add.reviewTitle"), sub: t("mcp.add.reviewSub") }
-      : step.kind === "approval"
-        ? { title: t("mcp.add.approvalTitle"), sub: t("mcp.add.subtitle") }
-        : { title: t("mcp.add.dialogTitle"), sub: t("mcp.add.subtitle") };
+  const heading = headingOf(t, i18n.language, step, createdRef.current, failures);
 
   if (step.kind === "importAgents") {
     return (
@@ -195,7 +179,7 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className={`max-h-[90vh] overflow-y-auto ${step.kind === "review" ? "max-w-[700px]" : "max-w-[660px]"}`}
+        className="max-h-[90vh] max-w-[640px] overflow-y-auto"
       >
         <DialogHeader>
           <DialogTitle>{heading.title}</DialogTitle>
@@ -219,7 +203,7 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
             taken={taken}
             pending={add.isPending}
             failure={failures[0] ?? null}
-            onBack={() => setStep({ kind: "paste" })}
+            onChangeType={() => setStep({ kind: "paste" })}
             onCancel={() => onOpenChange(false)}
             onSubmit={(server, reach) => submit([server], reach, true)}
           />
@@ -233,12 +217,13 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
             failures={failures}
             pending={add.isPending}
             onBack={() => setStep({ kind: "paste" })}
+            onClose={() => onOpenChange(false)}
             onSubmit={(batch, reach) => submit(batch, reach, false)}
           />
         ) : null}
         {step.kind === "approval" ? (
           <ApprovalStep
-            names={step.names}
+            added={step.added}
             onDone={() =>
               step.then ? finishOne(step.then.added, step.then.reach) : onOpenChange(false)
             }

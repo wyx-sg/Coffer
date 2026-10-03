@@ -1,5 +1,5 @@
 // src/components/change-preview/FileDiff.tsx
-// One changed file: a header (agent badge, mono path, op chip, line counts) over its unified diff.
+// One changed file: a header (agent badge — none for Coffer's own files, mono path, op chip, line counts) over its unified diff.
 import { forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -57,6 +57,17 @@ function DiffRow({ line, first }: { line: DiffLine; first: boolean }) {
   );
 }
 
+/** The bordered block of diff rows, without a file header. */
+function DiffLines({ lines }: { lines: readonly DiffLine[] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-raised font-mono text-xs leading-5">
+      {lines.map((line, index) => (
+        <DiffRow key={index} line={line} first={index === 0} />
+      ))}
+    </div>
+  );
+}
+
 interface Props {
   item: ChangeItem;
   className?: string;
@@ -72,20 +83,16 @@ export const FileDiff = forwardRef<HTMLElement, Props>(function FileDiff({ item,
       className={cn("flex min-w-0 scroll-mt-4 flex-col gap-2.5", className)}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <AgentBadge type={item.agentType} name={item.agentName} size="sm" />
+        {item.agentType === "coffer" ? null : (
+          <AgentBadge type={item.agentType} name={item.agentName} size="sm" />
+        )}
         <span className="min-w-0 truncate font-mono text-xs font-medium text-text">
           {item.path}
         </span>
         <OpChip op={item.op} />
         <LineCounts added={item.added} removed={item.removed} className="ml-auto" />
       </div>
-      {item.diff && item.diff.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-border bg-surface-raised font-mono text-xs leading-5">
-          {item.diff.map((line, index) => (
-            <DiffRow key={index} line={line} first={index === 0} />
-          ))}
-        </div>
-      ) : null}
+      {item.diff && item.diff.length > 0 ? <DiffLines lines={item.diff} /> : null}
     </section>
   );
 });

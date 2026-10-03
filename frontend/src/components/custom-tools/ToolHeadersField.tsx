@@ -1,38 +1,52 @@
-// src/components/custom-tools/ToolHeadersField.tsx — a request's headers: the group's auth header shown
-// read-only ("from the group"), then this request's own key/value rows.
+// src/components/custom-tools/ToolHeadersField.tsx — a request's headers: the group's headers shown read-only
+// ("Authorization ← 🔑 deploy-token · from the group"), then this request's own key/value rows. A request's own
+// header is a plain value: secrets belong to the group's headers.
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { CustomToolHeaderOut } from "@/lib/api/customTools";
 import { AuthLine } from "./AuthLine";
 import type { HeaderRow } from "./toolForm";
 
 interface Props {
-  /** The group's auth, when it has a secret bound. */
-  auth: { header: string; prefix: string; secret: string } | null;
+  /** The group's headers, shown as what the group already adds. */
+  groupHeaders: readonly CustomToolHeaderOut[];
   headers: HeaderRow[];
   onChange: (headers: HeaderRow[]) => void;
   /** The drawer's wording: "Add header for this request". */
   forThisRequest?: boolean;
 }
 
-export function ToolHeadersField({ auth, headers, onChange, forThisRequest = false }: Props) {
+export function ToolHeadersField({
+  groupHeaders,
+  headers,
+  onChange,
+  forThisRequest = false,
+}: Props) {
   const { t } = useTranslation();
   const set = (i: number, row: HeaderRow) =>
     onChange(headers.map((existing, j) => (j === i ? row : existing)));
+  const fromGroup = (
+    <span className="text-xs text-text-muted">{t("customTools.editor.fromGroup")}</span>
+  );
   return (
     <div className="flex flex-col gap-1.5">
       <Label>{t("customTools.editor.headers")}</Label>
-      {auth ? (
-        <AuthLine
-          {...auth}
-          trailing={
-            <span className="text-xs text-text-muted">{t("customTools.editor.fromGroup")}</span>
-          }
-        />
-      ) : null}
+      {groupHeaders.map((h) =>
+        h.secret ? (
+          <AuthLine key={h.name} header={h.name} secret={h.secret} trailing={fromGroup} />
+        ) : (
+          <span key={h.name} className="inline-flex items-center gap-2">
+            <span className="font-mono text-xs">
+              {h.name}: {h.value}
+            </span>
+            {fromGroup}
+          </span>
+        ),
+      )}
       {headers.map((row, i) => (
         <div key={i} className="flex gap-2">
           <Input
@@ -56,17 +70,20 @@ export function ToolHeadersField({ auth, headers, onChange, forThisRequest = fal
             aria-label={t("customTools.editor.removeHeader")}
             onClick={() => onChange(headers.filter((_, j) => j !== i))}
           >
-            <X aria-hidden />
+            <Trash2 aria-hidden />
           </Button>
         </div>
       ))}
-      <button
+      <Button
         type="button"
-        className="w-fit text-xs font-label text-accent-text hover:underline"
+        variant="link"
+        size="sm"
+        className="h-auto w-fit px-0 py-0.5"
         onClick={() => onChange([...headers, { key: "", value: "" }])}
       >
+        <Plus aria-hidden />
         {t(forThisRequest ? "customTools.editor.addHeaderThis" : "customTools.editor.addHeader")}
-      </button>
+      </Button>
     </div>
   );
 }

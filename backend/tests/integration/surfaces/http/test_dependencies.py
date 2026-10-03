@@ -118,7 +118,9 @@ _PROVIDERS: list[_Provider] = [
 _OPTIONAL_PROVIDERS: list[_Provider] = [
     *_pairs(chat_deps, "_channel_mirror", "_channel_note_reader"),
     # None in a graph built without the secret store.
-    *_pairs(skill_deps, "_skill_secret_presence"),
+    *_pairs(skill_deps, "_skill_secret_presence", "_skill_tool_states"),
+    # A status read lists no requirements until the MCP composition publishes them.
+    *_pairs(mcp_deps, "_server_requirements"),
 ]
 
 _MODULES: list[ModuleType] = sorted(

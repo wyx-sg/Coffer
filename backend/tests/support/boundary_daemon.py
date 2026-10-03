@@ -26,6 +26,7 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.infrastructure.vault.home import local_root
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.mcp.dependencies import set_server_requirements
 from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver, get_secret_boundary
 from coffer.surfaces.http.secret_composition import (
     get_master_key_manager,
@@ -130,6 +131,7 @@ def running_daemon(home: pathlib.Path, db: pathlib.Path) -> Iterator[BoundaryDae
             yield BoundaryDaemon(c, home, db)
     finally:
         set_active_token(None)
+        set_server_requirements(None)
 
 
 def prepare_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:

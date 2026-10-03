@@ -42,6 +42,8 @@ from coffer.domain.skill.validator import (
 )
 
 if TYPE_CHECKING:
+    from coffer.application.skill.copy_ops import KeptCopy
+    from coffer.application.skill.delivery_report import AgentDelivery
     from coffer.application.skill.unmanaged_ops import UnmanagedDetail, UnmanagedView
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,11 @@ class SkillService:
         # Closes over the reconciler at the composition root, so this service
         # never imports a surface (see ``reconcile_delivery``).
         self._reconcile_delivery = reconcile_delivery
+        #: Deletes in flight that keep an agent's own folder, by skill uid;
+        #: the on_delete hook fills in the folders it left.
+        self._keeping: dict[str, list[KeptCopy]] = {}
+        #: The newest delivery pass a front door of this service asked for.
+        self.last_delivery: PassReport | None = None
 
     # ---------- imports ----------
 
@@ -130,12 +137,33 @@ class SkillService:
         """
         if self._reconcile_delivery is None:
             return None
-        return await self._reconcile_delivery()
+        self.last_delivery = await self._reconcile_delivery()
+        return self.last_delivery
 
-    async def remove(self, *, uid: str, actor: str = "api") -> None:
+    async def delivery_of(self, skill: Resource) -> list[AgentDelivery]:
+        """Per agent, what the newest delivery pass did for ``skill``."""
+        from coffer.application.skill.delivery_report import delivery_for
+
+        return delivery_for(skill, await self.list_agents(), self.last_delivery)
+
+    async def remove(
+        self, *, uid: str, actor: str = "api", keep_foreign_copies: bool = False
+    ) -> list[KeptCopy]:
+        """Delete a skill. An agent's copy that is not Coffer's link refuses it
+        (``SkillCopyNotOurs``); with ``keep_foreign_copies`` the delete goes ahead
+        and the folders left alone are returned."""
         # All on-disk teardown happens inside the awaited on_delete hook,
         # so this path and the kind-agnostic DELETE share one cleanup flow.
-        await self._rs.delete(uid, actor=actor)
+        if not keep_foreign_copies:
+            await self._rs.delete(uid, actor=actor)
+            return []
+        kept: list[KeptCopy] = []
+        self._keeping[uid] = kept
+        try:
+            await self._rs.delete(uid, actor=actor)
+        finally:
+            self._keeping.pop(uid, None)
+        return kept
 
     async def cleanup_bindings_for_skill(self, skill: Resource) -> None:
         """on_delete hook: tear down symlinks + binding rows + master folder.
@@ -150,8 +178,11 @@ class SkillService:
         """
         from coffer.application.skill.copy_ops import refuse_foreign_copies
 
-        await refuse_foreign_copies(self, skill)
-        await self._cleanup_bindings_internal(skill_uid=skill.uid)
+        keep = self._keeping.get(skill.uid)
+        await refuse_foreign_copies(self, skill, keep=keep)
+        await self._cleanup_bindings_internal(
+            skill_uid=skill.uid, keep_paths=frozenset(k.path for k in keep or ())
+        )
         self._store.delete(skill.name)
 
     async def cleanup_bindings_for_agent(self, agent: Resource) -> None:
@@ -159,9 +190,11 @@ class SkillService:
         self._unlink_all(await self._bindings.list_for_agent(agent.uid))
         await self._bindings.delete_for_agent(agent.uid)
 
-    async def _cleanup_bindings_internal(self, *, skill_uid: str) -> None:
+    async def _cleanup_bindings_internal(
+        self, *, skill_uid: str, keep_paths: frozenset[str] = frozenset()
+    ) -> None:
         bindings = await self._bindings.list_for_skill(skill_uid)
-        self._unlink_all(bindings)
+        self._unlink_all([b for b in bindings if b.last_link_path not in keep_paths])
         await self._bindings.delete_for_skill(skill_uid)
 
     def _unlink_all(self, bindings: list[BindingState]) -> None:

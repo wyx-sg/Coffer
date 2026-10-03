@@ -1,7 +1,8 @@
 // src/components/custom-tools/AddCustomToolDialog.tsx — the Add custom tool flow. The group comes first: an
 // existing one only takes a request by hand (its base URL and secret); a new one offers Import an
-// OpenAPI spec (spec and operations → review) or By hand (New group → its first request). Nothing is
-// saved until the last step's button: Create group with N tools, or Add to <group>.
+// OpenAPI spec (spec and operations → review, 1060) or By hand (New group → its first request). Nothing
+// is saved until the last step's button: Create group with N tools, or Add to <group>; a failure stays
+// in the dialog and the button becomes Retry.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -13,8 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { persistNewSecrets } from "@/components/secret/secretValue";
+import { useToast } from "@/components/ui/toast";
 import type { CustomToolGroup, CustomToolGroupIn } from "@/lib/api/customTools";
-import { authBody } from "@/lib/customTools/drafts";
+import { translateApiError } from "@/lib/api/errors";
+import { resourcesApi } from "@/lib/api/resources";
+import { headersIn } from "./headerRows";
+import { cn } from "@/lib/utils";
 import { useCreateCustomToolGroup, useSaveCustomTool } from "@/lib/hooks/useCustomTools";
 import {
   NEW_GROUP,
@@ -44,7 +50,10 @@ interface Props {
 export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const create = useCreateCustomToolGroup();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<unknown>(null);
   const [step, setStep] = useState<AddStep>("choose");
   const [target, setTarget] = useState("");
   const [way, setWay] = useState<AddWay>("import");
@@ -57,9 +66,11 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
   useEffect(() => {
     if (!open) return;
     // A first-run card names a way into a new group: open on that way's first step.
-    const into = start?.target === NEW_GROUP ? start.way : undefined;
+    const into = !start?.target || start.target === NEW_GROUP ? start?.way : undefined;
     setStep(start?.step ?? (into ? (into === "import" ? "importSpec" : "newGroup") : "choose"));
-    setTarget(start?.target ?? "");
+    setTarget(into ? NEW_GROUP : (start?.target ?? ""));
+    setSaving(false);
+    setSaveError(null);
     setWay(start?.way ?? "import");
     setGroup(newGroupDraft());
     setSpec(newImportDraft());
@@ -76,20 +87,36 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
     if (target !== NEW_GROUP) return setStep("request");
     setStep(way === "import" ? "importSpec" : "newGroup");
   };
-  const submit = (body: CustomToolGroupIn) =>
-    create.mutate(body, { onSuccess: (made) => openGroup(made.name) });
+  // Secrets typed into the headers are written first, then the group; Off is written after it exists.
+  const submit = async (build: () => CustomToolGroupIn) => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const { waiting } = await persistNewSecrets(group.headers.map((h) => h.value));
+      if (waiting) toast.info(t("secrets.pending.toast"));
+      const made = await create.mutateAsync(build());
+      if (group.reach.mode === "disabled") {
+        await resourcesApi.disable(made.uid).catch((e) => toast.error(translateApiError(t, e)));
+      }
+      openGroup(made.name);
+    } catch (e) {
+      setSaveError(e);
+    } finally {
+      setSaving(false);
+    }
+  };
   const groupBody = (): CustomToolGroupIn => ({
     name: group.name,
     base_url: group.baseUrl.trim(),
-    auth: authBody(group.auth),
-    agents: group.agents,
+    headers: headersIn(group.headers),
+    agents: group.reach.mode === "restricted" ? (group.reach.scope?.agents ?? []) : null,
   });
 
   const createImported = () => {
     const reading = spec.reading;
     if (!reading) return;
     const chosen = reading.operations.filter((op) => spec.picked.includes(op.key));
-    submit({
+    void submit(() => ({
       ...groupBody(),
       tools: chosen.map((op) => ({
         ...op.tool,
@@ -105,22 +132,28 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
           .filter((op) => !spec.picked.includes(op.key))
           .map((op) => op.key),
       },
-    });
+    }));
   };
   const addRequest = (form: ToolForm) => {
     if (existing) {
+      setSaveError(null);
       return addTool.mutate(
         { tool: null, body: toolOf(form) },
         { onSuccess: () => openGroup(existing.name) },
       );
     }
-    submit({ ...groupBody(), tools: [toolOf(form)] });
+    void submit(() => ({ ...groupBody(), tools: [toolOf(form)] }));
   };
 
   const header = {
     choose: [t("customTools.add.title"), t("customTools.add.subtitle")],
     importSpec: [t("customTools.import.title"), t("customTools.import.step1")],
-    importReview: [t("customTools.import.title"), t("customTools.import.step2")],
+    importReview: [
+      t("customTools.import.title"),
+      t("customTools.import.step2", {
+        count: spec.picked.length,
+      }),
+    ],
     newGroup: [t("customTools.newGroup.title"), t("customTools.newGroup.subtitle")],
     request: [t("customTools.request.title"), t("customTools.request.subtitle")],
   }[step];
@@ -135,7 +168,12 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-[640px] overflow-y-auto">
+      <DialogContent
+        className={cn(
+          "max-h-[90vh] overflow-y-auto",
+          step === "importReview" ? "max-w-[1060px]" : "max-w-[640px]",
+        )}
+      >
         <DialogHeader>
           <DialogTitle>{header[0]}</DialogTitle>
           <DialogDescription>{header[1]}</DialogDescription>
@@ -164,11 +202,10 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
         ) : step === "importReview" && spec.reading ? (
           <ImportReviewStep
             group={group}
-            onGroup={setGroup}
             reading={spec.reading}
             picked={spec.picked}
-            creating={create.isPending}
-            error={create.error}
+            creating={saving}
+            error={saveError}
             onBack={() => setStep("importSpec")}
             onCancel={cancel}
             onCreate={createImported}
@@ -185,8 +222,8 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
         ) : requestGroup ? (
           <AddRequestStep
             group={requestGroup}
-            pending={create.isPending || addTool.isPending}
-            error={create.error ?? addTool.error}
+            pending={saving || addTool.isPending}
+            error={saveError ?? addTool.error}
             onChangeWay={backToChoose}
             onCancel={cancel}
             onAdd={addRequest}

@@ -1,24 +1,26 @@
 // frontend/src/components/skills/SkillLibraryRow.tsx
-// One row of the Skills library: the skill's name (with "Built-in" beside
-// Coffer's own), a second line only when something needs saying
-// (lib/skills/attention.ts — its master is gone, a folder is in the way of an
-// agent's link, a command it needs is missing, its Git source is unreachable
-// or has an update; the description is on the skill's own page, not in the
-// list), and its reach on the right — Off, All agents,
-// or the badges of the agents it is restricted to. The checkbox feeds the
-// selection bar; it shows on hover, and on every row while any is ticked. The
-// built-in row has none: it is never part of a bulk action.
+// One row of the Skills library (canvas 4.3 SkillsList): a state dot, the
+// skill's name (with "Built-in" beside Coffer's own), a second line — what
+// needs the reader (lib/skills/attention.ts: its master is gone, a folder is in
+// the way of an agent's link, a command or tool it needs is not ready, its Git
+// source is unreachable or has an update) or, with nothing to say, its
+// description in grey — and its reach on the right: All agents, or the badges
+// of the agents it is restricted to. An Off skill shows no reach word (the
+// group says it, as in the MCP servers list). The checkbox feeds the selection
+// bar; it shows on hover, and on every row while any is ticked. The built-in
+// row has none: it is never part of a bulk action.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
-import { StatusWord } from "@/components/status/StatusWord";
+import { StatusDot } from "@/components/status/StatusDot";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AgentOut } from "@/lib/api/agents";
 import type { Cli } from "@/lib/api/clis";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
-import { skillAttention, type SkillAttention } from "@/lib/skills/attention";
+import { skillAttention, isProblem, type SkillAttention } from "@/lib/skills/attention";
 import { toneTextClass } from "@/lib/statusColors";
+import type { StatusTone } from "@/lib/statusTone";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -52,18 +54,25 @@ function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): stri
         return t("skills.row.needsLogin", { command: item.loggedOut[0] });
       }
       return t("skills.row.needsNewer", { command: item.outdated[0] });
+    case "toolOff": {
+      const tool = item.tools[0];
+      return t("skills.row.needsTool", {
+        name: tool?.name,
+        state: t(`skills.requires.toolState.${tool?.status ?? "off"}`).toLowerCase(),
+      });
+    }
     case "secrets":
       return t("skills.row.needsSecret", { name: item.missing[0] });
     case "sourceUnreachable":
-      return t("skills.sourceUnreachable");
+      return t("skills.row.sourceUnreachable");
     case "updateAvailable":
-      return t("skills.updateAvailable");
+      return t("skills.row.updateAvailable");
   }
 }
 
 function subTone(item: SkillAttention): string {
   if (item.kind === "masterMissing") return toneTextClass("error");
-  if (item.kind === "updateAvailable") return "text-accent-text";
+  if (!isProblem(item)) return "text-text-muted";
   return toneTextClass("warn");
 }
 
@@ -72,9 +81,17 @@ function Subline({ item, agents }: { item: SkillAttention; agents: readonly Agen
   return <span className={cn("truncate text-xs", subTone(item))}>{text}</span>;
 }
 
+/** The dot before the name: red for a missing master, amber for any other
+ *  problem, green for a skill in use, grey for one that is off. */
+function dotTone(skill: SkillOut, attention: SkillAttention | undefined): StatusTone {
+  if (attention?.kind === "masterMissing") return "err";
+  if (attention && isProblem(attention)) return "warn";
+  return skill.enabled ? "ok" : "off";
+}
+
 function ReachMark({ skill, agents }: { skill: SkillOut; agents: readonly AgentOut[] }) {
   const { t } = useTranslation();
-  if (!skill.enabled) return <StatusWord tone="off">{t("skills.offMark")}</StatusWord>;
+  if (!skill.enabled) return null;
   const scoped = skill.scope?.agents ?? null;
   if (scoped === null) {
     return <span className="text-xs text-text-muted">{t("agentBadge.allAgents")}</span>;
@@ -105,7 +122,8 @@ export function SkillLibraryRow({
   onOpen,
 }: Props) {
   const { t } = useTranslation();
-  const attention = skillAttention(skill, clis, drift)[0];
+  // Built-in skills are never a problem to fix; they keep their description.
+  const attention = (skill.builtin ? [] : skillAttention(skill, clis, drift))[0];
   return (
     <li
       className={cn(
@@ -135,6 +153,7 @@ export function SkillLibraryRow({
         aria-current={current ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
       >
+        <StatusDot tone={dotTone(skill, attention)} size={7} className="self-center" />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate font-mono text-xs font-label">{skill.name}</span>
@@ -147,7 +166,11 @@ export function SkillLibraryRow({
               </span>
             ) : null}
           </span>
-          {attention ? <Subline item={attention} agents={agents} /> : null}
+          {attention ? (
+            <Subline item={attention} agents={agents} />
+          ) : skill.description ? (
+            <span className="truncate text-xs text-text-muted">{skill.description}</span>
+          ) : null}
         </span>
         <span className="shrink-0">
           <ReachMark skill={skill} agents={agents} />

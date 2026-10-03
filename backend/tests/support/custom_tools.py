@@ -15,7 +15,8 @@ from typing import Any
 from tests.support.boundary_daemon import BoundaryDaemon
 
 SECRET_NAME = "billing-token"
-SECRET_VALUE = "tok_live_9f8e7d6c5b4a"
+#: The secret holds the WHOLE header value, prefix included.
+SECRET_VALUE = "Bearer tok_live_9f8e7d6c5b4a"
 _ids = itertools.count(1)
 
 
@@ -51,7 +52,7 @@ def create_group(
     if secret:
         if d.value(f"secret/{SECRET_NAME}") is None:
             d.store(f"secret/{SECRET_NAME}", SECRET_VALUE)
-        body["auth"] = {"header": "Authorization", "prefix": "Bearer ", "secret": SECRET_NAME}
+        body["headers"] = [{"name": "Authorization", "secret": SECRET_NAME}]
     if agents is not None:
         body["agents"] = agents
     r = d.client.post("/api/v1/custom-tools", json=body)
