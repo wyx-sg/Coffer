@@ -1460,6 +1460,11 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 - **WHEN** its page opens
 - **THEN** the launcher callout names the launcher and offers Copy prompt, which copies the served prompt, and shows no `brew install` line
 
+#### Scenario: a rejected key reads Replace key
+- **GIVEN** an MCP server whose status reads failing with `failure_reason` `auth_rejected`, and an Overview item with the verb `replace_key`
+- **WHEN** the server's page opens and the Overview lists the item
+- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the edit dialog on its secret, and the Overview row's action reads Replace key and opens the server's page
+
 #### Scenario: a failed test offers a diagnosis hand-off beside View log
 - **GIVEN** an MCP server whose test just failed with an error and a `handoff`
 - **WHEN** the result is shown

@@ -24,6 +24,7 @@ McpTestErrorCode = Literal[
     "timeout",
     "initialize_failed",
     "connect_failed",
+    "auth_rejected",
     "stored_secret_not_released",
     "unsupported_transport",
 ]
@@ -52,6 +53,7 @@ class McpTestResultOut(BaseModel):
             "directory does not exist), exited (the process exited; see exit_code), "
             "timeout (the time limit), initialize_failed (MCP initialize or "
             "tools/list failed), connect_failed (the URL could not be reached), "
+            "auth_rejected (the HTTP server answered 401 or 403), "
             "stored_secret_not_released (the config cites a stored secret, released "
             "only to a registered server), unsupported_transport."
         ),

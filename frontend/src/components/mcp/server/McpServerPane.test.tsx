@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
+import { actionLabelKey } from "@/lib/overview/attention";
 import { acceptance } from "@/test/acceptance";
 import type { ResourceOut } from "@/lib/api/resources";
 import { McpServerPane } from "./McpServerPane";
@@ -213,6 +214,17 @@ describe("McpServerPane", () => {
     expect(screen.getByRole("button", { name: /test again/i })).toBeInTheDocument();
     fireEvent.click(within(callout).getByRole("button", { name: /view log/i }));
     expect(await screen.findByTestId("mcp-log-drawer")).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "a rejected key reads Replace key", async () => {
+    api.status = { status: "failing", failure_reason: "auth_rejected" };
+    renderPane();
+    const callout = await screen.findByTestId("mcp-callout-key-rejected");
+    expect(callout).toHaveTextContent("The key was rejected");
+    expect(callout).toHaveTextContent(/rejected with 401 Unauthorized/);
+    fireEvent.click(within(callout).getByRole("button", { name: "Replace key" }));
+    expect(await screen.findByText("edit dialog secret")).toBeInTheDocument();
+    expect(actionLabelKey("replace_key")).toBe("overview.actions.replace_key");
   });
 
   acceptance(

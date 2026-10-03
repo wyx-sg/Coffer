@@ -29,7 +29,7 @@ from coffer.infrastructure.persistence.engine import (
 from coffer.infrastructure.vault.home import derived_root
 
 #: Bumped whenever a table below changes shape; an older file is recreated.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class DerivedBase(DeclarativeBase):
@@ -44,6 +44,8 @@ class MCPServerHealthModel(DerivedBase):
     resource_uid: Mapped[str] = mapped_column(String, primary_key=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
     checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    #: Why a failing check failed (``domain.mcp.probe.FailureReason``); null when healthy.
+    failure_reason: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SkillAgentBindingModel(DerivedBase):

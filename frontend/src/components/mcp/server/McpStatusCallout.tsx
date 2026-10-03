@@ -4,7 +4,7 @@
 // with its stderr one click away and the diagnosis hand-off beside it).
 // Otherwise the state's own callout: a failing server's last error, since
 // when, who can't call it and its last successful call, with View log and the
-// diagnosis hand-off; a missing launcher, with the install hand-off (the
+// diagnosis hand-off; a rejected key, with Replace key (the edit dialog on its secret); a missing launcher, with the install hand-off (the
 // backend's prompt — which installer fits is the agent's call, so no install
 // command is named here); a secret this Mac does not hold, with Replace
 // secret; an Off server's explanation; many tools behind search. Nothing for
@@ -180,6 +180,29 @@ export function McpStatusCallout({
         }
       >
         {t("mcp.page.secretBody", { key: detail?.missing_secret ?? "" })}
+      </Callout>
+    );
+  }
+  if (state.kind === "failing" && detail?.failure_reason === "auth_rejected") {
+    return (
+      <Callout
+        tint="err"
+        icon={KeyRound}
+        testId="mcp-callout-key-rejected"
+        title={t("mcp.page.keyRejectedTitle")}
+        action={withHandoff(
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-surface-raised"
+            onClick={onReplaceSecret}
+          >
+            {t("mcp.page.replaceKey")}
+          </Button>,
+          detail.handoff?.prompt,
+        )}
+      >
+        {t("mcp.page.keyRejectedBody", { who, tools })}
       </Callout>
     );
   }

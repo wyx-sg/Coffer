@@ -112,14 +112,16 @@ async def _inventory(
     return tools, resources, prompts
 
 
-def _http_failure(exc: BaseException, url: str) -> _FailError:
+def _http_failure(exc: BaseException, url: str, answered: int | None = None) -> _FailError:
     """Classify a failed HTTP connect/initialize without echoing the URL's query."""
     if isinstance(exc, UpstreamTimeout):
         return _FailError("timeout", "The server did not answer within the time limit.")
     cause = _leaf_exception(exc.__cause__ or exc)
     host = urlparse(url).hostname or url
     response = getattr(cause, "response", None)
-    status = getattr(response, "status_code", None)
+    status = getattr(response, "status_code", None) or answered
+    if status in (401, 403):
+        return _FailError("auth_rejected", f"{host} rejected the credentials (HTTP {status}).")
     if status is not None:
         return _FailError("initialize_failed", f"{host} answered HTTP {status}.")
     name = type(cause).__name__
@@ -162,7 +164,7 @@ async def _probe_http(
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            raise _http_failure(exc, url) from exc
+            raise _http_failure(exc, url, conn.first_error_status) from exc
         try:
             tools, resources, prompts = await _inventory(conn, caps)
         except UpstreamTimeout as exc:

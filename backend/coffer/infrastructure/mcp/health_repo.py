@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from coffer.domain.mcp.probe import FailureReason
 from coffer.infrastructure.persistence.derived_db import MCPServerHealthModel
 
 # Write-side type alias for health status values.
@@ -31,15 +32,31 @@ class MCPServerHealthRepo:
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
         self._sm = sm
 
-    async def upsert(self, resource_uid: str, status: HealthStatus, checked_at: datetime) -> None:
-        """Insert or update the health record for the given server uid."""
+    async def upsert(
+        self,
+        resource_uid: str,
+        status: HealthStatus,
+        checked_at: datetime,
+        failure_reason: FailureReason | None = None,
+    ) -> None:
+        """Insert or update the health record for the given server uid; a
+        failing check carries why it failed, a healthy one carries none."""
         async with self._sm() as session:
             stmt = (
                 sqlite_insert(MCPServerHealthModel)
-                .values(resource_uid=resource_uid, status=status, checked_at=checked_at)
+                .values(
+                    resource_uid=resource_uid,
+                    status=status,
+                    checked_at=checked_at,
+                    failure_reason=failure_reason,
+                )
                 .on_conflict_do_update(
                     index_elements=["resource_uid"],
-                    set_={"status": status, "checked_at": checked_at},
+                    set_={
+                        "status": status,
+                        "checked_at": checked_at,
+                        "failure_reason": failure_reason,
+                    },
                 )
             )
             await session.execute(stmt)
@@ -55,6 +72,12 @@ class MCPServerHealthRepo:
             if row is None:
                 return None
             return row.status, _tz(row.checked_at)
+
+    async def get_reason(self, resource_uid: str) -> FailureReason | None:
+        """Why the last check failed, or None (healthy, no record, or unknown)."""
+        async with self._sm() as session:
+            row = await session.get(MCPServerHealthModel, resource_uid)
+            return row.failure_reason if row is not None else None  # type: ignore[return-value]
 
     async def list_all(self) -> list[tuple[str, HealthStatus]]:
         """Return all (resource_uid, status) pairs currently persisted."""

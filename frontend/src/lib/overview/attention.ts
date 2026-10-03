@@ -124,6 +124,7 @@ const VERBS = new Set([
   "connect",
   "test",
   "set_secret",
+  "replace_key",
   "check",
   "run",
   "review",
@@ -153,6 +154,7 @@ export function itemActionLabelKey(item: AttentionItem): string {
  *  checking or testing again. A verb with no entry carries no icon. */
 const VERB_ICONS: Record<string, LucideIcon> = {
   set_secret: KeyRound,
+  replace_key: KeyRound,
   review: Eye,
   connect: Plug,
   repair: Wrench,
@@ -169,7 +171,7 @@ export function actionIcon(verb: string): LucideIcon | undefined {
  *  an MCP server again (`test`, POST) and probing a command again (`check`,
  *  POST on a CLI). Every other verb opens its page — `connect` and `repair`
  *  write into an agent's own files, whose preview lives there; `set_secret`
- *  needs the value typed; `turn_on` changes a security setting the person
+ *  and `replace_key` need the value typed; `turn_on` changes a security setting the person
  *  should see; `review`, `run` and a GET `check` only read. Keyed by kind and
  *  verb, so the call itself goes through the typed client (useInPlaceAction). */
 const IN_PLACE = new Set(["mcp_server:test", "cli:check"]);

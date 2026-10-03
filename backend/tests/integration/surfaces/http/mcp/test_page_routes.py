@@ -197,6 +197,17 @@ async def test_a_failed_test_with_no_calls_is_failing_since_the_test(ctx):
     assert body["failing_since"] == body["last_checked_at"] is not None
 
 
+@pytest.mark.asyncio
+async def test_a_failing_status_carries_why_the_test_failed(ctx):
+    srv = await ctx.server("docs", _stdio())
+    await ctx.health.upsert(srv.uid, "failing", NOW, "auth_rejected")
+    body = (await ctx.client.get(f"/api/v1/resources/mcp_server/{srv.uid}/status")).json()
+    assert body["failure_reason"] == "auth_rejected"
+    await ctx.health.upsert(srv.uid, "healthy", NOW)
+    body = (await ctx.client.get(f"/api/v1/resources/mcp_server/{srv.uid}/status")).json()
+    assert body["failure_reason"] is None
+
+
 # --- 24 h summary -------------------------------------------------------------
 
 

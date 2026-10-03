@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Request
 from coffer.application.mcp.runner_detect import missing_runner_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.http_api import HttpApiTransport
+from coffer.domain.mcp.probe import failure_reason
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.domain.resource import Resource
@@ -74,7 +75,7 @@ async def test_mcp_server(
                 resolver.materialize, config.transport.secret_refs, destination
             )
         except Exception as e:  # a binding awaiting approval, a missing secret
-            await health_repo.upsert(resource.uid, "failing", datetime.now(tz=UTC))
+            await health_repo.upsert(resource.uid, "failing", datetime.now(tz=UTC), "other")
             return McpTestResultOut(
                 ok=False,
                 latency_ms=0,
@@ -100,7 +101,10 @@ async def test_mcp_server(
         )
         # Keyed on the identity, so the result survives a later rename.
         await health_repo.upsert(
-            resource.uid, "healthy" if result.ok else "failing", datetime.now(tz=UTC)
+            resource.uid,
+            "healthy" if result.ok else "failing",
+            datetime.now(tz=UTC),
+            None if result.ok else failure_reason(result.error_code),
         )
         if result.ok:
             return result_out(result)
@@ -145,7 +149,7 @@ async def test_mcp_server(
             await conn.close()
     except Exception as e:  # incl. UpstreamUnavailable / UpstreamTimeout
         latency_ms = int((time.monotonic() - start) * 1000)
-        await health_repo.upsert(resource.uid, "failing", datetime.now(tz=UTC))
+        await health_repo.upsert(resource.uid, "failing", datetime.now(tz=UTC), "other")
         return McpTestResultOut(
             ok=False,
             latency_ms=latency_ms,

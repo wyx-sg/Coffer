@@ -662,8 +662,10 @@ exits non-zero when any item failed.
 ### Requirement: Report what needs a person across every kind
 `GET /api/v1/attention` and `coffer attention` MUST list what needs a person
 now, from every source whose experimental feature is on: the reconciler's
-drift that a pass could not fix, MCP servers whose last test failed, whose
-launcher is missing or whose cited secret is absent, agents whose program is
+drift that a pass could not fix, MCP servers whose last test failed (a server
+whose key the upstream refused reads `mcp_key_rejected` and offers
+`replace_key`, which opens the server's page where the key is replaced),
+whose launcher is missing or whose cited secret is absent, agents whose program is
 missing, whose connection is partial or who are not connected, a sync stopped on
 a conflict or holding deletions, channels reconnecting, disconnected or not
 running, and commands a skill requires that are missing, older than a skill's
@@ -686,6 +688,11 @@ items, and the answer MUST count the items per kind.
 - **GIVEN** an MCP server whose last test failed and a partially connected agent
 - **WHEN** the user reads the attention list
 - **THEN** the server's item offers `test` through `POST /api/v1/resources/mcp_server/{uid}/test`, the agent's offers `connect` through `POST /api/v1/agents/{uid}/coffer-connection`, errors sort before warnings, and the counts name one item for each kind
+
+#### Scenario: a rejected key is its own attention item
+- **GIVEN** an enabled HTTP server whose last test failed with `auth_rejected`
+- **WHEN** the user reads the attention list
+- **THEN** the server's item reads `mcp_key_rejected` with the reason "Every call is rejected with 401 Unauthorized. The API key looks revoked.", offers `replace_key`, and still carries the diagnosis `handoff`
 
 #### Scenario: every item carries a hand-off prompt
 - **GIVEN** an attention item whose kind writes its own hand-off, and another whose source gives none
