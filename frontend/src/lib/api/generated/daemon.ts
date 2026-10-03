@@ -405,6 +405,7 @@ export interface components {
         DaemonLogRecordOut: {
             /** Event */
             event: string | null;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Level */
             level: string | null;
             /** Offset */

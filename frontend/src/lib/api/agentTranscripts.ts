@@ -25,7 +25,7 @@ type ListQuery = NonNullable<
   paths["/api/v1/agents/{uid}/transcripts"]["get"]["parameters"]["query"]
 >;
 
-export type TranscriptSort = NonNullable<ListQuery["sort"]>;
+type TranscriptSort = NonNullable<ListQuery["sort"]>;
 type SortOrder = NonNullable<ListQuery["order"]>;
 
 /** @ui-only The listing's query as the page builds it; every field maps to a

@@ -108,7 +108,7 @@ const agent = (
 
 function Where() {
   const location = useLocation();
-  return <output data-testid="where">{location.pathname}</output>;
+  return <output data-testid="where">{location.pathname + location.search}</output>;
 }
 
 function renderAt(path = "/model-providers") {
@@ -219,10 +219,30 @@ describe("ModelProvidersPage", () => {
   acceptance("provider-switching", "the provider library has no tabs", async () => {
     serve([makeProvider({ name: "official" })]);
     renderAt();
-    // The open provider is one column — Used by, Endpoint, Models — with no
-    // tab strip at all.
+    // The open provider is one column — Used by, Endpoint, Models — and the
+    // only tab strip is the page header's Providers | Usage.
     expect(await screen.findByRole("heading", { name: "Endpoint" })).toBeInTheDocument();
-    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Providers", "Usage"]);
+  });
+
+  acceptance("provider-switching", "Usage is a tab of Model providers", async () => {
+    serve([makeProvider({ name: "official" })]);
+    renderAt();
+    expect(await screen.findByRole("heading", { name: "Model providers" })).toBeInTheDocument();
+    // The header names the feature as experimental and carries the primary
+    // button for both tabs.
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Where your agents’ models come from, and what requests through Coffer cost.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add provider/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Providers" })).toHaveAttribute("aria-selected", "true");
+    // Radix tabs switch on mousedown.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Usage" }));
+    await waitFor(() => expect(where()).toBe("/model-providers?tab=usage"));
   });
 
   test("a row says what the provider offers", async () => {

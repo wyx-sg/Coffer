@@ -153,7 +153,7 @@ def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Pa
             "locked_refs": [],
         }
 
-        assert c.delete("/sync/remote").json() == {"cleared": True}
+        assert c.delete("/sync/remote").json() == {"cleared": True, "restorable": True}
         no_remote = c.post("/sync/run")
         assert no_remote.json()["error"]["code"] == "SYNC_NO_REMOTE"
 

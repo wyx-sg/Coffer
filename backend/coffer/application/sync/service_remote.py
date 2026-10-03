@@ -19,7 +19,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from coffer.domain.secret_errors import SecretMissing
+from coffer.domain.sync.errors import SyncNothingToRestore, SyncRemoteExists
 from coffer.domain.sync.remote import DEFAULT_USERNAME, SyncRemote
+from coffer.domain.sync.stops import conflict_from_json, stop_from_json, to_json
 from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -64,6 +66,7 @@ class RemoteMixin:
                 d.state.set_confirmed(None)
                 d.state.set_joined(False)
             self._remotes.put(remote)
+            self._remotes.forget_removed()
             d.git.ensure()
             d.git.set_remote(remote.url, remote.username)
             d.git.set_carry_secret(remote.include_secret)
@@ -86,12 +89,26 @@ class RemoteMixin:
         return changed
 
     async def clear_remote(self) -> bool:
-        """Forget the remote. The vault and its history stay as they are."""
+        """Forget the remote. The vault and its history stay as they are.
+        What was forgotten is kept (never a secret's value: the push secret is
+        a name) so :meth:`restore_remote` can put it back."""
 
         def apply() -> bool:
             d = self._engine.d
-            if self._remotes.get() is None:
+            remote = self._remotes.get()
+            if remote is None:
                 return False
+            stop = d.state.stop()
+            confirmed = d.state.confirmed()
+            self._remotes.keep_removed(
+                {
+                    "remote": remote.to_json(),
+                    "joined": d.state.joined(),
+                    "stop": to_json(stop) if stop is not None else None,
+                    "join_choices": [to_json(c) for c in d.state.join_choices()],
+                    "confirmed": list(confirmed) if confirmed else None,
+                }
+            )
             self._remotes.clear()
             d.git.clear_remote()
             d.git.set_carry_secret(False)
@@ -105,6 +122,31 @@ class RemoteMixin:
 
         done: bool = await self._locked(apply)
         return done
+
+    async def restore_remote(self) -> SyncRemote:
+        """Undo "Stop syncing": the remote that was forgotten, and what this
+        machine knew about it (joined, a round waiting for a person, a join's
+        differing files), as they were. Refused while another remote is set."""
+        snapshot = await asyncio.to_thread(self._remotes.removed)
+        if snapshot is None or not snapshot.get("remote"):
+            raise SyncNothingToRestore("no remote was stopped on this machine")
+        if await self.get_remote() is not None:
+            raise SyncRemoteExists("a sync remote is set already; stop it before restoring one")
+        remote = await self.set_remote(SyncRemote.from_json(snapshot["remote"]))
+
+        def reinstate() -> None:
+            d = self._engine.d
+            d.state.set_joined(bool(snapshot.get("joined")))
+            stop = snapshot.get("stop")
+            d.state.set_stop(stop_from_json(stop) if stop else None)
+            d.state.set_join_choices(
+                [conflict_from_json(c) for c in snapshot.get("join_choices") or ()]
+            )
+            confirmed = snapshot.get("confirmed")
+            d.state.set_confirmed((confirmed[0], confirmed[1]) if confirmed else None)
+
+        await self._locked(reinstate)
+        return remote
 
     async def check_remote(
         self, url: str, branch: str, secret_ref: str | None, username: str = DEFAULT_USERNAME

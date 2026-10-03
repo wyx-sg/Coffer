@@ -712,6 +712,8 @@ describe("overview hides an area whose backend or feature is off", () => {
     const usage = within(region).getByRole("link", { name: "Usage" });
     await waitFor(() => expect(usage).toHaveTextContent("Anthropic 71%"));
     expect(usage).toHaveTextContent("$4.12");
+    // Usage is a tab of Model providers now; the tile opens it.
+    expect(usage).toHaveAttribute("href", "/model-providers?tab=usage");
     // Board order: what agents use first, then the system areas.
     const names = within(region)
       .getAllByRole("link")

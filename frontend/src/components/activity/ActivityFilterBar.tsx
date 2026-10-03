@@ -1,209 +1,167 @@
-// src/components/activity/ActivityFilterBar.tsx — the filters of the visible Activity tab, as pills plus a free-text box.
+// src/components/activity/ActivityFilterBar.tsx — the filter row of the visible Activity tab (Foundations 0.2.06).
 //
-// Every tab filters by time range and free text; each adds the filters its
-// records afford (spec web-ui "Filter each Activity tab and expand any row"):
-// Everything an agent (or who else), a server and a kind; Changes who and
-// the kind of change; MCP calls an agent, a server and a status; the Daemon
-// log a severity floor and a logger. Agent and Kind choose several values at
-// once, each with its count (design 6.1.03, 6.1.04). "/" focuses the text box
-// from anywhere on the page.
-import { useEffect, useRef, type ReactNode } from "react";
+// Position never changes, only which controls a tab affords (design 6.2.04–10):
+// Everything — search, time range, By, Kind (MCP calls / Changes / Daemon
+// records); Changes — search, time range, By, Kind (the eleven kinds of
+// change); MCP calls — status segmented (All / OK / Failed), search, time
+// range, By (agents only); Daemon log — level segmented (All / Info /
+// Warnings / Errors), search, time range, Logger. There is no server filter:
+// the search matches a server's name. "Clear filters" sits at the far right
+// while anything is set; the counts are gone from every pill.
 import { useTranslation } from "react-i18next";
 
-import { SearchInput } from "@/components/SearchInput";
-import { Kbd } from "@/components/ui/kbd";
-import { type ActivityRecord, type ActivityTab } from "@/lib/activity/records";
-import type { ActivityFilters } from "@/lib/activity/filters";
-import type { TabCount } from "@/lib/hooks/useActivityFeed";
-import { cn } from "@/lib/utils";
-import { ActivityTimeRange } from "./ActivityTimeRange";
-import { FilterPill } from "./FilterPill";
-import { KindPill, WhoPill } from "./WhoKindPills";
+import { FilterPill, FilterRow, TimeRangePill, type FilterOption } from "@/components/filters";
+import { Segmented } from "@/components/ui/segmented";
+import {
+  CHANGE_CATEGORIES,
+  RECORD_KINDS,
+  WHO_ACTORS,
+  filtersNarrow,
+  type ActivityFilters,
+  type StatusFilter,
+} from "@/lib/activity/filters";
+import type { ActivityTab } from "@/lib/activity/records";
+import { RANGE_PRESETS } from "@/lib/hooks/useActivityView";
 
-const CALL_STATUSES = ["ok", "error", "timeout", "denied"] as const;
-
-/** The daemon tab's severity floors, least to most severe. */
-const LEVELS = ["", "info", "warning", "error"] as const;
-
-/** @ui-only An agent as the who filter lists it. */
+/** @ui-only An agent as the By filter lists it. */
 interface AgentOption {
   uid: string;
-  type: string;
   name: string;
-}
-
-/** @ui-only An MCP server as the server filter lists it. */
-interface ServerOption {
-  uid: string;
-  label: string;
 }
 
 interface Props {
   tab: ActivityTab;
   filters: ActivityFilters;
   onChange: (next: ActivityFilters) => void;
+  onClear: () => void;
   agents: AgentOption[];
-  agentNames: ReadonlyMap<string, string>;
-  servers: ServerOption[];
   /** Loggers seen in the loaded daemon records. */
   loggers: string[];
-  /** The loaded records before the client-side filters, for the pills' counts. */
-  loaded: readonly ActivityRecord[];
-  counts: Record<ActivityTab, TabCount>;
-  /** Shown after the text box (the daemon log's "Open log file"). */
-  trailing?: ReactNode;
 }
 
-export function ActivityFilterBar({
-  tab,
-  filters,
-  onChange,
-  agents,
-  agentNames,
-  servers,
-  loggers,
-  loaded,
-  counts,
-  trailing,
-}: Props) {
+const STATUSES: readonly StatusFilter[] = ["all", "ok", "failed"];
+const LEVELS = ["", "info", "warning", "error"] as const;
+
+/** The By pill's long list searches above this many values (FilterPill's own threshold). */
+const FEW = 8;
+
+export function ActivityFilterBar({ tab, filters, onChange, onClear, agents, loggers }: Props) {
   const { t } = useTranslation();
-  const searchBox = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<ActivityFilters>) => onChange({ ...filters, ...patch });
 
-  // "/" jumps to the text box, as the key hint beside it says.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
-      ) {
-        return;
-      }
-      const input = searchBox.current?.querySelector("input");
-      if (!input) return;
-      event.preventDefault();
-      input.focus();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  const timePill = (
-    <ActivityTimeRange
-      timeRange={filters.timeRange}
-      from={filters.from}
-      to={filters.to}
-      onChange={(v) => set(v)}
+  const presets = RANGE_PRESETS.map((id) => ({ id, label: t(`activity.time.${id}`) }));
+  const time = (
+    <TimeRangePill
+      key="time"
+      value={filters.range}
+      onChange={(range) => set({ range })}
+      presets={presets}
     />
   );
 
+  const agentOptions: FilterOption[] = agents.map((a) => ({
+    value: `agent:${a.uid}`,
+    label: a.name,
+    group: "agents",
+  }));
+  const actorOptions: FilterOption[] = WHO_ACTORS.map((actor) => ({
+    value: `actor:${actor}`,
+    label: t(`activity.actor.${actor}`),
+    group: "actors",
+  }));
+  const byOptions = tab === "mcp" ? agentOptions : [...agentOptions, ...actorOptions];
+  const by = (
+    <FilterPill
+      key="by"
+      label={t("activity.filters.by")}
+      options={byOptions}
+      groups={
+        tab === "mcp"
+          ? undefined
+          : [
+              { id: "agents", label: t("activity.filters.agents") },
+              { id: "actors", label: t("activity.filters.notAnAgent"), last: true },
+            ]
+      }
+      searchPlaceholder={t("activity.filters.findAgent")}
+      fixedOrder={byOptions.length <= FEW}
+      value={filters.by}
+      onChange={(next) => set({ by: next })}
+    />
+  );
+
+  const kindOptions: FilterOption[] =
+    tab === "changes"
+      ? CHANGE_CATEGORIES.map((c) => ({ value: c, label: t(`activity.filters.changeKinds.${c}`) }))
+      : RECORD_KINDS.map((k) => ({ value: k, label: t(`activity.filters.kinds.${k}`) }));
+  const kind = (
+    <FilterPill
+      key="kind"
+      label={t("activity.filters.kind")}
+      options={kindOptions}
+      searchPlaceholder={t("activity.filters.findKind")}
+      fixedOrder
+      value={filters.kinds}
+      onChange={(next) => set({ kinds: next })}
+    />
+  );
+
+  let segmented;
+  let pills;
+  if (tab === "mcp") {
+    segmented = (
+      <Segmented
+        label={t("activity.filters.statusLabel")}
+        value={filters.status}
+        options={STATUSES.map((s) => ({
+          value: s,
+          label: t(`activity.filters.statusOption.${s}`),
+        }))}
+        onChange={(status) => set({ status })}
+      />
+    );
+    pills = [time, by];
+  } else if (tab === "daemon") {
+    segmented = (
+      <Segmented
+        label={t("activity.filters.levelLabel")}
+        value={filters.level}
+        options={LEVELS.map((level) => ({
+          value: level,
+          label: t(`activity.filters.level.${level || "all"}`),
+        }))}
+        onChange={(level) => set({ level })}
+      />
+    );
+    pills = [
+      time,
+      <FilterPill
+        key="logger"
+        mode="single"
+        label={t("activity.filters.logger")}
+        options={loggers.map((logger) => ({ value: logger, label: logger }))}
+        searchPlaceholder={t("activity.filters.findLogger")}
+        value={filters.logger}
+        onChange={(logger) => set({ logger })}
+      />,
+    ];
+  } else {
+    pills = [time, by, kind];
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {tab === "daemon" ? (
-        <>
-          <div
-            role="radiogroup"
-            aria-label={t("activity.filters.levelLabel")}
-            className="inline-flex items-center gap-0.5 rounded-md border border-border-subtle bg-surface-sunken p-[3px]"
-          >
-            {LEVELS.map((level) => (
-              <button
-                key={level || "all"}
-                type="button"
-                role="radio"
-                aria-checked={filters.level === level}
-                onClick={() => set({ level })}
-                className={cn(
-                  "h-6 rounded-sm px-2.5 text-xs font-label text-text-muted transition-colors duration-fast hover:text-text",
-                  filters.level === level &&
-                    "bg-surface-raised text-text shadow-sm ring-1 ring-border",
-                )}
-              >
-                {t(`activity.filters.level.${level || "all"}`)}
-              </button>
-            ))}
-          </div>
-          <FilterPill
-            label={t("activity.filters.logger")}
-            value={filters.logger}
-            anyValue="any"
-            groups={[
-              {
-                options: loggers.map((logger) => ({
-                  value: logger,
-                  label: <span className="font-mono text-xs">{logger}</span>,
-                })),
-              },
-            ]}
-            onChange={(logger) => set({ logger })}
-          />
-          {timePill}
-        </>
-      ) : (
-        <>
-          {timePill}
-          <WhoPill
-            tab={tab}
-            filters={filters}
-            set={set}
-            loaded={loaded}
-            agents={agents}
-            agentNames={agentNames}
-          />
-        </>
-      )}
-      {tab === "everything" || tab === "mcp" ? (
-        <FilterPill
-          label={t("activity.filters.server")}
-          value={filters.server}
-          anyValue="any"
-          groups={[{ options: servers.map((s) => ({ value: s.uid, label: s.label })) }]}
-          onChange={(server) => set({ server })}
-        />
-      ) : null}
-      {tab === "everything" || tab === "changes" ? (
-        <KindPill tab={tab} filters={filters} set={set} loaded={loaded} counts={counts} />
-      ) : null}
-      {tab === "mcp" ? (
-        <FilterPill
-          label={t("activity.filters.status")}
-          value={filters.status}
-          anyValue="any"
-          groups={[
-            {
-              options: CALL_STATUSES.map((s) => ({
-                value: s,
-                label: t(`activity.status.${s}`),
-              })),
-            },
-          ]}
-          onChange={(status) => set({ status })}
-        />
-      ) : null}
-      <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
-        <div
-          ref={searchBox}
-          className={cn("relative w-full", tab === "daemon" ? "sm:w-56" : "sm:w-64")}
-        >
-          <SearchInput
-            value={filters.search}
-            onChange={(search) => set({ search })}
-            placeholder={t(`activity.filters.search.${tab}`)}
-            ariaLabel={t("activity.filters.searchLabel")}
-          />
-          {filters.search || tab === "daemon" ? null : (
-            <Kbd
-              aria-hidden
-              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
-            >
-              /
-            </Kbd>
-          )}
-        </div>
-        {trailing}
-      </div>
-    </div>
+    <FilterRow
+      segmented={segmented}
+      search={{
+        value: filters.search,
+        onChange: (search) => set({ search }),
+        placeholder: t(`activity.filters.search.${tab}`),
+        shortcut: "/",
+      }}
+      active={filtersNarrow(filters, tab)}
+      onClear={onClear}
+    >
+      {pills}
+    </FilterRow>
   );
 }

@@ -9,17 +9,9 @@ import { Archive, X } from "lucide-react";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillSegmented } from "@/components/skills/SkillSegmented";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FilterPill } from "@/components/filters";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ConversationFilters, SourceFilter } from "@/lib/conversations/filters";
-
-const ALL_AGENTS = "__all__";
 
 interface Props {
   filters: ConversationFilters;
@@ -63,25 +55,13 @@ export function ConversationsFilterBar({
         options={sources}
         onChange={(source) => onChange({ ...filters, source, channel: null })}
       />
-      <Select
-        value={filters.agent ?? ALL_AGENTS}
-        onValueChange={(v) => onChange({ ...filters, agent: v === ALL_AGENTS ? null : v })}
-      >
-        <SelectTrigger
-          className={"h-control-sm w-40 text-xs"}
-          aria-label={t("conversations.filters.agent")}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_AGENTS}>{t("conversations.filters.allAgents")}</SelectItem>
-          {agents.map((a) => (
-            <SelectItem key={a.agent_key} value={a.agent_key}>
-              {a.display_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <FilterPill
+        mode="single"
+        label={t("conversations.filters.agent")}
+        options={agents.map((a) => ({ value: a.agent_key, label: a.display_name }))}
+        value={filters.agent}
+        onChange={(agent) => onChange({ ...filters, agent })}
+      />
       {filters.channel ? (
         <span className="inline-flex h-control-sm items-center gap-1 rounded-md bg-accent-soft pl-2 text-xs font-label text-accent-text">
           {t("conversations.filters.channel", { channel: channelLabel ?? filters.channel })}

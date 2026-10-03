@@ -65,7 +65,6 @@ export function McpBuiltinPane({ basePath }: { basePath: string }) {
       </header>
       <McpServerDetailTabs
         basePath={basePath}
-        counts={{ tools: server.tool_count }}
         overview={
           <McpOverviewTab
             enabled

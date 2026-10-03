@@ -156,3 +156,51 @@ def test_a_dot_only_ref_segment_is_refused_not_answered_with_a_500(d: BoundaryDa
     # Over the path routes the segment arrives percent-encoded.
     assert d.client.get("/api/v1/secrets/%2E%2E/exists").status_code == 422
     assert d.client.delete("/api/v1/secrets/a/%2E%2E").status_code == 422
+
+
+def _attention(d: BoundaryDaemon) -> dict[str, object]:
+    r = d.client.get("/api/v1/attention")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _secret_items(report: dict[str, object], field: str = "items") -> dict[str, dict[str, object]]:
+    return {i["reason_code"]: i for i in report[field] if i["kind"] == "secret"}  # type: ignore[attr-defined]
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="secrets with no value on this Mac are listed on Overview"
+)
+def test_a_secret_with_no_value_here_is_on_overview_and_counts_toward_the_badge(
+    d: BoundaryDaemon,
+) -> None:
+    assert "secret_missing_here" not in _secret_items(_attention(d))
+    _plant_foreign_ciphertext(d, "secret/sentry-token")
+
+    report = _attention(d)
+
+    item = _secret_items(report)["secret_missing_here"]
+    assert item["severity"] == "error"
+    assert item["reason"] == "1 secret has no value on this Mac."
+    assert report["counts_by_kind"]["secret"] == 1  # type: ignore[index]
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="an ignored secret item returns when the situation changes"
+)
+def test_an_ignored_missing_secret_item_returns_when_another_goes_missing(
+    d: BoundaryDaemon,
+) -> None:
+    _plant_foreign_ciphertext(d, "secret/sentry-token")
+    key = str(_secret_items(_attention(d))["secret_missing_here"]["key"])
+
+    assert d.client.put(f"/api/v1/attention/ignored/{key}").status_code < 300
+    ignored = _attention(d)
+    assert "secret_missing_here" not in _secret_items(ignored)
+    assert "secret_missing_here" in _secret_items(ignored, "ignored")
+    assert "secret" not in ignored["counts_by_kind"]  # type: ignore[operator]
+
+    _plant_foreign_ciphertext(d, "secret/other-token")
+    back = _secret_items(_attention(d))["secret_missing_here"]
+    assert back["key"] != key
+    assert back["reason"] == "2 secrets have no value on this Mac."

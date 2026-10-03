@@ -25,7 +25,7 @@ coffer sync [OPTIONS] COMMAND [ARGS]...
 | [`sync rollback`](#sync-rollback) | Put back what one round changed, from its snapshot. |
 | [`sync join`](#sync-join) | Join the configured remote. |
 | [`sync conflicts`](#sync-conflicts) | The files the stopped round waits on (or the held deletions). |
-| [`sync resolve`](#sync-resolve) | Answer one conflicting file, or record an agent's merge of them all with --merged. |
+| [`sync resolve`](#sync-resolve) | Answer one conflicting file. |
 | [`sync edit`](#sync-edit) | Print the path of a marked-up copy of the file to hand-merge; then 'coffer sync resolve PATH --edited'. |
 | [`sync continue`](#sync-continue) | Continue the stopped round once every file has an answer. |
 | [`sync hold`](#sync-hold) | Show a held round, or answer it: --confirm deletes the files, --restore keeps them. |
@@ -160,27 +160,26 @@ coffer sync conflicts [OPTIONS]
 
 ## sync resolve
 
-Answer one conflicting file, or record an agent's merge of them all with --merged. Nothing is written until 'continue'.
+Answer one conflicting file. Nothing is written until 'continue'.
 
 <p class="cli-label">概要</p>
 
 ```sh
-coffer sync resolve [OPTIONS] [PATH]
+coffer sync resolve [OPTIONS] PATH
 ```
 
 <p class="cli-label">参数与选项</p>
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `PATH` <span class="cli-chip">参数</span> | text |  | Vault-relative path of a conflicting file (not with --merged) |
+| `PATH` <span class="cli-chip">参数</span> | text | 必填 | Vault-relative path of a conflicting file |
 | `--mine` <span class="cli-chip">选项</span> | 开关 |  | Keep this machine's version |
 | `--theirs` <span class="cli-chip">选项</span> | 开关 |  | Take the other machine's version |
-| `--edited` <span class="cli-chip">选项</span> | 开关 |  | Take the hand-merged copy 'coffer sync edit' opened |
-| `--merged` <span class="cli-chip">选项</span> | 开关 |  | Record an agent's merge: every file handed to it takes its merged copy |
+| `--edited` <span class="cli-chip">选项</span> | 开关 |  | Take the merged copy 'coffer sync edit' opened, or an agent's merge of it |
 
 ## sync edit
 
-Print the path of a marked-up copy of the file to hand-merge; then 'coffer sync resolve PATH --edited'. The vault's file is untouched.
+Print the path of a marked-up copy of the file to hand-merge; then 'coffer sync resolve PATH --edited'. The vault's file is untouched. With --discard, the copy (and an agent's merge in it) is thrown away and the file waits for a choice again.
 
 <p class="cli-label">概要</p>
 
@@ -193,6 +192,8 @@ coffer sync edit [OPTIONS] PATH
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `PATH` <span class="cli-chip">参数</span> | text | 必填 | Vault-relative path of a conflicting file |
+| `--join` <span class="cli-chip">选项</span> | 开关 |  | The file is one a join found different (then 'choose --edited') |
+| `--discard` <span class="cli-chip">选项</span> | 开关 |  | Forget the marked-up copy and any agent's merge: back to two choices |
 
 ## sync continue
 
@@ -238,6 +239,7 @@ coffer sync choose [OPTIONS] [PATH]
 | `PATH` <span class="cli-chip">参数</span> | text |  | A file that differs (omit to list them) |
 | `--mine` <span class="cli-chip">选项</span> | 开关 |  | Keep this machine's version |
 | `--theirs` <span class="cli-chip">选项</span> | 开关 |  | Take the remote's version |
+| `--edited` <span class="cli-chip">选项</span> | 开关 |  | Take the merged copy 'coffer sync edit' opened |
 
 ## sync remote
 

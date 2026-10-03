@@ -5,13 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Literal, cast
 
-from coffer.application.sync.views import MachineView, StoppedRound, SyncStatus
+from coffer.application.sync.views import MachineView, StoppedFile, StoppedRound, SyncStatus
 from coffer.domain.sync.handoffs import is_secret_file
 from coffer.domain.sync.joins import JoinPreview
 from coffer.domain.sync.plaintext import PlaintextFinding
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord
-from coffer.domain.sync.stops import ConflictFile
 from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.sync_schemas import (
     AgentInventoryOut,
@@ -132,12 +131,13 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
         join_choices=s.join_choices,
         ahead=s.ahead,
         behind=s.behind,
+        vault_real_path=s.vault_real_path,
+        default_vault_path=s.default_vault_path,
     )
 
 
-def conflict_out(
-    c: ConflictFile, editor_path: str | None = None, *, agent_merge: bool = False
-) -> ConflictFileOut:
+def conflict_out(f: StoppedFile) -> ConflictFileOut:
+    c = f.file
     return ConflictFileOut(
         path=c.path,
         area=c.area,
@@ -147,9 +147,14 @@ def conflict_out(
         theirs_machine=c.theirs_machine,
         other_path=c.other_path,
         answer=c.answer,
-        editor_path=editor_path,
+        editor_path=f.editor_path,
         secret=is_secret_file(c.path),
-        agent_merge=agent_merge,
+        agent_mergeable=f.agent_mergeable,
+        agent_state=cast(Any, f.agent_state),
+        agent_handed_at=c.handed_at,
+        agent_name=c.handed_agent,
+        agent_conversation_id=c.handed_conversation,
+        agent_merged_at=f.merged_at,
     )
 
 
@@ -162,7 +167,7 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
         local=stop.local,
         remote=stop.remote,
         join=stop.join,
-        files=[conflict_out(f.file, f.editor_path, agent_merge=f.agent_merge) for f in s.files],
+        files=[conflict_out(f) for f in s.files],
         unanswered=len(stop.unanswered),
         hold=HoldOut(
             direction=hold.direction.value,
@@ -176,7 +181,6 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
         )
         if hold
         else None,
-        handoff=handoff_out(s.handoff),
     )
 
 

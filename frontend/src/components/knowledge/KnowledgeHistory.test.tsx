@@ -171,8 +171,7 @@ describe("Recent changes", () => {
         waiting: [],
         next_cursor: null,
       }));
-      const filter = screen.getByRole("combobox", { name: "Collection" });
-      fireEvent.keyDown(filter, { key: "ArrowDown" });
+      fireEvent.click(screen.getByRole("button", { name: "Collection" }));
       fireEvent.click(await screen.findByRole("option", { name: OTHER.name }));
       await waitFor(() =>
         expect(api.listChanges).toHaveBeenLastCalledWith(

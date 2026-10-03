@@ -5,7 +5,7 @@
 // held round would delete from, each with its share. Nothing is fetched or
 // shown while the status says no round is stopped.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import type { StopState } from "@/lib/api/sync";
@@ -60,6 +60,19 @@ describe("SyncStoppedCard", () => {
       "href",
       `/sync/conflicts?path=${encodeURIComponent("skills/coffer-guide/SKILL.md")}`,
     );
+  });
+
+  test("a long list of conflicts shows five and Show all opens the rest in place", () => {
+    const names = ["a", "b", "c", "d", "e", "f"].map((n) => `knowledge/${n}.md`);
+    seed(
+      { stopped: true, round: makeStopped(names.map((n) => makeConflict(n))) },
+      { conflicts: 6 },
+    );
+    show();
+    expect(screen.queryByTestId("conflict-knowledge/f.md")).toBeNull();
+    expect(screen.getByText("Showing 5 of 6")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(screen.getByTestId("conflict-knowledge/f.md")).toHaveTextContent("Unresolved");
   });
 
   test("a held round lists its folders with each one's share, and opens the review", () => {

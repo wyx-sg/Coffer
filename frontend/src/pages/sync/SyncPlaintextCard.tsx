@@ -3,37 +3,39 @@
 // A round pushed nothing because a file it would publish holds a plaintext
 // secret (spec vault-sync "Refuse to push a plaintext secret"). The card names
 // each place — file, line, and the key the value is assigned to, never the
-// value — and offers, like a rejected push: Retry, the agent hand-off that
-// moves each value into a secret, and one more way out the detection needs,
-// because it can be wrong: "Push anyway", confirmed first and audited.
+// value — and offers the way out: "Move into secrets…" opens the Secrets scan
+// limited to those files, and one more way out the detection needs, because
+// it can be wrong: "Push anyway…", confirmed first and audited.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { KeySquare, RotateCw, Upload } from "lucide-react";
+import { KeySquare, Upload } from "lucide-react";
 
+import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { SyncProblem } from "@/lib/api/sync";
 import { usePushAnyway } from "@/lib/hooks/useSync";
 import { SyncBannerCard } from "./SyncBanner";
-import { Body, Handoff } from "./SyncProblemParts";
+import { Actions, Body } from "./SyncProblemParts";
 
-/** How many places the card lists; the hand-off and the CLI carry the rest. */
+/** How many places the card lists; the scan dialog carries the rest. */
 const MAX_PLACES = 8;
 
 interface Props {
   problem: SyncProblem;
-  onRun: () => void;
-  running: boolean;
+  onIgnore?: () => void;
 }
 
-function Places({ problem }: { problem: SyncProblem }) {
+function Places({ places }: { places: NonNullable<SyncProblem["plaintext"]> }) {
   const { t } = useTranslation();
-  const places = (problem.plaintext ?? []).filter((f) => f.current);
   return (
-    <ul className="flex flex-col gap-1 text-sm" data-testid="sync-plaintext-places">
+    <ul
+      className="mt-1 flex flex-col gap-1 rounded-md border border-border-subtle bg-surface-raised/70 px-2.5 py-2 text-xs"
+      data-testid="sync-plaintext-places"
+    >
       {places.slice(0, MAX_PLACES).map((f) => (
         <li key={`${f.path}:${f.line}:${f.key}`} className="flex flex-wrap gap-x-2">
-          <code className="rounded-xs bg-code px-1 py-0.5 font-mono text-xs text-text">
+          <code className="font-mono text-xs text-text-muted">
             {t("sync.problem.plaintext_found.where", { path: f.path, line: f.line })}
           </code>
           <span className="text-text-muted">
@@ -50,30 +52,33 @@ function Places({ problem }: { problem: SyncProblem }) {
   );
 }
 
-export function SyncPlaintextCard({ problem, onRun, running }: Props) {
+export function SyncPlaintextCard({ problem, onIgnore }: Props) {
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
+  const [moving, setMoving] = useState(false);
   const push = usePushAnyway();
+  const places = (problem.plaintext ?? []).filter((f) => f.current);
+  const files = [...new Set(places.map((f) => f.path))];
   return (
     <SyncBannerCard
       icon={KeySquare}
       tone="err"
-      title={t("sync.problem.plaintext_found.title")}
+      title={t("sync.problem.plaintext_found.title", { count: files.length })}
+      onIgnore={onIgnore}
       testId="sync-problem"
     >
       <Body>{t("sync.problem.plaintext_found.body")}</Body>
-      <Places problem={problem} />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onRun} loading={running}>
-          <RotateCw aria-hidden />
-          {t("sync.problem.retry")}
+      <Places places={places} />
+      <Actions>
+        <Button type="button" variant="outline" size="sm" onClick={() => setMoving(true)}>
+          {t("sync.problem.plaintext_found.move")}
         </Button>
-        <Handoff problem={problem} />
         <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(true)}>
           <Upload aria-hidden />
           {t("sync.problem.plaintext_found.pushAnyway")}
         </Button>
-      </div>
+      </Actions>
+      <ScanSecretsDialog open={moving} onOpenChange={setMoving} onlyPaths={files} />
       <ConfirmDialog
         open={confirming}
         onOpenChange={(next) => {

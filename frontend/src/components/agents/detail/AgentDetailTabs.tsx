@@ -3,8 +3,7 @@
 // Overview · Model · Skills · MCP servers · Plugins · Hooks · Memory · Sessions · Config files ·
 // Memory · Sessions (spec agent-registry "Expose every agent operation
 // through REST, CLI and the Agents page"). The open tab is the path segment (`useDetailTab`); only the open
-// tab is mounted, so a tab reads its data when it is opened. The list tabs
-// carry their count, read from the same queries the tabs make. Leaving Config
+// tab is mounted, so a tab reads its data when it is opened. Labels carry no counts. Leaving Config
 // files with an unsaved draft asks first, through the shell's unsaved-changes
 // guard, like every other way out of an editor.
 import { useTranslation } from "react-i18next";

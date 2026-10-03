@@ -56,3 +56,51 @@ export function formatClockOrMoment(
 ): string {
   return isToday(date, now) ? formatClock(date) : formatMoment(date.toISOString(), lang, t, now);
 }
+
+// --- relative time (Foundations 0.3.03) ---------------------------------------
+// "just now" · "12 min ago" · "3 h ago" · "Yesterday" · then the date as the US
+// writes it ("Sep 29", with the year once it is a past year). Chinese keeps the
+// same steps (刚刚 · 12 分钟前 · 3 小时前 · 昨天 · 9月29日). Every relative time
+// carries its exact local time on hover (`formatExact`).
+
+/** "Sep 29" / "Sep 29, 2025" in English, "9月29日" / "2025年9月29日" in Chinese. */
+export function formatUsDay(date: Date, lang: string, withYear: boolean): string {
+  if (zh(lang)) return dayText(date, lang, withYear);
+  const month = date.toLocaleDateString("en-US", { month: "short" });
+  return `${month} ${date.getDate()}${withYear ? `, ${date.getFullYear()}` : ""}`;
+}
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+/** How long ago `iso` was, in the steps above; the raw text when `iso` is not a date. */
+export function formatRelative(
+  iso: string | Date,
+  lang: string,
+  t: TFunction,
+  now = new Date(),
+): string {
+  const date = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(date.getTime())) return String(iso);
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
+  if (minutes < 1) return t("common.time.justNow");
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (days === 0) {
+    return minutes < 60
+      ? t("common.time.minAgo", { count: minutes })
+      : t("common.time.hAgo", { count: Math.floor(minutes / 60) });
+  }
+  if (days === 1) return t("common.time.yesterday");
+  return formatUsDay(date, lang, date.getFullYear() !== now.getFullYear());
+}
+
+/** "Oct 3, 2026 at 09:41:07" ("2026年10月3日 09:41:07"): the exact local time, to the second. */
+export function formatExact(iso: string | Date, lang: string): string {
+  const date = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(date.getTime())) return String(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const clock = `${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`;
+  if (zh(lang)) return `${formatDay(date, lang)} ${clock}`;
+  return `${formatUsDay(date, lang, true)} at ${clock}`;
+}

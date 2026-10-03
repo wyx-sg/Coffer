@@ -26,6 +26,7 @@ running for everything else.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 from enum import StrEnum
 from typing import Any
 
@@ -85,6 +86,13 @@ class ConflictFile:
     answer: Answer | None = None
     #: The blob of the person's hand-merged version (``answer == edited``).
     edited: str | None = None
+    #: When this file was handed to an agent to merge (ISO time), which agent
+    #: it was, and the Coffer conversation it was opened in. The merge itself
+    #: is read off the marked-up copy, never stored (spec vault-sync "Hand
+    #: conflicting files to an agent").
+    handed_at: str | None = None
+    handed_agent: str | None = None
+    handed_conversation: str | None = None
 
     def answered(self, answer: Answer, edited: str | None = None) -> ConflictFile:
         return dataclasses.replace(self, answer=answer, edited=edited)
@@ -142,6 +150,49 @@ class Stop:
         return dataclasses.replace(self, conflicts=tuple(out))
 
 
+def with_handoff(
+    conflicts: Sequence[ConflictFile],
+    paths: Sequence[str],
+    *,
+    at: str,
+    agent: str | None,
+    conversation: str | None,
+) -> tuple[ConflictFile, ...]:
+    """``conflicts`` with ``paths`` recorded as handed to an agent. A file
+    already handed over keeps its first time; a given agent or conversation
+    replaces the one recorded."""
+    wanted = set(paths)
+    return tuple(
+        dataclasses.replace(
+            c,
+            handed_at=c.handed_at or at,
+            handed_agent=agent or c.handed_agent,
+            handed_conversation=conversation or c.handed_conversation,
+        )
+        if c.path in wanted
+        else c
+        for c in conflicts
+    )
+
+
+def without_handoff(conflicts: Sequence[ConflictFile], path: str) -> tuple[ConflictFile, ...]:
+    """``conflicts`` with ``path`` back to two choices: no hand-off, no edited
+    version, and no answer."""
+    return tuple(
+        dataclasses.replace(
+            c,
+            handed_at=None,
+            handed_agent=None,
+            handed_conversation=None,
+            answer=None,
+            edited=None,
+        )
+        if c.path == path
+        else c
+        for c in conflicts
+    )
+
+
 def to_json(value: Any) -> Any:
     """A stop (or any part of one) as plain JSON."""
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
@@ -167,6 +218,9 @@ def conflict_from_json(raw: dict[str, Any]) -> ConflictFile:
         other_path=raw.get("other_path"),
         answer=Answer(raw["answer"]) if raw.get("answer") else None,
         edited=raw.get("edited"),
+        handed_at=raw.get("handed_at"),
+        handed_agent=raw.get("handed_agent"),
+        handed_conversation=raw.get("handed_conversation"),
     )
 
 
@@ -203,4 +257,6 @@ __all__ = [
     "conflict_from_json",
     "stop_from_json",
     "to_json",
+    "with_handoff",
+    "without_handoff",
 ]

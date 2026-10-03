@@ -1,15 +1,16 @@
 // src/components/secret/PendingApprovalsSheet.test.tsx
 //
-// The approvals sheet the shell mounts once. It opens by itself when something
-// waits, asks one question per change ("Approve a new value for …?", "Approve
-// the new secret …?") with who asked, the change and what uses the secret,
-// rejects over REST from any host, and — in a browser, where no presence
-// check can run — shows Approve disabled, naming the app. Only the network
+// The approvals dialog the shell mounts once. It opens by itself when something waits, lists every
+// change in one 1060-wide table (Change · Secret · Goes to · Requested by · At) with a header box
+// that selects them all, rejects over REST from any host, and — in a browser, where no presence
+// check can run — shows Approve disabled, naming the app. Approving several runs one presence
+// check over the ticked list and turns the same dialog into a per-change result. Only the network
 // boundary (`secretsApi`) and the shell module's presence seam are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Approval, SecretRef } from "@/lib/api/secret";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
@@ -36,7 +37,6 @@ vi.mock("@/lib/tauri", () => ({
 
 const { secretsApi } = await import("@/lib/api/secret");
 const listMock = vi.mocked(secretsApi.pendingApprovals);
-const rejectMock = vi.mocked(secretsApi.rejectApproval);
 const secretsMock = vi.mocked(secretsApi.list);
 const rejectManyMock = vi.mocked(secretsApi.rejectApprovals);
 
@@ -81,9 +81,11 @@ function renderSheet() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <TooltipProvider>
-        <PendingApprovalsSheet />
-      </TooltipProvider>
+      <ToastProvider>
+        <TooltipProvider>
+          <PendingApprovalsSheet />
+        </TooltipProvider>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -92,7 +94,9 @@ beforeEach(() => {
   inShell = false;
   listMock.mockResolvedValue({ approvals: [approval()] });
   secretsMock.mockResolvedValue({ refs: [GITHUB] });
-  rejectMock.mockResolvedValue(approval({ status: "rejected" }));
+  rejectManyMock.mockResolvedValue({
+    results: [{ id: "apr-1", outcome: "rejected", reason: null, approval: null }],
+  });
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -105,16 +109,17 @@ describe("PendingApprovalsSheet", () => {
     expect(secretsMock).not.toHaveBeenCalled();
   });
 
-  test("a new value asks its question with who asked and what uses the secret", async () => {
+  test("one waiting change is a table row with who asked and what uses the secret", async () => {
     renderSheet();
-    const dialog = await screen.findByRole("dialog", {
-      name: "Approve a new value for github-token?",
-    });
+    const dialog = await screen.findByRole("dialog", { name: "1 change waiting for approval" });
     const row = within(dialog).getByTestId("approval-row");
     expect(row).toHaveTextContent("New value");
+    expect(row).toHaveTextContent("github-token");
     expect(row).toHaveTextContent("You · on the command line");
-    await waitFor(() => expect(row).toHaveTextContent("MCP server github, Skill release-notes"));
-    expect(row).toHaveTextContent("keep using the current value");
+    await waitFor(() => expect(row).toHaveTextContent("Used by github, release-notes"));
+    for (const head of ["Change", "Secret", "Goes to", "Requested by", "At"]) {
+      expect(within(dialog).getByRole("columnheader", { name: head })).toBeInTheDocument();
+    }
   });
 
   acceptance("secret", "adding a standalone secret waits for approval", async () => {
@@ -122,29 +127,33 @@ describe("PendingApprovalsSheet", () => {
       approvals: [approval({ op: "add_secret", ref: "secret/npm-publish-token" })],
     });
     renderSheet();
-    const dialog = await screen.findByRole("dialog", {
-      name: "Approve the new secret npm-publish-token?",
-    });
+    const dialog = await screen.findByRole("dialog");
     const row = within(dialog).getByTestId("approval-row");
     expect(row).toHaveTextContent("New secret");
+    expect(row).toHaveTextContent("npm-publish-token");
     expect(row).toHaveTextContent("Nothing yet");
-    expect(row).toHaveTextContent("It can be used only after you approve it.");
   });
 
-  test("several waiting changes are counted, each as its own question", async () => {
+  test("a change sent somewhere says where, with the slot and the target", async () => {
     listMock.mockResolvedValue({
       approvals: [
-        approval(),
-        approval({ id: "apr-2", op: "add_secret", ref: "secret/npm-publish-token" }),
+        approval({
+          op: "bind",
+          destination_kind: "mcp_server",
+          destination_label: "filesystem-plus",
+          slot: "OPENAI_API_KEY",
+          target: "stdio fs.sh",
+        }),
       ],
     });
     renderSheet();
-    const dialog = await screen.findByRole("dialog", { name: "2 changes waiting for approval" });
-    expect(dialog).toHaveTextContent("Approve the new secret npm-publish-token?");
-    expect(within(dialog).getAllByTestId("approval-row")).toHaveLength(2);
+    const row = await screen.findByTestId("approval-row");
+    expect(row).toHaveTextContent("New use");
+    expect(row).toHaveTextContent("Sent to MCP server filesystem-plus (OPENAI_API_KEY)");
+    expect(row).toHaveTextContent("stdio fs.sh");
   });
 
-  test("a dismissed sheet comes back when Review asks for it", async () => {
+  test("a dismissed dialog comes back when Review asks for it", async () => {
     renderSheet();
     const dialog = await screen.findByRole("dialog");
     fireEvent.keyDown(dialog, { key: "Escape" });
@@ -153,21 +162,31 @@ describe("PendingApprovalsSheet", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
-  test("reject calls the route, from any host", async () => {
+  test("closing dismisses what it showed", async () => {
     renderSheet();
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^reject$/i }));
-    await waitFor(() => expect(rejectMock).toHaveBeenCalledWith("apr-1"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /close/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("reject calls the route from any host, and the toast says the secret keeps its value", async () => {
+    renderSheet();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
+    await waitFor(() => expect(rejectManyMock).toHaveBeenCalledWith(["apr-1"]));
+    expect(
+      await screen.findByText("Rejected · github-token keeps its current value"),
+    ).toBeInTheDocument();
   });
 
   acceptance("secret", "a browser can reject a change but not approve it", async () => {
     renderSheet();
     const dialog = await screen.findByRole("dialog");
-    const approve = within(dialog).getByRole("button", { name: /^approve$/i });
+    const approve = within(dialog).getByRole("button", { name: "Approve…" });
     expect(approve).toBeDisabled();
     expect(approve.parentElement).toHaveAttribute("title", "Approve in the Coffer desktop app");
-    expect(dialog).toHaveTextContent("Open the Coffer app on this Mac to approve");
-    expect(within(dialog).getByRole("button", { name: /^reject$/i })).toBeEnabled();
+    expect(dialog).toHaveTextContent("approve it in the Coffer desktop app");
+    expect(within(dialog).getByRole("button", { name: "Reject" })).toBeEnabled();
     expect(approvePending).not.toHaveBeenCalled();
   });
 
@@ -176,17 +195,11 @@ describe("PendingApprovalsSheet", () => {
     approvePending.mockResolvedValue(approval({ status: "approved" }));
     renderSheet();
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Approving asks for Touch ID or your login password.");
+    expect(dialog).toHaveTextContent("Approving asks for Touch ID or your login password once.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Approve…" }));
     await waitFor(() => expect(approvePending).toHaveBeenCalledWith("apr-1"));
   });
 
-  test("closing dismisses what it showed", async () => {
-    renderSheet();
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /close/i }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
   describe("several at once", () => {
     const three = () => [
       approval({
@@ -217,19 +230,19 @@ describe("PendingApprovalsSheet", () => {
     acceptance("secret", "approving several waits for a review of every change", async () => {
       renderSheet();
       const dialog = await screen.findByRole("dialog", { name: "3 changes waiting for approval" });
-      // Nothing is ticked to begin with, so approving is a deliberate act.
-      expect(within(dialog).getByRole("button", { name: /Approve selected \(0\)/ })).toBeDisabled();
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: /Select all/ }));
-      fireEvent.click(within(dialog).getByRole("button", { name: /Approve selected \(3\)/ }));
-
-      // The review lists every change the one confirmation covers; nothing ran yet.
-      const review = await screen.findByRole("dialog", { name: "Approve these 3 changes?" });
-      const rows = within(review).getAllByTestId("batch-review-row");
+      // The table is the review: every change, where it goes and the target that receives it.
+      const rows = within(dialog).getAllByTestId("approval-row");
       expect(rows).toHaveLength(3);
       expect(rows[0]).toHaveTextContent("alpha");
       expect(rows[0]).toHaveTextContent("stdio alpha.sh");
       expect(rows[1]).toHaveTextContent("beta");
-      expect(rows[2]).toHaveTextContent("Approve the new secret npm-publish-token?");
+      expect(rows[2]).toHaveTextContent("npm-publish-token");
+      // Nothing is ticked to begin with; the buttons then answer all, and nothing ran yet.
+      expect(within(dialog).getByText("Select changes to answer some of them")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Reject all" })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Approve all 3…" })).toBeEnabled();
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Select all changes" }));
+      expect(within(dialog).getByText("3 of 3 selected")).toBeInTheDocument();
       expect(approvePendingBatch).not.toHaveBeenCalled();
       expect(approvePending).not.toHaveBeenCalled();
     });
@@ -243,53 +256,40 @@ describe("PendingApprovalsSheet", () => {
       });
       renderSheet();
       const dialog = await screen.findByRole("dialog");
-      fireEvent.click(within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ })[0]);
-      fireEvent.click(within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ })[2]);
-      fireEvent.click(within(dialog).getByRole("button", { name: /Approve selected \(2\)/ }));
-      const review = await screen.findByRole("dialog", { name: "Approve these 2 changes?" });
-      fireEvent.click(within(review).getByRole("button", { name: "Approve all 2…" }));
+      const boxes = within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ });
+      fireEvent.click(boxes[0]);
+      fireEvent.click(boxes[2]);
+      expect(within(dialog).getByText("2 of 3 selected")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Reject 2" })).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Approve 2…" }));
 
       await waitFor(() => expect(approvePendingBatch).toHaveBeenCalledTimes(1));
       expect(approvePendingBatch).toHaveBeenCalledWith(["a", "c"]);
-      const done = await screen.findByRole("dialog", { name: "Approval finished" });
+      const done = await screen.findByRole("dialog", { name: "Approved 1 of 2 changes" });
       const rows = within(done).getAllByTestId("batch-review-row");
       expect(rows[0]).toHaveTextContent("Approved");
-      expect(rows[1]).toHaveTextContent("it changed after you looked");
-    });
-
-    test("backing out of the review approves nothing", async () => {
-      renderSheet();
-      const dialog = await screen.findByRole("dialog");
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: /Select all/ }));
-      fireEvent.click(within(dialog).getByRole("button", { name: /Approve selected/ }));
-      const review = await screen.findByRole("dialog", { name: "Approve these 3 changes?" });
-      fireEvent.click(within(review).getByRole("button", { name: "Back" }));
+      expect(rows[1]).toHaveTextContent("Skipped");
+      expect(rows[1]).toHaveTextContent("It changed after you looked; it is still waiting.");
+      expect(done).toHaveTextContent("Every change is recorded in Activity.");
+      fireEvent.click(within(done).getByRole("button", { name: "Done" }));
       expect(
         await screen.findByRole("dialog", { name: "3 changes waiting for approval" }),
       ).toBeInTheDocument();
-      expect(approvePendingBatch).not.toHaveBeenCalled();
     });
 
-    test("in a browser Approve selected is disabled but Reject selected works", async () => {
+    test("in a browser Approve is disabled but Reject N works", async () => {
       inShell = false;
       rejectManyMock.mockResolvedValue({
         results: [{ id: "b", outcome: "rejected", reason: null, approval: null }],
       });
       renderSheet();
       const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent("You can reject from here.");
       fireEvent.click(within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ })[1]);
-      expect(within(dialog).getByRole("button", { name: /Approve selected \(1\)/ })).toBeDisabled();
-      fireEvent.click(within(dialog).getByRole("button", { name: /Reject selected \(1\)/ }));
+      expect(within(dialog).getByRole("button", { name: "Approve 1…" })).toBeDisabled();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Reject 1" }));
       await waitFor(() => expect(rejectManyMock).toHaveBeenCalledWith(["b"]));
       expect(approvePendingBatch).not.toHaveBeenCalled();
-    });
-
-    test("a single waiting change has no selection controls", async () => {
-      listMock.mockResolvedValue({ approvals: [approval()] });
-      renderSheet();
-      const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).queryByTestId("approvals-batch-bar")).not.toBeInTheDocument();
-      expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
     });
   });
 });

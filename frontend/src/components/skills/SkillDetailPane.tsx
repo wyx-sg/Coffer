@@ -1,8 +1,8 @@
 // frontend/src/components/skills/SkillDetailPane.tsx
 // The open skill in the Skills page's reading pane (spec skill-manager "Cover
 // skill management on REST, the CLI and the web"): the header, the banners of
-// what needs the reader (SkillBanners), and four tabs in this order — Files ·
-// N (the default), Delivery, Requires · N, History (the master folder's
+// what needs the reader (SkillBanners), and four tabs in this order — Files
+// (the default), Delivery, Requires, History (the master folder's
 // versions, from the vault's history). The Files tab carries the
 // built-in note or a Git skill's Source block above the files, and, when the
 // master folder is gone, the two ways forward instead of them. The page owns
@@ -27,9 +27,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { useClis } from "@/lib/hooks/useClis";
-import { useSkillCopies, useSkillFiles } from "@/lib/hooks/useSkills";
+import { useSkillCopies } from "@/lib/hooks/useSkills";
 import { skillAttention } from "@/lib/skills/attention";
-import { countFiles } from "@/lib/skills/format";
 import type { SkillTab } from "@/lib/skills/tabs";
 
 interface Props {
@@ -39,19 +38,10 @@ interface Props {
   onDeleted: () => void;
 }
 
-function Count({ n }: { n: number }) {
-  return n > 0 ? (
-    <span className="text-text-muted" aria-hidden>
-      · {n}
-    </span>
-  ) : null;
-}
-
 export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
   const { t } = useTranslation();
   const copies = useSkillCopies();
   const clis = useClis().data?.items ?? [];
-  const files = useSkillFiles(skill.uid);
   const [reviewing, setReviewing] = useState<SkillDriftEntry | null>(null);
   const [updating, setUpdating] = useState(false);
 
@@ -60,11 +50,7 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <SkillDetailHeader
-        skill={skill}
-        masterMissing={masterMissing}
-        onDeleted={onDeleted}
-      />
+      <SkillDetailHeader skill={skill} masterMissing={masterMissing} onDeleted={onDeleted} />
 
       <SkillBanners
         skill={skill}
@@ -75,15 +61,9 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
 
       <Tabs value={tab} onValueChange={onTabChange}>
         <TabsList>
-          <TabsTrigger value="files">
-            {t("skills.detail.tabs.files")}
-            <Count n={countFiles(files.data)} />
-          </TabsTrigger>
+          <TabsTrigger value="files">{t("skills.detail.tabs.files")}</TabsTrigger>
           <TabsTrigger value="delivery">{t("skills.detail.tabs.delivery")}</TabsTrigger>
-          <TabsTrigger value="requires">
-            {t("skills.detail.tabs.requires")}
-            <Count n={skill.requires.length} />
-          </TabsTrigger>
+          <TabsTrigger value="requires">{t("skills.detail.tabs.requires")}</TabsTrigger>
           <TabsTrigger value="history">{t("skills.detail.tabs.history")}</TabsTrigger>
         </TabsList>
 

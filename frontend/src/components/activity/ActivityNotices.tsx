@@ -1,16 +1,17 @@
-// src/components/activity/ActivityNotices.tsx — what Activity says around its rows: a log that failed, "↑ N new", and what "Load older" brings.
+// src/components/activity/ActivityNotices.tsx — what Activity says around its rows: a log that failed, "↑ N new", and the box's footer.
 //
-// On Everything a failed log is named above the rows the others still show,
-// with its error, what is still shown and Retry (design 6.1.06); "↑ N new"
-// counts the records held while the reader is scrolled or has one open; and
-// beside "Load older" the page says what the next page holds and how long
-// each record is kept (design 6.1.02).
+// A failed log is one warning banner above the box, naming what is still
+// complete, with Retry for the failed source only (design 6.2.03); it cannot
+// be closed. "↑ N new" counts the records held while the reader is scrolled or
+// has one open. The box's footer says how much is shown and what the next page
+// holds; the retention note appears only once everything kept is shown (design
+// 6.2.02).
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowUp, RotateCw } from "lucide-react";
+import { AlertTriangle, ArrowUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
-import { LoadMoreFooter } from "@/components/ui/load-more";
+import { LoadMoreSentinel } from "@/components/ui/load-more";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import {
@@ -20,7 +21,6 @@ import {
   keptFor,
   sourceList,
 } from "@/lib/activity/feedText";
-import type { ActivityRecord } from "@/lib/activity/records";
 import { clockTime } from "@/lib/activity/recordText";
 import type { ActivityFeed } from "@/lib/hooks/useActivityFeed";
 import { MORE_PAGE } from "@/lib/hooks/useInfiniteList";
@@ -29,19 +29,21 @@ import { useRetentionPolicies } from "@/lib/hooks/useRetention";
 /** A log that failed on a tab whose other logs still answered. */
 export function PartialFailure({ feed }: { feed: ActivityFeed }) {
   const { t, i18n } = useTranslation();
-  const names = failedNames(t, feed);
   if (feed.failed.length === 0 || everyLogFailed(feed)) return null;
   return (
-    <div role="status" className="flex items-start gap-2.5 rounded-lg bg-warning-soft px-3 py-2.5">
-      <AlertTriangle className="mt-px size-[15px] shrink-0 text-warning" aria-hidden />
-      <div className="flex min-w-0 flex-col gap-[3px]">
+    <div
+      role="status"
+      className="flex items-center gap-3 rounded-[10px] border border-warning/30 bg-warning-soft px-3.5 py-2.5"
+    >
+      <AlertTriangle className="size-[15px] shrink-0 text-warning" aria-hidden />
+      <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm font-label text-text">
-          {t("activity.failed.title", { sources: names })}
+          {t("activity.failed.title", { sources: failedNames(t, feed) })}
         </span>
-        <span className="text-xs leading-[1.45] text-text-muted">
+        <span className="text-xs text-text-muted">
           {translateApiError(t, feed.failed[0].error)}{" "}
           {t("activity.failed.partial", {
-            sources: sourceList(t, i18n.language, answered(feed), false),
+            sources: sourceList(t, i18n.language, answered(feed)),
           })}
         </span>
       </div>
@@ -51,7 +53,6 @@ export function PartialFailure({ feed }: { feed: ActivityFeed }) {
         className="ml-auto shrink-0"
         onClick={() => feed.failed.forEach((s) => s.retry())}
       >
-        <RotateCw />
         {t("activity.failed.retry")}
       </Button>
     </div>
@@ -84,56 +85,67 @@ export function NewRecordsStrip({
   );
 }
 
-export function OlderHint({ oldest }: { oldest: ActivityRecord | undefined }) {
+/** "That's everything kept. MCP calls are kept 30 days — Settings › Data". */
+function RetentionNote() {
   const { t } = useTranslation();
   const policies = useRetentionPolicies().data?.policies ?? [];
-  const days = (table: string) => {
-    const p = policies.find((x) => x.table_name === table);
-    return p ? p.retention_days : undefined;
-  };
+  const calls = policies.find((p) => p.table_name === "mcp_invocations");
   return (
     <span className="text-xs text-text-subtle">
-      {t("activity.older.hint", {
-        count: MORE_PAGE,
-        before: clockTime(oldest?.at ?? null).slice(0, 5),
-        calls: keptFor(t, days("mcp_invocations")),
-        changes: keptFor(t, days("audit_log")),
-      })}{" "}
+      {t("activity.end")}{" "}
+      {t("activity.older.kept", { calls: keptFor(t, calls ? calls.retention_days : undefined) })}{" "}
       <Link to="/settings/data" className="text-text-muted underline-offset-2 hover:underline">
         {t("activity.older.settings")}
       </Link>
-      .
     </span>
   );
 }
 
 /**
- * Under the rows: the next page loads when this scrolls into view (a skeleton
- * row stands in for it), and "N loaded · Load more" is the same thing by hand.
+ * The box's last row. While older records exist: "Showing N of M · next 50
+ * from before 13:58" and "Load 50 more" (the page also loads when this
+ * scrolls into view). At the end: the retention note.
  */
 export function LoadOlder({ feed }: { feed: ActivityFeed }) {
-  const { t } = useTranslation();
-  const loaded = feed.rows.length;
+  const { t, i18n } = useTranslation();
+  const shown = feed.rows.length;
+  const before = clockTime(feed.rows.at(-1)?.at ?? null).slice(0, 5);
+  const total = feed.total ? feed.total.value.toLocaleString(i18n.language) : undefined;
   return (
-    <div className="flex flex-col gap-3 px-3 py-4">
+    <div className="flex flex-col gap-2 border-t border-border-subtle px-3 py-2.5">
       {feed.isLoadingOlder ? (
         <div className="flex flex-col gap-2" aria-busy="true">
-          <Skeleton className="h-6 w-full" />
           <Skeleton className="h-6 w-full" />
         </div>
       ) : null}
       {feed.hasOlder ? (
-        <LoadMoreFooter
-          autoLoad
-          loaded={loaded}
-          hasMore
-          loading={feed.isLoadingOlder}
-          onMore={feed.loadOlder}
-          moreLabel={t("activity.loadOlder")}
-          hint={<OlderHint oldest={feed.rows.at(-1)} />}
-        />
+        <>
+          <LoadMoreSentinel
+            active={!feed.isLoadingOlder}
+            onVisible={feed.loadOlder}
+            version={shown}
+          />
+          <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+            <span data-visual-volatile="count">
+              {total
+                ? t("activity.older.showingOf", { shown, total })
+                : t("activity.older.showing", { shown })}
+              {" · "}
+              {t("activity.older.next", { count: MORE_PAGE, before })}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              loading={feed.isLoadingOlder}
+              onClick={feed.loadOlder}
+            >
+              {t("activity.loadOlder", { count: MORE_PAGE })}
+            </Button>
+          </div>
+        </>
       ) : (
-        <span className="text-xs text-text-subtle">{t("activity.end")}</span>
+        <RetentionNote />
       )}
     </div>
   );

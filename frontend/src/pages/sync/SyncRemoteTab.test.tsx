@@ -1,10 +1,10 @@
 // frontend/src/pages/sync/SyncRemoteTab.test.tsx
 //
-// Sync › Remote (6.5.22/23/26): settings that save themselves — a text field
+// Sync › Remote (6.4.27/28/29): settings that save themselves — a text field
 // on blur, a picker or switch at once — always as the whole stored remote
 // with one field changed; the Secret is a pick from the store (a reference,
 // never a value); "Only when I press Sync now" is how a remote pauses; turning
-// secrets on asks first; Stop syncing asks and names what it forgets.
+// secrets on asks first; Stop syncing runs at once and its toast offers Undo.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -14,22 +14,36 @@ import type { SyncRemote, SyncStatus } from "@/lib/api/sync";
 import { SyncRemoteTab } from "./SyncRemoteTab";
 import { idleMutation, makeStatus } from "./syncTestKit";
 
-vi.mock("@/lib/hooks/useSync", () => ({ useSaveSyncRemote: vi.fn(), useClearSyncRemote: vi.fn() }));
+vi.mock("@/lib/hooks/useSync", () => ({
+  useSaveSyncRemote: vi.fn(),
+  useClearSyncRemote: vi.fn(),
+  useRestoreSyncRemote: vi.fn(),
+  useMoveVault: vi.fn(),
+}));
+const toast = { info: vi.fn(), error: vi.fn(), success: vi.fn() };
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast }) }));
 vi.mock("@/lib/hooks/useSecrets", () => ({ useSecrets: vi.fn() }));
 
-const { useSaveSyncRemote, useClearSyncRemote } = await import("@/lib/hooks/useSync");
+const { useSaveSyncRemote, useClearSyncRemote, useRestoreSyncRemote, useMoveVault } =
+  await import("@/lib/hooks/useSync");
 const { useSecrets } = await import("@/lib/hooks/useSecrets");
 const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 
 let save: ReturnType<typeof vi.fn>;
 let clear: ReturnType<typeof vi.fn>;
+let restore: ReturnType<typeof vi.fn>;
 const ref = (name: string) => ({ ref: `secret/${name}`, present: true, cited_by: [], uri: null });
 
 beforeEach(() => {
   save = vi.fn();
-  clear = vi.fn();
+  clear = vi.fn((_: unknown, opts?: { onSuccess?: (r: { restorable: boolean }) => void }) =>
+    opts?.onSuccess?.({ restorable: true }),
+  );
+  restore = vi.fn();
   mocked(useSaveSyncRemote).mockReturnValue(idleMutation({ mutate: save }));
   mocked(useClearSyncRemote).mockReturnValue(idleMutation({ mutate: clear }));
+  mocked(useRestoreSyncRemote).mockReturnValue(idleMutation({ mutate: restore }));
+  mocked(useMoveVault).mockReturnValue(idleMutation({ mutate: vi.fn() }));
   mocked(useSecrets).mockReturnValue({
     data: { refs: [ref("github-deploy-key"), ref("gitlab-token")] },
   });
@@ -174,13 +188,20 @@ describe("SyncRemoteTab", () => {
     expect(screen.getByTestId("sync-cloud-folder")).toHaveTextContent("iCloud Drive");
   });
 
-  test("Stop syncing asks first, naming the remote, then forgets it", () => {
+  test("Stop syncing runs at once, and the toast's Undo puts the remote back", () => {
     renderTab();
-    fireEvent.click(screen.getByRole("button", { name: "Stop syncing…" }));
-    const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByText("https://git.example.com/me/vault.git")).toBeInTheDocument();
-    expect(clear).not.toHaveBeenCalled();
-    fireEvent.click(dialog.getByRole("button", { name: "Stop syncing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop syncing" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(clear).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("Stopped syncing this Mac", {
+      undo: expect.any(Function),
+    });
+    toast.info.mock.calls[0][1].undo();
+    expect(restore).toHaveBeenCalled();
+  });
+
+  test("a vault in a cloud-synced folder can be moved from here", () => {
+    renderTab(status({}, { synchroniser: "iCloud Drive" }));
+    expect(screen.getByRole("button", { name: "Move the vault…" })).toBeInTheDocument();
   });
 });

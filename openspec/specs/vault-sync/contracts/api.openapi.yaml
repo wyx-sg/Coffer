@@ -152,6 +152,9 @@ paths:
       - sync
   /api/v1/sync/join-choices:
     get:
+      description: |-
+        The files a join left to choose, in the shape a stopped round's files
+        have, so one Resolve view serves both.
       operationId: join_choices_api_v1_sync_join_choices_get
       parameters:
       - in: header
@@ -186,8 +189,10 @@ paths:
       - sync
     post:
       description: |-
-        Keep this machine's version (pushed by the next round) or take the
-        remote's, for one or several of a join's differing files.
+        Keep this machine's version (pushed by the next round), take the
+        remote's, or take the merge in the file's editor copy (``edited``, refused
+        while a conflict marker is left in it), for one or several of a join's
+        differing files.
       operationId: choose_api_v1_sync_join_choices_post
       parameters:
       - in: header
@@ -224,6 +229,129 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Choose
+      tags:
+      - sync
+  /api/v1/sync/join-choices/discard:
+    post:
+      description: 'Back to two choices: forget the editor copy and any agent''s merge.'
+      operationId: join_discard_api_v1_sync_join_choices_discard_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilePathIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinChoicesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Join Discard
+      tags:
+      - sync
+  /api/v1/sync/join-choices/editor:
+    post:
+      description: The marked-up copy of a join's differing file, as for a stopped round's.
+      operationId: join_editor_api_v1_sync_join_choices_editor_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilePathIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorCopyOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Join Editor
+      tags:
+      - sync
+  /api/v1/sync/join-choices/handoff:
+    post:
+      description: Hand a join's differing files (or every one an agent may merge) to an agent.
+      operationId: join_handoff_api_v1_sync_join_choices_handoff_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoffIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentHandoffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Join Handoff
       tags:
       - sync
   /api/v1/sync/join/preview:
@@ -457,7 +585,9 @@ paths:
       - sync
   /api/v1/sync/machines/{machine_id}:
     delete:
-      description: 'Retire another machine: its descriptor goes, in a commit of yours.'
+      description: |-
+        Retire another machine: its descriptor goes, in a commit of yours; no
+        confirmation, ``POST /machines/{id}/restore`` registers it again.
       operationId: retire_machine_api_v1_sync_machines__machine_id__delete
       parameters:
       - in: path
@@ -494,6 +624,49 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Retire Machine
+      tags:
+      - sync
+  /api/v1/sync/machines/{machine_id}/restore:
+    post:
+      description: |-
+        Undo a retire: register the machine again with the descriptor it had.
+        404 ``SYNC_MACHINE_NOT_FOUND`` when it was never registered here.
+      operationId: restore_machine_api_v1_sync_machines__machine_id__restore_post
+      parameters:
+      - in: path
+        name: machine_id
+        required: true
+        schema:
+          title: Machine Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restore Machine
       tags:
       - sync
   /api/v1/sync/plaintext/push-anyway:
@@ -536,7 +709,9 @@ paths:
       - sync
   /api/v1/sync/remote:
     delete:
-      description: 'Stop syncing: forget the remote. The vault and its history stay.'
+      description: |-
+        Stop syncing: forget the remote. The vault and its history stay. No
+        confirmation: ``POST /remote/restore`` puts it back while nothing else is set.
       operationId: delete_remote_api_v1_sync_remote_delete
       parameters:
       - in: header
@@ -680,6 +855,45 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Check Remote
+      tags:
+      - sync
+  /api/v1/sync/remote/restore:
+    post:
+      description: |-
+        Undo Stop syncing: the remote that was forgotten (its push secret is
+        still only a name), and what this machine knew about it. 409
+        ``SYNC_NOTHING_TO_RESTORE`` when none was stopped, ``SYNC_REMOTE_EXISTS``
+        when another is set.
+      operationId: restore_remote_api_v1_sync_remote_restore_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRemoteOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restore Remote
       tags:
       - sync
   /api/v1/sync/run:
@@ -1007,6 +1221,49 @@ paths:
       summary: Answer
       tags:
       - sync
+  /api/v1/sync/stop/files/discard:
+    post:
+      description: |-
+        Back to two choices: forget the editor copy, any agent's merge and an
+        edited answer for the file.
+      operationId: stop_discard_api_v1_sync_stop_files_discard_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilePathIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopStateOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Stop Discard
+      tags:
+      - sync
   /api/v1/sync/stop/files/editor:
     post:
       description: |-
@@ -1091,12 +1348,15 @@ paths:
       summary: File Versions
       tags:
       - sync
-  /api/v1/sync/stop/merged:
+  /api/v1/sync/stop/handoff:
     post:
       description: |-
-        "I merged it": record the saved copy of every file handed to an agent
-        as its answer. Refused whole while any copy still has a conflict marker.
-      operationId: merged_api_v1_sync_stop_merged_post
+        Hand the stopped round's conflicting files (every one an agent may
+        merge, or the named ones) to an agent: the prompt, with each file's merged
+        copy written outside the vault. The agent's merge is shown as
+        ``merged_by_agent`` on the file; marking it resolved is the ``edited``
+        answer. Asked again for a merged file, it starts that file over.
+      operationId: stop_handoff_api_v1_sync_stop_handoff_post
       parameters:
       - in: header
         name: x-coffer-token
@@ -1106,12 +1366,18 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoffIn'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StopStateOut'
+                $ref: '#/components/schemas/AgentHandoffOut'
           description: Successful Response
         '422':
           content:
@@ -1125,11 +1391,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Merged
+      summary: Stop Handoff
+      tags:
+      - sync
+  /api/v1/sync/vault/move:
+    post:
+      description: |-
+        Move the vault out of a synchronised folder: rounds and writes are held
+        off, the folder is moved and its git repository checked at the new place.
+        The old folder is left empty. 422 ``SYNC_VAULT_TARGET_INVALID`` /
+        ``SYNC_VAULT_TARGET_IN_CLOUD``, 409 ``SYNC_VAULT_TARGET_NOT_EMPTY``, 500
+        ``SYNC_VAULT_MOVE_FAILED`` (the vault is back where it was).
+      operationId: move_vault_api_v1_sync_vault_move_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultMoveIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultMoveOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Move Vault
       tags:
       - sync
 components:
   schemas:
+    AgentHandoffOut:
+      properties:
+        handoff:
+          $ref: '#/components/schemas/HandoffOut'
+        paths:
+          items:
+            type: string
+          title: Paths
+          type: array
+      required:
+      - handoff
+      - paths
+      title: AgentHandoffOut
+      type: object
     AgentInventoryOut:
       properties:
         name:
@@ -1213,10 +1539,38 @@ components:
       type: object
     ConflictFileOut:
       properties:
-        agent_merge:
+        agent_conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Conversation Id
+        agent_handed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Handed At
+        agent_mergeable:
           default: false
-          title: Agent Merge
+          title: Agent Mergeable
           type: boolean
+        agent_merged_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Merged At
+        agent_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Name
+        agent_state:
+          anyOf:
+          - enum:
+            - handed_off
+            - merged_by_agent
+            type: string
+          - type: 'null'
+          title: Agent State
         answer:
           anyOf:
           - $ref: '#/components/schemas/Answer'
@@ -1269,7 +1623,12 @@ components:
       - answer
       - editor_path
       - secret
-      - agent_merge
+      - agent_mergeable
+      - agent_state
+      - agent_handed_at
+      - agent_name
+      - agent_conversation_id
+      - agent_merged_at
       title: ConflictFileOut
       type: object
     ConflictReason:
@@ -1363,6 +1722,16 @@ components:
           - type: string
           - type: 'null'
           title: Edited
+        merged:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Merged
+        merged_diff:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Merged Diff
         ours:
           anyOf:
           - type: string
@@ -1387,7 +1756,38 @@ components:
       - take_theirs
       - binary
       - edited
+      - merged
+      - merged_diff
       title: FileVersionsOut
+      type: object
+    HandoffIn:
+      description: |-
+        Which files to hand to an agent (every file an agent may merge when
+        ``paths`` is omitted). ``agent`` and ``conversation_id`` are what the
+        caller opened the prompt in, kept for the file's merged state; send the
+        request again with them once the conversation exists.
+      properties:
+        agent:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Agent
+        conversation_id:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          title: Conversation Id
+        paths:
+          anyOf:
+          - items:
+              type: string
+            minItems: 1
+            type: array
+          - type: 'null'
+          title: Paths
+      title: HandoffIn
       type: object
     HandoffOut:
       description: |-
@@ -1467,6 +1867,7 @@ components:
           enum:
           - mine
           - theirs
+          - edited
           title: Answer
           type: string
         path:
@@ -2128,10 +2529,6 @@ components:
             $ref: '#/components/schemas/ConflictFileOut'
           title: Files
           type: array
-        handoff:
-          anyOf:
-          - $ref: '#/components/schemas/HandoffOut'
-          - type: 'null'
         hold:
           anyOf:
           - $ref: '#/components/schemas/HoldOut'
@@ -2168,7 +2565,6 @@ components:
       - files
       - unanswered
       - hold
-      - handoff
       title: StoppedRoundOut
       type: object
     SyncChangeOut:
@@ -2223,8 +2619,13 @@ components:
         cleared:
           title: Cleared
           type: boolean
+        restorable:
+          default: false
+          title: Restorable
+          type: boolean
       required:
       - cleared
+      - restorable
       title: SyncRemoteClearedOut
       type: object
     SyncRemoteIn:
@@ -2357,6 +2758,11 @@ components:
         conflicts:
           title: Conflicts
           type: integer
+        default_vault_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Default Vault Path
         held:
           title: Held
           type: integer
@@ -2405,6 +2811,11 @@ components:
         vault_path:
           title: Vault Path
           type: string
+        vault_real_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Vault Real Path
         waiting:
           items:
             $ref: '#/components/schemas/WaitingCommitOut'
@@ -2430,7 +2841,31 @@ components:
       - join_choices
       - ahead
       - behind
+      - vault_real_path
+      - default_vault_path
       title: SyncStatusOut
+      type: object
+    VaultMoveIn:
+      properties:
+        to:
+          title: To
+          type: string
+      required:
+      - to
+      title: VaultMoveIn
+      type: object
+    VaultMoveOut:
+      properties:
+        from:
+          title: From
+          type: string
+        to:
+          title: To
+          type: string
+      required:
+      - from
+      - to
+      title: VaultMoveOut
       type: object
     WaitingCommitOut:
       description: One commit the remote does not have yet.

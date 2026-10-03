@@ -165,7 +165,8 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "sync",
     element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
   },
-  // Sub-views of a stopped round, without tabs, each with a "‹ Sync" back link.
+  // Sub-views of a stopped round, without tabs. Resolve conflicts also serves a
+  // first join's differing files (`?mode=join`).
   {
     path: "sync/conflicts",
     element: lazyPage(
@@ -190,7 +191,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "activity",
     element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
   },
-  { path: "usage", element: lazyPage(() => import("./pages/UsagePage"), "UsagePage") },
   { path: "*", element: <NotFoundPage /> },
 ]);
 

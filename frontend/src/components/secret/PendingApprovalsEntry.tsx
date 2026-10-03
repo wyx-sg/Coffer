@@ -24,9 +24,7 @@ export function PendingApprovalsEntry() {
     >
       <ShieldCheck className="size-4 shrink-0 text-warning" aria-hidden />
       <div className="min-w-0 space-y-0.5">
-        <p className="text-sm font-semibold text-text">
-          {t("secrets.approvals.title", { count })}
-        </p>
+        <p className="text-sm font-semibold text-text">{t("secrets.approvals.title", { count })}</p>
         <p className="text-xs text-text-muted">
           {presenceAvailable()
             ? t("secrets.approvals.hintShell")

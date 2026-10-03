@@ -5,7 +5,7 @@
 // so it is unit-tested alone. Day edges are the viewer's local midnight.
 
 /** The groups, newest first. */
-export const TIME_BUCKETS = ["today", "yesterday", "week", "month", "earlier"] as const;
+const TIME_BUCKETS = ["today", "yesterday", "week", "month", "earlier"] as const;
 export type TimeBucket = (typeof TIME_BUCKETS)[number];
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();

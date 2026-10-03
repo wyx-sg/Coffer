@@ -29,7 +29,6 @@ const t = i18next.t.bind(i18next) as TFunction;
 const ctx: FilterContext = {
   t,
   agentNames: new Map([["a-cc", "Claude Code"]]),
-  serverNames: new Map([["u-gh", "github"]]),
 };
 
 function call(overrides: Partial<Invocation> = {}): Invocation {
@@ -46,6 +45,7 @@ function call(overrides: Partial<Invocation> = {}): Invocation {
     session_id: "s-1",
     agent_uid: "a-cc",
     trace_id: null,
+    handoff: null,
     ...overrides,
   };
 }
@@ -74,6 +74,7 @@ describe("fromDaemonTail", () => {
     event: null,
     offset: 0,
     record: {},
+    handoff: null,
     ...patch,
   });
 
@@ -113,14 +114,14 @@ describe("sourcesFor", () => {
   });
   test("the kinds narrow everything to the logs they name", () => {
     expect(sourcesFor("everything", f({ kinds: ["calls"] }))).toEqual(["call"]);
-    expect(sourcesFor("everything", f({ kinds: ["change:skill"] }))).toEqual(["change"]);
+    expect(sourcesFor("everything", f({ kinds: ["changes"] }))).toEqual(["change"]);
+    expect(sourcesFor("everything", f({ kinds: ["daemon"] }))).toEqual(["daemon"]);
     expect(sourcesFor("everything", f({ kinds: ["calls", "changes"] }))).toEqual([
       "change",
       "call",
     ]);
   });
-  test("a server or only agents leave the daemon log out", () => {
-    expect(sourcesFor("everything", f({ server: "u-gh" }))).toEqual(["change", "call"]);
+  test("only agents leave the daemon log out", () => {
     expect(sourcesFor("everything", f({ by: ["agent:a-cc", "agent:a-cx"] }))).toEqual([
       "change",
       "call",
@@ -167,20 +168,16 @@ describe("matchesFilters", () => {
     const skill = fromAudit(audit({ id: 11, resource_kind: "skill", resource_name: "pdf" }));
     expect(changeCategory(audit({ id: 0, event_type: "master_key_exported" }))).toBe("secret");
     expect(changeCategory(audit({ id: 0, event_type: "sync_run" }))).toBe("sync");
-    const filters = f({ kinds: ["change:secret", "change:settings"] });
-    expect(matchesFilters(secret, "everything", filters, ctx)).toBe(true);
-    expect(matchesFilters(token, "everything", filters, ctx)).toBe(true);
-    expect(matchesFilters(skill, "everything", filters, ctx)).toBe(false);
+    // The Changes tab's Kind lists the kinds of change; Everything's lists the three records.
+    const filters = f({ kinds: ["secret", "settings"] });
+    expect(matchesFilters(secret, "changes", filters, ctx)).toBe(true);
+    expect(matchesFilters(token, "changes", filters, ctx)).toBe(true);
+    expect(matchesFilters(skill, "changes", filters, ctx)).toBe(false);
     expect(matchesFilters(skill, "everything", f({ kinds: ["changes"] }), ctx)).toBe(true);
-    expect(matchesFilters(fromCall(call()), "everything", filters, ctx)).toBe(false);
-  });
-
-  test("a server filter keeps changes to that server", () => {
-    const base = { event_type: "resource_updated", resource_kind: "mcp_server" };
-    const edit = fromAudit(audit({ ...base, id: 4, resource_name: "github" }));
-    const other = fromAudit(audit({ ...base, id: 5, resource_name: "linear" }));
-    expect(matchesFilters(edit, "everything", f({ server: "u-gh" }), ctx)).toBe(true);
-    expect(matchesFilters(other, "everything", f({ server: "u-gh" }), ctx)).toBe(false);
+    expect(matchesFilters(fromCall(call()), "everything", f({ kinds: ["changes"] }), ctx)).toBe(
+      false,
+    );
+    expect(matchesFilters(fromCall(call()), "everything", f({ kinds: ["calls"] }), ctx)).toBe(true);
   });
 
   test("the custom range's upper bound is applied here", () => {
@@ -192,8 +189,8 @@ describe("matchesFilters", () => {
 });
 
 test("filtersNarrow ignores filters a tab does not show", () => {
-  expect(filtersNarrow(f({ status: "error" }), "everything")).toBe(false);
-  expect(filtersNarrow(f({ status: "error" }), "mcp")).toBe(true);
+  expect(filtersNarrow(f({ status: "failed" }), "everything")).toBe(false);
+  expect(filtersNarrow(f({ status: "failed" }), "mcp")).toBe(true);
   expect(filtersNarrow(DEFAULT_FILTERS, "daemon")).toBe(false);
 });
 

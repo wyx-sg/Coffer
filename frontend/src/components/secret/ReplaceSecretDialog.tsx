@@ -88,8 +88,6 @@ export function ReplaceSecretDialog({ row, onOpenChange }: Props) {
             <DialogDescription className="sr-only">{t("secrets.replace.hint")}</DialogDescription>
           </DialogHeader>
           <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
-            <dt className={TERM}>{t("secrets.replace.secret")}</dt>
-            <dd className="truncate font-mono text-xs text-text">{name}</dd>
             <dt className={TERM}>{t("secrets.cols.usedBy")}</dt>
             <dd className="text-xs text-text">
               {citers.length === 0

@@ -24,8 +24,16 @@ vi.mock("@/lib/api/secret", () => ({
     pendingApprovals: vi.fn(),
     secretBoundary: vi.fn(),
     rejectApproval: vi.fn(),
-    refusedApprovals: vi.fn(),
-    askAgain: vi.fn(),
+  },
+}));
+// The attention list the banners' × (Ignore) shares with Overview.
+let attention: { items: unknown[]; ignored: unknown[] } = { items: [], ignored: [] };
+const ignoreAttention = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/api/attention", () => ({
+  attentionApi: {
+    read: () => Promise.resolve({ ...attention, counts_by_kind: {}, errors: [] }),
+    ignore: (key: string) => ignoreAttention(key),
+    unignore: vi.fn(),
   },
 }));
 let inShell = false;
@@ -133,7 +141,7 @@ beforeEach(() => {
   inShell = false;
   api.list.mockResolvedValue({ refs: [GITHUB, OPENAI, SEATALK, OLD] });
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
-  api.refusedApprovals.mockResolvedValue({ approvals: [] });
+  attention = { items: [], ignored: [] };
   api.remove.mockResolvedValue(undefined);
   api.set.mockResolvedValue(undefined);
 });
@@ -148,12 +156,12 @@ describe("SecretsPage", () => {
     await screen.findByText("GITHUB_TOKEN");
     const githubRow = screen.getByText("GITHUB_TOKEN").closest("tr")!;
     const openaiRow = screen.getByText("api_key").closest("tr")!;
-    expect(within(githubRow).queryByText("Missing on this Mac")).not.toBeInTheDocument();
-    expect(within(openaiRow).getByText("Missing on this Mac")).toBeInTheDocument();
+    expect(within(githubRow).queryByText("No value on this Mac")).not.toBeInTheDocument();
+    expect(within(openaiRow).getByText("No value on this Mac")).toBeInTheDocument();
 
     fireEvent.click(within(openaiRow).getByRole("button", { name: /is used by 1 thing/ }));
     expect(await screen.findByText("Model provider")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "OpenAI" }));
+    fireEvent.click(screen.getByRole("link", { name: /OpenAI/ }));
     expect(screen.getByTestId("where")).toHaveTextContent("/model-providers/u-oa");
   });
 
@@ -164,13 +172,13 @@ describe("SecretsPage", () => {
     const openaiRow = screen.getByText("api_key").closest("tr")!;
     fireEvent.click(within(openaiRow).getByRole("button", { name: /is used by 1 thing/ }));
     expect(await screen.findByText("Model provider")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "OpenAI" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /OpenAI/ })).toBeNull();
   });
 
   test("a secret nothing uses is found under Not used, never used", async () => {
     renderPage();
     await screen.findByText("old-openai-key");
-    fireEvent.click(screen.getByRole("button", { name: "Not used 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not used" }));
     const row = screen.getByText("old-openai-key").closest("tr")!;
     expect(within(row).getByText("Nothing")).toBeInTheDocument();
     expect(within(row).getByText("Never")).toBeInTheDocument();
@@ -183,7 +191,7 @@ describe("SecretsPage", () => {
     renderPage();
     const row = (await screen.findByText("seatalk-app-secret")).closest("tr")!;
     expect(row).toHaveTextContent("2 min ago");
-    expect(row).toHaveTextContent(/12 Aug|Aug 12/);
+    expect(row).toHaveTextContent("Aug 12");
     openMenu("seatalk-app-secret");
     expect(
       screen.getByRole("menuitem", {
@@ -206,12 +214,13 @@ describe("SecretsPage", () => {
     renderPage();
     const banner = await screen.findByTestId("secrets-missing-banner");
     expect(banner).toHaveTextContent("2 secrets have no value on this Mac");
-    expect(within(banner).getByRole("link", { name: "Import master key…" })).toHaveAttribute(
-      "href",
-      "/settings/security",
-    );
+    expect(banner).toHaveTextContent("OpenAI and sentry can’t start until they have a value.");
+    // Importing the master key replaces this Mac's own; it is not offered here.
+    expect(within(banner).queryByRole("link")).toBeNull();
+    expect(within(banner).getByRole("button", { name: "Add values" })).toBeInTheDocument();
     const row = screen.getByText("sentry-token").closest("tr")!;
-    expect(within(row).getByText("Missing on this Mac")).toBeInTheDocument();
+    expect(within(row).getByText("No value on this Mac")).toBeInTheDocument();
+    expect(within(row).getByText("Never")).toBeInTheDocument();
     openMenu("sentry-token");
     expect(screen.getByRole("menuitem", { name: "Reveal in the Coffer app" })).toBeDisabled();
     // The row's Add value button is not repeated in the menu.
@@ -250,7 +259,8 @@ describe("SecretsPage", () => {
       "href",
       "/channels/u-st",
     );
-    expect(within(dialog).getByRole("button", { name: "Delete secret" })).toBeDisabled();
+    // Blocked: only Close, no disabled Delete.
+    expect(within(dialog).queryByRole("button", { name: "Delete secret" })).toBeNull();
     expect(api.remove).not.toHaveBeenCalled();
     // The footer's Close, not the corner ×.
     fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
@@ -300,7 +310,9 @@ describe("SecretsPage", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Reveal for 30 s" }));
     expect(await screen.findByText("ghp_example_value")).toBeInTheDocument();
     expect(revealSecret).toHaveBeenCalledWith("secret/seatalk-app-secret");
-    expect(screen.getByText(/recorded as secret_revealed/)).toBeInTheDocument();
+    expect(screen.getByText(/Recorded in Activity/)).toBeInTheDocument();
+    expect(screen.queryByText(/secret_revealed/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hide" })).toBeNull();
   });
 
   test("a browser offers no reveal and names the desktop app instead", async () => {
@@ -326,31 +338,6 @@ describe("SecretsPage", () => {
     expect(api.set).toHaveBeenCalledWith("secret/npm-publish-token", "npm_x");
   });
 
-  acceptance(
-    "secret",
-    "a refused binding says it was refused and can be asked about again",
-    async () => {
-      const REFUSED = {
-        ...PENDING,
-        id: "apr-refused",
-        op: "bind" as const,
-        status: "rejected" as const,
-        description: "send GITHUB_TOKEN to the MCP server github",
-      };
-      api.refusedApprovals.mockResolvedValueOnce({ approvals: [REFUSED] });
-      api.refusedApprovals.mockResolvedValue({ approvals: [] });
-      api.askAgain.mockResolvedValue({
-        approvals: [{ ...REFUSED, id: "apr-again", status: "pending" }],
-      });
-      renderPage();
-      const row = await screen.findByTestId("refused-approval");
-      expect(row).toHaveTextContent("send GITHUB_TOKEN to the MCP server github");
-      fireEvent.click(within(row).getByRole("button", { name: "Ask again" }));
-      await waitFor(() => expect(api.askAgain).toHaveBeenCalledWith("apr-refused"));
-      await waitFor(() => expect(screen.queryByTestId("refused-approval")).not.toBeInTheDocument());
-    },
-  );
-
   test("a new secret waiting for approval says so, and the banner offers Review", async () => {
     api.set.mockResolvedValueOnce({ approval: PENDING });
     renderPage();
@@ -366,7 +353,7 @@ describe("SecretsPage", () => {
     expect(await screen.findByText(/Saved, waiting for approval/)).toBeInTheDocument();
     const entry = await screen.findByTestId("pending-approvals-entry");
     expect(entry).toHaveTextContent("1 change waiting for approval");
-    expect(entry).toHaveTextContent("Approve in the Coffer desktop app. You can reject here.");
+    expect(entry).toHaveTextContent("A new secret npm-publish-token.");
     expect(within(entry).getByRole("button", { name: "Review" })).toBeInTheDocument();
   });
 

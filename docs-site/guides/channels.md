@@ -329,7 +329,7 @@ conv:     01J8Z…
 
 ### A channel that waits for approval
 
-A channel does not start until its bot token or app secret is approved for it (see [Secrets](/guides/secrets#approvals)). That is the normal state right after [upgrading to the vault layout](/guides/upgrading), and after you change which app a channel uses. The channel's banner says its secret **waits for your approval in the Coffer app**, and the Overview lists it the same way; its pairing and settings are kept, and it is not a revoked token, so **Replace secret** is not the fix. Open the **Secrets** page in the Coffer app and approve it; the channel starts on its next attempt, with no restart. If the approval was refused, the banner says so, and **Ask again** on the Secrets page raises it again.
+A channel does not start until its bot token or app secret is approved for it (see [Secrets](/guides/secrets#approvals)). That is the normal state right after [upgrading to the vault layout](/guides/upgrading), and after you change which app a channel uses. The channel's banner says its secret **waits for your approval in the Coffer app**, and the Overview lists it the same way; its pairing and settings are kept, and it is not a revoked token, so **Replace secret** is not the fix. Open the **Secrets** page in the Coffer app and approve it; the channel starts on its next attempt, with no restart. If you rejected the approval, the secret stays withheld until the channel's destination changes; the Secrets page keeps no list of refused changes and offers no "Ask again".
 
 ## Security
 

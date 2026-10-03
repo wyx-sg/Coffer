@@ -17,18 +17,12 @@ import { History } from "lucide-react";
 import { HelpTip } from "@/components/HelpTip";
 import { Section, SectionStack } from "@/components/Section";
 import { EmptyState } from "@/components/EmptyState";
+import { FilterPill } from "@/components/filters";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeChangeRow } from "@/components/knowledge/KnowledgeChangeRow";
 import { KnowledgeWaitingList } from "@/components/knowledge/KnowledgeWaitingList";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorHandoff } from "@/lib/api/errorHandoff";
 import { translateApiError } from "@/lib/api/errors";
@@ -44,7 +38,6 @@ import {
 import { useKnowledgeChanges } from "@/lib/hooks/useKnowledgeHistory";
 
 const WRITERS: WriterFilter[] = ["everyone", "agents", "you"];
-const ALL = "__all__";
 
 interface Props {
   collections: CollectionOut[];
@@ -70,30 +63,18 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
         <h2 className="text-[16px] font-bold">{t("knowledge.recent.title")}</h2>
         <HelpTip>{t("knowledge.recent.window")}</HelpTip>
         <span className="ml-auto flex flex-wrap items-center gap-2">
-          <Select
-            value={collection ?? ALL}
-            onValueChange={(v) => setCollection(v === ALL ? null : v)}
-          >
-            <SelectTrigger
-              className="h-7 w-auto min-w-40 gap-2"
-              aria-label={t("knowledge.recent.collectionFilter")}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("knowledge.recent.allCollections")}</SelectItem>
-              {collections.map((c) => (
-                <SelectItem key={c.uid} value={c.name} className="font-mono text-xs">
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Segmented<WriterFilter>
             value={writer}
             onChange={setWriter}
             label={t("knowledge.recent.writerFilter")}
             options={WRITERS.map((w) => ({ value: w, label: t(`knowledge.recent.writer.${w}`) }))}
+          />
+          <FilterPill
+            mode="single"
+            label={t("knowledge.recent.collectionFilter")}
+            options={collections.map((c) => ({ value: c.name, label: c.name }))}
+            value={collection}
+            onChange={setCollection}
           />
         </span>
       </header>

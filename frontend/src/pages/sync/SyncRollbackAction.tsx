@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/SyncRollbackAction.tsx
 //
-// "Roll back to before the 14:32 round?" (6.5.10), opened from a round's row
+// "Roll back to before the 14:32 round?" (6.4.12), opened from a round's row
 // or from its detail drawer.
 //
 // The dialog says what will come back before anything does: the daemon is
@@ -9,28 +9,18 @@
 // and the files edited since, which are kept as they are. Rolling back is a
 // new commit here that the next round pushes, so the other Macs follow and
 // nothing another machine did after is lost. Once it lands, the round's own
-// toast says so and the Status banner reads "Rolled back" (6.5.11).
+// toast says so and the Status banner reads "Rolled back" (6.4.13).
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
+import { Info } from "lucide-react";
 
+import { ShowAllRow } from "@/components/LongList";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useLongList } from "@/components/useLongList";
 import type { SyncChange, SyncRound } from "@/lib/api/sync";
 import { useRollbackPlan, useRollbackRound } from "@/lib/hooks/useSync";
-import { changeLine } from "./syncRoundStatus";
+import { ChangeMark, FILE_LIST, FILE_ROW } from "./SyncChangeMark";
 import { clock, clockSeconds } from "./syncTime";
-
-/** Past this, lines are summarised: a dialog that scrolls past its own confirm
- *  button answers "what is about to happen" worse than a count does. */
-const MAX_PATHS = 20;
-
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex h-5 items-center rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted">
-      {children}
-    </span>
-  );
-}
 
 /** What each reversed file goes back to, from the round's side of it. */
 function reverseNote(t: TFunction, change: SyncChange, at: string | null) {
@@ -38,6 +28,57 @@ function reverseNote(t: TFunction, change: SyncChange, at: string | null) {
   if (change.status === "removed") return t("sync.rollback.wasAdded");
   if (change.status === "added") return t("sync.rollback.wasRemoved");
   return at ? t("sync.rollback.backTo", { time: at }) : t("sync.rollback.backToSnapshot");
+}
+
+/** Five rows, then Show all; the expanded list scrolls inside the dialog. */
+function ReversedList({
+  changes,
+  note,
+}: {
+  changes: SyncChange[];
+  note: (change: SyncChange) => string;
+}) {
+  const { visible, shown, total, collapsed, expand, listClassName } = useLongList(changes, {
+    scrollInside: true,
+  });
+  return (
+    <div className={FILE_LIST} data-testid="sync-rollback-paths">
+      <ul className={listClassName}>
+        {visible.map((change) => (
+          <li key={change.path} className={FILE_ROW}>
+            <ChangeMark status={change.status} />
+            <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">
+              {change.path}
+            </span>
+            <span className="shrink-0 text-xs text-text-subtle">{note(change)}</span>
+          </li>
+        ))}
+      </ul>
+      {collapsed ? <ShowAllRow shown={shown} total={total} onShowAll={expand} /> : null}
+    </div>
+  );
+}
+
+function KeptList({ paths }: { paths: string[] }) {
+  const { t } = useTranslation();
+  const { visible, shown, total, collapsed, expand, listClassName } = useLongList(paths, {
+    scrollInside: true,
+  });
+  return (
+    <div className="flex flex-col gap-2" data-testid="sync-rollback-kept">
+      <span className="text-sm font-semibold text-text">{t("sync.rollback.kept")}</span>
+      <div className={FILE_LIST}>
+        <ul className={listClassName}>
+          {visible.map((path) => (
+            <li key={path} className={FILE_ROW}>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">{path}</span>
+            </li>
+          ))}
+        </ul>
+        {collapsed ? <ShowAllRow shown={shown} total={total} onShowAll={expand} /> : null}
+      </div>
+    </div>
+  );
 }
 
 interface Props {
@@ -52,7 +93,6 @@ export function SyncRollbackDialog({ run, onClose }: Props) {
   const plan = useRollbackPlan(run?.id ?? null, open);
   const rollback = useRollbackRound();
   const reverses = plan.data?.reverses ?? [];
-  const shown = reverses.slice(0, MAX_PATHS);
   const snapAt = plan.data?.snapshot_time ?? null;
   const when = run ? clock(run.finished_at) : "";
 
@@ -66,10 +106,18 @@ export function SyncRollbackDialog({ run, onClose }: Props) {
         rollback.reset();
       }}
       title={t("sync.rollback.title", { time: when })}
-      description={t("sync.rollback.description")}
+      description={
+        plan.data
+          ? t("sync.rollback.descriptionSnapshot", {
+              snapshot: plan.data.snapshot,
+              time: snapAt ? clockSeconds(snapAt) : "",
+            })
+          : t("sync.rollback.description")
+      }
       confirmLabel={t("sync.rollback.confirm")}
       pendingLabel={t("sync.rollback.rollingBack")}
       variant="default"
+      width="wide"
       pending={rollback.isPending || plan.isLoading}
       error={rollback.error ?? plan.error}
       onConfirm={() => {
@@ -81,70 +129,21 @@ export function SyncRollbackDialog({ run, onClose }: Props) {
       {plan.isLoading ? (
         <p className="text-sm text-text-muted">{t("common.loading")}</p>
       ) : plan.data && run ? (
-        <div className="space-y-3" data-testid="sync-rollback-plan">
-          <div className="flex flex-wrap gap-1.5">
-            <Chip>{t("sync.rollback.pulled", { count: run.pulled_files })}</Chip>
-            <Chip>{t("sync.rollback.pushed", { count: run.pushed_files })}</Chip>
-            <Chip>
-              <span className="font-mono">
-                {plan.data.snapshot}
-                {snapAt ? ` · ${clockSeconds(snapAt)}` : ""}
-              </span>
-            </Chip>
-          </div>
-          {shown.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-text-subtle">
-                {t("sync.rollback.reverses")}
-              </p>
-              <ul
-                className="space-y-1 rounded-lg bg-surface-sunken px-3 py-2.5"
-                data-testid="sync-rollback-paths"
-              >
-                {shown.map((change) => (
-                  <li key={change.path} className="flex items-center gap-3 text-xs">
-                    <span className="min-w-0 flex-1 truncate font-mono text-text">
-                      {changeLine(change)}
-                    </span>
-                    <span className="shrink-0 text-text-subtle">
-                      {reverseNote(t, change, snapAt ? clock(snapAt) : null)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {reverses.length > shown.length ? (
-                <p className="text-xs text-text-muted">
-                  {t("sync.rollback.morePaths", { count: reverses.length - shown.length })}
-                </p>
-              ) : null}
+        <div className="flex flex-col gap-4" data-testid="sync-rollback-plan">
+          {reverses.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-text">{t("sync.rollback.reverses")}</span>
+              <ReversedList
+                changes={reverses}
+                note={(change) => reverseNote(t, change, snapAt ? clock(snapAt) : null)}
+              />
             </div>
           ) : null}
-          <div className="flex gap-3 rounded-lg border border-border p-3">
-            <span
-              aria-hidden
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-subtle text-text-muted"
-            >
-              <RefreshCw className="size-3.5" />
-            </span>
-            <div className="space-y-0.5">
-              <p className="text-sm font-label text-text">{t("sync.rollback.followTitle")}</p>
-              <p className="text-xs text-text-muted">
-                {t("sync.rollback.followBody", { time: when })}
-              </p>
-            </div>
-          </div>
-          {plan.data.kept.length > 0 ? (
-            <div className="space-y-1" data-testid="sync-rollback-kept">
-              <p className="text-xs text-text-muted">{t("sync.rollback.kept")}</p>
-              <ul className="space-y-0.5">
-                {plan.data.kept.slice(0, MAX_PATHS).map((path) => (
-                  <li key={path} className="font-mono text-xs text-text">
-                    {path}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {plan.data.kept.length > 0 ? <KeptList paths={plan.data.kept} /> : null}
+          <p className="flex items-start gap-2 text-xs leading-[1.45] text-text-muted">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            {t("sync.rollback.follow", { time: when })}
+          </p>
         </div>
       ) : null}
     </ConfirmDialog>

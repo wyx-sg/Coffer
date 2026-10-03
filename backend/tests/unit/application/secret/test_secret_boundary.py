@@ -244,7 +244,7 @@ def test_a_deleted_secret_forgets_where_it_went() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="secret", scenario="a refused binding says it was refused and can be asked about again"
+    spec="secret", scenario="a refused binding stays refused until its target changes"
 )
 def test_a_refused_binding_is_reported_as_refused_not_as_waiting() -> None:
     gate, _store, values = _gate()
@@ -260,27 +260,13 @@ def test_a_refused_binding_is_reported_as_refused_not_as_waiting() -> None:
     assert refused.value.approval_ids == [waiting.id]
     # Still a withheld secret for every caller that handles the pending kind.
     assert isinstance(refused.value, SecretBindingPending)
+    # Checking again raises no fresh approval: the refusal stands for this target.
+    assert gate.check(dest, {"TOKEN": "gh/token"})[0].id == waiting.id
 
 
 @pytest.mark.acceptance(
-    spec="secret", scenario="a refused binding says it was refused and can be asked about again"
+    spec="secret", scenario="a refused binding stays refused until its target changes"
 )
-def test_asking_again_puts_a_refused_binding_back_in_front_of_a_person() -> None:
-    gate, _store, values = _gate()
-    values.put("gh/token", "v", created=_OLD)
-    dest = _dest("a", "stdio a")
-    first = gate.check(dest, {"TOKEN": "gh/token"})[0]
-    gate.reject(first.id, actor="ui")
-
-    gate.ask_again(first.id, actor="ui")
-    [again] = gate.check(dest, {"TOKEN": "gh/token"})
-
-    assert gate.get(first.id).status == "superseded"
-    assert again.id != first.id and again.status == "pending"
-    with pytest.raises(ApprovalNotPending):  # only a refused binding can be asked again
-        gate.ask_again(again.id, actor="ui")
-
-
 def test_refresh_drops_a_refusal_of_a_target_that_has_changed() -> None:
     gate, _store, values = _gate()
     values.put("gh/token", "v", created=_OLD)
@@ -291,6 +277,8 @@ def test_refresh_drops_a_refusal_of_a_target_that_has_changed() -> None:
     gate.refresh([(_dest("a", "stdio two"), {"TOKEN": "gh/token"}, "ui")])
 
     assert gate.get(refused.id).status == "superseded"
+    # The changed target is put to a person afresh.
+    assert [a.status for a in gate.list(status="pending")] == ["pending"]
 
 
 @pytest.mark.acceptance(spec="secret", scenario="an approval that cannot be applied stays pending")

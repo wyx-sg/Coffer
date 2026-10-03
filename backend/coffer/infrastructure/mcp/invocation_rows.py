@@ -54,6 +54,10 @@ def tz(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
+#: A status filter that is every outcome but ``ok`` — an error, a timeout or a denial.
+FAILED = "failed"
+
+
 def filtered(
     stmt: Select[Any],
     *,
@@ -70,7 +74,9 @@ def filtered(
         stmt = stmt.where(MCPInvocationModel.trace_id == trace_id)
     if resource_uid is not None:
         stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
-    if status is not None:
+    if status == FAILED:
+        stmt = stmt.where(MCPInvocationModel.status != "ok")
+    elif status is not None:
         stmt = stmt.where(MCPInvocationModel.status == status)
     if since is not None:
         stmt = stmt.where(MCPInvocationModel.timestamp >= since)

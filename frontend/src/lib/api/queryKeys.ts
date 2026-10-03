@@ -125,10 +125,8 @@ export const providerPricesKey = (uid: string, models: readonly string[], listed
 
 /** POST /providers/detect-local at a loopback URL (`null` = default ports); a runtime, not a connection. */
 export const localRuntimesKey = (baseUrl: string | null) => ["localRuntimes", baseUrl] as const;
-// usage — GET /usage/summary per range + grouping, GET /usage/quota
-export const usageKey = ["usage"] as const;
+// usage — GET /usage/summary per range + grouping
 export const usageSummaryKey = (p: Record<string, unknown>) => ["usage", "summary", p] as const;
-export const usageQuotaKey = ["usage", "quota"] as const;
 
 // --- channels — channel resources ride `resourcesKey`; only live status is here ---
 
@@ -159,6 +157,8 @@ export const fsEditorsKey = ["fs", "editors"] as const;
 // --- audit / retention -----------------------------------------------------
 
 export const auditListKey = (filters: Record<string, unknown>) => ["audit", filters] as const;
+/** Whether any of the three Activity logs holds a record (the first-run check). */
+export const activityAnyRecordsKey = ["activity", "any-records"] as const;
 
 export const retentionKey = ["retention"] as const;
 export const retentionPoliciesKey = ["retention", "policies"] as const;
@@ -219,8 +219,6 @@ export const upkeepRunsKey = ["upkeep", "runs"] as const;
 // --- chat — conversations, their messages and per-conversation agent config ---
 
 export const conversationsKey = ["conversations"] as const;
-/** Every list of conversations (pages, head and palette reads): one prefix. */
-export const conversationListsKey = ["conversations", "lists"] as const;
 /** Every conversation list's head (what a sent message refreshes without re-reading the pages). */
 export const conversationHeadsKey = ["conversations", "lists", "head"] as const;
 /** The pages a conversation list has read so far, for one view (archived, title search). */
@@ -248,8 +246,6 @@ export const messagesKey = (conversationId: string) => ["messages", conversation
 export const secretsKey = ["secrets"] as const;
 /** The approvals still waiting for a present human. */
 export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
-/** The approvals a person refused (and none superseded). */
-export const refusedApprovalsKey = ["secrets", "approvals", "rejected"] as const;
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
 export const secretsListKey = ["secrets", "list"] as const;
 export const secretScanKey = ["secrets", "scan"] as const;

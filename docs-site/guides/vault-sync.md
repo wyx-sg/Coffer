@@ -112,7 +112,7 @@ coffer sync join
 
 `join` prints what joining would do and asks before it applies anything. Against an empty remote it pushes everything this vault holds.
 
-In the web UI the same steps are on the **Sync** page, which shows set-up until this machine has joined: **Repository URL**, **Branch**, **Secret**, **User name** (for an `https://` URL), **Run a round**, **Include encrypted secrets**, then **Check repository**. An empty repository offers **Push and start syncing**. One that already holds a vault shows the join preview (what comes down, what is the same, what differs, what goes up, and that nothing is deleted) with **Join and pull**. The **?** next to the page title explains adding another Mac.
+In the web UI the same steps are on the **Sync** page, which shows set-up until this machine has joined: **Repository URL**, **Branch**, **Secret**, **User name** (for an `https://` URL), **Run a round**, **Include encrypted secrets**, then **Check repository**. An empty repository offers **Push and start syncing**. One that already holds a vault shows the join preview (what comes down, what is the same, what differs, what goes up, and that nothing is deleted) with **Join and pull**.
 
 ## Join another machine
 
@@ -131,7 +131,7 @@ coffer sync choose knowledge/work/oncall.md --mine
 coffer sync choose knowledge/work/oncall.md --theirs
 ```
 
-On the web the **Status** tab lists them under **Differ from this Mac**, each with **Keep this Mac's** and **Take &lt;machine&gt;'s**.
+On the web the **Status** tab lists them under **Differ from this Mac**, with **Choose versions** and **Ask an agent**. **Choose versions** opens the same Resolve page a stopped round's conflicts use: each file offers **Keep this Mac's**, **Take &lt;machine&gt;'s**, **Open in editor** and **Ask an agent**, and the page ends in **Apply choices**. To merge a differing file by hand, `coffer sync edit <path> --join` prints the marked-up copy, and `coffer sync choose <path> --edited` takes it as this machine's version, which the next round pushes.
 
 `--yes` skips the join question for scripts. Until a machine has joined, rounds move nothing and end as `join required`.
 
@@ -195,9 +195,9 @@ coffer sync history      # one line per round, newest first (--limit, default 20
 
 `coffer sync status` exits `1` while a round waits for you: stopped on conflicts, held, unable to reach or sign in to the remote, or paused because the vault is in a synchronised folder. A cron line or a shell prompt can check that without parsing the text. A paused remote exits `0`.
 
-On the web, the **Sync** page's header says in one word where this Mac stands: **In sync**, **N changes to push**, **N changes pulled**, **Syncing**, **Stopped**, **Push failed**, **Remote unreachable**, **Sign-in failed** or **Paused**. Beside it are **Sync now** and the remote's URL with a copy button. The page has three tabs:
+On the web, the **Sync** page's header says in one word where this Mac stands: **In sync**, **N changes to push**, **N changes pulled**, **Syncing**, **Stopped**, **Push failed**, **Remote unreachable**, **Sign-in failed** or **Paused**. Beside it is **Sync now**, always the page's primary button, and under the title the remote's URL with a copy button. The page has no help icon, and three tabs:
 
-- **Status** opens first. It shows what the status means, the four counts (knowledge documents, skills, MCP servers & tools definitions, encrypted secrets), the changes waiting to push with who made each, any card that needs you, and every round this machine has run. Consecutive rounds that ended the same way fold into one row. Click a round to see its safety snapshot, the commits it pulled, what it changed here and what it pushed.
+- **Status** opens first. It shows what the status means with one grey line under it of what syncs (knowledge documents, skills, MCP server and tool definitions, and whether secrets are synced), the changes waiting to push (five, then **Show all**), any card that needs you, and every round this machine has run, as a table of when, the round, what it pulled and what it pushed. A problem card, such as sign-in failed or git missing, has an **×** that ignores it, like **Ignore** on Overview; it comes back when the problem changes. Consecutive rounds that ended the same way fold into one row. Click a round to see its safety snapshot, the commits it pulled, what it changed here and what it pushed.
 - **Machines** lists the machines (see [Manage the machines](#manage-the-machines)).
 - **Remote** holds the remote's settings.
 
@@ -216,18 +216,24 @@ coffer sync continue                                   # once every file has an 
 
 To merge by hand, `coffer sync edit <path>` prints the path of a marked-up copy under `~/.coffer/derived/sync-conflicts/`. Edit it, remove every conflict marker, then `coffer sync resolve <path> --edited`. A copy that still has a marker is refused, and the message names the line. The vault's own file never receives a marker.
 
-On the web the **Status** tab lists the files under **Changed on both Macs**; **Resolve conflicts** opens them one by one. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
+On the web the **Status** tab lists the files under **Changed on both Macs**, with **Resolve conflicts** and **Ask an agent** (which hands every file an agent may merge over at once). **Resolve conflicts** opens one page for all files. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**; one file can also be handed to an agent on its own. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
 
 ### Merge with an agent
 
-Merging two edits of one file is a job for your agent. On a stopped round, **Merge with an agent** (or `coffer sync conflicts --prompt`) gives you a prompt to copy, or opens a new conversation with it. The prompt names:
+Merging two edits of one file is a job for your agent. On a stopped round, **Ask an agent** (all the files at once, from the card; or one file, from the Resolve page) opens a new conversation with a prompt, and its menu's **Copy prompt** copies it. In a terminal, `coffer sync conflicts --prompt` prints the prompt and records that the files were handed over. The prompt states the goal and the constraints, with no shell command in it:
 
-- the vault;
-- each file, with the commit each side last changed it in;
-- how to see each side's changes with `git -C <vault> diff`;
-- the marked-up copy of each file that Coffer has written under `~/.coffer/derived/sync-conflicts/`.
+- the vault, to read for context;
+- each file, when each machine changed it, and the marked-up copy Coffer wrote under `~/.coffer/derived/sync-conflicts/` for the merge;
+- keep what each side added, and ask you where the two contradict;
+- write only those copies: the vault's own files and its git history are left alone, because Coffer writes the merged file into the vault.
 
-The agent edits only those copies. It runs no git command that changes the vault, because Coffer commits the result. When it says it is done, press **I merged it** (`coffer sync resolve --merged`). Coffer takes every merged copy as that file's answer, and refuses while any copy still has a conflict marker, naming the file and line. Then **Continue round**.
+An agent's merge is never an answer by itself. When a copy holds a merge, the file reads **Merged by an agent · check it** and shows the merge's diff from this machine's version, with three choices:
+
+- **Mark resolved** takes the copy as the file's answer (`coffer sync resolve <path> --edited`). Coffer refuses while the copy still has a conflict marker, naming the line.
+- **Open conversation** returns to the agent's conversation.
+- **Back to two choices** forgets the copy and the hand-off, and the file is open to **Keep this Mac's** or **Take &lt;machine&gt;'s** again.
+
+Then **Continue round**.
 
 An encrypted secret (`secret/*.enc`) is never handed to an agent or edited by hand. It offers only the two choices, and the prompt never carries its contents.
 
@@ -274,7 +280,7 @@ coffer sync history                 # find the round's id
 coffer sync rollback 42             # shows the plan, then asks
 ```
 
-Rolling back puts back what that round changed, as a new commit on this machine that the next round pushes, so the other machines follow. Files you edited since the round are kept, and the plan lists them. A round that applied nothing, or a rollback, cannot be rolled back. On the web, **Roll back** on a round's row, or **Roll back to before this round** in its drawer, shows the same plan first.
+Rolling back puts back what that round changed, as a new commit on this machine that the next round pushes, so the other machines follow. Files you edited since the round are kept, and the plan lists them. A round that applied nothing, or a rollback, cannot be rolled back. On the web, click a round and choose **Roll back to before this round** in its drawer (it is nowhere else); it shows the same plan first.
 
 For older states of a single file or folder, use the vault's own history: [`coffer vault history` and `coffer vault restore`](/guides/vault-files#history-and-restore).
 
@@ -288,12 +294,12 @@ coffer sync machine rm <machine_id>         # retire a machine you no longer use
 
 A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux), hashed before it is published, and survives reinstalling Coffer. Where no host identifier is readable, Coffer stores a generated id in `~/.coffer/machine-id`, which does not survive deleting `~/.coffer`. Renaming changes only a label. Retiring removes the machine's descriptor in a commit of yours and rewrites nothing else; a channel still bound to it runs nowhere until you bind it elsewhere. A retired machine that syncs again comes back.
 
-On the web the **Machines** tab lists every machine with when it was last seen, its last round, its Coffer version and its agents. This Mac is tagged **This Mac**, and the machine that curates knowledge is tagged **Runs curation**. The row's menu renames this Mac (other Macs see the name after their next round) and retires any other one. A machine can only rename itself, because each machine writes only its own descriptor.
+On the web the **Machines** tab lists every machine with when it was last seen, its last round, its Coffer version and its agents. This Mac is tagged **This Mac**, and the machine that curates knowledge is tagged **Runs curation**. The row's menu renames this Mac (other Macs see the name after their next round) and retires any other one. Retiring runs at once, with no confirmation, and the toast that says so offers **Undo**, which registers the machine again exactly as it was. A machine can only rename itself, because each machine writes only its own descriptor.
 
 ## Pause or stop syncing
 
 - **Pause:** set **Run a round** to **Only when I press Sync now** on the **Remote** tab, or run `coffer sync remote pause`. The timer stops; the remote, its settings and the history are kept. **Sync now** still runs a round when you ask. `coffer sync remote resume` switches the timer back on.
-- **Stop syncing:** **Stop syncing…** on the **Remote** tab, or `coffer sync remote clear`. This machine forgets the remote; the vault, its history and the repository are left as they are. Syncing again means joining again.
+- **Stop syncing:** **Stop syncing** on the **Remote** tab, or `coffer sync remote clear`. It runs at once, with no confirmation: this machine forgets the remote; the vault, its history and the repository are left as they are. In the web UI the toast offers **Undo**, which puts back the remote's settings (the push secret as a name), whether this machine had joined, a round waiting for you and a join's differing files, as long as no other remote has been set since. Otherwise syncing again means joining again.
 
 ## Troubleshooting
 
@@ -304,8 +310,8 @@ On the web the **Machines** tab lists every machine with when it was last seen, 
 | `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
 | `plaintext found` | A file the round would push holds what looks like a plaintext secret; nothing was pushed. | Move the value into a secret (**Ask an agent**, or `coffer sync status --prompt`) and retry, or `coffer sync push-anyway` if it is not a secret. |
-| `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine. |
-| `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Move `~/.coffer` out of that folder. |
+| `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine (**Ask an agent** on the card), then press **Check again**. |
+| `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Press **Move the vault…** on the Status tab: Coffer pauses rounds and agent writes, moves the folder (to `~/.coffer/vault` unless you choose another place outside any synchronised folder), checks the git repository there and resumes. The old folder is left empty; delete it yourself. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
 | `remote too old` | The remote was written by a Coffer from before the vault layout, or by an older layout. | Rebuild it from an upgraded machine: see [Upgrading an existing Coffer](/guides/upgrading#rebuild-your-sync-remote). |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |

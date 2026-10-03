@@ -19,7 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coffer.application.sync import round_answers
+from coffer.application.sync.round_merge import MERGED_BY_AGENT, merge_diff, merge_info
 from coffer.application.sync.views import (
     AreaCounts,
     FileVersions,
@@ -32,22 +32,24 @@ from coffer.application.sync.views import (
 )
 from coffer.domain.git_handoff import git_install_handoff
 from coffer.domain.sync.handoffs import (
-    MergeFile,
     agent_mergeable,
-    conflict_merge_handoff,
     is_secret_file,
     remote_failure_handoff,
     scrub_git_text,
 )
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import APPROVAL_WAIT, AppliedChange, RoundRecord, RoundStatus
-from coffer.domain.sync.stops import ConflictFile, HoldDirection, Stop, StopKind
+from coffer.domain.sync.stops import ConflictFile, HoldDirection, StopKind
 from coffer.domain.vault.layout import KNOWLEDGE, MACHINES, MANIFEST, RESOURCES, SKILLS
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.sync.round_engine import RoundEngine
     from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort
-    from coffer.application.sync.service_ports import HostMachinePort, SecretFilesPort
+    from coffer.application.sync.service_ports import (
+        HostMachinePort,
+        SecretFilesPort,
+        VaultMoverPort,
+    )
 
 #: How many unpushed commits the status lists.
 WAITING_LIMIT = 50
@@ -76,6 +78,7 @@ class StatusMixin:
     _machine: HostMachinePort
     _secrets: SecretFilesPort
     _vault_path: Callable[[], Path]
+    _mover: VaultMoverPort | None
     _running_since: str | None
     _next_round_at: str | None
     _git_available: Callable[[], bool]
@@ -121,6 +124,8 @@ class StatusMixin:
             join_choices=len(d.state.join_choices()),
             ahead=ahead,
             behind=behind,
+            vault_real_path=self._mover.real_path() if self._mover else None,
+            default_vault_path=self._mover.default_path() if self._mover else None,
         )
 
     def _divergence(self, remote: SyncRemote | None, head: str | None) -> tuple[int, int]:
@@ -143,6 +148,15 @@ class StatusMixin:
 
         return carrying(tip, head), carrying(head, tip)
 
+    def git_missing_handoff(self) -> str | None:
+        """The install hand-off while no ``git`` is found, read afresh each
+        time so "Check again" is just asking again; ``None`` when git is there."""
+        if self._git_available():
+            return None
+        return git_install_handoff(
+            self._host_label(), needed_for="keeping the vault's history and syncing it"
+        )
+
     def _current_problem(
         self, remote: SyncRemote | None, last: RoundRecord | None
     ) -> Problem | None:
@@ -150,13 +164,12 @@ class StatusMixin:
         round's failure."""
         if remote is None:
             return None
-        if not self._git_available():
+        missing = self.git_missing_handoff()
+        if missing is not None:
             return Problem(
                 kind="git_missing",
                 message="git is not installed on this machine",
-                handoff=git_install_handoff(
-                    self._host_label(), needed_for="keeping the vault's history and syncing it"
-                ),
+                handoff=missing,
             )
         if last is None:
             return None
@@ -200,22 +213,7 @@ class StatusMixin:
         stop = d.state.stop()
         if stop is None:
             return None
-        scratch = d.scratch
-        handed = (
-            tuple(c for c in stop.conflicts if agent_mergeable(c))
-            if stop.kind is StopKind.CONFLICTS and scratch is not None
-            else ()
-        )
-        handoff = self._merge_handoff(stop, handed) if handed else None
-        files = tuple(
-            StoppedFile(
-                c,
-                editor_path=scratch.where(c.path) if scratch is not None else None,
-                secret=is_secret_file(c.path),
-                agent_merge=c in handed,
-            )
-            for c in stop.conflicts
-        )
+        files = self._stopped_files(stop.conflicts) if stop.kind is StopKind.CONFLICTS else ()
         groups: tuple[HoldGroup, ...] = ()
         machines: tuple[str, ...] = ()
         if stop.hold is not None:
@@ -231,36 +229,30 @@ class StatusMixin:
             groups=groups,
             machines=machines,
             confirmed=d.state.confirmed() == (stop.local, stop.remote),
-            handoff=handoff,
         )
 
-    def _merge_handoff(self, stop: Stop, handed: tuple[ConflictFile, ...]) -> str | None:
-        """The agent's prompt. Each handed file's marked-up copy is written
-        first (once; the same copy "Open in editor" opens), so the prompt can
-        name where the agent edits."""
+    def _stopped_files(self, conflicts: tuple[ConflictFile, ...]) -> tuple[StoppedFile, ...]:
+        """Each file with where its copy is and where an agent's merge of it stands."""
         d = self._engine.d
-        merge: list[MergeFile] = []
-        with d.lock:
-            for c in handed:
-                copy = round_answers.editor_copy(self._engine, c.path)
-                ours = d.git.log(c.path, start=stop.local, limit=1)
-                theirs = d.git.log(c.path, start=stop.remote, limit=1)
-                merge.append(
-                    MergeFile(
-                        c,
-                        copy=copy,
-                        ours_commit=ours[0].version if ours else None,
-                        theirs_commit=theirs[0].version if theirs else None,
-                    )
+        out: list[StoppedFile] = []
+        for c in conflicts:
+            info = merge_info(d, c)
+            out.append(
+                StoppedFile(
+                    c,
+                    editor_path=d.scratch.where(c.path) if d.scratch is not None else None,
+                    secret=is_secret_file(c.path),
+                    agent_mergeable=agent_mergeable(c),
+                    agent_state=info.state if info else None,
+                    merged_at=info.merged_at if info else None,
                 )
-        return conflict_merge_handoff(
-            vault=str(self._vault_path()),
-            machine=self._machine.label(),
-            local=stop.local,
-            remote=stop.remote,
-            base=stop.base,
-            files=merge,
-            secret_files=sum(1 for c in stop.unanswered if is_secret_file(c.path)),
+            )
+        return tuple(out)
+
+    async def join_files(self) -> tuple[StoppedFile, ...]:
+        """A join's differing files, in the shape a stopped round's are."""
+        return await asyncio.to_thread(
+            lambda: self._stopped_files(self._engine.d.state.join_choices())
         )
 
     async def file_versions(self, path: str) -> FileVersions | None:
@@ -294,6 +286,8 @@ class StatusMixin:
             )
         )
         saved = d.scratch.read(path) if d.scratch and not is_secret_file(path) else None
+        info = merge_info(d, found)
+        merged = saved if saved is not None and info and info.state == MERGED_BY_AGENT else None
         return FileVersions(
             path=path,
             ours=texts["ours"],
@@ -302,6 +296,8 @@ class StatusMixin:
             take_theirs=take,
             binary=binary,
             edited=saved.decode("utf-8", "replace") if saved is not None else None,
+            merged=merged.decode("utf-8", "replace") if merged is not None else None,
+            merged_diff=merge_diff(d, found, merged) if merged is not None else None,
         )
 
 

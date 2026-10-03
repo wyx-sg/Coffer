@@ -276,7 +276,7 @@ describe("MemoryPage", () => {
       expect(first).toHaveTextContent("All agents");
       expect(first).toHaveTextContent(/Distilled /);
       expect(second).toHaveTextContent("4 entries read from Codex, waiting to distil");
-      expect(second).toHaveTextContent("Not distilled yet");
+      expect(second).toHaveTextContent("Never");
       expect(third).toHaveTextContent("Repository missing");
       expect(within(third).getByRole("button", { name: /^delete: /i })).toBeInTheDocument();
     },

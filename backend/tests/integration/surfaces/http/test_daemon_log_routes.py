@@ -476,3 +476,43 @@ async def test_every_record_carries_the_byte_offset_it_starts_at(monkeypatch, tm
         body = (await c.get("/api/v1/daemon/logs")).json()
     expected = [sum(len(x) + 1 for x in lines[:n]) for n in reversed(range(5))]
     assert [rec["offset"] for rec in body["records"]] == expected
+
+
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="an environment error carries a hand-off and an internal one does not",
+)
+@pytest.mark.asyncio
+async def test_an_environment_error_carries_a_handoff_and_an_internal_one_does_not(
+    monkeypatch, tmp_path
+) -> None:
+    """spec web-ui "Hand an environment failure on Activity to an agent": an ERROR about an
+    external service gets a prompt with the logger, message and traceback; an
+    error of Coffer's own, and any warning, gets none."""
+    env = json.dumps(
+        {
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+            "level": "error",
+            "logger": "mcp.gateway",
+            "event": "upstream call failed server=sentry tool=list_issues",
+        }
+    )
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [
+            _json_line("error", "KeyError: 'uid' while building the overview"),
+            env,
+            "Traceback (most recent call last):",
+            '  File "coffer/mcp/gateway/upstream.py", line 214, in call_tool',
+            "httpx.ConnectError: [Errno 61] Connection refused",
+            _json_line("warning", "connection refused by a peer"),
+        ],
+    )
+    async with _client() as c:
+        records = (await c.get("/api/v1/daemon/logs")).json()["records"]
+    by_event = {r["event"]: r for r in records}
+    prompt = by_event["upstream call failed server=sentry tool=list_issues"]["handoff"]["prompt"]
+    assert "mcp.gateway" in prompt and "list_issues" in prompt and "Connection refused" in prompt
+    assert by_event["KeyError: 'uid' while building the overview"]["handoff"] is None
+    assert by_event["connection refused by a peer"]["handoff"] is None

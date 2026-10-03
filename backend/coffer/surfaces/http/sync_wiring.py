@@ -53,6 +53,7 @@ from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteSt
 from coffer.infrastructure.sync.machine_descriptor import HostMachine
 from coffer.infrastructure.sync.master_key import ResolvedMasterKey, SecretFiles
 from coffer.infrastructure.sync.vault_git import VaultSyncGit
+from coffer.infrastructure.sync.vault_move import VaultMover
 from coffer.infrastructure.vault.git import git_available
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_writer
@@ -158,6 +159,7 @@ def wire_sync(
         audit=audit,
         set_machine_name=write_machine_name,
         vault_path=vault_root,
+        mover=VaultMover(),
         inventory=AgentPluginInventory(resources, _plugins),
         after_apply=_reconcile_imported,
         hold=_reconciler_hold,

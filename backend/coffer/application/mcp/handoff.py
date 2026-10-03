@@ -120,4 +120,52 @@ def diagnose_handoff(
     )
 
 
-__all__ = ["STDERR_LINES", "diagnose_handoff", "launcher_handoff"]
+def call_failure_handoff(
+    *,
+    server: str,
+    tool: str,
+    error: str | None,
+    status: str,
+    failures_24h: int,
+    session_id: str | None,
+    call_id: int,
+    machine: str,
+) -> str:
+    """The prompt to find why one MCP call could not reach its server.
+
+    For a call the server never answered (refused, timed out, would not start)
+    — spec mcp-gateway "Hand a failing MCP call's diagnosis to an agent". It
+    carries what the call log holds — the server, the tool, the error, how often
+    the server failed in the last 24 hours, the session and the call id — and
+    never the call's arguments or result: Coffer does not store them."""
+    facts = [
+        f"The MCP server is named {server} in Coffer; the call was to its tool {tool}.",
+        f"The call {'timed out' if status == 'timeout' else 'failed'}"
+        + (f" with: {scrub(error)[:_LINE_MAX]}" if error else "."),
+        f"{server} failed {failures_24h} time{'s' if failures_24h != 1 else ''} "
+        "in the last 24 hours.",
+    ]
+    if session_id:
+        facts.append(f"The agent session: {session_id}.")
+    facts.append(f"The call id in Coffer's call log: {call_id}.")
+    facts.append(_machine(machine))
+    return render_handoff(
+        Handoff(
+            task=(
+                f"Please find out why a call to the MCP server {server}, which Coffer runs for "
+                "my agents, could not reach it, and propose a fix."
+            ),
+            facts=tuple(facts),
+            steps=(
+                "Find the cause — for example the server being down, a wrong URL or port, a "
+                "network or proxy problem, or a process that won't start — and tell me the fix "
+                "before you change anything.",
+                "Do not read or change the secrets Coffer stores for this server; if one is "
+                "wrong, tell me and I will replace it on the server's page.",
+                f"Verify the fix with `{_test_command(server)}`.",
+            ),
+        )
+    )
+
+
+__all__ = ["STDERR_LINES", "call_failure_handoff", "diagnose_handoff", "launcher_handoff"]

@@ -16,7 +16,7 @@ One page per task. Each guide shows the CLI command and the place in the app. Th
 - [MCP servers](/guides/mcp-servers) Register upstream servers once for every agent.
 - [Custom tools](/guides/custom-tools) Turn an HTTP API into tools.
 - [Model providers](/guides/providers) Store a provider and switch agents to it.
-- [Usage and quota](/guides/usage) See what agents spent and what quota is left.
+- [Usage](/guides/usage) See what agents spent through your providers.
 - [Secret store](/guides/secret-store) How secrets are encrypted and where the key lives.
 - [Secrets](/guides/secrets) Keep keys encrypted and out of agent config.
 

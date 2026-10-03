@@ -298,7 +298,7 @@ connection that could be set on two of them. Switching an agent onto a connectio
 field and its own native config file and nothing else — another agent of the same type, or one of
 another type, that runs on the previous connection stays on it. One pure function,
 `connection_for_agent(agent, connections)`, answers which connection an agent is on, and projection,
-the proxy's route, the chat model list, the quota check and the protocol lock all ask it. A
+the proxy's route, the chat model list and the protocol lock all ask it. A
 connection SERVES an agent when the agent's `connection_uid` names it, it exists, is enabled, is not
 `ollama`, and its scope reaches the agent; a pointer that names a missing, switched-off or
 out-of-scope connection means the agent is treated as on its built-in login, and the reconciler reports
@@ -546,7 +546,7 @@ The web surfaces:
 #### Scenario: the provider library has no tabs
 - **GIVEN** the Model providers page
 - **WHEN** it renders
-- **THEN** it shows the connection table only, with no tab strip, no view of which agent runs on which connection and no Coffer's model tab (TypeScript acceptance test)
+- **THEN** its only tab strip is the page header's Providers | Usage, and the library itself has no view of which agent runs on which connection and no Coffer's model tab (TypeScript acceptance test)
 
 #### Scenario: a provider's used-by list is read-only
 - **GIVEN** a connection that Claude Code runs on (its `connection_uid`) with a chosen model, and that is flagged `internal_default`
@@ -1229,8 +1229,8 @@ resolves the same prices for the Models section, each with its source; `coffer p
 <name> [<model> --input <usd> --output <usd> | --reset]` shows them and sets or resets the price
 the user records. Every surface labels cost as estimated. Where nothing in a cost is priced, the web
 UI and the CLI MUST show `—` in its place, never `$0.00`, and the web UI MUST say why and where a
-price is set in the dash's tooltip and accessible name. Subscription logins are not metered and show
-only their official quota.
+price is set in the dash's tooltip and accessible name. Subscription logins do not pass through
+Coffer and are not metered.
 
 #### Scenario: a known model is priced per category
 - **GIVEN** a record for `claude-sonnet-4-6` through `https://api.anthropic.com` with input, cache-write, cache-read and output tokens
@@ -1259,9 +1259,9 @@ only their official quota.
 
 #### Scenario: a model with no price reads as a dash, never zero
 - **GIVEN** usage of a model through a connection that records no price for it, whose API reported none, and that the bundled list does not know
-- **WHEN** the Usage page and `coffer usage` show that model's row
+- **WHEN** the Usage tab of Model providers and `coffer usage` show that model's row
 - **THEN** its cost reads `—`, not `$0.00`, with the unpriced request count
-- **AND** on the Usage page the dash's tooltip says no price is known for it and that a price is set in Model providers
+- **AND** on the Usage tab the dash's tooltip says no price is known for it and that one is set on its provider
 
 ### Requirement: Report usage by model, agent or day over a range
 `GET /api/v1/usage/summary` and `coffer usage [--range today|24h|7d|30d|month|custom] [--from <day> --to <day>] [--by model|agent|day] [--agent <agent type>] [--provider <name>] [--json]`
@@ -1305,70 +1305,6 @@ page through the per-request detail, newest first. `GET /api/v1/usage/export.csv
 - **GIVEN** usage in the range
 - **WHEN** the user exports it
 - **THEN** the CSV has a header row and one line per group with the same totals the summary reports
-
-### Requirement: Show a subscription's official quota as of when it was seen
-For an agent on its own subscription login, Coffer MUST show only the vendor's own remaining
-allowance, never an estimate, each window with its used percentage, its length and when it resets,
-labelled with when its source produced it. Codex's comes from `codex app-server`'s
-`account/rateLimits/read` — on request (`POST /api/v1/usage/quota/refresh`, `coffer usage quota
---refresh`), and in the background no more often than every five minutes while a Codex agent is on its
-own login — and from `account/rateLimits/updated` notifications of the sessions Coffer drives.
-Claude Code's comes from the `rate_limit_event` of the sessions Coffer drives, preferring its
-both-windows field and degrading to the top-level window when that is absent. Coffer MUST NOT read
-another application's OAuth token or credential file and MUST NOT call an undocumented quota
-endpoint. `GET /api/v1/usage/quota` and `coffer usage quota` report the latest window per agent type;
-with no value, or a window whose reset has passed, they say so and show no number.
-
-#### Scenario: Codex quota comes from its app-server
-- **GIVEN** a `codex app-server` that answers `account/rateLimits/read` with a primary and a secondary window
-- **WHEN** Coffer reads Codex's quota
-- **THEN** both windows are stored with their used percentage, length, reset time and when they were seen
-
-#### Scenario: Claude Code quota comes from a driven session's rate-limit event
-- **GIVEN** a Claude Code session Coffer drives that emits a `rate_limit_event`
-- **WHEN** the event arrives
-- **THEN** its windows are stored as Claude Code's quota, and the turn is unaffected
-
-#### Scenario: no fresh value shows no number
-- **GIVEN** an agent type no source has reported for, and a window whose reset time has passed
-- **WHEN** the quota is read
-- **THEN** the first says no value has been seen and the second shows no percentage
-
-#### Scenario: Codex is not read more often than every five minutes
-- **GIVEN** a Codex quota read a minute ago
-- **WHEN** the background loop asks again, and then a manual refresh asks within thirty seconds
-- **THEN** neither reaches the app-server
-
-### Requirement: Offer an opt-in statusline wrapper
-`coffer usage statusline -- <the user's own statusLine command>` MUST forward the `rate_limits`
-object of the statusline JSON Claude Code writes to its stdin to
-`POST /api/v1/usage/quota/statusline`, with a timeout of at most one second and never starting a
-daemon, then run the user's own command with the same stdin and print its output and exit code —
-even when the daemon is down. Coffer never installs it: the user opts in by setting it as their
-`statusLine` command, which covers the Claude Code sessions they run in their own terminal.
-Because that is an edit to a setting of Claude Code's that differs per person, it is handed to
-the person's agent: while Claude Code has no quota value, its row in `GET /api/v1/usage/quota`
-(and in the refresh answer) MUST carry `handoff`, a prompt the daemon writes asking the agent to
-wrap the current `statusLine.command` in the registered Claude Code agent's `settings.json` (the
-standard `~/.claude` when none is registered) as `coffer usage statusline -- '<it>'`, kept as one
-argument, or to add a `statusLine` that runs `coffer usage statusline` alone when there is none;
-to keep every other setting; and to show the diff before saving. The prompt MUST NOT ask for a
-credential, an OAuth token or a quota endpoint. Every other row's `handoff` is `null`, and Claude
-Code's is `null` once a value is seen. `coffer usage quota --prompt` MUST print the same prompt,
-and the Usage page MUST offer it on Claude Code's row with no reading, and no switch that turns
-the wrapper on.
-
-#### Scenario: the user's statusline command still runs with the daemon down
-- **GIVEN** no daemon running
-- **WHEN** Claude Code runs the wrapper with the user's own statusline command
-- **THEN** the user's command runs with the same stdin and its output is printed
-
-#### Scenario: the quota page hands the statusline opt-in to an agent
-- **GIVEN** a Claude Code agent registered with its own config dir, and no quota value for it yet
-- **WHEN** the quota is read and the Usage page shows it
-- **THEN** Claude Code's row carries a prompt naming that config dir's `settings.json`, the wrapper's form, the no-`statusLine` case and showing the diff first, and naming no token; Codex's row carries none
-- **AND** the page offers Copy prompt on Claude Code's row only, with no switch
-- **AND** once a value is seen the row carries no prompt
 
 ### Requirement: Push the proxy an approved key without a restart
 The model proxy MUST hold a connection's key only once the key may go to the connection's base
@@ -1450,8 +1386,7 @@ failures, not on every attempt. The refresh is on by default and is switched per
 **Refresh model prices** in Settings › General under Coffer's model, `coffer config set
 prices.refresh on|off`, `PUT /api/v1/providers/price-list` — and `COFFER_PRICE_REFRESH=off` pins it
 off. `GET /api/v1/providers/price-list` says which list is in use, the day its data is from, and
-the refresh's state; a bundled price reads "Bundled · updated <that day>", and the Usage page's
-dash tooltip names the same day.
+the refresh's state; a bundled price reads "Bundled · updated <that day>".
 
 #### Scenario: a refreshed list is cached and used
 - **GIVEN** the published list prices a model differently from the bundled snapshot
@@ -1521,3 +1456,44 @@ round; the refusal above keeps every surface write from reaching it.
 - **WHEN** machine 1's round pushes and machine 2's round then merges
 - **THEN** machine 2's round stops on the connection files instead of checking out a tree with two internal defaults
 - **AND** machine 2's vault is left as it was, holding only its own flag, until the person answers
+
+### Requirement: Show metered usage on a Usage tab of Model providers
+The Model providers page MUST carry two tabs under one header — **Providers** and **Usage**. The
+header is the title with the Experimental tag, the line "Where your agents’ models come from, and
+what requests through Coffer cost." and the primary **Add provider** button, the same on both tabs.
+The tab is in the address: `/model-providers` and `/model-providers/<uid>` are Providers,
+`/model-providers?tab=usage` is Usage. There MUST be no `/usage` page and no Usage sidebar entry.
+The Usage tab shows only what Coffer's proxy metered for API-key requests: a filter row with a
+date-only time range (Today, Last 7 days, Last 30 days, This month, or a custom range of days, up to
+90 days back), an **Agent** pill, a **Provider** pill, **Clear filters** while one is set and a ghost
+**Export CSV** button at the right; five tiles in one row — Cost (estimated), whose "?" holds the
+note on which prices costed the range, Input, Output, Cache read and Cache write; a Cost per day
+chart in the data colour with today lighter; a segmented By model · By agent · By day over a bordered
+table with a Total row, a footer "Cost of priced models only." with **Edit prices**, which switches
+to the Providers tab, and, by day, the latest seven days then "Showing 7 of N · Show all". The range,
+the filters and the breakdown are in the address. A cost no price covers reads `—`, with the reason
+on hover. Before any API-key request has ever been metered the tab is one whole-page empty state —
+"No API-key usage yet" and **Open Providers**, which switches to the Providers tab — with no filter
+row and no export. Coffer MUST NOT show, read, store or report an agent's own subscription quota
+anywhere, nor offer a status-line wrapper for it; the data is Coffer's own, so the tab has no Refresh.
+
+#### Scenario: Usage is a tab of Model providers
+- **GIVEN** the Model providers page with a provider
+- **WHEN** it renders and the user chooses the Usage tab
+- **THEN** the header carries the Experimental tag, the description and Add provider on both tabs, and the address becomes `/model-providers?tab=usage`
+- **AND** `/usage` is not a page and the sidebar has no Usage entry
+
+#### Scenario: the Usage tab keeps its range and filters in the address
+- **GIVEN** the Usage tab with metered requests
+- **WHEN** the user picks Last 30 days, the By agent view and an Agent and a Provider filter
+- **THEN** the address carries `range`, `by`, `agent` and `provider` beside `tab=usage`, the summary and the export are asked with the same range, grouping and filters, and a custom range is two days
+
+#### Scenario: the Usage tab has nothing to show before any usage
+- **GIVEN** no API-key request has ever been metered
+- **WHEN** the Usage tab is opened
+- **THEN** it shows "No API-key usage yet" and Open Providers, which switches to the Providers tab, and no time range, filter pills or Export CSV
+
+#### Scenario: Coffer shows no subscription quota
+- **GIVEN** agents on their own subscription logins
+- **WHEN** the Usage tab is opened
+- **THEN** it shows no quota meter, no Refresh and no status-line wrapper, and no `/api/v1/usage/quota` route is asked for

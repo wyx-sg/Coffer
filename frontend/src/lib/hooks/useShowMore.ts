@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 /** How many rows one batch adds. */
-export const SHOW_MORE_BATCH = 50;
+const SHOW_MORE_BATCH = 50;
 
 /**
  * The first batch of `items` and a way to reveal the next. `resetKey` (the
