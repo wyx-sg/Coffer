@@ -1,7 +1,8 @@
 // src/components/chat/ThreadNotices.tsx — the two notices that take the place of
 // (or sit above) an open conversation's composer: an archived conversation is
-// read-only until unarchived, and a live stream lost mid-turn after every
-// reconnect says so and offers to reload what the turn has written so far.
+// read-only until unarchived. The stream-lost banner sits inside the reply that
+// lost its stream: after every reconnect failed it says so and offers to reload
+// what the turn has written so far.
 import { useTranslation } from "react-i18next";
 import { WifiOff } from "lucide-react";
 
@@ -32,7 +33,7 @@ export function StreamLostBanner({ onReload }: { onReload?: () => void }) {
   return (
     <div
       role="alert"
-      className="mx-auto mb-2 flex w-full max-w-[960px] items-start gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3"
+      className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-3"
     >
       <WifiOff className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
       <div className="min-w-0 flex-1 space-y-0.5">

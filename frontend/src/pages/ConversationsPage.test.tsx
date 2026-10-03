@@ -82,7 +82,11 @@ vi.mock("@/lib/hooks/useAgentModels", () => ({
 }));
 
 vi.mock("@/lib/hooks/useChannels", () => ({
-  useChannels: () => ({ data: [{ uid: "ch-1", name: "team-bot", title: "Team bot" }] }),
+  useChannels: () => ({
+    data: [
+      { uid: "ch-1", name: "team-bot", title: "Team bot", config: { channel_type: "seatalk" } },
+    ],
+  }),
 }));
 
 vi.mock("@/lib/chat/streamClient", () => ({
@@ -216,7 +220,7 @@ describe("ConversationsPage list", () => {
     });
     renderPage("/conversations");
     const row = async (title: string) =>
-      (await screen.findByRole("link", { name: title })).closest("tr")!;
+      (await screen.findByRole("link", { name: title })).closest("li")!;
     const dm = await row("In the DM");
     expect(dm).toHaveTextContent("SeaTalk · DM");
     expect(dm).toHaveTextContent("dm line");
@@ -225,7 +229,7 @@ describe("ConversationsPage list", () => {
     expect(grp).toHaveTextContent("SeaTalk · coffer-dev › thread");
     expect(grp).toHaveTextContent("group line");
     const par = await row("Parallel work");
-    expect(par).toHaveTextContent("🧵#2");
+    expect(par).toHaveTextContent("SeaTalk · DM · Thread 2");
     expect(par).toHaveTextContent("parallel line");
     expect(par).toHaveTextContent("Running");
   });
@@ -241,38 +245,50 @@ describe("ConversationsPage list", () => {
       expect(await screen.findByText("From the web")).toBeInTheDocument();
       expect(screen.getAllByText("Coffer").length).toBeGreaterThan(0);
 
-      fireEvent.click(screen.getByRole("button", { name: "SeaTalk" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Source/ }));
+      fireEvent.click(await screen.findByRole("checkbox", { name: "SeaTalk · Team bot" }));
       await waitFor(() => expect(screen.queryByText("From the web")).not.toBeInTheDocument());
       expect(screen.getByText("Daily Sentry triage")).toBeInTheDocument();
     },
   );
 
-  test("a channel's link narrows the list to that channel, named in a chip that clears", async () => {
+  test("a channel's link narrows the list to that channel, named in the Source pill", async () => {
+    chatApiMock.listConversations.mockResolvedValue({
+      conversations: [makeConv({ title: "From the web" }), channelConv],
+    });
+    renderPage("/conversations?source=ch-1");
+    expect(await screen.findByText("Daily Sentry triage")).toBeInTheDocument();
+    expect(screen.queryByText("From the web")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Source:\s*SeaTalk · Team bot/ }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(await screen.findByText("From the web")).toBeInTheDocument();
+  });
+
+  test("a legacy ?channel= link is read once as a source", async () => {
     chatApiMock.listConversations.mockResolvedValue({
       conversations: [makeConv({ title: "From the web" }), channelConv],
     });
     renderPage("/conversations?channel=ch-1");
     expect(await screen.findByText("Daily Sentry triage")).toBeInTheDocument();
     expect(screen.queryByText("From the web")).not.toBeInTheDocument();
-    expect(screen.getByText("Channel: Team bot")).toBeInTheDocument();
-    // The source switch stays beside the chip.
-    expect(screen.getByRole("group", { name: "Source" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /clear channel filter/i }));
-    expect(await screen.findByText("From the web")).toBeInTheDocument();
-    expect(screen.queryByText("Channel: Team bot")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Source:\s*SeaTalk · Team bot/ }),
+    ).toBeInTheDocument();
   });
 
   test("with nothing matching the filters, Clear filters brings every conversation back", async () => {
     chatApiMock.listConversations.mockResolvedValue({
       conversations: [makeConv({ title: "From the web" })],
     });
-    renderPage("/conversations?source=telegram");
+    renderPage("/conversations?source=ch-9");
     expect(await screen.findByText("No conversations match")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(await screen.findByText("From the web")).toBeInTheDocument();
   });
 
-  test("the archived list says how to continue an archived conversation", async () => {
+  test("the archived list has no explanatory strip", async () => {
     chatApiMock.listConversations.mockImplementation(async (opts: { archived?: boolean }) => ({
       conversations: opts.archived
         ? [makeConv({ id: "old", title: "Old work", archived_at: "2026-02-01T00:00:00Z" })]
@@ -280,18 +296,19 @@ describe("ConversationsPage list", () => {
     }));
     renderPage("/conversations?archived=1");
     expect(await screen.findByText("Old work")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Archived conversations are read-only. Open one and choose Unarchive to continue it.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });
 
-  test("with no conversation at all, one empty state offers New conversation", async () => {
+  test("with no conversation at all, the empty state is only the header and a message", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     renderPage("/conversations");
     expect(await screen.findByText("No conversations yet")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /new conversation/i }).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Start one here, or message one of your channels from SeaTalk or Telegram."),
+    ).toBeInTheDocument();
+    // The header's button is the only one: the empty state does not repeat it.
+    expect(screen.getAllByRole("button", { name: /new conversation/i })).toHaveLength(1);
+    expect(screen.queryByRole("textbox", { name: "Search titles and messages" })).toBeNull();
   });
 });
 
@@ -364,7 +381,7 @@ describe("ConversationsPage draft", () => {
     renderPage("/conversations");
 
     await openDraft();
-    expect(await screen.findByText("New conversation with Claude Code")).toBeInTheDocument();
+    expect(await screen.findByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(chatApiMock.createConversation).not.toHaveBeenCalled();
   });
@@ -399,7 +416,7 @@ describe("ConversationsPage draft", () => {
     renderPage("/conversations/new", [
       { agent_key: "claude_code", display_name: "Claude Code", available: false },
     ]);
-    expect(await screen.findByText("No managed agent available")).toBeInTheDocument();
+    expect(await screen.findByText("No agent connected")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
   });
 
@@ -527,7 +544,7 @@ describe("ConversationsPage open conversation", () => {
   test("the draft is full width too", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
     renderPage("/conversations/new?agent=codex");
-    expect(await screen.findByText("New conversation with Claude Code")).toBeInTheDocument();
+    expect(await screen.findByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Test Conv/ })).not.toBeInTheDocument();
   });
 
@@ -545,7 +562,7 @@ describe("ConversationsPage open conversation", () => {
     expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
   });
 
-  test("deleting a conversation from its menu asks for confirmation first", async () => {
+  acceptance("chat", "delete asks first, naming the conversation", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderPage("/conversations/conv-1");
@@ -553,14 +570,71 @@ describe("ConversationsPage open conversation", () => {
     fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
 
-    expect(await screen.findByText(/delete this conversation\?/i)).toBeInTheDocument();
+    expect(await screen.findByText("Delete “Test Conv”?")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "“Test Conv” and its messages are removed from Coffer. Files the agent changed and Claude Code’s own session files stay. This can’t be undone — Archive keeps it instead.",
+        "“Test Conv” and its messages are removed from Coffer; files the agent changed stay. To keep it out of the way instead, archive it.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete conversation" })).toBeInTheDocument();
     expect(chatApiMock.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  test("the title bar row has the title and ⋯, and no back link, archived pill or page header", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage("/conversations/conv-1");
+    const bar = await screen.findByTestId("content-title-bar");
+    expect(within(bar).getByRole("heading", { name: "Test Conv" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "More actions" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /conversations/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Archived")).not.toBeInTheDocument();
+  });
+
+  acceptance("chat", "rename a conversation in place", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.updateConversation.mockResolvedValue(makeConv({ title: "Better name" }));
+    renderPage("/conversations/conv-1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    const input = await screen.findByRole("textbox", { name: "Conversation title" });
+    expect(screen.getByText("Enter to save · Esc to cancel")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "Better name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(chatApiMock.updateConversation).toHaveBeenCalledWith("conv-1", {
+        title: "Better name",
+      }),
+    );
+    expect(screen.queryByRole("textbox", { name: "Conversation title" })).not.toBeInTheDocument();
+  });
+
+  test("Esc cancels a rename and keeps the title", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage("/conversations/conv-1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Test Conv" }));
+    const input = await screen.findByRole("textbox", { name: "Conversation title" });
+    fireEvent.change(input, { target: { value: "Nope" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: "Conversation title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Test Conv" })).toBeInTheDocument();
+    expect(chatApiMock.updateConversation).not.toHaveBeenCalled();
+  });
+
+  test("the list's Rename opens the conversation with its title already being edited", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage({ pathname: "/conversations/conv-1", state: { rename: true } });
+    expect(await screen.findByRole("textbox", { name: "Conversation title" })).toHaveValue(
+      "Test Conv",
+    );
   });
 
   test("archiving from the menu needs no confirmation", async () => {
@@ -603,27 +677,11 @@ describe("ConversationsPage open conversation", () => {
 
     expect(await screen.findByText("old question")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
-    // The header says it is archived and offers Unarchive; so does the notice.
-    expect(screen.getByRole("button", { name: "Unarchive" })).toBeInTheDocument();
+    // Unarchive lives in the notice that stands in for the reply box, not in the menu.
     expect(screen.getByRole("button", { name: /unarchive to continue/i })).toBeInTheDocument();
-    expect(screen.getAllByText("Archived").length).toBeGreaterThan(0);
-    // The ⋯ menu does not repeat the header's Unarchive button.
-    fireEvent.click(screen.getByRole("button", { name: "More actions for this conversation" }));
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     expect(screen.queryByRole("menuitem", { name: "Unarchive" })).not.toBeInTheDocument();
-  });
-
-  test("the header's Unarchive brings an archived conversation back", async () => {
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    chatApiMock.getConversation.mockResolvedValue(
-      makeConv({ archived_at: "2026-02-01T00:00:00Z" }),
-    );
-    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    chatApiMock.unarchiveConversation.mockResolvedValue(makeConv({ archived_at: null }));
-    renderPage("/conversations/conv-1");
-
-    fireEvent.click(await screen.findByRole("button", { name: "Unarchive" }));
-    await waitFor(() => expect(chatApiMock.unarchiveConversation).toHaveBeenCalled());
-    expect(await screen.findByText("Conversation unarchived")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Archive" })).not.toBeInTheDocument();
   });
 
   test("unarchiving an archived thread re-enables the composer", async () => {
@@ -680,6 +738,7 @@ describe("ConversationsPage hand-off", () => {
     const box = await screen.findByRole("textbox", { name: /message input/i });
     await waitFor(() => expect(box).toHaveValue("Install jq 1.6."));
     expect(screen.getByRole("button", { name: "Workspace" })).toHaveTextContent("~/work");
+    expect(screen.getByText("Nothing is sent until you press Send.")).toBeInTheDocument();
     // Pre-filled, not sent: no conversation exists and no turn has run.
     await new Promise((r) => setTimeout(r, 20));
     expect(chatApiMock.createConversation).not.toHaveBeenCalled();

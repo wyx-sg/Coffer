@@ -1,11 +1,12 @@
 // components/chat/MessageThread.mirror.test.tsx
-// A channel conversation's thread says where a reply also goes and marks the
-// replies its channel has not received yet (spec chat "Show where a reply will
-// also be sent"). The mirror comes from the single-conversation GET: the list
-// row the page opens the thread with carries `mirror: null`.
+// A channel conversation's thread marks the user messages its channel has not
+// received yet, "Not delivered to SeaTalk yet · will retry" (spec chat "Show
+// where a reply will also be sent"). The mirror comes from the single-conversation
+// GET: the list row the page opens the thread with carries `mirror: null`.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { MessageThread } from "./MessageThread";
@@ -71,12 +72,14 @@ function renderThread(conversation: Conversation = LISTED) {
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <MessageThread
-          conversation={conversation}
-          liveMessage={null}
-          isStreaming={false}
-          onSend={vi.fn()}
-        />
+        <TooltipProvider>
+          <MessageThread
+            conversation={conversation}
+            liveMessage={null}
+            isStreaming={false}
+            onSend={vi.fn()}
+          />
+        </TooltipProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -105,17 +108,16 @@ describe("MessageThread channel mirror", () => {
     );
     renderThread();
 
-    expect(
-      await screen.findByText("Also sends to SeaTalk · 🧵#1 deploy check"),
-    ).toBeInTheDocument();
-    expect(chatApiMock.getConversation).toHaveBeenCalledWith("conv-1");
     // Only the reply the channel still owes is marked — an owed answer marks no user bubble.
-    const marks = await screen.findAllByText("Not delivered to SeaTalk yet");
+    const marks = await screen.findAllByText("Not delivered to SeaTalk yet · will retry");
+    expect(chatApiMock.getConversation).toHaveBeenCalledWith("conv-1");
     expect(marks).toHaveLength(1);
     expect(marks[0]!.closest(".items-end")).toHaveTextContent("and the docs");
+    expect(marks[0]).toHaveClass("text-warning");
+    expect(screen.queryByRole("button", { name: /more info/i })).not.toBeInTheDocument();
   });
 
-  test("a reply that stays in Coffer says so", async () => {
+  test("a reply that stays in Coffer marks nothing and adds no hint", async () => {
     chatApiMock.getConversation.mockResolvedValue(
       withMirror({
         deliverable: false,
@@ -127,9 +129,8 @@ describe("MessageThread channel mirror", () => {
     );
     renderThread();
 
-    expect(await screen.findByText("Replies stay in Coffer")).toBeInTheDocument();
-    expect(screen.queryByText(/Also sends to/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /more info/i })).toBeInTheDocument();
+    expect(await screen.findByText("ship it")).toBeInTheDocument();
+    expect(screen.queryByText(/Also sends to|Replies stay in Coffer|Not delivered/)).toBeNull();
   });
 
   test("a web conversation has no hint and fetches no detail", async () => {

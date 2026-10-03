@@ -113,7 +113,7 @@ be offered for selection. A turn for a type with no enabled agent MUST be
 refused with an `agent_not_managed` rejection rather than run against the CLI's
 own default config directory, which Coffer was told to leave alone. With no
 managed agent at all, the draft surface is replaced by a state that links to the
-Agents page and offers the install prompt to copy.
+Agents page.
 
 #### Scenario: an unmanaged agent type is not offered and runs no turn
 - **GIVEN** the `claude_code` CLI is installed but no enabled `claude_code` agent is registered
@@ -595,14 +595,32 @@ history instead.
 The web UI MUST carry a **Conversations** page (`/conversations`): the conversation list on the left and the selected conversation on the right. The list MUST show every
 conversation Coffer runs, whatever opened it — a conversation an IM channel (SeaTalk, Telegram)
 opened, and one opened from Coffer's own UI, which is modelled as a built-in source named
-**Coffer** — each row carrying a **source badge** naming its channel or Coffer, with filters by
-source and by agent. A channel's badge MUST also name where in the channel the conversation
-lives — a direct chat or a group (by its name when Coffer knows it), a thread or topic rather than
-the chat's main timeline, and a parallel thread's `🧵#N` mark — and every row of the list MUST show
-the latest message's words on one line and whether a turn is running in it (the narrower list beside
-an open conversation marks the running ones and leaves the line out). A channel's link to its
-conversations opens the list filtered to that channel, named in a chip that clears the filter. A conversation's page MUST show the full exchange and a reply box
-that continues it, whichever source opened it; **New conversation** is a secondary action, and the
+**Coffer** — shown as a list with no header row, grouped by day (**Today**, **Yesterday**, **Earlier**; the
+group titles carry no counts) and newest activity first. A row MUST show the title, a status word
+(**Running** with a success-coloured dot while a turn runs; **Needs you** with a warning dot while the
+agent waits for an answer, when the conversation says so), the latest message's words on one muted
+line, its **source** (the platform's logo and name with where in the chat it lives — `SeaTalk · DM`, a
+group by its name when Coffer knows it, a thread or topic rather than the chat's main timeline, a
+parallel thread as `DM · Thread 2` — or the Coffer mark and **Coffer**), the agent's badge and name, and
+its last activity (the clock time for today and yesterday, a date such as `Sep 22` for earlier). Hovering
+a row shows a leading checkbox and a trailing **⋯** menu (Rename, Archive, Delete…; an archived
+conversation's menu is Unarchive, Delete…). Rename opens the conversation with its title already being
+edited; Archive and Unarchive act at once and answer with a toast that has Undo; Delete… asks first,
+naming the conversation, and says its messages are removed from Coffer while the files the agent changed
+stay. The filter row reads, in order, an **Active / Archived** switch, a search box over titles and
+message text (`/` focuses it), a **Source** pill (Coffer and each channel, several at once, each
+channel shown as its platform's logo and `SeaTalk · Team bot`), an **Agent** pill, and **Clear filters**
+once anything narrows the list; it shows no result count. All of it is in the URL — `?q=`,
+`?source=coffer,<channel uid>`, `?agent=`, `?archived=1` — so a filtered list is a link, and a channel's
+**Conversations from this channel** link opens `?source=<uid>`; a link carrying the earlier
+`?channel=<uid>` is read once as that source and the address rewritten. Ticking a row (a shift-click
+ticks the range) replaces the filter row with a selection bar — "3 of 8 selected", **Archive**
+(**Unarchive** in the archived view), **Delete…** and **Clear** — and a bulk delete asks first, listing
+the titles (five, then **Show all**). The list reads 30 conversations and then 50 more as it is
+scrolled. With no conversation at all the page is its header and one message; with filters that match
+nothing it says so and offers **Clear filters**; a list that fails to load shows the error in its own
+area with **Retry**. A conversation's page MUST show the full exchange and a reply box
+that continues it, whichever source opened it; **New conversation** is the header's primary action, and the
 page opens on the list rather than on a welcome or suggestions page, which it does not have. The
 composer carries no voice input: a voice message reaches an agent only through a channel, which
 transcribes it (see "Transcribe audio attachments when transcription is configured"). There is no
@@ -618,8 +636,37 @@ one owner, and an agent cannot tell which window a turn arrived through.
 #### Scenario: a row names the chat and thread it came from
 - **GIVEN** a conversation a SeaTalk direct chat opened, one a group thread opened, and one a `/thread` parallel conversation opened, whose turn is running
 - **WHEN** the Conversations page's list renders
-- **THEN** the first row's badge names SeaTalk and the direct chat, the second the group and its thread, and the third its `🧵#N` mark
+- **THEN** the first row's badge names SeaTalk and the direct chat, the second the group and its thread, and the third its `Thread N` mark
 - **AND** each row shows its latest message's line, and the third is marked running
+
+#### Scenario: rows are grouped by day without counts
+- **GIVEN** conversations last active today, yesterday and weeks ago
+- **WHEN** the Conversations page's list renders
+- **THEN** the list has no header row and shows the groups Today, Yesterday and Earlier, none of them with a count
+- **AND** a row from today shows its clock time and an earlier row its date
+
+#### Scenario: the Source pill filters by several sources
+- **GIVEN** conversations from Coffer and from two channels
+- **WHEN** the user ticks Coffer and one channel in the Source pill
+- **THEN** only those sources' conversations are listed, `?source=` names both, and Clear filters is offered
+- **AND** a link carrying the earlier `?channel=<uid>` is read once as that source and its address rewritten to `?source=<uid>`
+
+#### Scenario: a row's menu acts on one conversation
+- **GIVEN** a conversation in the list
+- **WHEN** the user opens its ⋯ menu
+- **THEN** it offers Rename, Archive and Delete…, and Rename opens the conversation with its title being edited
+- **AND** Archive acts at once with a toast that has Undo, and Delete… asks first, naming the conversation
+
+#### Scenario: ticking rows replaces the filter row with a selection bar
+- **GIVEN** a list of conversations
+- **WHEN** the user ticks two rows
+- **THEN** the filter row is replaced by "2 of N selected" with Archive, Delete… and Clear
+- **AND** Delete… lists the two titles in its confirmation, and a list of more than five shows five and Show all
+
+#### Scenario: a list that fails to load says so
+- **GIVEN** the conversation list request fails
+- **WHEN** the page renders
+- **THEN** the list area shows an error with Retry, and Retry reads the list again
 
 #### Scenario: a channel's conversation is continued from the page
 - **GIVEN** a conversation a SeaTalk channel opened
@@ -629,7 +676,7 @@ one owner, and an agent cannot tell which window a turn arrived through.
 #### Scenario: the page opens on the list with no welcome page
 - **GIVEN** conversations from two sources
 - **WHEN** the user opens `/conversations`
-- **THEN** it opens the Conversations list with New conversation as a secondary action, with no welcome or suggestions page and no voice-input control in the composer
+- **THEN** it opens the Conversations list with New conversation as the header's primary action, with no welcome or suggestions page and no voice-input control in the composer
 
 ### Requirement: Put the open conversation in the URL
 The open conversation MUST be part of the URL (`/conversations/:id`), so a refresh, a
@@ -646,7 +693,15 @@ nothing.
 
 ### Requirement: Create, rename, archive, unarchive and delete conversations
 The conversation list MUST support create, rename, archive, unarchive, and
-delete. Archiving takes a conversation out of the default (active) listing and
+delete. An open conversation's title, and its **⋯** menu (Rename, Archive, Delete…;
+an archived conversation's menu has no Archive, and its Unarchive is in the notice
+that stands in for the reply box), are shown in the window title bar — or, in a
+browser tab, in a bar at the top of the content — and the page carries no header strip
+and no back link of its own. Rename MUST edit the title **in place** — the title
+becomes an input, Enter saves and Esc cancels — with no dialog; the list's Rename
+opens the conversation already in that state. Delete MUST ask first, naming the
+conversation, and say that its messages are removed from Coffer while the files the
+agent changed stay. Archiving takes a conversation out of the default (active) listing and
 into the archived listing **without destroying it**; unarchiving returns it to
 the active listing. Deleting removes the conversation and its messages and
 cancels any turn in flight on it — deletion is the destructive one, archiving
@@ -658,6 +713,18 @@ rejected.
 - **WHEN** conversations are created, renamed, and deleted,
 - **THEN** each operation persists and the listing reflects it; a deleted
   conversation and its messages are removed.
+
+#### Scenario: rename a conversation in place
+- **GIVEN** an open conversation
+- **WHEN** the user chooses Rename from its ⋯ menu, types a new title and presses Enter
+- **THEN** the title is saved and no dialog was shown
+- **AND** pressing Esc instead keeps the old title
+
+#### Scenario: delete asks first, naming the conversation
+- **GIVEN** an open conversation titled "Test Conv"
+- **WHEN** the user chooses Delete… from its ⋯ menu
+- **THEN** a confirmation titled "Delete “Test Conv”?" says its messages are removed from Coffer and the files the agent changed stay
+- **AND** nothing is deleted until the user confirms
 
 #### Scenario: archive and restore a conversation
 - **GIVEN** a conversation in the active listing,
@@ -701,12 +768,20 @@ A dropped event stream MUST be recovered by re-subscribing — the replay of
 "Replay the in-flight turn to late subscribers" is what makes that safe — with
 a backoff and a bounded number of attempts, so a hard failure surfaces as an
 error the owner can act on rather than as a client hammering the endpoint.
+When every attempt has failed, the reply that lost its stream MUST carry a
+warning banner inside it, left-aligned with its text — "Lost the live stream
+from the daemon", that the turn may still be running and that reloading shows
+what it has written so far, and a Reload conversation action — and MUST stop
+showing a typing cursor or "Thinking…"; a tool call with no result then reads
+"Unknown" rather than Running.
 
 #### Scenario: a dropped event stream reconnects and is bounded
 - **GIVEN** an open conversation whose event subscription drops mid-turn,
 - **WHEN** the client recovers,
 - **THEN** it re-subscribes with a backoff and replays the in-flight turn; after
-  a bounded number of failed attempts it stops and reports the error.
+  a bounded number of failed attempts it stops and reports the error
+  as a warning banner inside the reply, with Reload conversation and no typing
+  cursor.
 
 #### Scenario: an idle event stream is re-subscribed
 - **GIVEN** an open conversation whose event subscription is closed while no turn
@@ -753,7 +828,13 @@ The page MUST be able to interrupt the turn it is watching — whichever surface
 started it — via `POST .../interrupt`, with the semantics of "Pause the pending
 queue on interrupt": the turn stops with its partial output kept and persisted,
 and the pending queue is **paused** rather than auto-advanced into the turn
-that was just stopped.
+that was just stopped. The stopped reply MUST say so at its end in a muted line,
+"Stopped by you.", and its header reads "Stopped after 12s"; when a tool call
+was still running at the stop, the line adds that the edit (for a file-writing
+tool) or the command (for a shell tool) was not finished and that sending a
+message continues — another tool adds nothing — and that call reads "Stopped"
+rather than Running. The persisted reply carries the status `stopped`, so a
+reload shows the same.
 
 #### Scenario: the page stops a turn another surface started
 - **GIVEN** a turn started by another surface, with a message queued behind it,
@@ -761,13 +842,23 @@ that was just stopped.
 - **THEN** the turn stops with its partial output persisted,
 - **AND** the queued message is held rather than auto-run.
 
+#### Scenario: a stopped reply says it was stopped
+- **GIVEN** a reply the user stopped while an edit tool call was still running
+- **WHEN** the thread renders it, live or after a reload
+- **THEN** its header reads "Stopped after" its length and its last line reads
+  "Stopped by you. The edit was not finished; send a message to continue."
+
 ### Requirement: Render tool calls as cards
 The message thread MUST render a turn's tool calls as their own cards rather
 than as prose: each card names the tool, shows what it was called with, and
 shows the result once one arrives, so a reader can see what the agent *did* and
 not only what it said. Text and tool-call blocks appear in the order the turn
-emitted them, and a card whose result has not arrived yet reads as still
-running.
+emitted them. A card whose result has not arrived yet reads as still running
+(muted text with a spinner, no warning colour); a finished card reads
+"Done · 0.3s" with the tool's duration when the daemon recorded one, and plain
+"Done" when it did not; a failed card reads "Error"; and a card with no result
+in a reply that was stopped or whose stream was lost reads "Stopped" or
+"Unknown" instead.
 
 #### Scenario: a tool call renders as a card between the text around it
 - **GIVEN** an assistant message whose blocks are text, a tool call with its result, then more text, and a second tool call with no result yet
@@ -780,7 +871,10 @@ running.
 Under an assistant reply that is no longer streaming, the thread MUST show a
 "Files changed" card listing each file the reply's tool calls wrote, with the
 lines added and removed; repeated edits to one file are summed into one row, and
-a reply that changed no file shows no card.
+a reply that changed no file shows no card. The card sits inside the reply, after
+its text and before its token line, aligned with the text, and its title carries
+no count; each row is a button that opens that file's change, and the row whose
+change is open is highlighted.
 
 #### Scenario: a reply's file edits are summed into one row per file
 - **GIVEN** an assistant reply whose tool calls edit one file twice, write a second file, and read a third
@@ -802,9 +896,13 @@ control, because the code is what a reader most often wants out of a reply.
 
 ### Requirement: Show a failed turn as one inline banner with Retry
 A failed turn MUST replace the in-progress bubble with a single inline error
-banner in the flow above the composer — never a floating notice and never two
-error surfaces at once — carrying a Retry that re-sends the message that failed
-and a dismiss that clears it.
+banner inside the reply that failed, left-aligned with its text (a bare reply
+carries it when the turn left none) — never a floating notice, never above the
+composer and never two error surfaces at once. It reads "The turn failed:" and
+the reason, adds that Retry sends the same message again, and carries a Retry
+that re-sends the message that failed and a dismiss that clears it; the reply's
+header reads "Failed after 38s". At the end of a reply that carries its token
+counts, a Copy reply control copies the reply's text.
 
 The Retry MUST re-send the failed message whole: its text AND every attachment
 it carried, whether the files came from the web composer or a channel. A
@@ -824,8 +922,8 @@ stays in the composer, so the banner shows the reason with no Retry.
 #### Scenario: a failed turn offers a retry in the thread
 - **GIVEN** a turn that fails,
 - **WHEN** the thread renders it,
-- **THEN** the in-progress bubble is replaced by one inline banner in the flow,
-  carrying a Retry that re-sends the failed message and a dismiss.
+- **THEN** the in-progress bubble is replaced by one inline banner inside the
+  failed reply, carrying a Retry that re-sends the failed message and a dismiss.
 
 #### Scenario: a retry re-sends the failed message's attachments
 - **GIVEN** a user message sent with an attached file, whose turn failed
@@ -877,14 +975,14 @@ The draft is not a conversation row. **New conversation** opens a blank draft su
 and the **first send** is what creates the conversation — so a user who opens
 the page and changes their mind leaves nothing behind. Where no managed agent
 is available at all, the draft MUST be replaced by a state saying how to get
-one rather than by a composer that can only fail, and the New conversation
-dialog MUST say the same. While no supported agent is installed on this machine
-that state MUST offer the daemon's install prompt (`GET /api/v1/agents/types`
-`install_handoff`, see [web-ui](../web-ui/spec.md) "Hand installing an agent to
-the person when none is found") through **Copy prompt** only — there is no agent
-of Coffer's to ask — and name no install command; once one is installed but
-none is added, it MUST link to the Agents page instead, where adding is
-Coffer's own action.
+one rather than by a composer that can only fail. That state says "No agent
+connected", names Claude Code and Codex, and offers one **Open Agents** link to the
+Agents page, where connecting an agent is Coffer's own action; it carries no install
+prompt and no install command (handing an install to an assistant belongs to the
+Agents page). The draft's title bar says "New conversation", and with an agent its
+centre says which agent will run in which folder; the folder picker, agent, model
+and effort sit in the reply box's toolbar, and a draft opened from Ask an agent
+says under the box that nothing is sent until Send.
 
 When the conversation is created but the daemon refuses its first message (for
 example `ATTACHMENT_NOT_FOUND`), the message MUST NOT be lost: its text and
@@ -898,11 +996,10 @@ refusal is shown in the thread's banner, without a Retry.
   opening the draft and leaving creates nothing. With no managed agent
   available, the draft is replaced by a state saying how to get one.
 
-#### Scenario: with no managed agent the draft offers the install prompt to copy
-- **GIVEN** no supported agent installed on this machine, so no managed agent is available
+#### Scenario: with no managed agent the draft links to the Agents page
+- **GIVEN** no managed agent is available
 - **WHEN** the user opens the New conversation draft
-- **THEN** it offers Copy prompt with the daemon's install prompt, and no Ask an agent and no install command
-- **AND** once an agent is installed but not added, the same state links to the Agents page instead
+- **THEN** it says no agent is connected and offers Open Agents, which links to the Agents page, with no composer, no Copy prompt and no install command
 
 #### Scenario: a draft's first message refused after its conversation is created keeps its text and files
 - **GIVEN** the draft surface with typed text and an attached file
@@ -1196,9 +1293,9 @@ uploads returned.
 - **THEN** it is attached and uploaded like a picked file
 
 ### Requirement: Show a message's attachments in the thread
-A user message's attachments MUST be shown in the thread as chips naming each
-file and its type, under the message's text — including the just-sent echo of
-a message before its row lands. Because they are read from the persisted
+A user message's attachments MUST be shown in the thread under the message's
+text — an image as a thumbnail, any other file as a chip naming it and its
+type — including the just-sent echo of a message before its row lands. Because they are read from the persisted
 references, a reload, a second tab and a message sent from a channel show the
 same chips. The path is never shown.
 
@@ -1326,12 +1423,15 @@ the channel kind.
 
 ### Requirement: Show where a reply will also be sent
 The Conversations page MUST tell the owner, before they send, where a reply to a channel's
-conversation will also go — "Also sends to SeaTalk · 🧵#1 deploy check" — or that
-it will stay in Coffer, and MUST mark each reply the channel has not received yet
-as not delivered to that channel until it is.
+conversation will also go — the source in the title bar beside the conversation's title
+("SeaTalk · coffer-dev › thread"), which means replies typed here also go there — or that
+it will stay in Coffer ("Replies stay in Coffer", with the reason one tap away), and MUST
+mark each reply the channel has not received yet as not delivered to that channel until it
+is, in a quiet warning line under the message: "Not delivered to SeaTalk yet · will retry".
+The reply box carries no line of its own about this.
 
 #### Scenario: the Conversations page shows where a reply also goes
 - **GIVEN** an open conversation a channel opened, with one reply not yet delivered
 - **WHEN** the page renders its composer
-- **THEN** the composer says where the reply will also be sent, and the
+- **THEN** the title bar names the source the reply will also be sent to, and the
   undelivered reply is marked as not delivered to that channel

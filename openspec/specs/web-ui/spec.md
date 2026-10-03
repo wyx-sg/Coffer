@@ -184,7 +184,11 @@ persist across sessions (`localStorage`). The sidebar toggle's shortcut is ⌘\
 The desktop shell on macOS MUST draw its own 44px title strip across the top of
 the window, in the sidebar's colour and with no rule beneath it. Besides the
 traffic lights the strip MUST hold only the sidebar toggle and back and forward
-arrows through the app's own history, to the right of the toggle. The controls
+arrows through the app's own history, to the right of the toggle — with one
+exception: an open conversation's title row (its title, its channel source and
+its ⋯ menu) sits in the strip, 32px right of the sidebar's edge, because that page
+has no header of its own; no other page puts anything there, and a page's title
+stays in the page. The controls
 start 16px right of the traffic lights, or at the left edge in full screen,
 where the lights are hidden. Where the strip is blank the window MUST remain
 draggable. While the sidebar is expanded its right edge MUST run up through the
@@ -192,7 +196,7 @@ strip; collapsed, the strip MUST run across. An arrow MUST be greyed out and
 inert when the app's history has nowhere to go that way, and ⌘[ and ⌘] (Ctrl
 off macOS) MUST do what the arrows do, except while the user types in a text
 field. A browser tab has no strip and no arrows; its sidebar toggle sits beside
-the logo.
+the logo, and an open conversation's title row is a 44px bar at the top of the content.
 
 #### Scenario: the arrows in the title bar go back and forward through the app's history
 - **GIVEN** the desktop shell with no history behind or ahead of the current page

@@ -9,6 +9,7 @@ import { ConversationsPage } from "./ConversationsPage";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { makeConversation } from "@/test/conversationFixtures";
+import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
@@ -74,23 +75,14 @@ describe("Conversations selection", () => {
   test("ticking a row shows the selection bar; the row itself does not open", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select Conv a" }));
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByText("1 of 4 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+    // The selection bar replaces the filter row.
+    expect(screen.queryByRole("textbox", { name: "Search titles and messages" })).toBeNull();
     // Still on the list: the checkbox click did not navigate.
     expect(screen.getByRole("link", { name: "Conv b" })).toBeInTheDocument();
-  });
-
-  test("the header checkbox selects every row, shows indeterminate for some, and clears", async () => {
-    renderPage();
-    await screen.findByRole("link", { name: "Conv a" });
-    const all = screen.getByRole("checkbox", { name: "Select all conversations" });
-    fireEvent.click(rowBox("Conv a"));
-    expect(all).toHaveProperty("indeterminate", true);
-    fireEvent.click(all);
-    expect(screen.getByText("4 selected")).toBeInTheDocument();
-    fireEvent.click(all);
-    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
   });
 
   test("shift-click ticks the range between two rows", async () => {
@@ -98,7 +90,7 @@ describe("Conversations selection", () => {
     await screen.findByRole("link", { name: "Conv a" });
     fireEvent.click(rowBox("Conv a"));
     fireEvent.click(rowBox("Conv c"), { shiftKey: true });
-    expect(screen.getByText("3 selected")).toBeInTheDocument();
+    expect(screen.getByText("3 of 4 selected")).toBeInTheDocument();
     expect(rowBox("Conv d")).not.toBeChecked();
   });
 
@@ -106,11 +98,19 @@ describe("Conversations selection", () => {
     renderPage();
     await screen.findByRole("link", { name: "Conv a" });
     fireEvent.click(rowBox("Conv a"));
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
-    // Clear (×) ends the selection and brings the filters back.
+    expect(screen.getByText("1 of 4 selected")).toBeInTheDocument();
+    // Clear ends the selection and brings the filter row back.
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Coffer" }));
+    expect(
+      await screen.findByRole("textbox", { name: "Search titles and messages" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+    // A different view starts with nothing ticked.
+    fireEvent.click(rowBox("Conv a"));
+    api.listConversations.mockResolvedValue({ conversations: rows.slice(1) });
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Archived" }));
+    await waitFor(() => expect(screen.queryByText(/selected/)).not.toBeInTheDocument());
   });
 
   test("Archive runs straight away, toasts with Undo and refreshes the list", async () => {
@@ -130,19 +130,48 @@ describe("Conversations selection", () => {
   test("Delete confirms first, naming the count and titles, then the rows are gone", async () => {
     renderPage();
     await screen.findByRole("link", { name: "Conv a" });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select all conversations" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    for (const id of ["a", "b", "c", "d"]) fireEvent.click(rowBox(`Conv ${id}`));
+    fireEvent.click(screen.getByRole("button", { name: "Delete…" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Delete 4 conversations?")).toBeInTheDocument();
-    expect(within(dialog).getByText(/“Conv a”, “Conv b”, “Conv c” and 1 more/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "These conversations and their messages are removed from Coffer; files the agents changed stay.",
+      ),
+    ).toBeInTheDocument();
+    for (const id of ["a", "b", "c", "d"]) {
+      expect(within(dialog).getByText(`Conv ${id}`)).toBeInTheDocument();
+    }
     expect(api.batchConversations).not.toHaveBeenCalled();
     api.listConversations.mockResolvedValue({ conversations: [] });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete 4 conversations" }));
     await waitFor(() =>
       expect(api.batchConversations).toHaveBeenCalledWith("delete", ["a", "b", "c", "d"]),
     );
     expect(await screen.findByText("Deleted 4 conversations")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("link", { name: "Conv a" })).toBeNull());
+  });
+
+  acceptance("chat", "ticking rows replaces the filter row with a selection bar", async () => {
+    const many = Array.from({ length: 7 }, (_, i) =>
+      makeConversation({
+        id: `m${i}`,
+        title: `Many ${i}`,
+        updated_at: new Date(Date.now() - i * 1000).toISOString(),
+      }),
+    );
+    api.listConversations.mockResolvedValue({ conversations: many, total: 7 });
+    renderPage();
+    await screen.findByRole("link", { name: "Many 0" });
+    for (const c of many) fireEvent.click(rowBox(c.title));
+    expect(screen.getByText("7 of 7 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(5);
+    expect(within(dialog).getByText("Showing 5 of 7")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Show all" }));
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(7);
+    expect(within(dialog).queryByText(/Showing 5/)).toBeNull();
   });
 
   test("a running conversation is reported as skipped, with the rest done", async () => {
@@ -156,9 +185,11 @@ describe("Conversations selection", () => {
     await screen.findByRole("link", { name: "Conv a" });
     fireEvent.click(rowBox("Conv a"));
     fireEvent.click(rowBox("Conv b"));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete…" }));
     fireEvent.click(
-      within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete" }),
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Delete 2 conversations",
+      }),
     );
     expect(await screen.findByText("1 done, 1 skipped")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /details/i }));

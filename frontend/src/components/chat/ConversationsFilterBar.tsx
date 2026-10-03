@@ -1,119 +1,153 @@
 // src/components/chat/ConversationsFilterBar.tsx — the Conversations list's
-// filters, all in the URL (lib/conversations/filters): source (every source,
-// Coffer, SeaTalk, Telegram), agent, the one channel a channel's link narrowed
-// it to (a chip beside the agent filter that clears back to every source), and
-// the archived view.
+// filter row, all in the URL (lib/conversations/filters): the Active / Archived
+// switch, the search over titles and messages ("/" focuses it), a Source pill
+// (Coffer and each channel, several at once), an Agent pill, and Clear filters
+// once anything narrows the list. It shows no result count.
 import { useTranslation } from "react-i18next";
-import { Archive, X } from "lucide-react";
 
+import { ChecklistPill, type CheckItem } from "@/components/activity/ChecklistPill";
+import { AgentBadge } from "@/components/agent/AgentBadge";
+import { CofferMark } from "@/components/brand/CofferMark";
+import { PlatformMark } from "@/components/channel/PlatformMark";
 import { SearchInput } from "@/components/SearchInput";
-import { SkillSegmented } from "@/components/skills/SkillSegmented";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Segmented } from "@/components/ui/segmented";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
-import type { ConversationFilters, SourceFilter } from "@/lib/conversations/filters";
+import {
+  clearFilters,
+  COFFER_SOURCE,
+  isFiltered,
+  toggled,
+  type ConversationFilters,
+} from "@/lib/conversations/filters";
 
-const ALL_AGENTS = "__all__";
+/** @ui-only A channel as the Source pill lists it. */
+export interface SourceChannel {
+  uid: string;
+  /** "SeaTalk · Team bot". */
+  heading: string;
+  platform: string;
+}
 
 interface Props {
   filters: ConversationFilters;
   onChange: (next: ConversationFilters) => void;
   agents: AgentProviderInfo[];
-  /** The narrowed-to channel's label, when `filters.channel` is set. */
-  channelLabel: string | null;
-  /** The platform of the channel in `filters.channel`, for the source switch. */
-  channelSource?: SourceFilter | null;
-  /** The title search's text; the server is asked for it once typing pauses. */
-  search: string;
-  onSearch: (text: string) => void;
+  channels: SourceChannel[];
+  /** The list below is empty and says "Clear filters" itself. */
+  clearInList?: boolean;
 }
 
 export function ConversationsFilterBar({
   filters,
   onChange,
   agents,
-  channelLabel,
-  channelSource = null,
-  search,
-  onSearch,
+  channels,
+  clearInList = false,
 }: Props) {
   const { t } = useTranslation();
-  const sources: { value: SourceFilter; label: string }[] = [
-    { value: "all", label: t("conversations.filters.allSources") },
-    { value: "coffer", label: t("conversations.source.coffer") },
-    { value: "seatalk", label: "SeaTalk" },
-    { value: "telegram", label: "Telegram" },
-  ];
+  const set = (patch: Partial<ConversationFilters>) => onChange({ ...filters, ...patch });
 
-  const sourceValue = filters.channel ? (channelSource ?? "all") : filters.source;
+  const chosen = (values: string[], words: (v: string) => string): string | null =>
+    values.length === 0
+      ? null
+      : values.length === 1
+        ? words(values[0])
+        : t("conversations.filters.selected", { count: values.length });
+
+  const sourceItems: CheckItem[] = [
+    {
+      value: COFFER_SOURCE,
+      text: t("conversations.source.coffer"),
+      checked: filters.source.includes(COFFER_SOURCE),
+      label: (
+        <span className="flex items-center gap-2">
+          <span className="inline-flex h-[18px] w-[22px] shrink-0 items-center justify-center rounded-sm bg-chip">
+            <CofferMark size={12} className="text-text-muted" />
+          </span>
+          {t("conversations.source.coffer")}
+        </span>
+      ),
+    },
+    ...channels.map((ch) => ({
+      value: ch.uid,
+      text: ch.heading,
+      checked: filters.source.includes(ch.uid),
+      label: (
+        <span className="flex items-center gap-2">
+          <PlatformMark platform={ch.platform} />
+          {ch.heading}
+        </span>
+      ),
+    })),
+  ];
+  // A source named in the link that no channel matches any more is still shown, so it can be unticked.
+  const known = new Set(sourceItems.map((i) => i.value));
+  for (const uid of filters.source) {
+    if (!known.has(uid)) {
+      sourceItems.push({ value: uid, text: uid, checked: true, label: uid });
+    }
+  }
+  const agentItems: CheckItem[] = agents.map((a) => ({
+    value: a.agent_key,
+    text: a.display_name,
+    checked: filters.agent.includes(a.agent_key),
+    label: (
+      <AgentBadge type={a.agent_key} name={a.display_name} size="sm" showName tooltip={false} />
+    ),
+  }));
+
+  const summary = (values: string[]) =>
+    values.length > 0 ? t("conversations.filters.selected", { count: values.length }) : null;
 
   return (
-    <div className={"flex flex-wrap items-center gap-2"}>
-      {/* A channel's link narrows further than its platform: the switch keeps
-          showing that platform, and picking any source drops the channel. */}
-      <SkillSegmented
-        label={t("conversations.filters.source")}
-        value={sourceValue}
-        options={sources}
-        onChange={(source) => onChange({ ...filters, source, channel: null })}
+    <div className="flex flex-wrap items-center gap-2">
+      <Segmented
+        label={t("conversations.filters.view")}
+        value={filters.archived ? "archived" : "active"}
+        options={[
+          { value: "active", label: t("conversations.filters.showActive") },
+          { value: "archived", label: t("conversations.filters.showArchived") },
+        ]}
+        onChange={(v) => set({ archived: v === "archived" })}
       />
-      <Select
-        value={filters.agent ?? ALL_AGENTS}
-        onValueChange={(v) => onChange({ ...filters, agent: v === ALL_AGENTS ? null : v })}
-      >
-        <SelectTrigger
-          className={"h-control-sm w-40 text-xs"}
-          aria-label={t("conversations.filters.agent")}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_AGENTS}>{t("conversations.filters.allAgents")}</SelectItem>
-          {agents.map((a) => (
-            <SelectItem key={a.agent_key} value={a.agent_key}>
-              {a.display_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {filters.channel ? (
-        <span className="inline-flex h-control-sm items-center gap-1 rounded-md bg-accent-soft pl-2 text-xs font-label text-accent-text">
-          {t("conversations.filters.channel", { channel: channelLabel ?? filters.channel })}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-accent-text hover:bg-transparent"
-            aria-label={t("conversations.filters.clearChannel")}
-            onClick={() => onChange({ ...filters, channel: null, source: "all" })}
-          >
-            <X aria-hidden />
-          </Button>
-        </span>
-      ) : null}
       <SearchInput
-        value={search}
-        onChange={onSearch}
+        value={filters.q}
+        onChange={(q) => set({ q })}
         ariaLabel={t("conversations.filters.search")}
         placeholder={t("conversations.filters.search")}
-        className="ml-auto w-56"
+        shortcut="/"
+        className="w-60"
       />
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-pressed={filters.archived}
-        onClick={() => onChange({ ...filters, archived: !filters.archived })}
-      >
-        <Archive aria-hidden />
-        {filters.archived
-          ? t("conversations.filters.showActive")
-          : t("conversations.filters.showArchived")}
-      </Button>
+      <ChecklistPill
+        label={t("conversations.filters.source")}
+        valueLabel={chosen(
+          filters.source,
+          (v) => sourceItems.find((i) => i.value === v)?.text ?? v,
+        )}
+        groups={[{ items: sourceItems }]}
+        onToggle={(v) => set({ source: toggled(filters.source, v) })}
+        onClear={() => set({ source: [] })}
+        summary={summary(filters.source)}
+      />
+      <ChecklistPill
+        label={t("conversations.filters.agent")}
+        valueLabel={chosen(filters.agent, (v) => agentItems.find((i) => i.value === v)?.text ?? v)}
+        groups={[{ items: agentItems }]}
+        onToggle={(v) => set({ agent: toggled(filters.agent, v) })}
+        onClear={() => set({ agent: [] })}
+        summary={summary(filters.agent)}
+      />
+      {isFiltered(filters) && !clearInList ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto"
+          onClick={() => onChange(clearFilters(filters))}
+        >
+          {t("conversations.list.clearFilters")}
+        </Button>
+      ) : null}
     </div>
   );
 }

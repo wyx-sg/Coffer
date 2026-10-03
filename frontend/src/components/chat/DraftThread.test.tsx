@@ -16,12 +16,9 @@ vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
 // result with the agent's own catalogue; it no longer reaches the network at
 // all, so there is no introspection hook to mock here.
 vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn() }));
-// With no managed agent the draft reads the daemon's install prompt, if any.
-vi.mock("@/lib/hooks/useAgentTypes", () => ({ useAgentInstallHandoff: vi.fn() }));
 
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
-import { useAgentInstallHandoff } from "@/lib/hooks/useAgentTypes";
 import type { AgentModel } from "@/lib/api/agentModels";
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
@@ -61,7 +58,6 @@ beforeEach(() => {
   // Default: an active connection exists so the composer/draft surface renders.
   useProvidersMock.mockReturnValue({ data: [activeConnection] });
   useAgentModelsMock.mockReturnValue({ data: WITH_LEVELS });
-  vi.mocked(useAgentInstallHandoff).mockReturnValue({ data: null } as never);
 });
 
 const agents: AgentProviderInfo[] = [
@@ -90,20 +86,43 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
 describe("DraftThread", () => {
   test("shows the draft's composer right away, with no welcome page", () => {
     renderDraft();
-    expect(screen.getByText("New conversation with Claude Code")).toBeInTheDocument();
+    expect(screen.getByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+    // The draft's title is in the title bar.
+    expect(screen.getByRole("heading", { name: "New conversation" })).toBeInTheDocument();
   });
 
-  test("says what the first turn runs with: folder, model and effort, when chosen", () => {
-    renderDraft({ cwd: "/Users/me/WorkEnv/AI/Coffer", modelValue: "opus", effortValue: "high" });
-    expect(
-      screen.getByText("~/WorkEnv/AI/Coffer · Opus 5 · high effort — send a message to start."),
-    ).toBeInTheDocument();
+  test("says which agent runs in which folder, the folder in mono", () => {
+    renderDraft({ cwd: "/Users/me/WorkEnv/AI/Coffer" });
+    const line = screen.getByText(/New conversation with Claude Code in/);
+    expect(line).toHaveTextContent(
+      "New conversation with Claude Code in ~/WorkEnv/AI/Coffer — send a message to start.",
+    );
+    expect(within(line).getByText("~/WorkEnv/AI/Coffer")).toHaveClass("font-mono");
   });
 
-  test("leaves out the model and effort that were not chosen", () => {
+  test("with no folder chosen the line names Coffer's workspace", () => {
     renderDraft();
-    expect(screen.getByText("Coffer’s workspace — send a message to start.")).toBeInTheDocument();
+    expect(screen.getByText(/New conversation with Claude Code in/)).toHaveTextContent(
+      "in Coffer’s workspace — send a message",
+    );
+  });
+
+  test("the folder picker sits in the composer toolbar, beside the paperclip", () => {
+    renderDraft();
+    const toolbar = screen.getByTestId("composer");
+    expect(within(toolbar).getByRole("button", { name: "Workspace" })).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "Attach files" })).toBeInTheDocument();
+  });
+
+  test("a draft opened from Ask an agent says nothing is sent until Send", () => {
+    renderDraft({ fromHandoff: true });
+    expect(screen.getByText("Nothing is sent until you press Send.")).toBeInTheDocument();
+  });
+
+  test("a plain draft carries no such line", () => {
+    renderDraft();
+    expect(screen.queryByText("Nothing is sent until you press Send.")).not.toBeInTheDocument();
   });
 
   test("sends the typed first message through onSend", () => {
@@ -114,41 +133,18 @@ describe("DraftThread", () => {
     expect(onSend).toHaveBeenCalledWith("first message", []);
   });
 
-  test("shows the no-managed-agent empty state when none is available", () => {
+  acceptance("chat", "with no managed agent the draft links to the Agents page", () => {
     renderDraft({ noManagedAgent: true });
-    expect(screen.getByText("No managed agent available")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New conversation" })).toBeInTheDocument();
+    expect(screen.getByText("No agent connected")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Conversations run on an agent Coffer manages. Connect Claude Code or Codex on the Agents page first.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
-    // An agent is installed but not added: adding it is Coffer's own action.
+    // Connecting an agent is the Agents page's job: no install prompt to copy here.
     expect(screen.getByRole("link", { name: "Open Agents" })).toHaveAttribute("href", "/agents");
-    expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
-  });
-
-  acceptance(
-    "chat",
-    "with no managed agent the draft offers the install prompt to copy",
-    async () => {
-      vi.mocked(useAgentInstallHandoff).mockReturnValue({
-        data: "Please install Claude Code or OpenAI Codex on this machine.",
-      } as never);
-      const writeText = vi.fn().mockResolvedValue(undefined);
-      Object.assign(navigator, { clipboard: { writeText } });
-      renderDraft({ noManagedAgent: true });
-      fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
-      expect(writeText).toHaveBeenCalledWith(
-        "Please install Claude Code or OpenAI Codex on this machine.",
-      );
-      // Copy only: there is no agent of Coffer's to ask, and no install command.
-      expect(screen.queryByRole("button", { name: "Ask an agent" })).not.toBeInTheDocument();
-      expect(document.body).not.toHaveTextContent(/npm|install -g|brew/);
-    },
-  );
-
-  test("an agent installed but not added links to the Agents page instead of the install prompt", () => {
-    // The daemon writes the install prompt only while no supported agent is
-    // installed; with none it is null and adding is Coffer's own action.
-    vi.mocked(useAgentInstallHandoff).mockReturnValue({ data: null } as never);
-    renderDraft({ noManagedAgent: true });
-    expect(screen.getByRole("link", { name: /agents/i })).toHaveAttribute("href", "/agents");
     expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
   });
 
@@ -182,7 +178,7 @@ describe("DraftThread", () => {
     // to its built-in login").
     useProvidersMock.mockReturnValue({ data: [] });
     renderDraft();
-    expect(screen.getByText("New conversation with Claude Code")).toBeInTheDocument();
+    expect(screen.getByText(/New conversation with Claude Code in/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
     expect(screen.queryByText("No connection configured")).not.toBeInTheDocument();
   });

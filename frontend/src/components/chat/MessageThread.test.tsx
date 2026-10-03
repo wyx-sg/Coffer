@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageThread } from "./MessageThread";
 import { acceptance } from "@/test/acceptance";
@@ -64,7 +65,9 @@ function renderThread(props?: Partial<React.ComponentProps<typeof MessageThread>
   return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
-        <MessageThread {...defaultProps} {...props} />
+        <TooltipProvider>
+          <MessageThread {...defaultProps} {...props} />
+        </TooltipProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -324,13 +327,65 @@ describe("MessageThread", () => {
     );
   });
 
-  test("a stream lost mid-turn says so and offers Reload", async () => {
+  test("a stream lost mid-turn hangs inside the live reply, drops the cursor, and offers Reload", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     const onReload = vi.fn();
-    renderThread({ streamLost: true, onReload });
-    expect(await screen.findByText("Lost the live stream from the daemon")).toBeInTheDocument();
+    renderThread({
+      streamLost: true,
+      onReload,
+      liveMessage: {
+        blocks: [contentBlock({ type: "text", text: "partial words" })],
+        streaming: true,
+        startedAt: "2026-01-01T10:14:00Z",
+      },
+    });
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("Lost the live stream from the daemon");
+    // Inside the reply, under its text — not a strip above the composer.
+    const reply = screen.getByText("partial words").closest(".pl-\\[30px\\]") as HTMLElement;
+    expect(reply).toContainElement(banner);
+    expect(screen.queryByText(/working/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /reload conversation/i }));
     expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  test("a stream lost before any reply started still shows the banner in a reply of its own", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({ streamLost: true });
+    expect(await screen.findByText("Lost the live stream from the daemon")).toBeInTheDocument();
+  });
+
+  test("a failed turn's banner sits inside the failed reply and says why", async () => {
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "go" })] }),
+        makeMsg({
+          id: "msg-2",
+          seq: 2,
+          role: "assistant",
+          status: "failed",
+          content: [contentBlock({ type: "text", text: "half an answer" })],
+          created_at: "2026-01-01T10:14:00Z",
+          finished_at: "2026-01-01T10:14:38Z",
+        }),
+      ],
+    });
+    renderThread({ turnError: new Error("Company gateway returned 529") });
+    const answer = await screen.findByText("half an answer");
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent("The turn failed: Company gateway returned 529");
+    expect(banner).toHaveTextContent("Retry sends the same message again.");
+    const reply = answer.closest(".pl-\\[30px\\]") as HTMLElement;
+    expect(reply).toContainElement(banner);
+    expect(screen.getByText(/Failed after 38s/)).toBeInTheDocument();
+  });
+
+  test("the composer is given the conversation's working folder", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.getAgentConfig.mockResolvedValue({ cwd: "/Users/me/proj", model: null });
+    renderThread();
+    await waitFor(() => expect(chatApiMock.getAgentConfig).toHaveBeenCalled());
+    expect(await screen.findByText(/proj/)).toBeInTheDocument();
   });
 
   test("a failed turn shows the error banner and never a 'Thinking…' bubble beside it", async () => {

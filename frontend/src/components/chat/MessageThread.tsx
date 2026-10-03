@@ -1,20 +1,20 @@
 // components/chat/MessageThread.tsx
 // Messages + echoed just-sent prompts + the live message. Follows the stream
 // only while the user sits at the bottom (useFollowScroll's "Jump to latest"),
-// restarts at the bottom per conversation, and on a failed turn swaps the live
-// bubble for the error banner with a Retry of the failed message. Rows are
+// restarts at the bottom per conversation. A failed turn's banner (with a Retry
+// of the failed message) and a lost stream's banner hang inside the reply they
+// belong to, not above the composer. Rows are
 // chosen by useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
 import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
-import { useChannelMirror } from "@/lib/hooks/useConversations";
+import { useAgentConfig, useChannelMirror } from "@/lib/hooks/useConversations";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { retryTargetFor } from "@/lib/chat/threadView";
 import type { PendingEcho } from "@/lib/hooks/useChatTurn";
 import { Button } from "@/components/ui/button";
-import { ChannelMirrorHint } from "./ChannelMirrorHint";
 import { ChatErrorBanner } from "./ChatErrorBanner";
 import { ThreadMessages } from "./ThreadMessages";
 import { Composer, type ComposerHandle } from "./Composer";
@@ -45,13 +45,14 @@ export function MessageThread({
   onSetPending,
   queueHeld = false,
   onResumeQueue,
-  header,
   agentLabel,
   streamLost = false,
   onReload,
   readOnly,
   onUnarchive,
   unarchivePending,
+  onOpenFile,
+  selectedPath,
 }: MessageThreadProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -73,6 +74,7 @@ export function MessageThread({
   const { messages, isPending, error } = useMessageThread(conversation.id, liveMessage, turnError);
   // Where a reply also goes, and which ones its channel has not received yet.
   const { mirror, notDeliveredTo } = useChannelMirror(conversation, messages);
+  const { data: agentConfig } = useAgentConfig(conversation.id);
   const isEmpty = messages.length === 0 && pendingEchoes.length === 0 && !liveMessage;
   // A failed turn is never "thinking": freeze the live bubble so only the
   // banner reports the state, and keep whatever text already streamed.
@@ -81,6 +83,34 @@ export function MessageThread({
   // Retry re-sends the newest echo, else the last persisted user message — with
   // its attachments either way.
   const retry = retryable && !readOnly ? retryTargetFor(messages, pendingEchoes.at(-1)) : null;
+
+  const failedBanner = turnError ? (
+    <ChatErrorBanner
+      variant="reply"
+      message={
+        queueHeld && !readOnly
+          ? t("conversations.queueHeld.message", { error: describeTurnError(t, turnError) })
+          : t("conversations.turn.failed", { reason: describeTurnError(t, turnError) })
+      }
+      detail={queueHeld && !readOnly ? undefined : t("conversations.turn.failedHint")}
+      onDismiss={onClearTurnError}
+      retryLabel={queueHeld && !readOnly ? t("conversations.queueHeld.resume") : undefined}
+      onRetry={
+        queueHeld && !readOnly
+          ? onResumeQueue
+          : retry && (retry.kind === "send" || onResend)
+            ? () => {
+                onClearTurnError?.();
+                void (retry.kind === "send"
+                  ? onSend(retry.text, retry.attachments)
+                  : onResend?.(retry.messageId));
+              }
+            : undefined
+      }
+    />
+  ) : streamLost ? (
+    <StreamLostBanner onReload={onReload} />
+  ) : undefined;
 
   const scroll = useFollowScroll({
     scrollRef,
@@ -92,8 +122,6 @@ export function MessageThread({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {header}
-
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <div
           ref={scrollRef}
@@ -124,6 +152,10 @@ export function MessageThread({
             pendingEchoes={pendingEchoes}
             live={liveForRender}
             notDeliveredTo={notDeliveredTo}
+            banner={failedBanner}
+            bannerState={turnError ? "failed" : streamLost ? "lost" : undefined}
+            onOpenFile={onOpenFile}
+            selectedPath={selectedPath}
           />
 
           <div ref={bottomRef} />
@@ -156,33 +188,6 @@ export function MessageThread({
         ) : null}
       </div>
 
-      {streamLost && !turnError && <StreamLostBanner onReload={onReload} />}
-
-      {turnError && (
-        <ChatErrorBanner
-          className="border-t"
-          message={
-            queueHeld && !readOnly
-              ? t("conversations.queueHeld.message", { error: describeTurnError(t, turnError) })
-              : describeTurnError(t, turnError)
-          }
-          onDismiss={onClearTurnError}
-          retryLabel={queueHeld && !readOnly ? t("conversations.queueHeld.resume") : undefined}
-          onRetry={
-            queueHeld && !readOnly
-              ? onResumeQueue
-              : retry && (retry.kind === "send" || onResend)
-                ? () => {
-                    onClearTurnError?.();
-                    void (retry.kind === "send"
-                      ? onSend(retry.text, retry.attachments)
-                      : onResend?.(retry.messageId));
-                  }
-                : undefined
-          }
-        />
-      )}
-
       {readOnly ? (
         <ArchivedNotice onUnarchive={onUnarchive} pending={unarchivePending} />
       ) : (
@@ -192,7 +197,6 @@ export function MessageThread({
             onEdit={handleEditPending}
             onRemove={(idx) => onSetPending?.(pending.filter((_, i) => i !== idx))}
           />
-          {mirror && <ChannelMirrorHint mirror={mirror} />}
           {/* The composer is NEVER disabled by streaming: a message sent during a
               turn queues server-side. */}
           <Composer
@@ -205,6 +209,7 @@ export function MessageThread({
                   : "conversations.composer.placeholder",
               { agent: agentLabel ?? "" },
             )}
+            cwd={agentConfig?.cwd ?? null}
             onSend={onSend}
             streaming={isStreaming}
             onStop={onStop}

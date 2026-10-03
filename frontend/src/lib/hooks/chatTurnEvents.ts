@@ -23,6 +23,12 @@ export interface LiveMessage {
   blocks: ContentBlock[];
   /** Whether the turn is still streaming. */
   streaming: boolean;
+  /** When the turn started (ISO) — the reply header's clock and "Working" timer. */
+  startedAt?: string;
+  /** When it ended (ISO), once `turn_done` arrived. */
+  endedAt?: string;
+  /** The user stopped it (`turn_done` with stop reason `interrupted`). */
+  interrupted?: boolean;
 }
 
 /** `blocks` with `delta` appended to its trailing text block, or a new one. */
@@ -39,7 +45,7 @@ function withBlocks(
   prev: LiveMessage | null,
   next: (blocks: ContentBlock[]) => ContentBlock[],
 ): LiveMessage {
-  return { blocks: next(prev?.blocks ?? []), streaming: true };
+  return { ...prev, blocks: next(prev?.blocks ?? []), streaming: true };
 }
 
 /**
@@ -113,8 +119,17 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       // so this client may hold no echo for it. Begin a fresh live bubble and
       // invalidate messages so the committed user message appears (which is
       // also what retires this client's own echo, via the cache subscription).
-      setLiveMessage({ blocks: [], streaming: true });
+      setLiveMessage({ blocks: [], streaming: true, startedAt: new Date().toISOString() });
       await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
+      // A turn replayed after a reload began earlier: its streaming row says when.
+      {
+        const row = (qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [])
+          .filter((m) => m.role === "assistant" && m.status === "streaming")
+          .at(-1);
+        if (row) {
+          setLiveMessage((prev) => (prev ? { ...prev, startedAt: row.created_at } : prev));
+        }
+      }
       break;
 
     case "text_delta":
@@ -139,6 +154,7 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
         tool_name: event.data.tool_name,
         output: event.data.output ?? null,
         error: event.data.error ?? null,
+        duration_ms: event.data.duration_ms ?? null,
       });
       setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, resultBlock]));
       break;
@@ -146,7 +162,16 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
 
     case "turn_done": {
       setIsStreaming(false);
-      setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : null));
+      setLiveMessage((prev) =>
+        prev
+          ? {
+              ...prev,
+              streaming: false,
+              endedAt: new Date().toISOString(),
+              interrupted: event.data.stop_reason === "interrupted",
+            }
+          : null,
+      );
       // Refetch the persisted messages, then drop the live bubble ONLY once that
       // refetch carries a NEW complete reply (count increased). Clearing before
       // it lands removes the live bubble into a gap (the keyed persisted bubble

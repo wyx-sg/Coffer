@@ -3439,17 +3439,18 @@
     }
   },
   "conversations": {
-    "subtitle": "Your conversations with agents, including those from chat channels.",
+    "subtitle": "Every conversation, from Coffer and your channels.",
     "bulk": {
       "label": "Selected conversations",
-      "selected": "{{count}} selected",
-      "selectAll": "Select all conversations",
+      "selected": "{{count}} of {{total}} selected",
       "selectRow": "Select {{title}}",
-      "andMore_one": " and {{count}} more",
-      "andMore_other": " and {{count}} more",
       "deleteTitle_one": "Delete {{count}} conversation?",
       "deleteTitle_other": "Delete {{count}} conversations?",
-      "deleteBody": "{{titles}} and their messages are removed from Coffer for good. Files the agent changed and the agents’ own session files stay. Conversations that are running are skipped. Archive keeps them instead.",
+      "deleteBody": "These conversations and their messages are removed from Coffer; files the agents changed stay.",
+      "deleteConfirm_one": "Delete {{count}} conversation",
+      "deleteConfirm_other": "Delete {{count}} conversations",
+      "showing": "Showing {{shown}} of {{count}}",
+      "showAll": "Show all",
       "done": {
         "archive_one": "Archived {{count}} conversation",
         "archive_other": "Archived {{count}} conversations",
@@ -3467,18 +3468,15 @@
     "title": "Conversations",
     "thinking": "Thinking…",
     "message": {
-      "failed": "This response did not complete.",
       "tokens": "{{prompt}} in · {{completion}} out"
     },
     "history": {
       "rename": "Rename",
-      "renameAria": "Rename conversation",
       "delete": "Delete…",
       "unarchive": "Unarchive",
       "unarchived": "Conversation unarchived",
       "archive": "Archive",
-      "archivedEmpty": "No archived conversations",
-      "archivedHelp": "Archived conversations are read-only. Open one and choose Unarchive to continue it."
+      "archivedEmpty": "No archived conversations"
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
@@ -3511,6 +3509,9 @@
       "unknown": "unknown tool",
       "running": "Running",
       "done": "Done",
+      "doneIn": "Done · {{duration}}",
+      "stopped": "Stopped",
+      "lost": "Unknown",
       "error": "Error",
       "input": "Input",
       "result": "Result",
@@ -3533,15 +3534,14 @@
     "effortPicker": {
       "label": "Reasoning effort",
       "placeholder": "Effort (optional)",
-      "inheritNoEffort": "Agent default"
+      "inheritNoEffort": "Agent default",
+      "shown": "{{effort}} effort"
     },
     "draft": {
-      "title": "New conversation with {{agent}}",
-      "details": "{{details}} — send a message to start.",
-      "effort": "{{effort}} effort",
-      "noAgentTitle": "No managed agent available",
-      "noAgentInstall": "Conversations run on a Coffer-managed agent, and none is installed on this machine. Copy the prompt into any assistant to have it install Claude Code or Codex.",
-      "noAgentAdd": "Conversations run on a Coffer-managed agent. Add Claude Code or Codex on the Agents page.",
+      "line": "New conversation with {{agent}} in <mono>{{dir}}</mono> — send a message to start.",
+      "handoffNote": "Nothing is sent until you press Send.",
+      "noAgentTitle": "No agent connected",
+      "noAgentBody": "Conversations run on an agent Coffer manages. Connect Claude Code or Codex on the Agents page first.",
       "openAgents": "Open Agents",
       "workspace": "Coffer’s workspace",
       "workspaceFull": "Coffer’s workspace (~/.coffer/content/workspace)",
@@ -3553,8 +3553,8 @@
       }
     },
     "delete": {
-      "title": "Delete this conversation?",
-      "body": "“{{title}}” and its messages are removed from Coffer. Files the agent changed and {{agent}}’s own session files stay. This can’t be undone — Archive keeps it instead.",
+      "title": "Delete “{{title}}”?",
+      "body": "“{{title}}” and its messages are removed from Coffer; files the agent changed stay. To keep it out of the way instead, archive it.",
       "confirm": "Delete conversation"
     },
     "jumpToLatest": "Jump to latest",
@@ -3571,7 +3571,6 @@
       "listLabel": "Attached files"
     },
     "mirror": {
-      "alsoSends": "Also sends to {{target}}",
       "staysInCoffer": "Replies stay in Coffer",
       "reason": {
         "group_main": "This conversation is a group's main chat, which never receives replies sent from here.",
@@ -3579,8 +3578,7 @@
         "chat_kind_unknown": "This conversation is not linked to a chat thread Coffer can write to.",
         "channel_deleted": "The channel this conversation came from has been deleted."
       },
-      "notDelivered": "Not delivered to {{platform}} yet",
-      "notDeliveredHelp": "Coffer will send it, and the agent's answer, when the channel is running again."
+      "notDelivered": "Not delivered to {{platform}} yet · will retry"
     },
     "source": {
       "coffer": "Coffer",
@@ -3588,38 +3586,30 @@
       "dm": "DM",
       "group": "Group",
       "thread": "thread",
-      "topic": "topic",
-      "viaChannel": "Through the channel {{channel}}"
+      "threadN": "Thread {{n}}",
+      "topic": "topic"
     },
     "group": {
       "today": "Today",
       "yesterday": "Yesterday",
-      "week": "Previous 7 days",
-      "month": "Previous 30 days",
       "earlier": "Earlier"
     },
     "list": {
       "running": "Running",
       "ariaLabel": "Conversations",
-      "cols": {
-        "conversation": "Conversation",
-        "source": "Source",
-        "agent": "Agent",
-        "lastActivity": "Last activity"
-      },
+      "needsYou": "Needs you",
+      "loadFailed": "Couldn’t load conversations",
       "emptyTitle": "No conversations yet",
-      "emptyBody": "Every conversation shows up here — the ones you start in Coffer and the ones that come in through SeaTalk or Telegram.",
+      "emptyBody": "Start one here, or message one of your channels from SeaTalk or Telegram.",
       "noMatches": "No conversations match",
       "clearFilters": "Clear filters"
     },
     "filters": {
+      "view": "View",
       "source": "Source",
-      "allSources": "All sources",
       "agent": "Agent",
-      "allAgents": "All agents",
-      "search": "Search titles…",
-      "channel": "Channel: {{channel}}",
-      "clearChannel": "Clear channel filter",
+      "search": "Search titles and messages",
+      "selected": "{{count}} selected",
       "showArchived": "Archived",
       "showActive": "Active"
     },
@@ -3628,12 +3618,27 @@
       "title": "New conversation"
     },
     "header": {
-      "more": "More actions for this conversation",
-      "archived": "Archived",
-      "agentFixed": "The agent is fixed for this conversation — start a new conversation to use another"
+      "more": "More actions",
+      "titleAria": "Conversation title",
+      "renameHint": "Enter to save · Esc to cancel"
     },
     "files": {
       "title": "Files changed"
+    },
+    "turn": {
+      "working": "Working · {{duration}}",
+      "workingNoTime": "Working",
+      "waiting": "Waiting for you",
+      "stopped": "Stopped",
+      "stoppedAfter": "Stopped after {{duration}}",
+      "failedWord": "Failed",
+      "failedAfter": "Failed after {{duration}}",
+      "stoppedByYou": "Stopped by you.",
+      "editNotFinished": "The edit was not finished; send a message to continue.",
+      "commandNotFinished": "The command was not finished; send a message to continue.",
+      "copyReply": "Copy reply",
+      "failed": "The turn failed: {{reason}}",
+      "failedHint": "Retry sends the same message again."
     },
     "queueHeld": {
       "message": "A queued message could not start, so the queue is on hold: {{error}}",

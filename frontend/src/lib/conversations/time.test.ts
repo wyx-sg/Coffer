@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { clock, groupByTime, timeBucket } from "./time";
+import { clock, groupByTime, rowTime, timeBucket } from "./time";
 
 // Local-time dates throughout: the edges are the viewer's midnight.
 const NOW = new Date(2026, 5, 15, 12, 0, 0); // Mon 15 Jun 2026, noon
@@ -12,14 +12,12 @@ describe("timeBucket", () => {
     expect(timeBucket(at(2026, 5, 15, 0, 0), NOW)).toBe("today");
     expect(timeBucket(at(2026, 5, 14, 23, 59), NOW)).toBe("yesterday");
     expect(timeBucket(at(2026, 5, 14, 0, 0), NOW)).toBe("yesterday");
-    expect(timeBucket(at(2026, 5, 13, 23, 59), NOW)).toBe("week");
+    expect(timeBucket(at(2026, 5, 13, 23, 59), NOW)).toBe("earlier");
   });
 
-  test("the 7- and 30-day edges", () => {
-    expect(timeBucket(at(2026, 5, 8, 0, 0), NOW)).toBe("week"); // 7 days back
-    expect(timeBucket(at(2026, 5, 7, 23, 59), NOW)).toBe("month"); // 8 days back
-    expect(timeBucket(at(2026, 4, 16, 0, 0), NOW)).toBe("month"); // 30 days back
-    expect(timeBucket(at(2026, 4, 15, 23, 59), NOW)).toBe("earlier"); // 31 days back
+  test("anything older than yesterday is Earlier", () => {
+    expect(timeBucket(at(2026, 5, 8, 0, 0), NOW)).toBe("earlier");
+    expect(timeBucket(at(2025, 4, 15, 23, 59), NOW)).toBe("earlier");
   });
 
   test("just after midnight, yesterday evening is still yesterday", () => {
@@ -45,7 +43,7 @@ describe("groupByTime", () => {
 
   test("groups newest first, rows newest first, empty groups left out", () => {
     const groups = groupByTime(rows, (r) => r.t, NOW);
-    expect(groups.map((g) => g.bucket)).toEqual(["today", "yesterday", "week", "earlier"]);
+    expect(groups.map((g) => g.bucket)).toEqual(["today", "yesterday", "earlier"]);
     expect(groups[0].items.map((r) => r.id)).toEqual(["t2", "t1"]);
   });
 
@@ -56,4 +54,15 @@ describe("groupByTime", () => {
 
 test("clock is HH:MM", () => {
   expect(clock(at(2026, 5, 15, 7, 5))).toBe("07:05");
+});
+
+describe("rowTime", () => {
+  test("the clock for today and yesterday, the date for earlier", () => {
+    expect(rowTime(at(2026, 5, 15, 7, 5), NOW, "en")).toBe("07:05");
+    expect(rowTime(at(2026, 5, 14, 14, 10), NOW, "en")).toBe("14:10");
+    expect(rowTime(at(2026, 5, 2, 9), NOW, "en")).toBe("Jun 2");
+    expect(rowTime(at(2026, 5, 2, 9), NOW, "zh")).toBe("6月2日");
+    expect(rowTime(at(2025, 11, 30, 9), NOW, "en")).toBe("Dec 30, 2025");
+    expect(rowTime("nope", NOW, "en")).toBe("—");
+  });
 });

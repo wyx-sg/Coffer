@@ -2,7 +2,16 @@
 import { describe, expect, it } from "vitest";
 
 import type { Conversation } from "@/lib/api/chat";
-import { filterConversations, filtersSearch, parseFilters, sourceKey } from "./filters";
+import {
+  clearFilters,
+  filterConversations,
+  filtersSearch,
+  hasLegacyChannel,
+  isFiltered,
+  parseFilters,
+  sourceToken,
+  toggled,
+} from "./filters";
 
 function conv(id: string, agent: string, binding?: Partial<Conversation["channel_binding"]>) {
   return {
@@ -35,35 +44,62 @@ const orphan = conv("gone", "codex", { channel_uid: "ch3", channel: null, platfo
 const all = [web, seatalk, telegram, orphan];
 
 describe("conversation filters", () => {
-  it("reads a platform, a channel, an agent and the archived view from the URL", () => {
-    expect(parseFilters(new URLSearchParams("source=seatalk&agent=codex&archived=1"))).toEqual({
-      source: "seatalk",
-      channel: null,
-      agent: "codex",
-      archived: true,
+  it("reads sources, agents, the search and the archived view from the URL", () => {
+    expect(
+      parseFilters(new URLSearchParams("source=coffer,ch2&agent=codex&archived=1&q=sentry")),
+    ).toEqual({ source: ["coffer", "ch2"], agent: ["codex"], archived: true, q: "sentry" });
+    expect(parseFilters(new URLSearchParams(""))).toEqual({
+      source: [],
+      agent: [],
+      archived: false,
+      q: "",
     });
-    expect(parseFilters(new URLSearchParams("source=nope")).source).toBe("all");
   });
 
-  it("writes only what narrows the list, a channel before its platform", () => {
+  it("round-trips through the URL, writing only what narrows the list", () => {
     expect(filtersSearch(parseFilters(new URLSearchParams("")))).toBe("");
-    expect(filtersSearch({ source: "seatalk", channel: "ch1", agent: null, archived: false })).toBe(
-      "?channel=ch1",
-    );
+    const f = { source: ["coffer", "ch1"], agent: ["codex"], archived: true, q: "a b" };
+    expect(filtersSearch(f)).toBe("?source=coffer,ch1&agent=codex&archived=1&q=a+b");
+    expect(parseFilters(new URLSearchParams(filtersSearch(f)))).toEqual(f);
   });
 
-  it("filters by source: Coffer, a platform, one channel", () => {
+  it("reads a legacy ?channel=<uid> as one source", () => {
+    const params = new URLSearchParams("channel=ch1&agent=codex");
+    expect(hasLegacyChannel(params)).toBe(true);
+    const f = parseFilters(params);
+    expect(f.source).toEqual(["ch1"]);
+    // Written back, the legacy key is gone.
+    expect(filtersSearch(f)).toBe("?source=ch1&agent=codex");
+    expect(hasLegacyChannel(new URLSearchParams(filtersSearch(f)))).toBe(false);
+    expect(parseFilters(new URLSearchParams("source=ch1&channel=ch1")).source).toEqual(["ch1"]);
+  });
+
+  it("filters by source (several at once) and by agent", () => {
     const by = (q: string) => filterConversations(all, parseFilters(new URLSearchParams(q)));
     expect(by("source=coffer")).toEqual([web]);
-    expect(by("source=seatalk")).toEqual([seatalk]);
-    expect(by("source=telegram")).toEqual([telegram]);
-    expect(by("channel=ch2")).toEqual([telegram]);
+    expect(by("source=ch1")).toEqual([seatalk]);
+    expect(by("source=coffer,ch2")).toEqual([web, telegram]);
     expect(by("agent=codex")).toEqual([telegram, orphan]);
+    expect(by("agent=codex&source=ch2,ch3")).toEqual([telegram, orphan]);
     expect(by("")).toEqual(all);
   });
 
-  it("names a deleted channel's conversation by no platform", () => {
-    expect(sourceKey(orphan)).toBe("channel");
-    expect(sourceKey(web)).toBe("coffer");
+  it("names a conversation's source by its channel uid, Coffer when it has none", () => {
+    expect(sourceToken(orphan)).toBe("ch3");
+    expect(sourceToken(web)).toBe("coffer");
+  });
+
+  it("counts a source, an agent or a search as narrowing, and clears them but not the archived view", () => {
+    const base = parseFilters(new URLSearchParams("archived=1"));
+    expect(isFiltered(base)).toBe(false);
+    expect(isFiltered({ ...base, q: "  " })).toBe(false);
+    const narrowed = { ...base, source: ["ch1"], agent: ["codex"], q: "x" };
+    expect(isFiltered(narrowed)).toBe(true);
+    expect(clearFilters(narrowed)).toEqual(base);
+  });
+
+  it("toggles a value in and out of a list", () => {
+    expect(toggled(["a"], "b")).toEqual(["a", "b"]);
+    expect(toggled(["a", "b"], "a")).toEqual(["b"]);
   });
 });

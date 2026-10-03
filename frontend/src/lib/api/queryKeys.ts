@@ -38,8 +38,6 @@ export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
-/** The install hand-off the types read carries while no agent is installed. */
-export const agentInstallHandoffKey = ["agents", "types", "install-handoff"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;

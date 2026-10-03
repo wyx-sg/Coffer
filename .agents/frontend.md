@@ -279,7 +279,9 @@ return useMutation({
   - `PageHeader` is the one page header, list and detail alike: the title (18/650), `badges` beside it, `actions` on the
     right and one `subtitle` line under the row (there is no title icon: the sidebar entry already carries it, and no `back`:
     pages carry no back button or "← list" link — the title bar's global ← → (⌘[ / ⌘]) are the only back/forward). Detail-page actions keep one fixed order: reach → test/refresh →
-    edit → delete.
+    edit → delete. The title bar holds only window controls, with one exception: an open conversation's
+    title row goes through `InTitleBar` (`components/shell/titleBarSlot.tsx`), portalled into the desktop strip or
+    rendered as a 44px bar in a browser. No other page uses it.
   - `DataTable` is the one list table. Pass `isLoading` so the header stays
     mounted over skeleton rows (never a "Loading…" card in the table's place)
     and `emptyAction` for the call-to-action under the empty message. The reach

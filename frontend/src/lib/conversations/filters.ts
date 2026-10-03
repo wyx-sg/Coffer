@@ -1,64 +1,71 @@
 // src/lib/conversations/filters.ts
 // The Conversations page's filters (spec chat "Show every conversation on the
-// Conversations page"): by source — Coffer's own UI, a platform, or one
-// channel — and by agent, read from and written to the URL so a filtered list
-// is a link (a channel's "Conversations from this channel" opens
-// `/conversations?channel=<uid>`). Pure, so the matching is unit-tested alone.
-import type { ChannelPlatform, Conversation } from "@/lib/api/chat";
+// Conversations page"): the archived view, the title-and-message search, the
+// sources (Coffer's own UI, or any number of channels) and the agents, read
+// from and written to the URL so a filtered list is a link (a channel's
+// "Conversations from this channel" opens `/conversations?source=<uid>`).
+// Pure, so the matching is unit-tested alone.
+import type { Conversation } from "@/lib/api/chat";
 
-/** Where a conversation came from: Coffer's own UI, or a channel's platform. */
-export type SourceFilter = "all" | "coffer" | ChannelPlatform;
+/** The source token for a conversation opened in Coffer's own UI; any other token is a channel uid. */
+export const COFFER_SOURCE = "coffer";
 
 export interface ConversationFilters {
-  source: SourceFilter;
-  /** One channel's uid — narrower than a platform, set by a channel's link. */
-  channel: string | null;
-  /** An agent key (`claude_code`, `codex`), or null for every agent. */
-  agent: string | null;
+  /** Source tokens — `coffer` and/or channel uids; empty means every source. */
+  source: string[];
+  /** Agent keys (`claude_code`, `codex`); empty means every agent. */
+  agent: string[];
   /** The archived conversations instead of the active ones. */
   archived: boolean;
+  /** The search text, matched against titles and message text. */
+  q: string;
 }
 
-/** Every platform the contract names; typed as a record so a new one is a compile error here. */
-const PLATFORMS: Record<ChannelPlatform, true> = { seatalk: true, telegram: true };
-const SOURCES: readonly string[] = ["all", "coffer", ...Object.keys(PLATFORMS)];
+const list = (raw: string | null): string[] =>
+  Array.from(new Set((raw ?? "").split(",").filter(Boolean)));
 
 export function parseFilters(params: URLSearchParams): ConversationFilters {
-  const raw = params.get("source") ?? "all";
+  const source = list(params.get("source"));
+  // A link from before sources were a pill: `?channel=<uid>` is one source.
+  const legacy = params.get("channel");
+  if (legacy && !source.includes(legacy)) source.push(legacy);
   return {
-    source: SOURCES.includes(raw) ? (raw as SourceFilter) : "all",
-    channel: params.get("channel") || null,
-    agent: params.get("agent") || null,
+    source,
+    agent: list(params.get("agent")),
     archived: params.get("archived") === "1",
+    q: params.get("q") ?? "",
   };
+}
+
+/** Whether the URL still spells a filter the old way (and should be rewritten once). */
+export function hasLegacyChannel(params: URLSearchParams): boolean {
+  return params.has("channel");
 }
 
 /** The query string for `filters` — a default is never spelled out. */
 export function filtersSearch(filters: ConversationFilters): string {
   const params = new URLSearchParams();
-  if (filters.channel) params.set("channel", filters.channel);
-  else if (filters.source !== "all") params.set("source", filters.source);
-  if (filters.agent) params.set("agent", filters.agent);
+  if (filters.source.length > 0) params.set("source", filters.source.join(","));
+  if (filters.agent.length > 0) params.set("agent", filters.agent.join(","));
   if (filters.archived) params.set("archived", "1");
-  const s = params.toString();
+  if (filters.q) params.set("q", filters.q);
+  // Commas stay readable in the address bar.
+  const s = params.toString().replace(/%2C/g, ",");
   return s ? `?${s}` : "";
 }
 
-/** A channel conversation's platform key, "coffer" for one opened in Coffer, and
- *  "channel" for one whose channel has since been deleted. */
-export function sourceKey(conversation: Conversation): string {
-  const binding = conversation.channel_binding;
-  if (!binding) return "coffer";
-  return binding.platform ?? "channel";
+/** The source token a conversation belongs to: `coffer`, or its channel's uid. */
+export function sourceToken(conversation: Conversation): string {
+  return conversation.channel_binding?.channel_uid ?? COFFER_SOURCE;
 }
 
 function matchesFilters(conversation: Conversation, filters: ConversationFilters): boolean {
-  if (filters.agent && conversation.agent_key !== filters.agent) return false;
-  if (filters.channel) return conversation.channel_binding?.channel_uid === filters.channel;
-  if (filters.source === "all") return true;
-  return sourceKey(conversation) === filters.source;
+  if (filters.agent.length > 0 && !filters.agent.includes(conversation.agent_key)) return false;
+  if (filters.source.length === 0) return true;
+  return filters.source.includes(sourceToken(conversation));
 }
 
+/** The pill filters applied to loaded rows (archived and the search are the server's). */
 export function filterConversations(
   conversations: readonly Conversation[],
   filters: ConversationFilters,
@@ -66,21 +73,17 @@ export function filterConversations(
   return conversations.filter((c) => matchesFilters(c, filters));
 }
 
-/** Whether any filter narrows the list (the archived view is a list, not a filter). */
+/** Whether anything narrows the list: a source, an agent or a search (the archived view is a list, not a filter). */
 export function isFiltered(filters: ConversationFilters): boolean {
-  return filters.source !== "all" || filters.channel !== null || filters.agent !== null;
+  return filters.source.length > 0 || filters.agent.length > 0 || filters.q.trim() !== "";
 }
 
 /** The same view with every filter cleared (the archived view stays). */
 export function clearFilters(filters: ConversationFilters): ConversationFilters {
-  return { ...filters, source: "all", channel: null, agent: null };
+  return { ...filters, source: [], agent: [], q: "" };
 }
 
-/** The source a channel's platform is listed under, read from its resource
- *  config, so the source switch still says which platform a channel filter is. */
-export function channelSource(config: unknown): SourceFilter | null {
-  const type = (config as { channel_type?: unknown } | null | undefined)?.channel_type;
-  return typeof type === "string" && Object.hasOwn(PLATFORMS, type)
-    ? (type as ChannelPlatform)
-    : null;
+/** `values` with `value` added, or removed when already there. */
+export function toggled(values: readonly string[], value: string): string[] {
+  return values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
 }

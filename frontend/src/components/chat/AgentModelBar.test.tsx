@@ -54,12 +54,13 @@ describe("AgentModelBar", () => {
     );
   });
 
-  test("the agent's tooltip says it is fixed for the conversation", async () => {
+  test("the agent is a plain label: no control and no tooltip explaining it", () => {
     render(<AgentModelBar conversationId="c1" agentKey="claude_code" agentLabel="Claude Code" />);
-    fireEvent.focus(screen.getByTestId("conversation-agent"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "The agent is fixed for this conversation — start a new conversation to use another",
-    );
+    const agent = screen.getByTestId("conversation-agent");
+    expect(agent).not.toHaveAttribute("tabindex");
+    expect(agent.querySelector("button, [role=combobox]")).toBeNull();
+    fireEvent.focus(agent);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   test("committing a new model calls setAgentModel with the conversation id", () => {
@@ -109,7 +110,9 @@ describe("AgentModelBar", () => {
 
     test("shows the effort control on the conversation's current level", () => {
       render(<AgentModelBar conversationId="c1" agentKey="codex" agentLabel="Codex" />);
-      expect(screen.getByRole("combobox", { name: /reasoning effort/i })).toHaveTextContent("low");
+      expect(screen.getByRole("combobox", { name: /reasoning effort/i })).toHaveTextContent(
+        "Low effort",
+      );
     });
 
     test("picking a level patches the effort ALONE, leaving the model untouched", () => {
