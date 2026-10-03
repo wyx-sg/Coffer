@@ -9,9 +9,6 @@
 
 import { inDesktopShell } from "./tauri";
 
-/** Height of the strip the traffic lights sit in, in px (matches index.css). */
-export const TITLEBAR_INSET_PX = 44;
-
 function isMac(): boolean {
   return typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent);
 }
