@@ -250,7 +250,7 @@ PRE_LAYOUT_TABLES = {
     # (spec skill-manager "Update a Git-imported skill from its source").
     "skill_source_status",
     # 0134: the attention items ignored on this machine (spec web-ui "Let the
-    # user ignore an unconnected agent on Overview").
+    # user ignore any item on Overview").
     "attention_ignores",
 }
 

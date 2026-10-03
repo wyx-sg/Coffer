@@ -127,7 +127,6 @@
     },
     "copy": "Copy",
     "copied": "Copied",
-    "backTo": "Back to {{label}}",
     "emptyValue": "—",
     "search": "Search",
     "moreInfo": "More info",
@@ -171,13 +170,14 @@
     "settings": "Settings",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
+    "back": "Back",
+    "forward": "Forward",
     "agents": "Agents",
     "channels": "Channels",
     "activity": "Activity",
     "modelProviders": "Model providers",
     "sync": "Sync",
-    "experimental": "Experimental",
-    "experimentalLabel": "{{label}} (experimental)",
+    "experimentalLabel": "{{label}} · Experimental",
     "needsAttention": "Needs your attention",
     "overview": "Overview",
     "conversations": "Conversations",
@@ -187,20 +187,8 @@
     "usage": "Usage",
     "search": "Search or jump to…",
     "resizeSidebar": "Resize the sidebar",
-    "daemon": {
-      "connecting": "Connecting to the daemon…",
-      "running": "Daemon running on port {{port}}",
-      "outOfDate": "Daemon on port {{port}} is from a different app version",
-      "stopping": "Daemon stopping",
-      "offline": "Daemon offline",
-      "outOfDateShort": "Daemon out of date",
-      "reconnecting": "Reconnecting…"
-    },
-    "attentionCount": {
-      "danger": "{{count}} failing",
-      "warning_one": "{{count}} needs you",
-      "warning_other": "{{count}} need you"
-    },
+    "attentionCount_one": "{{count}} needs you",
+    "attentionCount_other": "{{count}} need you",
     "update": {
       "title": "Update ready",
       "body": "is available. Restart downloads it, checks its signature and reopens Coffer.",
@@ -1107,11 +1095,11 @@
       "autostartUnsupported": "Only available on macOS."
     },
     "features": {
-      "title": "Features",
       "subtitle": "Experimental features, each off until you turn it on here. Turning one off hides it everywhere on this machine and keeps everything it holds.",
       "experimental": "Experimental",
       "decidedBy": "Decided by",
       "reset": "Reset to default",
+      "saveFailed": "Couldn’t save the change: {{reason}}",
       "names": {
         "knowledge": "Knowledge",
         "memory": "Memory",
@@ -1193,6 +1181,7 @@
     },
     "about": {
       "documentationLink": "Open the docs",
+      "intro": "The version you run, how it updates, and where to read more.",
       "copyDiagnostics": "Copy diagnostics for a bug report",
       "fields": {
         "version": "Version",
@@ -1360,7 +1349,8 @@
       "model": "Model",
       "modelPlaceholder": "Select a model",
       "timeout": "Time limit per call",
-      "timeoutHint": "How long Coffer waits for one answer from its own model — a memory pass, a knowledge description, one turn of curation, a transcription. A call that runs out of time defers its work and reports success, so set this above what your provider really takes.",
+      "timeoutHint": "How long Coffer waits for one answer from its own model.",
+      "timeoutMore": "A memory pass, a knowledge description, one turn of curation and a transcription each get this long. A call that runs out of time defers its work and reports success, so set this above what your provider really takes.",
       "defaultTimeout": "Default ({{timeout}})",
       "seconds": "{{count}}s",
       "minutes": "{{count}} min"
@@ -1390,13 +1380,13 @@
       "restartTimedOut": "The daemon did not come back within 90 seconds. Check Activity › Daemon log once it answers, or start it again.",
       "copyCommand": "Copy {{command}}",
       "port": "Port",
-      "portHelp": "{{min}}–{{max}}, default 8000. Bookmarks and agent connections follow it.",
+      "portHelp": "{{min}}–{{max}}, default 8000. Press Enter to apply; bookmarks and agent connections follow it.",
       "portRange": "Use a port from {{min}} to {{max}}.",
       "portInUse": "Port {{port}} is in use by another program. Pick another port.",
       "portInUseBy": "Port {{port}} is in use by {{name}} (pid {{pid}}). Pick another port.",
       "portPending": "Port {{port}} saved — takes effect after Coffer restarts",
       "portPendingHelp": "Agents are reconnected to the new port automatically.",
-      "save": "Save",
+      "status": "Status",
       "startup": "Startup",
       "upDays_one": "Up {{count}} day",
       "upDays_other": "Up {{count}} days",
@@ -1673,7 +1663,7 @@
     "SECRET_MISSING": "Required secret is missing from the secret store — store it again on the resource's edit page",
     "SECRET_UNREADABLE": "Stored secret could not be decrypted with the current master key",
     "PROVIDER_SECRET_SOURCE_INVALID": "Supply exactly one of a saved secret or an inline key",
-    "ATTENTION_NOT_IGNORABLE": "Only an item that is worth knowing but not broken can be ignored, and this one isn't listed any more.",
+    "ATTENTION_NOT_IGNORABLE": "That item isn't listed any more, so there is nothing to ignore.",
     "MASTER_KEY_PASSPHRASE_WRONG": "That passphrase doesn't open this key file.",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "Use a passphrase of at least 8 characters.",
     "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
@@ -1994,7 +1984,6 @@
       "binary": "Binary file ({{size}} bytes)",
       "truncated": "Content truncated — showing the start of the file.",
       "missingDir": "No memory store was named — open one from the agent's Memory tab.",
-      "back": "{{agent}} · Memory",
       "treeCount_one": "Files · {{count}}",
       "treeCount_other": "Files · {{count}}",
       "subtitle_one": "{{agent}} native memory store · {{count}} file",
@@ -4180,7 +4169,6 @@
       "files_other": "{{count}} files"
     },
     "resolve": {
-      "back": "Sync",
       "title": "Resolve conflicts",
       "pill": "Pushing blocked",
       "subline": "Round at {{time}} · pulled from {{machine}} · pick a version for every file, then continue the round.",
@@ -4680,13 +4668,7 @@
         "checked": "Checked"
       },
       "moreFor": "More for {{name}}",
-      "ignore": "Ignore",
-      "restore": "Stop ignoring",
-      "ignored_one": "{{count}} ignored",
-      "ignored_other": "{{count}} ignored",
-      "showIgnored": "Show",
-      "hideIgnored": "Hide",
-      "ignoredList": "Ignored"
+      "ignore": "Ignore"
     },
     "actions": {
       "connect": "Connect",

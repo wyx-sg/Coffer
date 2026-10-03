@@ -108,7 +108,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? null : close())}>
-      <DialogContent className="max-w-[480px]">
+      <DialogContent>
         {result ? (
           <ImportedKeyResult result={result} onDone={close} />
         ) : (
@@ -211,7 +211,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
               <span className="mr-auto text-xs text-text-muted">
                 {t("settings.security.import.recorded")}
               </span>
-              <Button type="button" variant="outline" onClick={close}>
+              <Button type="button" variant="ghost" onClick={close}>
                 {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={!ready || importKey.isPending}>

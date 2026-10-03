@@ -1,4 +1,4 @@
-// src/components/settings/storage/DataBlock.tsx — one kind of data on Settings › Data (design 6.2.07): its name and size, a line on how it is kept, a folder action, then its rows.
+// src/components/settings/storage/DataBlock.tsx — one kind of data on Settings › Data (canvas 1.4.11): its name and size, a line on how it is kept, a folder action, then its rows.
 import type { ReactNode } from "react";
 
 import { SettingsSection } from "@/components/settings/SettingsLayout";

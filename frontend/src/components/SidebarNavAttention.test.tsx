@@ -88,7 +88,8 @@ acceptance("web-ui", "an entry whose kind needs attention carries a count badge"
   expect(sync).toHaveAccessibleName("Needs your attention");
   const mcp = screen.getByTestId("nav-dot-mcp-servers");
   expect(mcp).toHaveTextContent("2");
-  expect(mcp).toHaveAttribute("data-tone", "danger");
+  expect(mcp).toHaveClass("bg-danger-strong");
+  expect(sync).toHaveClass("bg-danger-strong");
   expect(mcp).toHaveAccessibleName("Needs your attention");
   expect(badges()).toHaveLength(2);
 });
@@ -99,9 +100,9 @@ acceptance("web-ui", "the attention dot stays on the collapsed rail", async () =
 
   const dot = screen.getByTestId("nav-dot-mcp-servers");
   expect(dot).toHaveTextContent("");
-  expect(dot).toHaveAttribute("data-tone", "danger");
+  expect(dot).toHaveClass("bg-danger-strong");
   fireEvent.focus(screen.getByRole("link", { name: "MCP servers" }));
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("MCP servers · 1 failing");
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("MCP servers · 1 needs you");
 });
 
 acceptance("web-ui", "an entry without a signal never carries a badge", async () => {
@@ -167,4 +168,15 @@ acceptance("web-ui", "an unreadable signal leaves no badge", async () => {
   await new Promise((r) => setTimeout(r, 20));
   expect(badges()).toHaveLength(0);
   expect(document.body.textContent ?? "").not.toMatch(/error|couldn.t|failed/i);
+});
+
+acceptance("web-ui", "the badge count caps at 9+", async () => {
+  attention.mockReturnValue({
+    data: { items: Array.from({ length: 12 }, () => item("mcp_server", "warning")) },
+  });
+  renderNav("/agents");
+
+  const badge = await screen.findByTestId("nav-dot-mcp-servers");
+  expect(badge).toHaveTextContent("9+");
+  expect(badge).toHaveClass("bg-danger-strong");
 });

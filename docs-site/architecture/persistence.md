@@ -140,7 +140,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | `sync_runs` | Every sync round this machine has run. Pruned after 90 days by default. |
 | `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage page reads. |
 | `quota_snapshots` | The latest official subscription quota each feed reported. |
-| `attention_ignores` | The informational "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
+| `attention_ignores` | The "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
 
 ::: details Tables no code reads
 The migration chain also creates `workflow_runs`, `workflow_events`, `workflow_node_attempts` and `workflow_approvals`. No module in this build reads them; they exist because migrations are one linear history and later revisions build on the ones that created them.

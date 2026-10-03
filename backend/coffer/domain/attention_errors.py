@@ -6,13 +6,12 @@ from coffer.domain.error_base import CofferError
 
 
 class AttentionNotIgnorable(CofferError):  # noqa: N818
-    """The key names no item that can be ignored right now: nothing is listed
-    under it, or what is listed is broken rather than informational."""
+    """The key names no item in the list right now, so there is nothing to ignore."""
 
     code = "ATTENTION_NOT_IGNORABLE"
 
     def __init__(self, key: str) -> None:
-        super().__init__(f"no informational attention item {key!r} to ignore")
+        super().__init__(f"no attention item {key!r} to ignore")
         self.key = key
 
 

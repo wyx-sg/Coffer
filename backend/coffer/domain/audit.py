@@ -33,8 +33,8 @@ class AuditEventType(StrEnum):
     # start its successor and exit
     DAEMON_RESTARTED = "daemon_restarted"
     RETENTION_UPDATED = "retention_updated"
-    # spec web-ui "Let the user ignore an unconnected agent on Overview": an
-    # informational "needs you" item ignored on this machine, or no longer.
+    # spec web-ui "Let the user ignore any item on Overview": a
+    # "needs you" item ignored on this machine, or no longer.
     ATTENTION_IGNORED = "attention_ignored"
     ATTENTION_UNIGNORED = "attention_unignored"
     # Settings > Data "Rebuildable cache": the memory tree and the transcript

@@ -41,25 +41,23 @@ function EngineSection() {
   // section's shape rather than render pickers that read as unset.
   const { isPending } = useProviders();
   return (
-    <div className="flex flex-col gap-6">
-      <SettingsSection
-        title={t("settings.cofferModel.title")}
-        description={t("settings.cofferModel.subtitle")}
-        testId="coffer-model-section"
-      >
-        {isPending ? (
-          <div className="flex flex-col gap-2 py-2.5" data-testid="coffer-model-loading">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : (
-          <>
-            <InternalEngineSettings />
-            <SpeechToTextSettings />
-            <PriceRefreshSetting />
-          </>
-        )}
-      </SettingsSection>
-    </div>
+    <SettingsSection
+      title={t("settings.cofferModel.title")}
+      description={t("settings.cofferModel.subtitle")}
+      testId="coffer-model-section"
+    >
+      {isPending ? (
+        <div className="flex flex-col gap-2 py-2.5" data-testid="coffer-model-loading">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : (
+        <>
+          <InternalEngineSettings />
+          <SpeechToTextSettings />
+          <PriceRefreshSetting />
+        </>
+      )}
+    </SettingsSection>
   );
 }

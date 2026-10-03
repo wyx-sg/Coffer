@@ -866,7 +866,7 @@ new version. It carries the standing rules of every hand-off.
 
 ### Requirement: Report the state the shell shows
 The daemon's state MUST be visible to the user while starting it stays automatic. Every fact the
-web UI's shell footer, its Settings → Daemon tab and its About tab show about the daemon —
+web UI's Settings → Daemon tab and its About tab show about the daemon —
 lifecycle phase, bound port, start time, version, executable, process id, the
 commit a release build was stamped with, Coffer's data folder and how many agents carry Coffer's
 connection — MUST come from
@@ -882,7 +882,7 @@ needs one").
 #### Scenario: the status probe carries what the shell shows
 - **GIVEN** a running daemon,
 - **WHEN** `GET /api/v1/daemon/status` is called with no token,
-- **THEN** the response carries the phase, port, start time, version, executable, channel, pid, commit, data folder and connected-agent count the shell footer, Settings → Daemon and About show,
+- **THEN** the response carries the phase, port, start time, version, executable, channel, pid, commit, data folder and connected-agent count Settings → Daemon and About show,
 - **AND** `coffer daemon status --json` reports the same version, channel and port.
 
 ### Requirement: Report what Coffer stores and clear the rebuildable cache

@@ -16,22 +16,15 @@ describe("PageHeader", () => {
     expect(screen.getByText("What agents read")).toBeInTheDocument();
   });
 
-  test("renders the back link, badges and actions slots when given", () => {
+  test("renders the badges and actions slots when given", () => {
     renderHeader(
       <PageHeader
         title="alpha"
-        back={{ to: "/knowledge", label: "Knowledge" }}
         badges={<span data-testid="badge">enabled</span>}
         actions={<button type="button">Edit</button>}
       />,
     );
-    expect(screen.getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/knowledge");
     expect(screen.getByTestId("badge")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-  });
-
-  test("renders no back link when the prop is omitted", () => {
-    renderHeader(<PageHeader title="Knowledge" />);
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-// src/components/overview/NeedsYouRow.test.tsx — a row whose item carries a hand-off offers it in its ⋯ menu.
+// src/components/overview/NeedsYouRow.test.tsx — every row's ⋯ menu offers the item's hand-off and Ignore.
 //
 // Real QueryClientProvider and router; only the agent-providers api is mocked.
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -20,7 +20,6 @@ const PROMPT = "Please install `uvx` on this machine so MCP server fetch can sta
 function item(overrides: Partial<AttentionItem> = {}): AttentionItem {
   return {
     key: "mcp_server:u1:mcp_missing_launcher",
-    ignorable: false,
     kind: "mcp_server",
     uid: "u1",
     title: "fetch",
@@ -44,6 +43,8 @@ function Draft() {
   return <div data-testid="draft">{handoff ? handoff.prompt : ""}</div>;
 }
 
+const onIgnore = vi.fn();
+
 function renderRow(row: AttentionItem, available: boolean) {
   listAgents.mockResolvedValue({
     agents: [{ agent_key: "claude_code", display_name: "Claude Code", available }],
@@ -57,7 +58,7 @@ function renderRow(row: AttentionItem, available: boolean) {
             path="/"
             element={
               <ul>
-                <NeedsYouRow item={row} />
+                <NeedsYouRow item={row} onIgnore={onIgnore} />
               </ul>
             }
           />
@@ -99,7 +100,10 @@ test("with no managed agent available the menu offers Copy prompt only", async (
   expect(screen.queryByRole("menuitem", { name: /^Ask an agent/ })).not.toBeInTheDocument();
 });
 
-test("a row with no hand-off that cannot be ignored has no menu", () => {
-  renderRow(item({ handoff: null }), true);
-  expect(screen.queryByRole("button", { name: "More for fetch" })).not.toBeInTheDocument();
+test("every row's menu ends with Ignore", async () => {
+  renderRow(item({ severity: "error" }), false);
+  await waitFor(() => expect(listAgents).toHaveBeenCalled());
+  openMenu();
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Ignore" }));
+  expect(onIgnore).toHaveBeenCalledTimes(1);
 });

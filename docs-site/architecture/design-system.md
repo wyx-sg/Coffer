@@ -39,7 +39,7 @@ By default the UI follows the operating system's appearance, and follows it live
 
 ## Type
 
-The app runs on one base size, **13px**, and builds hierarchy from weight and colour rather than from size jumps. There are a handful of roles: the page title (18, bold), the title of the object a detail page is about (20), a dialog or empty-state title (15), a section title (13, semibold), body text (13), buttons and row titles (13 at a medium-heavy weight), meta lines (12, muted), and captions such as table heads and group labels (11, semibold). Nothing is set below 11px. Numbers use tabular figures, so columns of counts line up.
+The app runs on one base size, **13px**, and builds hierarchy from weight and colour rather than from size jumps. There are a handful of roles: the page title (18, bold), the title of the object a detail page is about (20), a dialog or empty-state title (15), a section title (15, semibold, with one visible description line under it in 12 muted), body text (13), buttons and row titles (13 at a medium-heavy weight), meta lines (12, muted), and captions such as table heads and group labels (11, semibold). Nothing is set below 11px. Numbers use tabular figures, so columns of counts line up.
 
 Two families are used: **Figtree** for the interface and **JetBrains Mono** for identifiers. Both are open-source (SIL Open Font License) and both are **bundled with the app**. The desktop shell only allows fonts from the app's own origin, and a tool that runs on your machine should not reach out to a font service to draw its own screen, so the font files ship inside the build.
 
@@ -70,6 +70,8 @@ The base controls — button, input, select, checkbox, switch, tabs, dialog, too
 **Empty state.** A tile, a title, one line of why, and one next action. An error in place of a list uses the same shape, toned for danger, with a retry and a way to diagnose.
 
 **Lists and tables.** Most pages are lists of hairline-separated rows. A table is used only where the reader compares columns — agents side by side, usage by provider, activity over time: sentence-case heads with no fill, rows tall enough for a sub-line, a ticked row reading as selected, a floating selection bar that lists safe actions before destructive ones, and no numbered pages: a long list shows its first rows with "Showing x of y" and grows with **Load N more**, N being the page size set in Settings.
+
+**Page grammar.** Every page is built from the same few shapes so it reads at a glance. A bordered box holds a *group of things* — a list of rows, a table, a set of cards. One thing's own properties are plain rows separated by hairlines, with no box. A page opens with its title, its actions on the right and one line of explanation; each section under it has a title and one visible description line, with generous space between sections. Explanations are shown, not tucked behind a "?", which is kept for the overflow of a long one. Pages carry no back button: the title bar's back and forward arrows are the only way through history. Counts that mean "needs you" are one red and stop at 9+. Controls save as you change them; only editors of documents have an explicit Save.
 
 **Split view.** Every list-and-detail, tree-and-file and list-and-thread page can be resized by dragging its divider, and so can the sidebar. The divider is a hairline until the pointer reaches it, is a keyboard stop that arrow keys move, resets on a double-click, and remembers its width for this viewer.
 

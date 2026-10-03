@@ -1,8 +1,8 @@
 // frontend/src/pages/settings/DataSettings.tsx
 //
-// Settings → Data (design 6.2.07–6.2.10; spec web-ui "Group the Data tab by
+// Settings → Data (canvas 1.4.11, 1.4.12; spec web-ui "Group the Data tab by
 // what kind of data it is"): what Coffer keeps, where it lives and for how
-// long, in four blocks — Vault (the git repository at ~/.coffer/vault: size
+// long, in four sections — Vault (the git repository at ~/.coffer/vault: size
 // with .git, versions, Open folder, its location), Local
 // content (not synced, the user backs it up: chat and channel attachments),
 // History (the records, their retention, Clear expired now) and Rebuildable
@@ -16,7 +16,11 @@ import { LoadError } from "@/components/LoadError";
 import { CacheBlock } from "@/components/settings/storage/CacheBlock";
 import { DataBlock } from "@/components/settings/storage/DataBlock";
 import { HistoryBlock } from "@/components/settings/storage/HistoryBlock";
-import { SettingRow } from "@/components/settings/SettingsLayout";
+import {
+  SETTINGS_STACK,
+  SettingRow,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { abbreviateHomePath } from "@/lib/agents/display";
@@ -59,11 +63,11 @@ export function DataSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm text-text-muted">{t("settings.data.intro")}</p>
+      <SettingsTabHeader title={t("settings.tabs.data")} intro={t("settings.data.intro")} />
       {storage.error ? (
         <LoadError error={storage.error} onRetry={() => void storage.refetch()} />
       ) : null}
-      <div className="flex flex-col gap-6">
+      <div className={SETTINGS_STACK}>
         <DataBlock
           title={t("settings.data.vault.title")}
           size={storage.error ? "—" : vaultSize}

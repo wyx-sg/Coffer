@@ -24,13 +24,6 @@ pub fn open_page(app: &AppHandle, path: &str) {
     navigate(app, &navigate_js(path));
 }
 
-/// Show the window with the Settings modal open on `tab`, over the page the
-/// user is on — what the sidebar's Settings row and ⌘, do (spec web-ui "Open
-/// Settings as a modal from the sidebar footer").
-pub fn open_settings(app: &AppHandle, tab: &str) {
-    navigate(app, &open_settings_js(tab));
-}
-
 fn navigate(app: &AppHandle, script: &str) {
     show_window(app);
     if let Some(window) = app.get_webview_window("main") {
@@ -44,22 +37,6 @@ pub fn navigate_js(path: &str) -> String {
     format!(
         "(function(){{var s=window.history.state||{{}};\
          var n={{usr:null,key:'tray'+Date.now(),idx:(s.idx||0)+1}};\
-         window.history.pushState(n,'',{path});\
-         window.dispatchEvent(new PopStateEvent('popstate',{{state:n}}));}})()"
-    )
-}
-
-/// A push of `/settings/<tab>` carrying the page underneath as its
-/// `backgroundLocation`, as `frontend/src/lib/settingsModal.ts` does. When
-/// Settings is already open the page underneath stays the one it was over.
-pub fn open_settings_js(tab: &str) -> String {
-    let path = js_string(&format!("/settings/{tab}"));
-    format!(
-        "(function(){{var s=window.history.state||{{}};var l=window.location;\
-         var open=l.pathname.indexOf('/settings')===0;\
-         var bg=open?((s.usr||{{}}).backgroundLocation||null):\
-         {{pathname:l.pathname,search:l.search,hash:l.hash,state:s.usr||null,key:s.key||'default'}};\
-         var n={{usr:{{backgroundLocation:bg}},key:'tray'+Date.now(),idx:(s.idx||0)+1}};\
          window.history.pushState(n,'',{path});\
          window.dispatchEvent(new PopStateEvent('popstate',{{state:n}}));}})()"
     )
@@ -93,14 +70,6 @@ mod tests {
         assert!(js.contains("PopStateEvent('popstate'"));
         // The router ignores an entry without the next `idx`.
         assert!(js.contains("idx:(s.idx||0)+1"));
-    }
-
-    #[test]
-    fn settings_opens_over_the_page_the_user_is_on() {
-        let js = open_settings_js("general");
-        assert!(js.contains("'/settings/general'"), "{js}");
-        assert!(js.contains("backgroundLocation"));
-        assert!(js.contains("pathname:l.pathname"));
     }
 
     #[test]

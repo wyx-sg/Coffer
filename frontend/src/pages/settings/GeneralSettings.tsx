@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/GeneralSettings.tsx
 //
-// Settings → General (design 6.2.01): preferences for this browser and this
+// Settings → General (canvas 1.4.01): preferences for this browser and this
 // Mac, in three sections — Appearance (the interface language and the theme,
 // each a segmented choice applied at once), Coffer's model (the model Coffer's
 // own engine runs on and speech to text; spec web-ui "Choose Coffer's model in
@@ -18,7 +18,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
+import {
+  SETTINGS_STACK,
+  SettingRow,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import {
@@ -126,8 +131,8 @@ export function GeneralSettings() {
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm text-text-muted">{t("settings.general.intro")}</p>
-      <div className="flex flex-col gap-6">
+      <SettingsTabHeader title={t("settings.tabs.general")} intro={t("settings.general.intro")} />
+      <div className={SETTINGS_STACK}>
         <SettingsSection title={t("settings.general.appearance")}>
           <SettingRow
             label={t("settings.general.language")}

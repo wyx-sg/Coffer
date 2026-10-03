@@ -1,4 +1,4 @@
-// src/components/settings/storage/HistoryBlock.tsx — Settings › Data's History block (design 6.2.07, 6.2.08, 6.2.10).
+// src/components/settings/storage/HistoryBlock.tsx — Settings › Data's History block (canvas 1.4.11, 1.4.12).
 //
 // Spec web-ui "Group the Data tab by what kind of data it is": the retention
 // of each record kind — changes, MCP calls and conversations — Keep forever or
@@ -165,7 +165,10 @@ export function HistoryBlock({ size, onReveal }: Props) {
             {prune.isPending ? t("settings.retention.pruning") : t("settings.retention.pruneAll")}
           </Button>
         </SettingRow>
-        <p className="py-3 text-xs text-text-muted" data-testid="settings-data-other-retention">
+        <p
+          className="border-t border-border-subtle py-3 text-xs text-text-muted"
+          data-testid="settings-data-other-retention"
+        >
           {t("settings.data.otherRetention")} <code className="font-mono">coffer config</code>
         </p>
       </DataBlock>

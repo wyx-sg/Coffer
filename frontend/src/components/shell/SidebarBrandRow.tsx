@@ -1,8 +1,8 @@
 // src/components/shell/SidebarBrandRow.tsx — the sidebar's top row in the browser build.
 //
 // The brand mark linking home and, at md and wider, the collapse toggle. The
-// desktop shell has neither: its title strip holds the traffic lights and the
-// toggle, and the sidebar starts at the search box.
+// desktop shell has neither: its title strip holds the traffic lights, the
+// toggle and the history arrows, and the sidebar starts at the search box.
 import { Link } from "react-router-dom";
 
 import { cn } from "@/lib/utils";

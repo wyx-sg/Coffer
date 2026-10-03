@@ -9,6 +9,4 @@ export const attentionApi = {
   read: (): Promise<AttentionReport> => unwrap(getApiClient().GET("/attention")),
   ignore: (key: string): Promise<void> =>
     unwrapVoid(getApiClient().PUT("/attention/ignored/{key}", { params: { path: { key } } })),
-  unignore: (key: string): Promise<void> =>
-    unwrapVoid(getApiClient().DELETE("/attention/ignored/{key}", { params: { path: { key } } })),
 };

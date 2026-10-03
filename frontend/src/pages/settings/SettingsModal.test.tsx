@@ -36,6 +36,12 @@ beforeEach(() => {
             candidates: [],
             entries: [],
             items: [],
+            approvals: [],
+            policies: [],
+            vault: { path: "/v", bytes: 0, versions: null },
+            local_content: { folder: "/c", locations: [], bytes: 0 },
+            history: { path: "/c/coffer.db", bytes: 0 },
+            cache: { bytes: 0 },
             status: "ready",
             version: "0.0.0",
             port: 8000,
@@ -104,6 +110,24 @@ describe("the Settings modal", () => {
       await screen.findByTestId("settings-pane-about", {}, { timeout: 5_000 }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "every settings tab opens with its title and an intro line", async () => {
+    for (const [tab, title] of [
+      ["general", "General"],
+      ["security", "Security"],
+      ["data", "Data"],
+      ["daemon", "Daemon"],
+      ["about", "About"],
+      ["features", "Features"],
+    ]) {
+      const { unmount } = renderAt(`/settings/${tab}`);
+      const pane = await screen.findByTestId(`settings-pane-${tab}`, {}, { timeout: 5_000 });
+      const heading = await within(pane).findByRole("heading", { level: 1, name: title });
+      expect(heading.nextElementSibling?.tagName).toBe("P");
+      expect(within(pane).queryByRole("button", { name: /^save$/i })).toBeNull();
+      unmount();
+    }
   });
 
   acceptance("web-ui", "the Settings row opens Settings over the current page", async () => {

@@ -1,7 +1,8 @@
 // frontend/src/pages/settings/UpdatesSection.tsx
 //
 // Settings › About › Updates (spec web-ui "Check for and install updates on
-// Settings › About"; design canvas 6.2.13–6.2.15). The shell does the checking
+// Settings › About"; canvas 1.4.23–1.4.26), an ordinary section: its title, then
+// a hairline-topped status row and the automatic-check row. The shell does the checking
 // and installing; this renders its record — up to date, a newer version with
 // Download and restart, or a failed check that keeps the last good time — and
 // asks it to act. A busy control shows it and takes no second press. In a
@@ -9,12 +10,12 @@
 // the app, so the section says who installs updates and offers no update
 // button — only the daemon's hand-off that has an agent upgrade this copy the
 // way it was installed (`GET /daemon/upgrade`).
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, RefreshCw } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useUpgradeHandoff } from "@/lib/hooks/useDaemon";
 import { useShellUpdates } from "@/lib/hooks/useShellUpdates";
@@ -33,19 +34,16 @@ export function UpdatesSection() {
 
   if (!inShell || (status && !status.configured)) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.about.updates.title")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
+      <UpdatesBlock>
+        <div className="space-y-3 text-sm text-text-muted">
           <p>
             {inShell
               ? t("settings.about.updates.unconfigured")
               : t("settings.about.updates.browser")}
           </p>
           {!inShell && upgrade.data ? <AgentHandoff prompt={upgrade.data} size="sm" /> : null}
-        </CardContent>
-      </Card>
+        </div>
+      </UpdatesBlock>
     );
   }
 
@@ -87,17 +85,14 @@ export function UpdatesSection() {
     .filter(Boolean);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("settings.about.updates.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
+    <UpdatesBlock>
+      <div className="flex flex-col gap-3.5 text-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
-            <p className="font-medium">{headline}</p>
-            <p className="text-muted-foreground">{detail}</p>
+            <p className="font-label">{headline}</p>
+            <p className="text-text-muted">{detail}</p>
             {error ? (
-              <p className="text-destructive" role="alert">
+              <p className="text-danger" role="alert">
                 {error}{" "}
                 {status
                   ? t("settings.about.updates.youAreOn", { version: status.currentVersion })
@@ -117,7 +112,7 @@ export function UpdatesSection() {
           ) : (
             <Button
               size="sm"
-              variant="secondary"
+              variant="outline"
               disabled={checking || !status}
               onClick={() => void check()}
             >
@@ -132,7 +127,7 @@ export function UpdatesSection() {
         </div>
 
         {notes.length > 0 ? (
-          <div className="space-y-1 rounded-md bg-muted px-3 py-2 text-muted-foreground">
+          <div className="space-y-1 rounded-md bg-surface-sunken px-3 py-2 text-text-muted">
             <p className="text-xs font-semibold uppercase">
               {t("settings.about.updates.whatsNew")}
             </p>
@@ -144,10 +139,10 @@ export function UpdatesSection() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-4 border-t pt-4">
+        <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-3.5">
           <div className="space-y-0.5">
-            <p className="font-medium">{t("settings.about.updates.auto")}</p>
-            <p className="text-muted-foreground">{t("settings.about.updates.autoHelp")}</p>
+            <p className="font-label">{t("settings.about.updates.auto")}</p>
+            <p className="text-text-muted">{t("settings.about.updates.autoHelp")}</p>
           </div>
           <Switch
             checked={status?.autoCheck ?? true}
@@ -156,7 +151,18 @@ export function UpdatesSection() {
             aria-label={t("settings.about.updates.auto")}
           />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </UpdatesBlock>
+  );
+}
+
+/** The Updates section: its title, then one hairline-topped body (an ordinary section, not a card). */
+function UpdatesBlock({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-md font-semibold text-text">{t("settings.about.updates.title")}</h2>
+      <div className="border-t border-border-subtle pt-3">{children}</div>
+    </section>
   );
 }

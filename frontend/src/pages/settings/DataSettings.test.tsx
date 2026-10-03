@@ -128,7 +128,6 @@ describe("DataSettings", () => {
     expect(within(vault).getByText("~/.coffer/vault")).toBeInTheDocument();
     expect(within(vault).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const local = screen.getByTestId("settings-data-local");
-    fireEvent.click(within(local).getByRole("button", { name: "More info" }));
     expect(screen.getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
     expect(within(local).getByText("~/.coffer/chat-media")).toBeInTheDocument();
     expect(within(local).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
@@ -167,7 +166,6 @@ describe("DataSettings", () => {
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
     expect(await within(vault).findByText(/1,382 versions/)).toBeInTheDocument();
-    fireEvent.click(within(vault).getByRole("button", { name: "More info" }));
     expect(screen.getByText(/Synced — a git repository/)).toBeInTheDocument();
     expect(within(vault).queryByText("Latest version")).toBeNull();
   });
@@ -184,8 +182,7 @@ describe("DataSettings", () => {
       },
     });
     render(wrap(<DataSettings />));
-    const vault = await screen.findByTestId("settings-data-vault");
-    fireEvent.click(within(vault).getByRole("button", { name: "More info" }));
+    await screen.findByTestId("settings-data-vault");
     expect(await screen.findByText(/makes it a git repository/i)).toBeInTheDocument();
   });
 

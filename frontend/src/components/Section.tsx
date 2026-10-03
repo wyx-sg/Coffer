@@ -1,10 +1,10 @@
 // src/components/Section.tsx — the one titled block of a page or pane, and the
 // stack that separates several of them.
 //
-// A Section is a heading (one size everywhere), an optional "?" help tip beside
-// it that holds the explanation, trailing controls on the right, and the
-// content. It prints no sentence under the title and no count beside it: what
-// the block is for rides in `help`, how many it holds is in the content. A
+// A Section is a heading (15/600 everywhere, Foundations 0.5.03), an optional
+// "?" help tip beside it that holds the explanation, trailing controls on the
+// right, and the content. It prints no sentence under the title: what the block is for rides in
+// `help`, and `aside` carries only a small mark such as the Overview's count. A
 // SectionStack lays Sections one above the other with a hairline between each,
 // so every pane that stacks blocks divides them the same way.
 import type { ReactNode } from "react";
@@ -16,7 +16,7 @@ interface Props {
   title: string;
   /** What the block is for — shown in a "?" tip beside the title, never inline. */
   help?: ReactNode;
-  /** Raw slot after the title (and help tip), e.g. a link carrying its own `ml-auto`. Not for counts. */
+  /** Raw slot after the title (and help tip), e.g. a link carrying its own `ml-auto` or the Overview's count chip. */
   aside?: ReactNode;
   /** Right-aligned controls on the title's row — a "Change" or "All 412" link. */
   actions?: ReactNode;
@@ -52,7 +52,7 @@ export function Section({
       aria-label={labelled ? title : undefined}
     >
       <div className="flex min-h-control-sm items-center gap-2">
-        <Heading className="text-sm font-semibold text-text">{title}</Heading>
+        <Heading className="text-md font-semibold text-text">{title}</Heading>
         {help ? <HelpTip>{help}</HelpTip> : null}
         {aside}
         {actions ? <span className="ml-auto inline-flex items-center gap-2">{actions}</span> : null}

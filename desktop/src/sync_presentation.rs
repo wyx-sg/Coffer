@@ -1,6 +1,5 @@
-//! What the sync alert READS like — the notification, and the name the menu
-//! bar's "needs you" entry gives a single sync problem. What it LOOKS like is
-//! the menu bar's attention dot, drawn by `tray.rs` from `tray_state.rs`.
+//! What the sync alert READS like — the notification. What it LOOKS like is
+//! the count beside the menu bar icon, drawn by `tray.rs` from `tray_state.rs`.
 //!
 //! Split out of `sync_alert` to keep that module within the file-size budget,
 //! and the seam is an honest one: that module decides *whether* a human is
@@ -69,29 +68,6 @@ fn english_body(status: &str) -> &'static str {
     }
 }
 
-/// The tray entry's label while a condition is outstanding. Short — it sits in
-/// a menu — and it names the condition, so the tray answers "which problem"
-/// without the window being opened.
-pub fn tray_label(status: &str, lang: Lang) -> String {
-    let reason = match (lang, status) {
-        (Lang::En, "awaiting_confirmation") => "held for confirmation",
-        (Lang::En, "conflict") => "conflict",
-        (Lang::En, "push_failed") => "push failed",
-        (Lang::En, "failed") => "run failed",
-        (Lang::En, "awaiting_join") => "not joined yet",
-        (Lang::Zh, "awaiting_confirmation") => "已暂停，等你确认",
-        (Lang::Zh, "conflict") => "冲突",
-        (Lang::Zh, "push_failed") => "推送失败",
-        (Lang::Zh, "failed") => "运行失败",
-        (Lang::Zh, "awaiting_join") => "尚未加入",
-        _ => status,
-    };
-    match lang {
-        Lang::En => format!("Sync needs attention — {reason}"),
-        Lang::Zh => format!("同步需要处理 — {reason}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,10 +77,7 @@ mod tests {
 
     #[test]
     fn every_attention_status_has_its_own_body_and_label() {
-        for (lang, prefix) in [
-            (Lang::En, "Sync needs attention — "),
-            (Lang::Zh, "同步需要处理 — "),
-        ] {
+        for lang in [Lang::En, Lang::Zh] {
             let mut bodies: Vec<&str> = ATTENTION_STATUSES
                 .iter()
                 .map(|s| notification_body(s, lang))
@@ -117,13 +90,6 @@ mod tests {
                 ATTENTION_STATUSES.len(),
                 "two statuses share a body in {lang:?}"
             );
-
-            for status in ATTENTION_STATUSES {
-                let label = tray_label(status, lang);
-                assert!(label.starts_with(prefix), "{label}");
-                // The raw enum name never reaches the menu.
-                assert!(!label.contains('_'), "{label}");
-            }
         }
         assert_ne!(notification_title(Lang::En), notification_title(Lang::Zh));
     }

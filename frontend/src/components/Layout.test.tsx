@@ -113,15 +113,29 @@ describe("Layout", () => {
     ).toBeNull();
   });
 
-  test("Cmd/Ctrl+B toggles the sidebar in the overlay shell only", () => {
+  test("Cmd/Ctrl+\\ toggles the sidebar, and the arrows only the overlay shell", () => {
     chrome.overlay = true;
     renderShell();
-    const press = () => {
-      fireEvent.keyDown(window, { key: "b", metaKey: true });
-      fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    expect(screen.getByTestId("title-sidebar-edge")).toBeInTheDocument();
+    const press = (key: string) => {
+      fireEvent.keyDown(window, { key, metaKey: true });
+      fireEvent.keyDown(window, { key, ctrlKey: true });
     };
-    press();
+    press("\\");
     expect(localStorage.getItem("coffer.nav.collapsed")).toBe("1");
+    // Collapsed, the strip runs across with no edge line.
+    expect(screen.queryByTestId("title-sidebar-edge")).toBeNull();
+    press("\\");
+    expect(localStorage.getItem("coffer.nav.collapsed")).toBe("0");
+    // The old shortcut does nothing.
+    press("b");
+    expect(localStorage.getItem("coffer.nav.collapsed")).toBe("0");
+  });
+
+  test("the browser has no back and forward arrows", () => {
+    renderShell();
+    expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^forward$/i })).toBeNull();
   });
 
   test("the skip link is the first focusable element and targets main", () => {

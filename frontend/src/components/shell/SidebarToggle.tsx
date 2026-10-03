@@ -1,9 +1,9 @@
 // src/components/shell/SidebarToggle.tsx — the button that collapses and expands the primary sidebar.
 //
 // Two placements share it: in the logo row (browser, and the rail's expand
-// control under the mark) and, in the desktop shell, as the one fixed control
-// in the title strip beside the traffic lights, where it never moves when the
-// sidebar changes width.
+// control under the mark) and, in the desktop shell, in the title strip beside
+// the traffic lights, where it never moves when the sidebar changes width.
+// Both show the ⌘\ shortcut in the tooltip.
 import { useTranslation } from "react-i18next";
 import { PanelLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ export function SidebarToggle({ collapsed, onToggle, placement, controls, classN
         </Button>
       </TooltipTrigger>
       <TooltipContent side={placement === "titlebar" ? "bottom" : "right"}>
-        {placement === "titlebar" ? `${label} (${shortcutLabel("B")})` : label}
+        {`${label} ${shortcutLabel("\\")}`}
       </TooltipContent>
     </Tooltip>
   );

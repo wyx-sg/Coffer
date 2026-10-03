@@ -32,7 +32,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { useDetailTab } from "@/lib/detailTabs";
-import { useBackLink } from "@/lib/origin";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 import { displayName } from "@/lib/resourceTitle";
@@ -48,7 +47,6 @@ export function MemoryDetailPage() {
   const updating = useMemoryUpdateRunning();
   const running = distilling || updating;
   const [tab, setTab] = useDetailTab(MEMORY_TABS, "memories", `/memory/${encodeURIComponent(uid)}`);
-  const back = useBackLink({ to: "/memory", label: t("nav.memory") });
 
   if (partitions.isPending) {
     return (
@@ -61,7 +59,7 @@ export function MemoryDetailPage() {
   if (!row) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={t("memory.title")} />
+        <PageHeader title={t("memory.title")} />
         <EmptyState icon={Brain} title={t("memory.detail.notFound")} />
       </div>
     );
@@ -76,7 +74,6 @@ export function MemoryDetailPage() {
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <PageHeader
-        back={back}
         title={<ResourceLabel resource={row} heading />}
         badges={row.unresolvable ? <UnresolvableBadge /> : null}
         subtitle={subtitle}

@@ -140,7 +140,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | `sync_runs` | 这台机器跑过的每一轮同步。默认 90 天后清理。 |
 | `usage_requests`、`usage_daily` | 模型代理暂存的上游尝试，以及用量页面读取的按天汇总。 |
 | `quota_snapshots` | 每个来源报告的最新官方订阅额度。 |
-| `attention_ignores` | 这台机器上有人忽略掉的提示性“需要你处理”项，按项键记录，附带忽略时间。待处理列表会把它们排除在条目和计数之外。 |
+| `attention_ignores` | 这台机器上有人忽略掉的“需要你处理”项，按项键记录，附带忽略时间。待处理列表会把它们排除在条目和计数之外。 |
 
 ::: details 没有代码读取的表
 迁移链还会创建 `workflow_runs`、`workflow_events`、`workflow_node_attempts` 和 `workflow_approvals`。这个构建里没有模块读取它们；它们之所以存在，是因为迁移是一条线性历史，后面的修订建立在创建它们的那些修订之上。

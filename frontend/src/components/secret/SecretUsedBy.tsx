@@ -8,20 +8,17 @@ import { useTranslation } from "react-i18next";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { SecretRef } from "@/lib/api/secret";
-import { useHereOriginState } from "@/lib/origin";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { citersOf, displayName, referenceOf, type Citer } from "./secretRows";
 import { useKindLabel } from "./useKindLabel";
 
 function CiterName({ citer }: { citer: Citer }) {
   const pageOpen = useKindPageOpen();
-  const origin = useHereOriginState();
   if (!citer.href || !pageOpen(citer.kind))
     return <span className="truncate text-sm text-text">{citer.name}</span>;
   return (
     <Link
       to={citer.href}
-      state={origin}
       className="truncate text-sm text-text underline-offset-2 hover:underline focus-visible:underline"
     >
       {citer.name}

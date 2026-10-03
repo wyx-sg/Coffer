@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/DaemonSettings.tsx
 //
-// Settings → Daemon (design 6.2.11 / 6.2.12; spec web-ui "Show and manage the
+// Settings → Daemon (canvas 1.4.15, 1.4.16; spec web-ui "Show and manage the
 // daemon on Settings → Daemon"): the background process that serves the
 // agents and this page. The status card (state, version, channel, port, start
 // time, executable) with the host's restart, then Startup — Start at login and
@@ -14,27 +14,33 @@ import { useTranslation } from "react-i18next";
 
 import { DaemonPortRow } from "@/components/settings/daemon/DaemonPortRow";
 import { DaemonStatusCard } from "@/components/settings/daemon/DaemonStatusCard";
-import { SettingsSection } from "@/components/settings/SettingsLayout";
-import { useDaemonFooterState } from "@/components/shell/useDaemonFooterState";
+import {
+  SETTINGS_STACK,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
+import { useDaemonState } from "@/components/settings/daemon/useDaemonState";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { inDesktopShell } from "@/lib/tauri";
 import { DaemonResidencySettings } from "./DaemonResidencySettings";
 
 export function DaemonSettings() {
   const { t } = useTranslation();
-  const state = useDaemonFooterState();
+  const state = useDaemonState();
   const { data: status } = useDaemonStatus();
   const inShell = inDesktopShell();
   const unreachable = state.kind === "offline" || state.kind === "connecting";
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm text-text-muted">{t("settings.daemonTab.intro")}</p>
-      <DaemonStatusCard state={state} status={status} inShell={inShell} />
-      <SettingsSection title={t("settings.daemonTab.startup")} testId="settings-daemon-startup">
-        <DaemonResidencySettings disabled={unreachable} />
-        <DaemonPortRow disabled={unreachable} />
-      </SettingsSection>
+      <SettingsTabHeader title={t("settings.tabs.daemon")} intro={t("settings.daemonTab.intro")} />
+      <div className={SETTINGS_STACK}>
+        <DaemonStatusCard state={state} status={status} inShell={inShell} />
+        <SettingsSection title={t("settings.daemonTab.startup")} testId="settings-daemon-startup">
+          <DaemonResidencySettings disabled={unreachable} />
+          <DaemonPortRow disabled={unreachable} />
+        </SettingsSection>
+      </div>
     </div>
   );
 }

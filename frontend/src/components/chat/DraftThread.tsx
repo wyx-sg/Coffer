@@ -22,7 +22,6 @@ import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ChatAttachment } from "@/lib/api/chat";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
-import { ConversationBackLink } from "./ConversationBackLink";
 import { Composer } from "./Composer";
 import { DraftWorkspacePicker } from "./DraftWorkspacePicker";
 import { EffortPicker } from "./EffortPicker";
@@ -31,8 +30,6 @@ import { NoManagedAgentHelp } from "./NoManagedAgentHelp";
 
 interface Props {
   agents: AgentProviderInfo[];
-  /** The Conversations list the back link returns to, with its filters. */
-  listPath: string;
   agentKey: string;
   /** The folder the turn will run in; null is Coffer's own workspace. */
   cwd?: string | null;
@@ -55,7 +52,6 @@ interface Props {
 
 export function DraftThread({
   agents,
-  listPath,
   agentKey,
   cwd = null,
   noManagedAgent = false,
@@ -89,9 +85,6 @@ export function DraftThread({
   if (noManagedAgent) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex h-[52px] shrink-0 items-center border-b border-border-subtle px-5">
-          <ConversationBackLink listPath={listPath} />
-        </div>
         <NoManagedAgentHelp layout="empty" />
       </div>
     );
@@ -100,7 +93,6 @@ export function DraftThread({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-subtle px-5">
-        <ConversationBackLink listPath={listPath} />
         <h1 className="text-md font-semibold text-text">{t("conversations.new.title")}</h1>
         <DraftWorkspacePicker cwd={cwd} onChange={(next) => onCwdChange?.(next)} />
       </div>

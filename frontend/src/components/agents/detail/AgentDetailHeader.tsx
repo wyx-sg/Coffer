@@ -139,7 +139,6 @@ export function AgentDetailHeader({ typeRow, rowActions }: Props) {
 
   return (
     <PageHeader
-      back={{ to: "/agents", label: t("agents.title") }}
       title={
         <span className="inline-flex items-center gap-2.5">
           <AgentBadge type={typeRow.type} size="lg" state={badgeState(state)} tooltip={false} />

@@ -1,15 +1,12 @@
 // src/components/PageHeader.tsx — the one page header for every surface.
 //
-// The boards draw one header (1.2 App shell, every list and detail board): an
-// optional "← list" link above (in the desktop shell it moves into the title bar), then one row — the title (18/650), anything
-// that sits beside it (a count, a status, "Unsaved changes"), and the page's
-// actions pushed to the right — and an optional subtitle under the row. Detail
-// pages keep one fixed action order: reach → test/refresh → edit → delete.
-import { ArrowLeft } from "lucide-react";
+// The boards draw one header (1.1.02 title bar, every list and detail board):
+// one row — the title (18/650), anything that sits beside it (a count, a
+// status, "Unsaved changes"), and the page's actions pushed to the right — and
+// an optional subtitle line under the row. Pages carry no back button; the
+// sidebar and the browser's own history are the way out. Detail pages keep one
+// fixed action order: reach → test/refresh → edit → delete.
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
-
-import { InTitleBar } from "@/components/shell/titleBarSlot";
 
 interface Props {
   title: ReactNode;
@@ -18,29 +15,11 @@ interface Props {
   actions?: ReactNode;
   /** Inline slot beside the title — a count, a status, a kind chip. */
   badges?: ReactNode;
-  /** Detail pages: a "← label" link back to the list, rendered above the title. */
-  back?: { to: string; label: string };
 }
 
-/** The "← label" link — also used alone by a page whose header is its own. */
-export function BackLink({ to, label }: { to: string; label: string }) {
-  return (
-    <InTitleBar>
-      <Link
-        to={to}
-        className="inline-flex items-center gap-1 self-start text-xs text-text-subtle transition-colors duration-fast hover:text-text"
-      >
-        <ArrowLeft className="size-3.5" aria-hidden />
-        {label}
-      </Link>
-    </InTitleBar>
-  );
-}
-
-export function PageHeader({ title, subtitle, actions, badges, back }: Props) {
+export function PageHeader({ title, subtitle, actions, badges }: Props) {
   return (
     <header className="flex flex-col gap-1.5">
-      {back ? <BackLink to={back.to} label={back.label} /> : null}
       <div className="flex min-h-control-md flex-wrap items-center gap-x-2.5 gap-y-2">
         <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-bold">{title}</h1>
         {badges}

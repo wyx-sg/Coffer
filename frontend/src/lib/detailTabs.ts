@@ -47,8 +47,8 @@ export function detailTabRedirect<T extends string>(
  *
  * The tab is the route's optional `:tab` segment (unknown → `defaultTab`);
  * `setTab` replace-navigates to the address of the next tab, keeping the
- * search params and the router state (a page's origin, `lib/origin.ts`). While `enabled`, an unknown or default `:tab` segment is
- * replaced by the bare address — a page whose subject has not resolved yet
+ * search params and the router state. While `enabled`, an unknown or default
+ * `:tab` segment is replaced by the bare address — a page whose subject has not resolved yet
  * passes `enabled: false`.
  */
 export function useDetailTab<T extends string>(

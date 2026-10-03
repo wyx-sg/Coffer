@@ -12,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { FirstRun } from "@/components/overview/FirstRun";
 import { HealthTiles } from "@/components/overview/HealthTiles";
-import { SectionStack } from "@/components/Section";
 import { LiveMark } from "@/components/overview/LiveMark";
 import { NeedsYouList } from "@/components/overview/NeedsYouList";
 import { RecentActivity } from "@/components/overview/RecentActivity";
@@ -37,11 +36,11 @@ export function OverviewPage() {
       {firstRun ? (
         <FirstRun />
       ) : (
-        <SectionStack>
+        <div className="flex flex-col gap-6">
           <NeedsYouList />
           <HealthTiles />
           <RecentActivity />
-        </SectionStack>
+        </div>
       )}
     </div>
   );

@@ -37,7 +37,6 @@ export function SyncResolveConflictsPage() {
 
   const header = (
     <PageHeader
-      back={{ to: "/sync", label: t("sync.resolve.back") }}
       title={t("sync.resolve.title")}
       badges={round ? <StatusPill tone="err">{t("sync.resolve.pill")}</StatusPill> : null}
       subtitle={

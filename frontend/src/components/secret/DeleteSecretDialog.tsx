@@ -24,7 +24,6 @@ import { useToast } from "@/components/ui/toast";
 import type { SecretRef } from "@/lib/api/secret";
 import { ApiError } from "@/lib/api/errors";
 import { useDeleteSecret } from "@/lib/hooks/useSecrets";
-import { useHereOriginState } from "@/lib/origin";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { citersFromRefusal, citersOf, displayName, referenceOf, type Citer } from "./secretRows";
 import { lastUsedLabel } from "./secretTimes";
@@ -39,7 +38,6 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
   const { t } = useTranslation();
   const kindLabel = useKindLabel();
   const pageOpen = useKindPageOpen();
-  const origin = useHereOriginState();
   return (
     <>
       <DialogHeader>
@@ -55,7 +53,7 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
             <span className="text-xs text-text-muted">{kindLabel(c.kind)}</span>
             {c.href && pageOpen(c.kind) ? (
               <Button asChild variant="outline" size="sm">
-                <Link to={c.href} state={origin} onClick={onClose}>
+                <Link to={c.href} onClick={onClose}>
                   {t("secrets.blocked.open")}
                 </Link>
               </Button>

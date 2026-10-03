@@ -1,8 +1,8 @@
 """``PUT`` / ``DELETE /api/v1/attention/ignored/{key}`` over a real database:
-an ignored informational item leaves ``items`` and ``counts_by_kind`` (which
+an ignored item, whatever its severity, leaves ``items`` and ``counts_by_kind`` (which
 the sidebar's badges and the menu bar count) and is listed under ``ignored``;
-the choice is kept in ``attention_ignores`` and audited; a broken item cannot
-be ignored."""
+the choice is kept in ``attention_ignores`` and audited; a key that names no
+item cannot be ignored."""
 
 from __future__ import annotations
 
@@ -105,12 +105,12 @@ async def rig(tmp_path: pathlib.Path) -> AsyncIterator[_Rig]:
 
 
 @pytest.mark.acceptance(
-    spec="web-ui", scenario="an ignored agent leaves needs you and is counted under it"
+    spec="web-ui", scenario="an ignored item leaves needs you whatever its severity"
 )
 async def test_ignoring_an_unconnected_agent_moves_it_out_of_items_and_counts(rig: _Rig) -> None:
     before = (await rig.client.get("/api/v1/attention")).json()
     codex = next(i for i in before["items"] if i["uid"] == "a-codex")
-    assert codex["key"] == "agent:a-codex:agent_not_connected" and codex["ignorable"] is True
+    assert codex["key"] == "agent:a-codex:agent_not_connected" and codex["handoff"]["prompt"]
     assert before["counts_by_kind"] == {"mcp_server": 1, "agent": 1}
     assert before["ignored"] == []
 
@@ -133,14 +133,23 @@ async def test_ignoring_an_unconnected_agent_moves_it_out_of_items_and_counts(ri
     assert await rig.audit_events() == [("attention_ignored", "ui"), ("attention_unignored", "ui")]
 
 
-async def test_a_broken_or_unknown_item_cannot_be_ignored(rig: _Rig) -> None:
-    for key in ("mcp_server:m-github:mcp_failing", "agent:nobody:agent_not_connected"):
-        r = await rig.client.put(f"/api/v1/attention/ignored/{key}")
-        assert r.status_code == 409, r.text
-        assert r.json()["error"]["code"] == "ATTENTION_NOT_IGNORABLE"
+async def test_a_broken_item_can_be_ignored_and_an_unknown_key_cannot(rig: _Rig) -> None:
+    r = await rig.client.put("/api/v1/attention/ignored/mcp_server:m-github:mcp_failing")
+    assert r.status_code == 204, r.text
+    after = (await rig.client.get("/api/v1/attention")).json()
+    assert [i["uid"] for i in after["ignored"]] == ["m-github"]
+    assert after["counts_by_kind"] == {"agent": 1}
+    assert after["ignored"][0]["handoff"]["prompt"]
+    await rig.client.delete("/api/v1/attention/ignored/mcp_server:m-github:mcp_failing")
+    r = await rig.client.put("/api/v1/attention/ignored/agent:nobody:agent_not_connected")
+    assert r.status_code == 409, r.text
+    assert r.json()["error"]["code"] == "ATTENTION_NOT_IGNORABLE"
     body = (await rig.client.get("/api/v1/attention")).json()
     assert len(body["items"]) == 2 and body["ignored"] == []
     # Stopping to ignore what is not ignored is a no-op, not an error.
     r = await rig.client.delete("/api/v1/attention/ignored/agent:nobody:agent_not_connected")
     assert r.status_code == 204
-    assert await rig.audit_events() == []
+    assert await rig.audit_events() == [
+        ("attention_ignored", "ui"),
+        ("attention_unignored", "ui"),
+    ]

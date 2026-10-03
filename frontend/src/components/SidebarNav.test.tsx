@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
-import { render, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { isValidElement } from "react";
 import { MemoryRouter, Navigate, matchRoutes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -77,10 +77,9 @@ function group(label: string): [string, string | null][] {
     .map((link) => [entryName(link), link.getAttribute("href")]);
 }
 
-/** A row's name without the experimental marker some rows carry beside it. */
+/** A row's name: its visible text. */
 function entryName(link: HTMLElement): string {
-  const marker = link.querySelector('[data-testid^="nav-experimental-"]');
-  return (link.textContent ?? "").replace(marker?.textContent ?? "", "");
+  return link.textContent ?? "";
 }
 
 /** The entries under no heading — Overview. */
@@ -422,33 +421,24 @@ describe("a switched-off experimental feature", () => {
 describe("an experimental feature's entry", () => {
   acceptance(
     "experimental-features",
-    "a switched-on feature's entry says it is experimental",
-    () => {
-      const { getByTestId, queryByTestId } = renderNav();
+    "a collapsed rail's tooltip says a feature's entry is experimental",
+    async () => {
+      const expanded = renderNav();
+      // The expanded row stays plain: no tag beside the label.
+      for (const name of ["Knowledge", "Memory", "Sync", "Model providers", "Usage"]) {
+        expect(expanded.getByRole("link", { name })).toHaveTextContent(new RegExp(`^${name}$`));
+      }
+      expanded.unmount();
 
-      for (const id of ["model-providers", "usage", "knowledge", "memory", "sync"]) {
-        expect(getByTestId(`nav-experimental-${id}`)).toHaveTextContent("Experimental");
-      }
-      // An entry no feature owns carries no marker.
-      for (const id of [
-        "overview",
-        "agents",
-        "conversations",
-        "channels",
-        "mcp-servers",
-        "skills",
-        "secrets",
-        "activity",
-      ]) {
-        expect(queryByTestId(`nav-experimental-${id}`)).toBeNull();
-      }
+      const rail = renderNav("/", true);
+      fireEvent.focus(rail.getByRole("link", { name: "Knowledge" }));
+      expect(await rail.findByRole("tooltip")).toHaveTextContent("Knowledge · Experimental");
+      rail.unmount();
+
+      // An entry no feature owns names no marker in its tooltip.
+      const plain = renderNav("/", true);
+      fireEvent.focus(plain.getByRole("link", { name: "Agents" }));
+      expect(await plain.findByRole("tooltip")).not.toHaveTextContent("Experimental");
     },
   );
-
-  test("a collapsed rail leaves the marker to the tooltip, as it does the label", () => {
-    const { queryByTestId, getByRole } = renderNav("/", true);
-
-    expect(queryByTestId("nav-experimental-knowledge")).toBeNull();
-    expect(getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
-  });
 });

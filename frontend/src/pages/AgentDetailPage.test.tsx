@@ -158,7 +158,6 @@ describe("AgentDetailPage", () => {
     renderAt();
     expect(screen.getByRole("heading", { name: /Claude Code/ })).toBeInTheDocument();
     expect(screen.queryByText(/v2\.1\.281/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Agents/ })).toHaveAttribute("href", "/agents");
   });
 
   acceptance("agent-registry", "the header offers the action the state calls for", () => {

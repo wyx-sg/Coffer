@@ -122,7 +122,7 @@ Channels included, is owned by no feature and is always there:
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
 - **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
-- **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar, above the daemon status
+- **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
@@ -171,13 +171,35 @@ headings, page titles, buttons, dialogs and prose — never "Agent" or 代理.
 
 ### Requirement: Collapse the sidebar to a remembered icon rail
 The sidebar MUST collapse to an icon-only rail and back, and that choice MUST
-persist across sessions (`localStorage`).
+persist across sessions (`localStorage`). The sidebar toggle's shortcut is ⌘\
+(Ctrl+\ off macOS), shown in its tooltip.
 
 #### Scenario: the collapsed sidebar stays collapsed after a reload
 - **GIVEN** the user collapses the sidebar to its icon rail
 - **WHEN** the shell is rendered again, as after a reload
 - **THEN** it opens as the icon rail
 - **AND** expanding it again is likewise remembered
+
+### Requirement: Go back and forward from the title bar
+The desktop shell on macOS MUST draw its own 44px title strip across the top of
+the window, in the sidebar's colour and with no rule beneath it. Besides the
+traffic lights the strip MUST hold only the sidebar toggle and back and forward
+arrows through the app's own history, to the right of the toggle. The controls
+start 16px right of the traffic lights, or at the left edge in full screen,
+where the lights are hidden. Where the strip is blank the window MUST remain
+draggable. While the sidebar is expanded its right edge MUST run up through the
+strip; collapsed, the strip MUST run across. An arrow MUST be greyed out and
+inert when the app's history has nowhere to go that way, and ⌘[ and ⌘] (Ctrl
+off macOS) MUST do what the arrows do, except while the user types in a text
+field. A browser tab has no strip and no arrows; its sidebar toggle sits beside
+the logo.
+
+#### Scenario: the arrows in the title bar go back and forward through the app's history
+- **GIVEN** the desktop shell with no history behind or ahead of the current page
+- **THEN** both arrows are greyed out
+- **WHEN** the user visits two pages and presses the back arrow
+- **THEN** the app shows the first page and the forward arrow is enabled
+- **AND** ⌘[ and ⌘] go back and forward the same way, except in a text field
 
 ### Requirement: Use one shared table for every list surface
 Every list surface that is a table — agents, memory partitions, the rounds
@@ -388,16 +410,13 @@ shell a Start daemon control, because only one of the two can spawn a daemon;
 both with Retry, when the next check runs and when the daemon last answered.
 Both MUST clear themselves once the daemon is reachable again, with no manual
 page reload: every query is read again and a toast says the app reconnected.
-The banner owns the failure case; the shell footer reports the daemon's state
-at all times (see "Show the daemon's state in the shell footer"), and the two
-MUST agree: the footer reads reconnecting under the bar and offline beside the
-offline state, never running.
+The reconnecting bar and the offline state express the daemon's state; the
+sidebar's Settings row carries none of it.
 
 #### Scenario: daemon-offline banner appears when daemon is unreachable
 - **GIVEN** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **WHEN** the user has the app open and any authenticated request to the daemon fails to connect
 - **THEN** the reconnecting bar shows first, and after 10 seconds of failures the offline state renders in the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Start daemon control, because it can
-- **AND** the shell footer reads as offline for as long as the offline state is shown
 - **AND** the offline state disappears automatically once the daemon becomes reachable again, without a manual page reload
 
 #### Scenario: a daemon that comes back within seconds leaves the page in place
@@ -761,12 +780,25 @@ Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
 modal.
 
+Every pane follows the page grammar: it opens with the tab's title (an `h1`) and
+one muted intro line, then its sections 32px apart. A section is not boxed — its
+title carries its meta and action on one line, its description is one muted line
+under the title, and its rows are separated by hairlines; a tab with a single
+section (Features) prints no section title. Settings save on change: no pane has
+a Save button, and a text field applies on Enter or when it loses focus.
+
 #### Scenario: settings layout uses the redesigned tabbed sidebar
 - **GIVEN** the user navigates to `/settings`
 - **WHEN** the route resolves
 - **THEN** the Settings modal opens on the General tab
-- **AND** the modal's tab list shows General, Security, Data, Daemon, About and Features — exactly those six, in that order — with the current route highlighted
+- **AND** the modal's tab list shows General, Security, Data, Daemon, Features and About — exactly those six, in that order — with the current route highlighted
 - **AND** clicking a tab swaps the right pane content without a full page reload and the modal stays open
+
+#### Scenario: every settings tab opens with its title and an intro line
+- **GIVEN** the Settings modal
+- **WHEN** each of the six tabs is opened
+- **THEN** its pane starts with an `h1` named for the tab, followed by one intro line
+- **AND** the pane has no Save button
 
 #### Scenario: the security tab keeps only machine-level settings
 - **GIVEN** stored secrets cited by a registered MCP server and a model provider
@@ -865,16 +897,15 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **AND** once confirmed only the memory tree and the transcript summary cache are cleared, with no vault or local content touched
 
 ### Requirement: Switch language from the sidebar
-The sidebar MUST offer the English / 简体中文 switch from every screen: in the
-version menu its footer opens (see "Show the daemon's state in the shell
-footer"), each locale named in its own language, and in Settings › General.
+The English / 简体中文 switch MUST be reachable from every screen in Settings ›
+General, each locale named in its own language.
 Every sidebar label, page title and form label MUST switch on the very next
 render, with no full page reload, and the choice MUST persist in `localStorage`
 under `coffer.language`.
 
 #### Scenario: language switcher round-trips correctly
 - **GIVEN** the UI is in English
-- **WHEN** the user opens the version menu from the sidebar footer and selects 简体中文
+- **WHEN** the user opens Settings › General and selects 简体中文
 - **THEN** all sidebar labels, page titles, and form labels switch to Chinese without a full page reload, on the very next render
 - **AND** the preference persists across reloads (localStorage `coffer.language`)
 
@@ -1263,25 +1294,22 @@ the same tab.
 #### Scenario: a memory hook changed by hand opens the agent's hooks tab from overview
 - **GIVEN** the attention list holds the hand-edited memory hook of Claude Code
 - **WHEN** the user opens Overview
-- **THEN** Needs you shows a row on Claude Code with the reason and since when, its one action reads Repair hook and opens Claude Code's Hooks tab, its name opens Claude Code's page, and the row has no menu
+- **THEN** Needs you shows a row on Claude Code with the reason and since when, its one action reads Repair hook and opens Claude Code's Hooks tab, its name opens Claude Code's page, and the row has the ⋯ menu
 
-### Requirement: Let the user ignore an unconnected agent on Overview
-An agent that Overview lists only because it is not connected to Coffer — an informational item of
-the attention list — MUST carry a ⋯ menu with **Ignore** beside its Connect action. The daemon MUST
-remember an ignored item on this machine, by the item's stable key (its kind, resource and reason),
-and audit each ignore and each stop: `GET /api/v1/attention` then lists it under `ignored`, out of
-`items` and `counts_by_kind`, so Needs you, the Agents health tile, the sidebar's badges and the
-menu bar's count all leave it out alike. Overview MUST count the ignored items under the list as
-**N ignored · Show**; Show lists them again, muted, each with **Stop ignoring** in its menu.
-Ignoring changes nothing about the agent. Only an informational item can be ignored; asking to
-ignore anything else is refused with `ATTENTION_NOT_IGNORABLE`, because something broken stays
-until it is fixed.
+### Requirement: Let the user ignore any item on Overview
+Every row of Needs you — whatever its severity — MUST carry a ⋯ menu whose last entry is
+**Ignore**. The daemon MUST remember an ignored item on this machine, by the item's stable key
+(its kind, resource and reason), and audit each ignore and each stop: `GET /api/v1/attention` then
+lists it under `ignored`, out of `items` and `counts_by_kind`, so Needs you, the Agents health tile,
+the sidebar's badges and the menu bar's count all leave it out alike. Overview MUST NOT list ignored
+items or count them. Ignoring changes nothing about the resource itself. Asking to ignore a key that
+names no item in the list is refused with `ATTENTION_NOT_IGNORABLE`.
 
-#### Scenario: an ignored agent leaves needs you and is counted under it
+#### Scenario: an ignored item leaves needs you whatever its severity
 - **GIVEN** Overview listing Codex as not connected and an MCP server that fails
-- **WHEN** the user chooses Ignore in Codex's menu, then Show, then Stop ignoring on Codex
-- **THEN** Codex leaves the list while the server stays and "1 ignored · Show" appears under it; Show lists Codex again under the list; after Stop ignoring Codex is back in Needs you and nothing is counted as ignored
-- **AND** while Codex is ignored the daemon's attention list carries it only under `ignored`, its counts leave it out, both changes are audited, and ignoring the failing server is refused
+- **WHEN** the user chooses Ignore in Codex's menu, then Ignore in the failing server's menu
+- **THEN** each leaves Needs you in turn, and Overview shows no "ignored" line and no list of ignored items
+- **AND** the daemon's attention list carries them only under `ignored`, its counts leave them out, and both changes are audited
 
 ### Requirement: Hand installing an agent to the person when none is found
 While no supported agent is installed on this machine, `GET /api/v1/agents/types` MUST carry
@@ -1588,68 +1616,13 @@ configuration (search is literal-only), and the second picker is Speech to text.
 - **THEN** the picker reads as failing with the endpoint's error beside it
 - **AND** the chosen pair is kept as it was
 
-### Requirement: Show the daemon's state in the shell footer
-The shell MUST show the daemon's state at all times in a footer at the bottom of
-the sidebar, read from the daemon's status probe (spec
-[daemon](../daemon/spec.md) "Report the state the shell shows"). The footer MUST
-name one of five states in plain words — connecting (no answer yet), running,
-stopping (the daemon reports `draining`), reconnecting (the first seconds after
-it stopped answering, see "Show a self-clearing offline banner") or offline (it
-cannot be reached) — with the app's version beside it, and its accessible name
-MUST carry, while running, the port it answers on. In the desktop shell, a
-daemon from a different app version MUST read as running with a version
-warning. Clicking the state MUST open the version menu above it: its head names
-the version and the address the daemon answers on (or the state, when it is not
-running) and opens the Settings modal on its Daemon tab over the current page;
-below it the theme (Light, Dark, System, applied at once), the language (each
-locale named in its own language, applied at once), Documentation (the docs
-site) and Check for updates (Settings › About, where the desktop shell checks at
-once). The labelled Settings row sits just above the state (see "Open Settings
-as a modal from the sidebar footer"). On the collapsed icon rail the state MUST
-shrink to an icon whose tooltip carries the same words, and the Settings row to
-its gear. Showing the state MUST NOT make starting the daemon the user's job:
-every surface that can start one still does so without asking.
-
-#### Scenario: the footer shows a running daemon
-- **GIVEN** a daemon answering its status probe with `status: "ready"` on port 8000
-- **WHEN** the shell renders
-- **THEN** the sidebar footer reads that the daemon is running, with the app's version, and its accessible name names port 8000
-- **AND** clicking it opens the version menu, whose head names `127.0.0.1:8000` and opens the Settings modal on its Daemon tab at `/settings/daemon`, over the page the user was on
-
-#### Scenario: the version menu switches theme and language at once
-- **GIVEN** the version menu open from the footer
-- **WHEN** the user picks Dark, then 简体中文
-- **THEN** the whole shell turns dark and then reads in Chinese with no reload, each locale named in its own language
-- **AND** Documentation opens the docs site and Check for updates opens Settings › About
-
-#### Scenario: the footer says connecting before the first answer
-- **GIVEN** the shell has rendered and the daemon's status probe has not answered yet
-- **WHEN** the footer renders
-- **THEN** it reads as connecting, not as offline and not as running
-
-#### Scenario: the footer shows an offline daemon
-- **GIVEN** the daemon cannot be reached
-- **WHEN** the footer renders
-- **THEN** it reads as offline while the offline banner is shown
-- **AND** its version menu still opens Settings → Daemon, which names the host's recovery
-
-#### Scenario: the footer shows a stopping daemon
-- **GIVEN** a daemon whose status probe reports `status: "draining"`
-- **WHEN** the footer renders
-- **THEN** it reads as stopping
-
-#### Scenario: the collapsed rail keeps the daemon state
-- **GIVEN** the sidebar collapsed to its icon rail and a running daemon
-- **WHEN** the rail renders
-- **THEN** the footer is a state icon whose tooltip reads that the daemon is running on its port
-
 ### Requirement: Show and manage the daemon on Settings → Daemon
 The Daemon tab MUST show the daemon's state and carry the controls a user needs
 for it, and nothing that stops it:
 
-- **Status** — state and the address it answers on, then one line: how long
+- **Status** — an ordinary section (a title over a hairline-topped row, not a box): state and the address it answers on, then one line: how long
   it has been up, its pid and how many agents carry Coffer's connection, all
-  from the status probe. The version is on About and in the shell footer.
+  from the status probe. The version is on About.
 - **Restart** — a Restart control in both hosts: in the desktop shell it runs the
   shell's restart (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first");
   in a browser it asks the daemon to restart itself (spec [daemon](../daemon/spec.md) "Restart itself on request"),
@@ -1659,8 +1632,9 @@ for it, and nothing that stops it:
   answer within 90 seconds is reported beside the control.
 - **Port** — the port the daemon answers on, editable (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port"):
   a value MUST be a whole number from 1024 to 65535 and a port no other process
-  holds, each refused in place otherwise, with Save disabled until the value is
-  edited; saving writes it to the pre-database
+  holds, each refused in place under the row's description otherwise. The row has
+  no Save button: Enter, or leaving the field, applies an edited value, and a
+  refused value is not sent again until it is edited. Applying writes it to the pre-database
   daemon config and the row then reads **takes effect after restart**, with
   **Restart now** — the same restart as the Restart control, in either host.
   Until the restart, the status keeps showing the port the daemon answers on.
@@ -1671,7 +1645,7 @@ Troubleshooting section: the daemon log is read on Activity's Daemon tab, and
 Copy diagnostics is on Settings › About.
 
 While the status has not yet answered, the tab MUST keep its layout over
-skeleton rows. While the daemon cannot be reached, the status card MUST read
+skeleton rows. While the daemon cannot be reached, the Status section MUST read
 offline and name the host's recovery — the Restart control in the desktop shell,
 the `coffer daemon start` command in a browser — and the Start at login and
 Port controls MUST be disabled.
@@ -1679,7 +1653,7 @@ Port controls MUST be disabled.
 #### Scenario: the settings daemon tab shows the running daemon
 - **GIVEN** a running daemon
 - **WHEN** the user opens `/settings/daemon`
-- **THEN** the status card shows its state, port, uptime, pid and connected-agent count, matching `GET /api/v1/daemon/status`
+- **THEN** the Status section shows its state, port, uptime, pid and connected-agent count, matching `GET /api/v1/daemon/status`
 - **AND** the tab carries no stop or shutdown control
 
 #### Scenario: the settings daemon tab offers the host's restart
@@ -1690,7 +1664,7 @@ Port controls MUST be disabled.
 
 #### Scenario: saving a valid port leaves it pending until restart
 - **GIVEN** a daemon answering on port 8000, opened in the desktop shell
-- **WHEN** the user sets the port to 8123 on the Daemon tab and saves
+- **WHEN** the user sets the port to 8123 on the Daemon tab and presses Enter
 - **THEN** 8123 is saved through `PUT /api/v1/daemon/port` (which writes it to `~/.coffer/daemon-config.json`), the row reads takes effect after restart with Restart now, and the status still shows 8000
 - **AND** in a browser the row offers the same Restart now
 
@@ -1871,11 +1845,11 @@ sidebar speaks only through these badges, and only for things that need the
 user — failures, drift, a held vault, a required CLI that is missing, too old or
 not logged in; an informational count (how many servers, how many documents
 waiting in a knowledge collection's inbox) MUST NOT become a badge. The badge
-shows how many things need the user, toned danger while any of them is a
-failure and warning otherwise, rendered by one shared component with an
-accessible name that says the entry needs attention. On the collapsed icon rail
-it MUST shrink to a dot of the same tone on the icon, and the row's tooltip
-carries the count ("MCP servers · 1 failing").
+shows how many things need the user in the one danger-strong tone, capped at
+"9+", rendered by one shared component with an accessible name that says the
+entry needs attention. An item the user chose to ignore MUST NOT count. On the
+collapsed icon rail it MUST shrink to a dot of the same colour on the icon, and
+the row's tooltip carries the count ("MCP servers · 1 needs you").
 
 What raises a signal and what clears it belongs to the capability that owns the
 kind: the entries of Agents, Model providers, MCP servers, Skills and Channels
@@ -1891,13 +1865,18 @@ failed, MUST leave no badge rather than an error in the sidebar.
 #### Scenario: an entry whose kind needs attention carries a count badge
 - **GIVEN** a sync round held for confirmation, and two MCP servers the attention list reports, one of them failing
 - **WHEN** the user is on any page other than Sync
-- **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a danger badge of 2, each with an accessible name saying it needs attention
+- **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a badge of 2, both in the danger-strong tone, each with an accessible name saying it needs attention
 - **AND** no other entry carries one
+
+#### Scenario: the badge count caps at 9+
+- **GIVEN** an entry whose kind reports twelve things that need the user
+- **WHEN** the sidebar renders expanded
+- **THEN** its badge reads "9+" in the danger-strong tone
 
 #### Scenario: the attention dot stays on the collapsed rail
 - **GIVEN** the MCP servers entry carrying a badge for one failing server
 - **WHEN** the sidebar is collapsed to its icon rail
-- **THEN** the MCP servers icon carries a dot of the same tone, and its tooltip reads "MCP servers · 1 failing"
+- **THEN** the MCP servers icon carries a dot of the same colour, and its tooltip reads "MCP servers · 1 needs you"
 
 #### Scenario: an entry without a signal never carries a badge
 - **GIVEN** every attention signal the kinds declare is raised, and documents waiting in a knowledge collection's inbox
@@ -1914,21 +1893,22 @@ failed, MUST leave no badge rather than an error in the sidebar.
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
 entries and belongs to no group. It MUST open as a large modal over the current
 page from three places: a labelled **Settings** row — a gear icon and the word
-Settings, not an icon-only button — at the bottom of the sidebar, just above the
-daemon status (see "Show the daemon's state in the shell footer"); the ⌘,
+Settings, not an icon-only button — at the bottom of the sidebar; the ⌘,
 shortcut on macOS and Ctrl+, elsewhere, from any page; and the command palette's
 Settings tabs. On the collapsed icon rail the row MUST shrink to the gear icon
 with a tooltip reading Settings and its shortcut. The row MUST show as active only while the
-modal is open, and never mark the page underneath as not current. The row and
-the shortcut open it on General; the menu the footer's daemon state opens leads to Daemon. Settings is machine-level
+modal is open, and never mark the page underneath as not current. The row shows
+no daemon state — no status dot, no words, no corner dot on the rail — and, like
+the shortcut, always opens General; the daemon's state is told by the
+reconnecting bar and the offline page. Settings is machine-level
 configuration a user visits rarely, so it takes no place in the sidebar
 beside the pages used every day, the convention of desktop applications' own
 preferences windows.
 
 The modal MUST stay addressable by route: each tab is `/settings/<tab>`
-(General, Security, Data, Daemon, About, Features — see "Organise Settings into six
+(General, Security, Data, Daemon, Features, About — see "Organise Settings into six
 tabs"), and while it is open the address bar and history carry that route,
-so a deep link, a reload, a link from another page (such as the footer's link
+so a deep link, a reload, a link from another page (such as a link
 to `/settings/daemon`) or the palette opens the modal on that tab.
 Opening it from a page MUST keep that page rendered underneath, unchanged.
 Closing it — the close control, Escape, or a click outside it — MUST return to
@@ -1939,14 +1919,14 @@ close it and return to the page underneath.
 
 #### Scenario: the Settings row opens Settings over the current page
 - **GIVEN** the user on `/mcp-servers`
-- **WHEN** they click the labelled Settings row at the bottom of the sidebar, above the daemon status
+- **WHEN** they click the labelled Settings row at the bottom of the sidebar
 - **THEN** the Settings modal opens on General, the URL reads `/settings/general`, and the MCP servers list stays rendered underneath
 - **AND** the Settings row shows as active while the modal is open and not after it closes, and the fifteen navigation entries do not include Settings
 
 #### Scenario: the collapsed rail keeps Settings as a gear with a tooltip
 - **GIVEN** the sidebar collapsed to its icon rail
-- **WHEN** the user points at the gear icon above the daemon state and clicks it
-- **THEN** the gear carries no word, a tooltip reads Settings, and the click opens the Settings modal on General
+- **WHEN** the user points at the gear icon and clicks it
+- **THEN** the gear carries no word and no daemon state, a tooltip reads Settings and its shortcut, and the click opens the Settings modal on General
 
 #### Scenario: the keyboard shortcut opens Settings
 - **GIVEN** the app open on any page, with focus outside a text field
@@ -2312,10 +2292,11 @@ first: one row per item of the attention list ([resource-framework](../resource-
 "Report what needs a person across every kind"), most severe first and then
 oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
-where the item is dealt with. A row whose item carries a hand-off MUST also
-offer it in the row's ⋯ menu — Copy prompt, and Ask an agent while a managed
-agent is available — with the daemon's prompt as given, the same hand-off the
-item's page offers. An attention source that failed MUST be named
+where the item is dealt with. Every row MUST also
+carry a ⋯ menu — Copy prompt, Ask an agent while a managed agent is available,
+then Ignore — with the daemon's prompt as given (every item carries one, the
+kind's own where it has one); the list scrolls inside a frame of about six
+rows, under its title, which shows how many items it holds. An attention source that failed MUST be named
 above the rows, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
@@ -2347,7 +2328,7 @@ for what agents share follows.
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
 - **WHEN** the user opens the row's ⋯ menu and chooses Copy prompt, then Ask an agent
 - **THEN** the daemon's prompt is copied as given, and Ask an agent opens New conversation and then the draft with the prompt in its composer, unsent
-- **AND** with no managed agent available the menu offers Copy prompt only, and a row whose item has no hand-off and cannot be ignored has no menu
+- **AND** with no managed agent available the menu offers Copy prompt only, and every row's menu ends with Ignore
 
 #### Scenario: overview shows a calm card when nothing needs the user
 - **GIVEN** an attention list with no items and no failed source

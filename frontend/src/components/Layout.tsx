@@ -11,8 +11,13 @@
 // view by its divider"), and collapses to a 56px icon rail (the choice persists
 // in localStorage); below md it is always the icon rail, so narrow viewports
 // keep their navigation. Collapsed rows get a tooltip, and the expand control
-// stays at the top of the rail, under the brand mark. Theme and
-// language live in the version menu the footer opens.
+// stays at the top of the rail, under the brand mark. Theme and language live
+// in Settings › General.
+//
+// The desktop shell draws its own title strip across the top (board 1.1.02):
+// the sidebar toggle and the back / forward arrows live there, and the
+// sidebar and the page both start under it. The page keeps 16px above its
+// content and 32px at each side.
 //
 // The daemon's connection states are drawn in the workspace, in line
 // (board 1.2.17 / 1.2.18): while reconnecting the page stays under a bar,
@@ -25,12 +30,12 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useHistoryNav } from "@/lib/hooks/useHistoryNav";
 import { useResizableWidth } from "@/lib/hooks/useResizableWidth";
 import { isSettingsPath } from "@/lib/navigation";
 import { overlayTitleBar } from "@/lib/windowChrome";
 import { SidebarBrandRow } from "./shell/SidebarBrandRow";
 import { WindowTitleStrip } from "./shell/WindowTitleStrip";
-import { TitleBarSlotContext } from "./shell/titleBarSlot";
 import { useOpenSettings, usePageLocation } from "@/lib/settingsModal";
 import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
 import { SidebarNav } from "./SidebarNav";
@@ -87,7 +92,6 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const overlay = overlayTitleBar();
-  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   const { toast } = useToast();
   const daemon = useDaemonConnectionDriver(() => toast.success(t("daemon.reconnect.reconnected")));
   const phase = daemon.connection.phase;
@@ -116,9 +120,13 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
     });
   };
 
+  const history = useHistoryNav();
+
   usePaletteRequests(openPalette);
   useShellShortcuts({
-    toggleSidebar: overlay && isMd ? toggleCollapsed : undefined,
+    toggleSidebar: isMd ? toggleCollapsed : undefined,
+    goBack: overlay ? history.goBack : undefined,
+    goForward: overlay ? history.goForward : undefined,
     togglePalette: () => setPaletteOpen((open) => !open),
     openSettings: () => {
       setPaletteOpen(false);
@@ -128,93 +136,93 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <TitleBarSlotContext.Provider value={titleSlot}>
-        {/* h-[100vh] + overflow-hidden pins the app to the viewport; the sidebar
+      {/* h-[100vh] + overflow-hidden pins the app to the viewport; the sidebar
           and the main content each own an independent scroll region. */}
-        <div className="flex h-[100vh] overflow-hidden bg-background text-foreground">
-          {/* First focusable element: lets keyboard users jump past the rail. */}
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-toast focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-overlay focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            {t("nav.skipToContent")}
-          </a>
-          {overlay ? (
-            <WindowTitleStrip
-              slotRef={setTitleSlot}
-              showToggle={isMd}
-              collapsed={collapsed}
-              onToggle={toggleCollapsed}
-            />
-          ) : null}
-          {/* Once for the whole app: a secret change waiting for a present
+      <div className="flex h-[100vh] overflow-hidden bg-background text-foreground">
+        {/* First focusable element: lets keyboard users jump past the rail. */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-toast focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-overlay focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          {t("nav.skipToContent")}
+        </a>
+        {overlay ? (
+          <WindowTitleStrip
+            showToggle={isMd}
+            collapsed={collapsed}
+            onToggle={toggleCollapsed}
+            sidebarWidth={sidebar.width}
+            onBack={history.goBack}
+            onForward={history.goForward}
+          />
+        ) : null}
+        {/* Once for the whole app: a secret change waiting for a present
             human is answered wherever the user is, not on one page. */}
-          <PendingApprovalsSheet />
-          <aside
-            className={cn(
-              "flex shrink-0 flex-col gap-3 bg-surface-sidebar",
-              collapsed ? "w-rail border-r border-border" : null,
-              // The desktop shell's sidebar starts under the title strip, with
-              // no brand row; the strip holds the traffic lights and the toggle.
-              overlay ? "pt-[var(--titlebar-inset)]" : null,
-            )}
-            // The dragged width is state, not a token: the one inline style is
-            // this theming-free bridge from the divider to the rail.
-            style={collapsed ? undefined : { width: sidebar.width }}
-            id="sidebar"
-            data-testid="sidebar"
-          >
-            {overlay ? null : (
-              <SidebarBrandRow collapsed={collapsed} showToggle={isMd} onToggle={toggleCollapsed} />
-            )}
-
-            <SidebarSearch collapsed={collapsed} onOpen={openPalette} />
-
-            <SidebarNav collapsed={collapsed} pathname={pageLocation.pathname} />
-
-            <SidebarFooter collapsed={collapsed} />
-          </aside>
-          {collapsed ? null : (
-            <SplitDivider
-              value={sidebar.width}
-              min={sidebar.bounds.min}
-              max={sidebar.bounds.max}
-              onChange={sidebar.setWidth}
-              onReset={sidebar.reset}
-              label={t("nav.resizeSidebar")}
-            />
+        <PendingApprovalsSheet />
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col gap-3 bg-surface-sidebar",
+            collapsed ? "w-rail border-r border-border" : null,
+            // The desktop shell's sidebar starts under the title strip, with
+            // no brand row; the strip holds the traffic lights, the toggle and the arrows.
+            overlay ? "pt-[var(--titlebar-inset)]" : null,
           )}
-          <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
-            <DaemonStatusBar connection={daemon.connection} onRetry={daemon.retryNow} />
-            {/* The page starts under the title strip, so no page header ever sits
+          // The dragged width is state, not a token: the one inline style is
+          // this theming-free bridge from the divider to the rail.
+          style={collapsed ? undefined : { width: sidebar.width }}
+          id="sidebar"
+          data-testid="sidebar"
+        >
+          {overlay ? null : (
+            <SidebarBrandRow collapsed={collapsed} showToggle={isMd} onToggle={toggleCollapsed} />
+          )}
+
+          <SidebarSearch collapsed={collapsed} onOpen={openPalette} />
+
+          <SidebarNav collapsed={collapsed} pathname={pageLocation.pathname} />
+
+          <SidebarFooter collapsed={collapsed} />
+        </aside>
+        {collapsed ? null : (
+          <SplitDivider
+            value={sidebar.width}
+            min={sidebar.bounds.min}
+            max={sidebar.bounds.max}
+            onChange={sidebar.setWidth}
+            onReset={sidebar.reset}
+            label={t("nav.resizeSidebar")}
+          />
+        )}
+        <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
+          <DaemonStatusBar connection={daemon.connection} onRetry={daemon.retryNow} />
+          {/* The page starts under the title strip, so no page header ever sits
               beneath it; full-bleed pages (`h-screen`) shrink by the same
               inset through index.css. */}
-            <div
-              className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-[var(--titlebar-inset)]"
-              data-testid="page-scroll"
-            >
-              {phase === "offline" ? (
-                <DaemonOfflineState connection={daemon.connection} onRetry={daemon.retryNow} />
-              ) : (
-                // Full-width — the content tracks the sidebar, so collapsing it
-                // genuinely widens the working area.
-                <div
-                  ref={pageRef}
-                  aria-busy={phase === "reconnecting" || undefined}
-                  className={cn(
-                    "w-full px-6 py-10 md:px-10",
-                    phase === "reconnecting" && "pointer-events-none select-none opacity-[.55]",
-                  )}
-                >
-                  {page}
-                </div>
-              )}
-            </div>
-          </main>
-        </div>
-        {settingsOpen ? <SettingsRoutes routes={settingsRoutes} /> : null}
-        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      </TitleBarSlotContext.Provider>
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-[var(--titlebar-inset)]"
+            data-testid="page-scroll"
+          >
+            {phase === "offline" ? (
+              <DaemonOfflineState connection={daemon.connection} onRetry={daemon.retryNow} />
+            ) : (
+              // Full-width — the content tracks the sidebar, so collapsing it
+              // genuinely widens the working area.
+              <div
+                ref={pageRef}
+                aria-busy={phase === "reconnecting" || undefined}
+                className={cn(
+                  "w-full px-8 pb-10 pt-4",
+                  phase === "reconnecting" && "pointer-events-none select-none opacity-[.55]",
+                )}
+              >
+                {page}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+      {settingsOpen ? <SettingsRoutes routes={settingsRoutes} /> : null}
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </TooltipProvider>
   );
 }

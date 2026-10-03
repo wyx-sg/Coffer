@@ -125,7 +125,6 @@
         "allFailed": "失败 {{count}} 项"
       }
     },
-    "backTo": "返回 {{label}}",
     "emptyValue": "—",
     "copy": "复制",
     "copied": "已复制",
@@ -171,13 +170,14 @@
     "settings": "设置",
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏",
+    "back": "后退",
+    "forward": "前进",
     "agents": "智能体",
     "channels": "消息渠道",
     "activity": "活动",
     "modelProviders": "模型提供商",
     "sync": "同步",
-    "experimental": "实验",
-    "experimentalLabel": "{{label}}（实验）",
+    "experimentalLabel": "{{label}} · 实验",
     "needsAttention": "有待处理的事项",
     "overview": "总览",
     "conversations": "对话",
@@ -187,20 +187,8 @@
     "usage": "用量",
     "search": "搜索或跳转…",
     "resizeSidebar": "调整侧边栏宽度",
-    "daemon": {
-      "connecting": "正在连接守护进程…",
-      "running": "守护进程运行中，端口 {{port}}",
-      "outOfDate": "端口 {{port}} 上的守护进程来自另一个应用版本",
-      "stopping": "守护进程正在停止",
-      "offline": "守护进程离线",
-      "outOfDateShort": "守护进程版本不一致",
-      "reconnecting": "正在重新连接…"
-    },
-    "attentionCount": {
-      "danger": "{{count}} 项失败",
-      "warning_one": "{{count}} 项待处理",
-      "warning_other": "{{count}} 项待处理"
-    },
+    "attentionCount_one": "{{count}} 项待处理",
+    "attentionCount_other": "{{count}} 项待处理",
     "update": {
       "title": "更新已就绪",
       "body": "可以安装。重启会下载它、校验签名并重新打开 Coffer。",
@@ -1107,11 +1095,11 @@
       "autostartUnsupported": "仅 macOS 可用。"
     },
     "features": {
-      "title": "功能",
       "subtitle": "实验功能，默认全部关闭，在这里开启后才会出现。关闭后在这台机器上的所有入口都会隐藏，已有数据全部保留。",
       "experimental": "实验",
       "decidedBy": "决定方",
       "reset": "恢复默认",
+      "saveFailed": "无法保存这次更改：{{reason}}",
       "names": {
         "knowledge": "知识",
         "memory": "记忆",
@@ -1192,6 +1180,7 @@
       "about": "约 {{rows}}"
     },
     "about": {
+      "intro": "你正在运行的版本、它如何更新，以及去哪里了解更多。",
       "documentationLink": "打开文档站",
       "copyDiagnostics": "复制诊断信息以报告问题",
       "fields": {
@@ -1360,7 +1349,8 @@
       "model": "模型",
       "modelPlaceholder": "选择模型",
       "timeout": "单次调用的时间上限",
-      "timeoutHint": "Coffer 等自用模型给出一次回答的最长时间——提炼记忆、给知识写摘要、跑一轮知识整理、转写一段语音都算。超时的调用会把这次的活儿留到下次，并且对外报成功，所以这个值要设得比你的提供商实际耗时更宽。",
+      "timeoutHint": "Coffer 等自用模型给出一次回答的最长时间。",
+      "timeoutMore": "提炼记忆、给知识写摘要、跑一轮知识整理、转写一段语音，每次都按这个时间算。超时的调用会把这次的活儿留到下次，并且对外报成功，所以这个值要设得比你的提供商实际耗时更宽。",
       "defaultTimeout": "默认（{{timeout}}）",
       "seconds": "{{count}} 秒",
       "minutes": "{{count}} 分钟"
@@ -1390,13 +1380,13 @@
       "restartTimedOut": "守护进程在 90 秒内没有恢复。等它响应后到「活动 › 守护进程日志」查看，或重新启动它。",
       "copyCommand": "复制 {{command}}",
       "port": "端口",
-      "portHelp": "{{min}}–{{max}}，默认 8000。书签和智能体连接都会跟随它。",
+      "portHelp": "{{min}}–{{max}}，默认 8000。按回车生效；书签和智能体连接都会跟随它。",
       "portRange": "请使用 {{min}} 到 {{max}} 之间的端口。",
       "portInUse": "端口 {{port}} 已被其他程序占用，请换一个端口。",
       "portInUseBy": "端口 {{port}} 已被 {{name}}（pid {{pid}}）占用，请换一个端口。",
       "portPending": "端口 {{port}} 已保存 — Coffer 重启后生效",
       "portPendingHelp": "智能体会自动重新连接到新端口。",
-      "save": "保存",
+      "status": "状态",
       "startup": "启动",
       "upDays_one": "已运行 {{count}} 天",
       "upDays_other": "已运行 {{count}} 天",
@@ -1673,7 +1663,7 @@
     "SECRET_MISSING": "所需密钥在密钥库中不存在——请在该资源的编辑页重新保存",
     "SECRET_UNREADABLE": "存储的密钥无法用当前主密钥解密",
     "PROVIDER_SECRET_SOURCE_INVALID": "已保存的密钥与内联密钥，二者必须且只能提供一个",
-    "ATTENTION_NOT_IGNORABLE": "只有值得知道但没有出问题的项可以忽略，而这一项已不在列表里。",
+    "ATTENTION_NOT_IGNORABLE": "这一项已不在列表里，没有可忽略的内容。",
     "MASTER_KEY_PASSPHRASE_WRONG": "这个口令打不开这个密钥文件。",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "口令至少需要 8 个字符。",
     "KNOWLEDGE_RESTORE_CONFLICT": "没有恢复：这个路径上又有了文档。请先重命名或删除它。",
@@ -1994,7 +1984,6 @@
       "binary": "二进制文件（{{size}} 字节）",
       "truncated": "内容已截断——只显示文件开头。",
       "missingDir": "没有指定记忆存储——请从该智能体的「记忆」标签页进入。",
-      "back": "{{agent}} · 记忆",
       "treeCount_one": "文件 · {{count}}",
       "treeCount_other": "文件 · {{count}}",
       "subtitle_one": "{{agent}} 原生记忆库 · {{count}} 个文件",
@@ -4180,7 +4169,6 @@
       "files_other": "{{count}} 个文件"
     },
     "resolve": {
-      "back": "同步",
       "title": "解决冲突",
       "pill": "推送已阻塞",
       "subline": "这一轮在 {{time}} · 从 {{machine}} 拉取 · 为每个文件选一个版本，然后继续这一轮。",
@@ -4680,13 +4668,7 @@
         "checked": "检查于"
       },
       "moreFor": "{{name}} 的更多操作",
-      "ignore": "忽略",
-      "restore": "不再忽略",
-      "ignored_one": "已忽略 {{count}} 项",
-      "ignored_other": "已忽略 {{count}} 项",
-      "showIgnored": "显示",
-      "hideIgnored": "收起",
-      "ignoredList": "已忽略"
+      "ignore": "忽略"
     },
     "actions": {
       "connect": "连接",

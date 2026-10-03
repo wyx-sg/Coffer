@@ -143,7 +143,7 @@ pub fn run() {
             // keeps it true — which also drives the sync alert (spec vault-sync
             // "Say a vault needs a human where the user already is").
             updater::start(app.handle());
-            tray::build_tray(app.handle(), updater::status(app.handle()))?;
+            tray::build_tray(app.handle())?;
             tray_watch::start(app.handle().clone());
             // One notification per secret waiting on a person's approval
             // (spec desktop-app "Release plaintext and approvals only after a

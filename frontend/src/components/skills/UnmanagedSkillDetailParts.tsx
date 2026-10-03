@@ -26,7 +26,6 @@ import { ActionMenu } from "@/components/ui/menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import type { UnmanagedSkillDetailOut } from "@/lib/api/agents-workspace";
-import type { Origin } from "@/lib/origin";
 import { useFsActions } from "@/lib/fsActions";
 import { useAdoptUnmanagedSkill, useDeleteUnmanagedSkill } from "@/lib/hooks/useAgents";
 
@@ -57,14 +56,11 @@ export function UnmanagedSkillActions({
   agentUid,
   skill,
   backTo,
-  adoptedFrom,
 }: {
   agentUid: string;
   skill: Skill;
   /** Where a successful delete returns to: the agent's Skills tab. */
   backTo: string;
-  /** What an adopted skill's page names as the way back: the agent's Skills tab. */
-  adoptedFrom: Origin;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -95,9 +91,7 @@ export function UnmanagedSkillActions({
               {
                 onSuccess: (ref) => {
                   toast.success(t("agents.skillsTab.adoptSuccess", { name: ref.name }));
-                  navigate(`/skills/${encodeURIComponent(ref.name)}`, {
-                    state: { from: adoptedFrom },
-                  });
+                  navigate(`/skills/${encodeURIComponent(ref.name)}`);
                 },
               },
             )

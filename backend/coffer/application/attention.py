@@ -9,34 +9,37 @@ An item names one resource, a stable ``reason_code`` with one sentence a
 person can read, when the condition was first seen when anything knows that,
 and **one** action: a verb and the REST route the kind's own page already uses
 for it. The Overview therefore never has a write of its own — acting on an item
-is the same call the item's page would make. An item whose fix is a chore for
-an agent (installing a launcher, diagnosing a failing server) also carries the
-kind's hand-off prompt, so the Overview row offers the same hand-off as the
-page; its ``reason`` then names no command.
+is the same call the item's page would make. Every item carries a hand-off
+prompt: the kind's own when it has one (installing a launcher, diagnosing a
+failing server — the same text its page offers; its ``reason`` then names no
+command), otherwise :func:`fallback_handoff` writes one from the item itself,
+so every Overview row can be copied to an agent or opened in a conversation.
 
 A source is added by the kind that owns the signal, registered at the
 composition root. A signal nothing records yet (a provider key the endpoint
 rejected) has no source: a list that reports only what the backend can know is
 the contract, and a new source is the extension point.
 
-**Ignoring.** An informational item — worth knowing, nothing broken, such as
-an agent the person chose not to connect — can be ignored by its stable key
+**Ignoring.** Any item — an agent the person chose not to connect, a
+server that stays broken on purpose — can be ignored by its stable key
 (:func:`attention_key`). The keys are kept on this machine by an
 :class:`IgnoreStore`; an ignored item leaves ``items`` and ``counts_by_kind``
 and is listed in ``ignored`` instead, so the Overview, the sidebar's badges and
-the menu bar all count the same list. Something broken can never be ignored.
+the menu bar all count the same list. Any item can be ignored, whatever its
+severity.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol
 
 from coffer.domain.attention_errors import AttentionNotIgnorable
 from coffer.domain.audit import AuditEventType
+from coffer.domain.handoff import Handoff, render_handoff
 
 
 class Severity(StrEnum):
@@ -74,9 +77,10 @@ class AttentionItem:
     severity: Severity
     action: AttentionAction
     since: datetime | None = None
-    #: The prompt that hands this item's chore to an agent (``domain/handoff.py``),
-    #: when it is one — the same text the kind's own page offers; ``None`` when
-    #: the action alone is the fix.
+    #: The prompt that hands this item's chore to an agent (``domain/handoff.py``):
+    #: the same text the kind's own page offers when it has one. A source may
+    #: leave it ``None``; the service then fills :func:`fallback_handoff`, so an
+    #: item in a report always has one.
     handoff: str | None = None
 
 
@@ -103,9 +107,27 @@ def attention_key(item: AttentionItem) -> str:
     return f"{item.kind}:{item.uid or ''}:{item.reason_code}"
 
 
-def ignorable(item: AttentionItem) -> bool:
-    """Only an informational item can be ignored; a broken thing stays listed."""
-    return item.severity is Severity.INFO
+def fallback_handoff(item: AttentionItem) -> str:
+    """A hand-off written from the item alone, for a source that gives none:
+    what is wrong and how Coffer would fix it. Carries no secret — only the
+    title, the reason and the action's verb and route."""
+    facts = [f"Kind: {item.kind}", f"Resource: {item.title}"]
+    if item.uid:
+        facts.append(f"Id: {item.uid}")
+    facts.append(f"Problem: {item.reason}")
+    if item.since is not None:
+        facts.append(f"First seen: {item.since.isoformat()}")
+    facts.append(f"Coffer's fix: {item.action.verb} ({item.action.method} {item.action.path})")
+    return render_handoff(
+        Handoff(
+            task=f"Coffer reports that {item.title} needs attention: {item.reason}",
+            facts=tuple(facts),
+            steps=(
+                "Work out the cause and fix it, using the Coffer fix above where it applies.",
+                "Confirm the item no longer appears in Coffer's Overview.",
+            ),
+        )
+    )
 
 
 class IgnoreStore(Protocol):
@@ -166,26 +188,29 @@ class AttentionService:
                 found.extend(await source.items())
             except Exception as exc:
                 errors.append(SourceError(source.name, repr(exc)))
+        found = [
+            i if i.handoff is not None else replace(i, handoff=fallback_handoff(i)) for i in found
+        ]
         found.sort(key=lambda i: (_RANK[i.severity], i.kind, i.title, i.reason_code))
         keys = await self._ignores.keys() if self._ignores is not None else set()
         items: list[AttentionItem] = []
         ignored: list[AttentionItem] = []
         for item in found:
-            (ignored if ignorable(item) and attention_key(item) in keys else items).append(item)
+            (ignored if attention_key(item) in keys else items).append(item)
         counts: dict[str, int] = {}
         for item in items:
             counts[item.kind] = counts.get(item.kind, 0) + 1
         return AttentionReport(tuple(items), tuple(errors), counts, tuple(ignored))
 
     async def ignore(self, key: str, *, actor: str) -> None:
-        """Ignore the listed informational item ``key``. Raises
-        :class:`AttentionNotIgnorable` for a key that names no such item now.
+        """Ignore the listed item ``key``. Raises
+        :class:`AttentionNotIgnorable` for a key that names no item now.
         Ignoring an ignored item again writes and audits nothing."""
         report = await self.report()
         if any(attention_key(i) == key for i in report.ignored):
             return
         item = next((i for i in report.items if attention_key(i) == key), None)
-        if item is None or not ignorable(item) or self._ignores is None:
+        if item is None or self._ignores is None:
             raise AttentionNotIgnorable(key)
         if await self._ignores.add(key):
             await self._record(AuditEventType.ATTENTION_IGNORED, key, actor)
@@ -210,5 +235,5 @@ __all__ = [
     "Severity",
     "SourceError",
     "attention_key",
-    "ignorable",
+    "fallback_handoff",
 ]

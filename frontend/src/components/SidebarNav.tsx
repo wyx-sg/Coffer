@@ -23,11 +23,10 @@ interface RowProps {
 function NavRow({ entry, collapsed, active, signal }: RowProps) {
   const { t } = useTranslation();
   const label = t(entry.labelKey);
-  // An experimental feature's entry says so, so nobody takes it for a
-  // finished part of the product (spec experimental-features "Mark an
-  // experimental feature's sidebar entry").
+  // An experimental feature's entry says so in the rail tooltip (the row
+  // itself stays plain; the page's title carries the tag) — spec
+  // experimental-features "Mark an experimental feature's sidebar entry".
   const experimental = entry.feature !== undefined;
-  const slug = entry.to === "/" ? "overview" : entry.to.replace(/\//g, "");
   const link = (
     <Link
       to={entry.to}
@@ -47,30 +46,15 @@ function NavRow({ entry, collapsed, active, signal }: RowProps) {
         aria-hidden
       />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
-      {experimental && !collapsed ? (
-        <span
-          data-testid={`nav-experimental-${slug}`}
-          className="shrink-0 rounded-xs border border-border px-1 text-2xs font-normal text-text-muted"
-        >
-          {t("nav.experimental")}
-        </span>
-      ) : null}
-      {signal ? (
-        <AttentionDot
-          entry={entry.to}
-          collapsed={collapsed}
-          count={signal.count}
-          tone={signal.tone}
-        />
-      ) : null}
+      {signal ? <AttentionDot entry={entry.to} collapsed={collapsed} count={signal.count} /> : null}
     </Link>
   );
   if (!collapsed) return link;
   // The rail has no room for the count, so the tooltip carries it
-  // ("MCP servers · 1 failing", board 1.2.02).
+  // ("MCP servers · 1 needs you", board 1.1.01).
   const name = experimental ? t("nav.experimentalLabel", { label }) : label;
   const tip = signal
-    ? `${name} · ${t(`nav.attentionCount.${signal.tone}`, { count: signal.count })}`
+    ? `${name} · ${t("nav.attentionCount", { count: signal.count })}`
     : name;
   return (
     <Tooltip>

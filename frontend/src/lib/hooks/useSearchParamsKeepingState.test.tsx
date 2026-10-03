@@ -5,8 +5,8 @@ import { describe, expect, test } from "vitest";
 import { useSearchParamsKeepingState } from "./useSearchParamsKeepingState";
 
 describe("useSearchParamsKeepingState", () => {
-  test("changing a param keeps the history state (the page's origin)", () => {
-    const state = { from: { to: "/agents/x", label: "X" } };
+  test("changing a param keeps the history state (the router state)", () => {
+    const state = { opened: "elsewhere" };
     const { result } = renderHook(
       () => ({ set: useSearchParamsKeepingState()[1], loc: useLocation() }),
       {

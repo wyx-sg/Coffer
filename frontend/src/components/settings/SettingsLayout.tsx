@@ -1,44 +1,53 @@
 // src/components/settings/SettingsLayout.tsx — the one pattern for a stack of titled settings blocks.
 //
-// Foundations "Forms": a section is its own card (raised surface, hairline
-// border, r10) with a header — a 13px semibold title, an optional muted line
-// under it, an optional meta/action on the right — a divider, then
-// hairline-divided rows. A row is its label with its own helper text on the
-// left and its control on the right (`layout="stack"` puts a wide control
-// under the label), 56px tall at least. The gap between cards is 24px: wrap
-// the stack in `SETTINGS_STACK`. A destructive or rare action is the last
-// section. Settings modal tabs and the channel Settings tab are built from
-// these two pieces so they read as one surface.
+// The page grammar (Shell · 1.4): a tab opens with its title (h1, 18/650) and
+// one muted intro line (`SettingsTabHeader`); below it sit sections 32px
+// apart. A section is NOT boxed — a bordered box is for a group of things,
+// hairlines alone are for one thing's properties. Its title is 15/600 with an
+// optional meta text and action on the same line, the description is one
+// muted line directly under the title, and the rows are separated by
+// hairlines (one above the first as well). A row is its label (13/500) with
+// its own helper text (12 muted) on the left and its control on the right
+// (`layout="stack"` puts a wide control under the label), 56px tall at least.
+// A tab with a single section prints no section title. Settings modal tabs and
+// the channel Settings tab are built from these pieces so they read as one
+// surface.
 import { useId, type ReactNode } from "react";
 
-import { HelpTip } from "@/components/HelpTip";
 import { cn } from "@/lib/utils";
 
-/** The stack of section cards: 24px between them, form width. */
-export const SETTINGS_STACK = "flex max-w-form flex-col gap-6";
+/** The stack of sections: 32px between them, form width. */
+export const SETTINGS_STACK = "flex max-w-form flex-col gap-8";
 
-/** The card surface of a section, for a bespoke block that cannot use `SettingsSection`
- *  (add `p-4` or its own padding). */
-export const SETTINGS_CARD = "rounded-xl border border-border bg-surface-raised text-text";
+/** A tab's title and its one intro line — the head of every Settings pane. */
+export function SettingsTabHeader({ title, intro }: { title: string; intro: ReactNode }) {
+  return (
+    <header className="flex flex-col gap-1">
+      <h1 className="text-lg font-bold text-text">{title}</h1>
+      <p className="text-sm text-text-muted">{intro}</p>
+    </header>
+  );
+}
 
 export function SettingsSection({
   title,
   description,
   meta,
   action,
-  headingLevel = 3,
+  headingLevel = 2,
   children,
   className,
   testId,
 }: {
-  title: string;
-  /** What the block is for — shown in a "?" tip beside the title, never inline. */
+  /** Omitted on a tab that has only one section. */
+  title?: string;
+  /** What the block is for — one muted line under the title. */
   description?: ReactNode;
-  /** Muted text at the right end of the header, before the action (a size). */
+  /** Muted text at the right end of the title line, before the action (a size). */
   meta?: ReactNode;
-  /** The right-hand end of the header: a status, a button. */
+  /** The right-hand end of the title line: a status, a button. */
   action?: ReactNode;
-  /** Heading level under the page's h1 (and a tab's h2): 2 or 3. */
+  /** Heading level under the tab's h1: 2 or 3. */
   headingLevel?: 2 | 3;
   children?: ReactNode;
   className?: string;
@@ -48,31 +57,34 @@ export function SettingsSection({
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <section
-      aria-labelledby={headingId}
-      className={cn(SETTINGS_CARD, className)}
+      aria-labelledby={title ? headingId : undefined}
+      className={cn("flex flex-col gap-1.5 text-text", className)}
       data-testid={testId}
     >
-      <header
-        className={cn(
-          "flex min-h-control-sm items-center justify-between gap-3 px-4 py-3",
-          children ? "border-b border-border-subtle" : null,
-        )}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <Heading id={headingId} className="text-sm font-semibold text-text">
+      {title ? (
+        <div className="flex min-h-[26px] items-center gap-3">
+          <Heading id={headingId} className="text-md font-semibold text-text">
             {title}
           </Heading>
-          {description ? <HelpTip>{description}</HelpTip> : null}
+          {meta || action ? (
+            <div className="ml-auto flex shrink-0 items-center gap-3">
+              {meta ? <span className="text-xs text-text-muted">{meta}</span> : null}
+              {action}
+            </div>
+          ) : null}
         </div>
-        {meta || action ? (
-          <div className="flex shrink-0 items-center gap-3">
-            {meta ? <span className="text-xs text-text-muted">{meta}</span> : null}
-            {action}
-          </div>
-        ) : null}
-      </header>
+      ) : null}
+      {description ? <p className="mt-0.5 text-xs text-text-muted">{description}</p> : null}
       {children ? (
-        <div className="flex flex-col divide-y divide-border-subtle px-4">{children}</div>
+        // A tab's only section has no title, so its first row has no hairline above it.
+        <div
+          className={cn(
+            "mt-1 flex flex-col",
+            !title && "[&>*:first-child]:border-t-0 [&>*:first-child>*:first-child]:border-t-0",
+          )}
+        >
+          {children}
+        </div>
       ) : null}
     </section>
   );
@@ -87,6 +99,7 @@ export function SettingRow({
   children,
   align = "center",
   layout = "inline",
+  indent = false,
 }: {
   label: ReactNode;
   /** Id of the control the label names, when there is one control. */
@@ -101,13 +114,16 @@ export function SettingRow({
   align?: "center" | "start";
   /** `stack` puts a wide control (a list, a path field) under the label. */
   layout?: "inline" | "stack";
+  /** A sub-row of the row above it: inset 16px, its hairline still full width. */
+  indent?: boolean;
 }) {
   const labelClass = "text-sm font-medium text-text";
   const stack = layout === "stack";
   return (
     <div
       className={cn(
-        "flex min-h-setting-row flex-col gap-3 py-2.5",
+        "flex min-h-setting-row flex-col gap-3 border-t border-border-subtle py-2.5",
+        indent && "pl-4",
         stack ? "justify-center" : "sm:flex-row sm:gap-6",
         !stack && (align === "center" ? "sm:items-center" : "sm:items-start"),
       )}
