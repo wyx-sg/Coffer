@@ -1518,28 +1518,33 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 
 ### Requirement: Offer the hand-off a knowledge refusal carries beside it
 When the daemon refuses a knowledge operation with a hand-off in the error's details
-(`details.handoff.prompt`), the Knowledge page MUST offer that prompt (Copy prompt, and Ask an
-agent when a managed agent is available) where it shows the refusal, passing the prompt on as
-served and never assembling it: a refused **Undo this pass** offers the prompt for undoing the
-pass by hand in the note that names the document edited since, which still points at the
-per-document History restore; and a History tab or Recent changes that cannot be read because
-git is not installed offers the prompt for installing it beside Retry. The page MUST NOT show an
-install command.
+(`details.handoff.prompt`), the Knowledge page MUST offer that prompt as one **Ask an agent ▾**
+control — Ask an agent opens a draft conversation with the prompt, and its menu holds Copy prompt,
+which is the only action when no managed agent is available — passing the prompt on as served and
+never assembling it. A History tab or Recent changes that cannot be read because git is not
+installed MUST say so in one neutral row — **History needs git** or **Recent changes needs git**,
+*Install git on this Mac to see versions. The document itself is fine.* — with **Check again** and
+the hand-off, and no Retry or Open Activity. A refused **Undo this pass** MUST say in one sentence
+which document was changed since and offer **Open its History**, which opens that document's
+History tab, where the person restores a single version; it carries no hand-off. The page MUST NOT
+show an install command.
 
-#### Scenario: a refused pass undo offers the prompt for undoing it by hand
-- **GIVEN** a curation pass whose undo the daemon refuses because a document it wrote was edited since, with a hand-off in the refusal
+#### Scenario: a refused pass undo points at the document's history
+- **GIVEN** a curation pass whose undo the daemon refuses because a document it wrote was edited since
 - **WHEN** the user undoes the pass from its page
-- **THEN** the note that names the document still points at restoring a single document from its History, and offers Copy prompt, which copies the served prompt
+- **THEN** one sentence names the document edited since and Open its History opens that document's History tab
+- **AND** nothing is written and no prompt is shown
 
 #### Scenario: a history that needs git offers the prompt for installing it
 - **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
 - **WHEN** a document's History tab opens
-- **THEN** it says the history could not be read, with Retry and Copy prompt, which copies the served prompt, and names no install command
+- **THEN** it shows the row *History needs git* with Check again and Ask an agent ▾, whose menu copies the served prompt, and names no install command
+- **AND** it offers no Retry and no Open Activity
 
-#### Scenario: recent changes that need git offer the prompt for installing it
+#### Scenario: recent changes that need git offer the same row
 - **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
 - **WHEN** Recent changes opens
-- **THEN** it offers Retry and Copy prompt, which copies the served prompt
+- **THEN** it shows the row *Recent changes needs git* with Check again and Ask an agent ▾
 
 ### Requirement: Show, copy and rotate the access token on Settings › Security
 Settings › Security MUST be the one place in the web UI that shows the daemon's access token. It
@@ -2419,38 +2424,51 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 - **THEN** the split opens at its default width, the drag still resizes it, and no error is shown
 
 ### Requirement: Show a knowledge document's history on its History tab
-A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**. History
-lists the document's versions newest first — who wrote each (the user, Coffer's curation naming the
-agent whose item it curated, or sync) and when — and choosing a version shows its diff against the
-one before, with **Restore this version**, which writes a new version rather than rewriting the
-past (spec [knowledge](../knowledge/spec.md) "Keep every document's history and undo a pass as a
-whole"). A history that cannot be read MUST say so in the tab with a retry, leaving the Document tab
-working.
+A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**, neither
+with a count. History is **one list** of the document's versions, newest first — who wrote each (the
+user, Coffer's curation naming the agent whose item it curated, or sync), when, and its added and
+removed line counts — with a **See the pass** link on a curation's row. Choosing a row MUST expand it
+in place to its diff, with a switch between **Changes in this version** (against the one before) and
+**Compare with current**, and **Restore this version** on every version but the current one, which
+writes a new version rather than rewriting the past (spec [knowledge](../knowledge/spec.md) "Keep
+every document's history and undo a pass as a whole"); a long line wraps in the diff rather than
+being cut. A history that cannot be read MUST say so in one **Load error** row inside the tab —
+*Couldn't load the history*, the reason, **Retry** and **Open Activity** — leaving the Document tab
+working; without git the row is *History needs git* (see "Offer the hand-off a knowledge refusal
+carries beside it").
 
 #### Scenario: the history tab lists versions with their writers
 - **GIVEN** a document the user created, that curation then changed from a Codex item
-- **WHEN** the user opens its History tab and chooses the older version
-- **THEN** the tab lists both versions newest first with their writers, shows the older version's diff, and offers Restore this version
+- **WHEN** the user opens its History tab and chooses the older version's row
+- **THEN** the tab lists both versions newest first with their writers, the row expands in place to its diff, and Restore this version is offered on it and not on the current version
 - **AND** restoring it writes it back as a new version
 
 #### Scenario: a history that fails to load leaves the document readable
 - **GIVEN** the history read failing
 - **WHEN** the user opens the History tab
-- **THEN** the tab says it could not load the history and offers a retry, and the Document tab still renders
+- **THEN** the tab shows one Load error row with Retry and Open Activity, and the Document tab still renders
 
 ### Requirement: Follow knowledge changes in Recent changes
 The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
-first, of curation passes and of documents people and agents wrote or deleted, filterable to one
-collection, with the items still waiting and a quiet **Curate now** beside them (spec
-[knowledge](../knowledge/spec.md) "Run curation on a sweep and on demand"). Choosing a pass MUST show
-what it changed — each document it wrote or retired, with a diff — and offer **Undo this pass**, which
-asks first and undoes the whole pass, reporting a refusal that names the document changed since. The
-wording is Curate / Curation (整理) throughout.
+first, of curation passes and of documents people and agents wrote or deleted, with the items still
+waiting and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
+on a sweep and on demand"). It MUST be filtered with **Collection** and **Author** filter pills and a
+**Clear filters** control, the choice kept in the URL. A delete carries **Restore**. Choosing a pass
+MUST show what it changed — each document it wrote or retired, with a diff — and offer **Undo this
+pass**, which asks first and undoes the whole pass, reporting a refusal that names the document
+changed since (see "Offer the hand-off a knowledge refusal carries beside it"). What became of each
+item a manual Curate now could not curate is written on that change's row. An empty Inbox reads as one
+quiet line. The wording is Curate / Curation (整理) throughout.
 
 #### Scenario: recent changes shows a cross-collection timeline with waiting items
 - **GIVEN** a pass in one collection, a person's edit in another, and an item waiting
 - **WHEN** the user opens Recent changes
-- **THEN** both changes are listed, each linking the documents it wrote, the waiting item is shown with Curate now, and filtering to one collection leaves only its entries
+- **THEN** both changes are listed, each linking the documents it wrote, and the waiting item is shown with Curate now
+
+#### Scenario: the filter pills narrow the timeline and live in the URL
+- **GIVEN** changes in two collections by the user and by an agent
+- **WHEN** the user picks one collection in the Collection pill and the agent in the Author pill, then chooses Clear filters
+- **THEN** the timeline lists only that collection's changes by that agent and the URL carries both choices, and Clear filters empties both and the URL
 
 #### Scenario: a pass is inspected and undone as a whole
 - **GIVEN** a pass that changed two documents

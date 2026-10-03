@@ -1,6 +1,6 @@
 // frontend/src/components/knowledge/KnowledgeChangeRow.tsx
 //
-// One change on the Recent changes timeline (boards 5.1.07, 5.1.27): the
+// One change on the Recent changes timeline (boards 5.1.21–5.1.23): the
 // writer's mark, who and what in words — "Curation curated Codex's item into
 // `daemon/port.md`" — its time, and a line under it saying more where the
 // change's fields allow. A curation pass links to what it did (See the pass,
@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChangeOut, CollectionOut } from "@/lib/api/knowledge";
@@ -60,6 +61,11 @@ function detailOf(
       return t("knowledge.recent.detail.sync", { count: lines });
     }
     case "pass":
+      // How an item that could not go through the model ended, from the pass's
+      // status: too large for one pass, or cut off until it gave up (only a
+      // pass that gave up leaves a change behind for `truncated`).
+      if (change.status === "too_large") return t("knowledge.recent.detail.too_large");
+      if (change.status === "truncated") return t("knowledge.recent.detail.gave_up");
       return change.item
         ? t("knowledge.recent.detail.pass", { when: whenLabel(t, change.time, locale) })
         : null;
@@ -85,7 +91,7 @@ export function KnowledgeChangeRow({ change, collections, undone, restored }: Pr
     document && docUid && !removed ? (
       <Link
         to={collectionPath(docUid, "document", document)}
-        className="min-w-0 truncate font-mono text-xs text-text hover:underline"
+        className="min-w-0 truncate font-mono text-xs text-accent-text"
       >
         {docLabel}
       </Link>
@@ -120,7 +126,7 @@ export function KnowledgeChangeRow({ change, collections, undone, restored }: Pr
               {isPass ? (
                 <Link
                   to={changePath(change.version)}
-                  className="text-xs font-label text-accent-text hover:underline"
+                  className="text-xs font-label text-accent-text"
                 >
                   {t("knowledge.recent.seePass")}
                 </Link>
@@ -129,8 +135,10 @@ export function KnowledgeChangeRow({ change, collections, undone, restored }: Pr
                 restored ? (
                   <span className="text-xs text-text-muted">{t("knowledge.recent.restored")}</span>
                 ) : (
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     disabled={restore.isPending}
                     onClick={() =>
                       restore.mutate(change.version, {
@@ -145,12 +153,11 @@ export function KnowledgeChangeRow({ change, collections, undone, restored }: Pr
                           ),
                       })
                     }
-                    className="text-xs font-label text-accent-text hover:underline disabled:opacity-disabled"
                   >
                     {restore.isPending
                       ? t("knowledge.recent.restoring")
                       : t("knowledge.recent.restore")}
-                  </button>
+                  </Button>
                 )
               ) : null}
               <span className="whitespace-nowrap text-xs text-text-muted">

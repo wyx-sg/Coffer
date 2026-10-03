@@ -5,12 +5,11 @@
 // "Present a partition as its memories"). The daemon hands the body without
 // its frontmatter, so frontmatter never renders as text; the provenance is
 // reduced to agent names — never a native path or an agent's original text.
-// Open in editor and reveal act on the memory's own file under
-// `~/.coffer/derived/memory/<partition>/notes/`. No edit or delete: the next distil
-// pass would rewrite either.
+// No edit, delete or file action: the next distil pass would rewrite them, and
+// the partition's ⋯ menu reveals the folder (board 5.2.06). Title 15/600, meta
+// 12, body 13, 620 wide.
 import { useTranslation } from "react-i18next";
 
-import { FileActions } from "@/components/FileActions";
 import { FILE_PANE_SCROLL } from "@/components/filePane";
 import { Markdown } from "@/components/Markdown";
 import { learnedByLabels } from "@/components/memory/memoryAgents";
@@ -22,11 +21,9 @@ import { formatDateTime } from "@/lib/utils";
 interface Props {
   uid: string;
   slug: string;
-  /** Absolute path of the memory's file, once the partition's files are read. */
-  filePath: string | null;
 }
 
-export function MemoryPane({ uid, slug, filePath }: Props) {
+export function MemoryPane({ uid, slug }: Props) {
   const { t } = useTranslation();
   const note = useMemoryNote(uid, slug);
 
@@ -52,19 +49,16 @@ export function MemoryPane({ uid, slug, filePath }: Props) {
   const date = formatDateTime(m.updated_at);
   return (
     <article className="flex min-h-0 flex-1 flex-col gap-4" data-testid="memory-pane">
-      <header className="flex flex-wrap items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <h2 className="text-lg font-semibold text-text">{m.title}</h2>
-          <p className="text-xs text-text-muted" data-testid="memory-meta">
-            {agents.length > 0
-              ? t("memory.memories.learnedBy", { agents: agents.join(", "), date })
-              : t("memory.memories.updated", { date })}
-          </p>
-        </div>
-        {filePath ? <FileActions filePath={filePath} /> : null}
+      <header className="flex flex-col gap-1.5">
+        <h2 className="text-md font-semibold text-text">{m.title}</h2>
+        <p className="text-xs text-text-muted" data-testid="memory-meta">
+          {agents.length > 0
+            ? t("memory.memories.learnedBy", { agents: agents.join(", "), date })
+            : t("memory.memories.updated", { date })}
+        </p>
       </header>
       <div className={FILE_PANE_SCROLL}>
-        <div className="max-w-[620px]">
+        <div className="max-w-[620px] text-sm">
           <Markdown>{m.body}</Markdown>
         </div>
       </div>

@@ -36,7 +36,11 @@ export function MemoryDeliveriesSection() {
       gap="snug"
       labelled
       title={t("memory.deliveries.title")}
-      help={t("memory.deliveries.window", { count: days })}
+      aside={
+        <span className="text-xs text-text-muted">
+          {t("memory.deliveries.window", { count: days })}
+        </span>
+      }
       testId="memory-deliveries"
     >
       <div className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised">

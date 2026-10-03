@@ -25,9 +25,12 @@ interface Props {
    *  or a request for it, made when the person picks Ask an agent or Copy prompt. */
   prompt: PromptSource;
   size?: "sm" | "default";
+  /** The "?" beside it; off in a row that already says what the problem is
+   *  (Knowledge and Memory failures, after their own Retry / Check again). */
+  help?: boolean;
 }
 
-export function AgentHandoff({ prompt, size = "default" }: Props) {
+export function AgentHandoff({ prompt, size = "default", help = true }: Props) {
   const { t } = useTranslation();
   const { copy, canAsk, ask } = useAgentHandoff(prompt);
   const [open, setOpen] = useState(false);
@@ -87,9 +90,11 @@ export function AgentHandoff({ prompt, size = "default" }: Props) {
           {t("handoff.copyPrompt")}
         </Button>
       )}
-      <HelpTip>
-        <p className="text-xs">{t("handoff.help")}</p>
-      </HelpTip>
+      {help ? (
+        <HelpTip>
+          <p className="text-xs">{t("handoff.help")}</p>
+        </HelpTip>
+      ) : null}
     </div>
   );
 }

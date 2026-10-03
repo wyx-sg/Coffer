@@ -1,13 +1,14 @@
 // frontend/src/components/knowledge/KnowledgeChangeView.tsx
 //
-// One change, in full (boards 5.1.10–5.1.12, 5.1.22; spec web-ui "Follow
-// knowledge changes in Recent changes"): who and when, and every document it
-// touched with its diff and a link to that document's History. A curation
-// pass also offers Undo this pass, which asks first and undoes the whole pass.
-// When a document it wrote has changed since, the daemon refuses the whole
-// undo: the dialog closes, the bar reads Not undone and a note above the
-// documents names the one that changed. A pass already undone reads Undone,
-// with when and by whom.
+// One change, in full (boards 5.1.18-5.1.20; spec web-ui "Follow knowledge
+// changes in Recent changes"): the 15/600 title, one muted meta line — when,
+// and for a pass "from 3 inbox items (2 from Claude Code, 1 from Codex)" — and
+// every document it touched with its diff and a link to that document's
+// History. A curation pass also offers Undo this pass, which asks first and
+// undoes the whole pass. When a document it wrote has changed since, the daemon
+// refuses the whole undo: the dialog closes and a notice above the documents
+// names the one that changed, with a button to its History; Undo this pass
+// stays on the bar. A pass already undone reads Undone, with when and by whom.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -94,16 +95,15 @@ export function KnowledgeChangeView({ version, collections }: Props) {
   const undoneBy = (timeline.data?.changes ?? []).find((c) => c.undoes === change.version);
   const refusal = undo.error ? undoRefusal(t, undo.error) : null;
   const changedSince = refusal?.document ?? null;
+  const historyTo = (path: string | null) => {
+    const uid = path ? uidOf.get(collectionOfPath(path)) : undefined;
+    return path && uid ? collectionPath(uid, "history", path) : null;
+  };
 
   const status = isPass ? (
     undoneBy ? (
       <span className="inline-flex h-[22px] items-center gap-1.5 rounded-item bg-chip px-2 text-xs font-semibold text-text-muted">
         {t("knowledge.pass.undone")}
-      </span>
-    ) : refusal ? (
-      <span className="inline-flex h-[22px] items-center gap-1.5 rounded-item bg-warning-soft px-2 text-xs font-semibold text-warning">
-        <span className="size-1.5 rounded-full bg-warning" aria-hidden />
-        {t("knowledge.pass.notUndone")}
       </span>
     ) : (
       <Button variant="outline" onClick={() => setUndoing(true)}>
@@ -111,6 +111,19 @@ export function KnowledgeChangeView({ version, collections }: Props) {
       </Button>
     )
   ) : null;
+
+  // A pass names the agent whose inbox item it curated; the daemon records one
+  // item per pass, so the breakdown is that agent's one.
+  const from =
+    isPass && change.agent
+      ? t("knowledge.pass.fromItems", {
+          count: 1,
+          breakdown: t("knowledge.pass.fromAgent", {
+            count: 1,
+            agent: agentLabel(t, change.agent),
+          }),
+        })
+      : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -122,23 +135,12 @@ export function KnowledgeChangeView({ version, collections }: Props) {
               <KnowledgeWriterMark writer={change.writer} agent={change.agent} />
             </span>
             <div className="flex min-w-0 flex-col gap-1">
-              <h2 className="text-lg font-bold">
+              <h2 className="text-md font-semibold">
                 {isPass ? t("knowledge.pass.heading") : changeSentence(t, change)}
               </h2>
-              <p className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                <span>
-                  {whenLabel(t, change.time, i18n.language)}
-                  {isPass ? ` · ${t("knowledge.pass.meta")}` : ` · ${writerLabel(t, change)}`}
-                </span>
-                {isPass && change.agent ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <KnowledgeWriterMark
-                      writer={change.agent === "user" ? "user" : "agent"}
-                      agent={change.agent}
-                    />
-                    {agentLabel(t, change.agent)}
-                  </span>
-                ) : null}
+              <p className="text-xs text-text-muted">
+                {whenLabel(t, change.time, i18n.language)}
+                {isPass ? (from ? ` · ${from}` : "") : ` · ${writerLabel(t, change)}`}
               </p>
             </div>
           </header>
@@ -162,7 +164,7 @@ export function KnowledgeChangeView({ version, collections }: Props) {
               </div>
             </div>
           ) : refusal ? (
-            <KnowledgeUndoRefusal text={refusal.text} handoff={refusal.handoff} />
+            <KnowledgeUndoRefusal text={refusal.text} historyTo={historyTo(refusal.document)} />
           ) : null}
 
           <div className="flex flex-col">
@@ -178,7 +180,7 @@ export function KnowledgeChangeView({ version, collections }: Props) {
                     {uid && d.status !== "removed" ? (
                       <Link
                         to={collectionPath(uid, "document", d.path)}
-                        className="font-mono text-xs font-medium hover:underline"
+                        className="font-mono text-xs font-medium text-accent-text"
                       >
                         {d.path}
                       </Link>
@@ -223,11 +225,6 @@ export function KnowledgeChangeView({ version, collections }: Props) {
               );
             })}
           </div>
-          {isPass ? (
-            <p className="border-t border-border-subtle pt-3 text-xs text-text-subtle">
-              {t("knowledge.pass.itemsLeft")}
-            </p>
-          ) : null}
         </div>
       </div>
 

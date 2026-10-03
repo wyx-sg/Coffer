@@ -6,9 +6,10 @@
 // (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created,
 // so the header's one action is Update memory: read every agent's latest
 // memory and distil what is new (spec memory "Update memory in one action"),
-// beside the Automatic control that does the same on a timer and a quiet line
-// saying when the agents' memory was last read, or how far Update memory is.
-// When the last read left an agent unread, a banner above the blocks says so.
+// the page's one primary button, beside the Automatic control that does the
+// same on a timer and a quiet line saying when the agents' memory was last
+// read, or how far Update memory is. When the last read left an agent unread,
+// a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
 //
 // Two blocks. "Delivered at session start" shows, per agent and over the last
 // seven days, how often memory was delivered and how many memories were read —
@@ -28,6 +29,7 @@ import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable
 import { Section, SectionStack } from "@/components/Section";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
+import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { translateApiError } from "@/lib/api/errors";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
@@ -55,6 +57,7 @@ export function MemoryPage() {
     <div className="space-y-6">
       <PageHeader
         title={t("memory.title")}
+        badges={<ExperimentalTag />}
         subtitle={t("memory.subtitle")}
         actions={
           // On the first run the welcome carries the same button; two of them
@@ -63,7 +66,7 @@ export function MemoryPage() {
             <>
               <MemoryHeaderStatus />
               <MemoryAutomaticPopover />
-              <MemoryUpdateButton variant="outline" running={updating} />
+              <MemoryUpdateButton running={updating} />
             </>
           )
         }

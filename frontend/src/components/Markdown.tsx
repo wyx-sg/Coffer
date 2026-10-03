@@ -13,8 +13,8 @@ import type { Components } from "react-markdown";
 
 const components: Components = {
   h1: (props) => <h2 className="mb-3 mt-5 text-xl font-bold first:mt-0" {...props} />,
-  h2: (props) => <h3 className="mb-2 mt-5 text-lg font-bold first:mt-0" {...props} />,
-  h3: (props) => <h4 className="mb-2 mt-4 text-md font-semibold first:mt-0" {...props} />,
+  h2: (props) => <h3 className="mb-2 mt-6 text-md font-bold first:mt-0" {...props} />,
+  h3: (props) => <h4 className="mb-1.5 mt-4 text-sm font-semibold first:mt-0" {...props} />,
   h4: (props) => <h5 className="mb-1.5 mt-3 font-semibold first:mt-0" {...props} />,
   h5: (props) => <h6 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
   h6: (props) => <h6 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,

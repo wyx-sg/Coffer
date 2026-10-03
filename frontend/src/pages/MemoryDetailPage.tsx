@@ -1,13 +1,15 @@
 // frontend/src/pages/MemoryDetailPage.tsx — one partition, at /memory/<uid>[/delivered]
 // (spec memory "Present a partition as its memories").
 //
-// The header names the partition (its title when set), the repository it is
-// keyed on — a worktree and a second clone are one partition ("Identify a
-// partition by its repository") — and how many memories it holds; a partition
-// whose repository is gone says so ("Report unresolvable partitions"). Its
-// actions: Update memory (spinning while the daemon reports a distil pass over
-// THIS partition, by uid, so leaving mid-pass and coming back still reads
-// busy), the title editor and the ⋯ menu.
+// The header is the partition's name alone (no back link, no Experimental tag,
+// no Automatic control) over one description line: the repository it is keyed
+// on in mono — a worktree and a second clone are one partition ("Identify a
+// partition by its repository") — how many memories it holds and when it was
+// distilled; a partition whose repository is gone says so ("Report
+// unresolvable partitions"). Its actions: Update memory, secondary (spinning
+// while the daemon reports a distil pass over THIS partition, by uid, so
+// leaving mid-pass and coming back still reads busy) and the ⋯ menu. Boards
+// 5.2.06–5.2.09.
 //
 // Two tabs in the path: Memories (default) and Delivered. There is no status
 // or reach control — every partition is served to every agent — and no
@@ -20,13 +22,11 @@ import { DetailNotFound } from "@/components/DetailNotFound";
 import { PartitionDeliveredTab } from "@/components/memory/PartitionDeliveredTab";
 import { PartitionMemoriesTab } from "@/components/memory/PartitionMemoriesTab";
 import { PartitionMenu } from "@/components/memory/PartitionMenu";
-import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
 import { useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { distilState } from "@/components/memory/partitionFacts";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { PageHeader } from "@/components/PageHeader";
-import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
 import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,7 +51,6 @@ export function MemoryDetailPage() {
   if (partitions.isPending) {
     return (
       <div className="space-y-6" aria-busy="true">
-        <Skeleton className="h-4 w-20" />
         <Skeleton className="h-8 w-64" />
       </div>
     );
@@ -65,11 +64,17 @@ export function MemoryDetailPage() {
     );
   }
 
-  const subtitle = [
-    row.repository_path ? abbreviateHomePath(row.repository_path) : t("memory.cols.global"),
-    t("memory.partitions.memories", { count: row.note_count }),
-    distilState(t, i18n.language, row, distilling).toLowerCase(),
-  ].join(" · ");
+  const where = row.repository_path ? (
+    <span className="font-mono text-xs">{abbreviateHomePath(row.repository_path)}</span>
+  ) : (
+    t("memory.cols.global")
+  );
+  const subtitle = (
+    <span className="text-text-muted">
+      {where} · {t("memory.partitions.memories", { count: row.note_count })} ·{" "}
+      {distilState(t, i18n.language, row, distilling).toLowerCase()}
+    </span>
+  );
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
@@ -79,11 +84,7 @@ export function MemoryDetailPage() {
         subtitle={subtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <MemoryAutomaticPopover />
-            <MemoryUpdateButton variant="outline" size="sm" running={running} />
-            {/* Not on the boards; kept because a partition's editable title is
-                still required (spec resource-framework). */}
-            <EditTitleDialog kind="memory" resource={row} />
+            <MemoryUpdateButton variant="outline" running={running} />
             <PartitionMenu partition={row} />
           </div>
         }
@@ -96,12 +97,7 @@ export function MemoryDetailPage() {
         </TabsList>
         <TabsContent value={tab} className="mt-[18px] min-h-0">
           {tab === "memories" ? (
-            <PartitionMemoriesTab
-              uid={uid}
-              name={displayName(row)}
-              running={running}
-              partition={row}
-            />
+            <PartitionMemoriesTab uid={uid} name={displayName(row)} partition={row} />
           ) : (
             <PartitionDeliveredTab uid={uid} repositoryPath={row.repository_path} />
           )}

@@ -1,10 +1,11 @@
 // frontend/src/components/knowledge/KnowledgeCollectionNode.tsx
 //
 // One collection in the Knowledge tree: its row (chevron, folder, its folder
-// name, how many documents), and while expanded its Inbox node and its
+// name — no document count), and while expanded its Inbox node and its
 // documents. A collection has no title — the tree names it by its folder.
-// The Inbox node carries the number of items waiting (the only signal of
-// them: the sidebar has no badge) and opens the Inbox view; while that view is
+// The Inbox node carries the number of items waiting, in 11 text-subtle and
+// never as "0" — the tree's only count and the only signal of them (the
+// sidebar has no badge) — and opens the Inbox view; while that view is
 // open it expands to list the items, each opening read-only (boards 5.1.09,
 // 5.1.26). With Coffer's model not set there is no Inbox node at all: items
 // become documents as they arrive, so there is never anything waiting.
@@ -14,10 +15,11 @@ import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Inbox } from "
 
 import {
   NAV_CHEVRON,
+  NAV_COUNT,
+  NAV_FOLDER,
   NAV_ICON,
   NAV_LABEL,
   NAV_NAME,
-  NAV_PILL,
   NAV_ROW,
   NAV_ROW_ACTIVE,
   NAV_ROW_IDLE,
@@ -79,10 +81,7 @@ export function KnowledgeCollectionNode({
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1.5 text-left"
         >
           <FolderIcon className={NAV_ICON} aria-hidden />
-          <span className={cn(NAV_NAME, onOverview && "font-label")}>{name}</span>
-          <span className="shrink-0 text-xs tabular-nums text-text-muted">
-            {collection.document_count}
-          </span>
+          <span className={cn(NAV_FOLDER, onOverview && "font-label")}>{name}</span>
         </button>
       </div>
 
@@ -139,10 +138,7 @@ function InboxNode({ collection, open, selected, onOpen, onSelect }: InboxNodePr
         <Inbox className={NAV_ICON} aria-hidden />
         <span className={cn(NAV_LABEL, open && "font-label")}>{t("knowledge.inbox.title")}</span>
         {count > 0 ? (
-          <span
-            className={cn(NAV_PILL, "bg-warning-soft text-warning")}
-            aria-label={t("knowledge.inbox.waitingCount", { count })}
-          >
+          <span className={NAV_COUNT} aria-label={t("knowledge.inbox.waitingCount", { count })}>
             {count}
           </span>
         ) : null}
@@ -160,7 +156,7 @@ function InboxNode({ collection, open, selected, onOpen, onSelect }: InboxNodePr
                 className={cn(NAV_ROW, active ? NAV_ROW_ACTIVE : NAV_ROW_IDLE)}
               >
                 <span className={NAV_CHEVRON} />
-                <FileText className={cn(NAV_ICON, active && "text-accent")} aria-hidden />
+                <FileText className={NAV_ICON} aria-hidden />
                 <span className={cn(NAV_NAME, active && "font-label")}>
                   {item.path.split("/").pop()}
                 </span>

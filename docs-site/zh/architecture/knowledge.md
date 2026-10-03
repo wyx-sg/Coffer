@@ -93,9 +93,8 @@ Coffer 按固定顺序写五个键：`title`、`description`、`actor`（`agent`
 | `coffer knowledge write`、`POST /api/v1/knowledge/material` | CLI 和 REST |
 | `coffer knowledge upload`、`POST /api/v1/knowledge/upload`、知识页面 | 上传，先转成 Markdown |
 | 附件之后发 `/kb <collection>` | 已配对的 [消息渠道](/zh/architecture/chat) 所有者 |
-| 知识页面上的 **添加文档** | Web 界面，通过 `POST /api/v1/knowledge/material`，actor 为 `user` |
 
-没有任何路由能在指定路径上创建文档。人添加文档和智能体一样要经过收件箱，所以由同一套整理来决定它该放在哪里。
+没有任何路由能在指定路径上创建文档，Web 界面里也没有手敲一篇文档的表单：人通过编辑器写（`PUT /file`，保存一篇已有文档的正文）或上传，所以由收件箱和同一套整理来决定新知识该放在哪里。
 
 ```mermaid
 flowchart TD
