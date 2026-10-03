@@ -1,9 +1,9 @@
 // src/lib/hooks/useAgentConnectionDraft.test.tsx
 //
-// The Model tab's draft → test → confirm state machine, driven through the
-// hook with a real query cache and only `call` (the network) faked: what makes
-// a draft dirty, the test-before-confirm rule, which binding fields a confirm
-// PATCHes, where Effort's levels come from, and Coffer's tier prefill.
+// The Change model dialog's draft, driven through the hook with a real query
+// cache and only `call` (the network) faked: what makes a draft dirty and
+// reviewable, the request it builds, where Effort's levels come from, the
+// context-window ask for a local model and Coffer's tier prefill.
 import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, test } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -80,45 +80,28 @@ async function setup(agent: AgentOut, providers: Provider[], catalogue?: AgentMo
   return hook;
 }
 
-async function testAndConfirm(
-  result: { current: ReturnType<typeof useAgentConnectionDraft> },
-  agentType = "claude_code",
-) {
-  act(() => result.current.runTest());
-  await waitFor(() => expect(result.current.canConfirm).toBe(true));
-  act(() => result.current.confirm());
-  await waitFor(() =>
-    expect(call.mock.calls.some(([p]) => String(p).endsWith("/activate"))).toBe(true),
-  );
-  const activation = call.mock.calls.find(([p]) => String(p).endsWith("/activate"));
-  expect((activation?.[1] as { body: unknown }).body).toEqual({ agent_type: agentType });
-  const patch = call.mock.calls.find(([, o]) => (o as { method?: string })?.method === "PATCH");
-  return (patch?.[1] as { body: Record<string, unknown> }).body;
-}
-
 beforeEach(() => {
   call.mockReset();
 });
 
 describe("useAgentConnectionDraft", () => {
-  test("starts clean on the applied state and needs a passing test before confirm", async () => {
+  test("starts clean on the applied state; picking a provider makes it reviewable", async () => {
     const { result } = await setup(AGENT, [conn("gw", { models: text("m1", "m2") })]);
     expect(result.current.draftConn).toBe(BUILTIN);
     expect(result.current.dirty).toBe(false);
+    expect(result.current.canReview).toBe(false);
 
     act(() => result.current.pickConnection("u-gw"));
     expect(result.current.draftModel).toBe("m1");
-    expect(result.current.dirty).toBe(true);
-    expect(result.current.canConfirm).toBe(false);
-
-    act(() => result.current.runTest());
-    await waitFor(() => expect(result.current.canConfirm).toBe(true));
-    // A model change invalidates the test.
-    act(() => result.current.pickModel("m2"));
-    expect(result.current.canConfirm).toBe(false);
+    expect(result.current.canReview).toBe(true);
+    expect(result.current.request).toMatchObject({
+      agent_type: "claude_code",
+      connection_uid: "u-gw",
+      model: "m1",
+    });
   });
 
-  test("Claude Code confirm PATCHes model, effort and tier_models — never fast_model", async () => {
+  test("Claude Code sends model, effort and every tier; the built-in login sends none", async () => {
     const { result } = await setup(
       AGENT,
       [conn("gw", { models: text("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5") })],
@@ -135,8 +118,9 @@ describe("useAgentConnectionDraft", () => {
     act(() => result.current.pickConnection("u-gw"));
     expect(result.current.effortLevels).toEqual(["low", "high"]);
     act(() => result.current.pickEffort("high"));
-    const body = await testAndConfirm(result);
-    expect(body).toEqual({
+    expect(result.current.request).toEqual({
+      agent_type: "claude_code",
+      connection_uid: "u-gw",
       model: "claude-opus-5-5",
       effort: "high",
       tier_models: {
@@ -144,19 +128,30 @@ describe("useAgentConnectionDraft", () => {
         sonnet: "claude-sonnet-5-5",
         haiku: "claude-haiku-5",
       },
+      context_window: null,
     });
-    expect(body).not.toHaveProperty("fast_model");
+    act(() => result.current.pickConnection(BUILTIN));
+    expect(result.current.request).toMatchObject({
+      connection_uid: null,
+      model: null,
+      effort: null,
+      tier_models: null,
+    });
   });
 
-  test("Codex confirm sends no tier_models, and an unset effort clears with null", async () => {
+  test("Codex has no tiers, and sends effort only when the model reports levels", async () => {
     const codex: AgentOut = { ...AGENT, uid: "a-codex", type: "codex", effort: "high" };
     const { result } = await setup(codex, [
       conn("oa", { protocol: "openai", models: text("gpt-5") }),
     ]);
     expect(result.current.showTiers).toBe(false);
     act(() => result.current.pickConnection("u-oa"));
-    const body = await testAndConfirm(result, "codex");
-    expect(body).toEqual({ model: "gpt-5", effort: null });
+    expect(result.current.effortLevels).toEqual([]);
+    expect(result.current.request).toMatchObject({
+      model: "gpt-5",
+      effort: null,
+      tier_models: null,
+    });
   });
 
   test("the connection's recorded levels win over the agent's catalogue", async () => {
@@ -173,7 +168,22 @@ describe("useAgentConnectionDraft", () => {
     expect(result.current.effortLevels).toEqual(["low", "medium"]);
   });
 
-  test("a local runtime pins every tier to the Model; Reset puts an edited tier back", async () => {
+  test("a local model without a reported window asks for one and sends it", async () => {
+    const codex: AgentOut = { ...AGENT, uid: "a-codex", type: "codex" };
+    const { result } = await setup(codex, [
+      conn("ollama", {
+        protocol: "openai",
+        base_url: "http://127.0.0.1:11434",
+        models: text("qwen3-coder:30b"),
+      }),
+    ]);
+    act(() => result.current.pickConnection("u-ollama"));
+    expect(result.current.showWindow).toBe(true);
+    act(() => result.current.setWindow("32768"));
+    expect(result.current.request.context_window).toBe(32768);
+  });
+
+  test("a local runtime pins every tier to the Model; an edited tier can be changed", async () => {
     const { result } = await setup(AGENT, [
       conn("ollama", {
         base_url: "http://127.0.0.1:11434",
@@ -188,8 +198,7 @@ describe("useAgentConnectionDraft", () => {
     });
     act(() => result.current.pickTier("haiku", "claude-haiku-ish"));
     expect(result.current.draftTiers.haiku).toBe("claude-haiku-ish");
-    act(() => result.current.resetTiers());
-    expect(result.current.draftTiers.haiku).toBe("qwen-coder");
+    expect(result.current.tiersAreSuggested).toBe(false);
   });
 
   test("a pointer to a connection that no longer reaches the agent reads as the built-in login", async () => {
@@ -199,7 +208,7 @@ describe("useAgentConnectionDraft", () => {
     expect(result.current.draftConn).toBe(BUILTIN);
   });
 
-  test("an applied binding is the starting draft, and Discard returns to it", async () => {
+  test("an applied binding is the starting draft; changing the model makes it dirty", async () => {
     const agent: AgentOut = {
       ...AGENT,
       model: "m1",
@@ -213,8 +222,5 @@ describe("useAgentConnectionDraft", () => {
     expect(result.current.dirty).toBe(false);
     act(() => result.current.pickModel("m2"));
     expect(result.current.dirty).toBe(true);
-    act(() => result.current.discard());
-    expect(result.current.draftModel).toBe("m1");
-    expect(result.current.dirty).toBe(false);
   });
 });

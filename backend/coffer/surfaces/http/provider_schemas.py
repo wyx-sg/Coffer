@@ -249,6 +249,35 @@ class DeactivateOut(BaseModel):
     previous: str | None = None
 
 
+class DeletePreviewLine(BaseModel):
+    kind: Literal["context", "add", "remove", "hunk"]
+    text: str
+    old_no: int | None = None
+    new_no: int | None = None
+
+
+class DeletePreviewFileOut(BaseModel):
+    """One agent file that deleting the connection would change."""
+
+    #: Absolute path.
+    path: str
+    op: Literal["modify", "remove"]
+    diff: list[DeletePreviewLine]
+
+
+class DeletePreviewAgentOut(BaseModel):
+    agent_uid: str
+    agent_type: AgentType
+    agent_name: str
+    files: list[DeletePreviewFileOut]
+
+
+class ProviderDeletePreviewOut(BaseModel):
+    """What deleting a connection does to the agents running on it."""
+
+    agents: list[DeletePreviewAgentOut]
+
+
 # ---------------------------------------------------------------------------
 # Introspection: probe a connection, list what it serves.
 #
@@ -318,3 +347,53 @@ class DetectLocalOut(BaseModel):
     #: person's agent (``application/provider/local_runtime_handoff.py``);
     #: ``None`` once one answers.
     handoff: HandoffOut | None = None
+
+
+# ---------------------------------------------------------------------------
+# Change model: review what a model switch writes, then write it.
+# ---------------------------------------------------------------------------
+
+
+class ModelSwitchIn(BaseModel):
+    """What the agent page's Change model dialog asks for.
+
+    ``connection_uid`` ``null`` is the agent's own built-in login: no model,
+    effort or tiers are written, and Coffer removes only the keys it wrote.
+    ``seen`` is sent only to apply: each previewed file's path with the
+    fingerprint the preview read, so a file edited since is refused."""
+
+    agent_type: AgentType
+    connection_uid: str | None = None
+    model: str | None = None
+    effort: str | None = None
+    tier_models: dict[str, str] | None = None
+    #: A local model's context window in tokens, when its runtime reports none.
+    context_window: int | None = None
+    seen: dict[str, str] | None = None
+
+
+class ModelSwitchLine(BaseModel):
+    kind: Literal["context", "add", "remove", "hunk"]
+    text: str
+    old_no: int | None = None
+    new_no: int | None = None
+
+
+class ModelSwitchFile(BaseModel):
+    """One file the switch changes (or would change)."""
+
+    path: str
+    op: Literal["add", "modify", "remove"]
+    added: int
+    removed: int
+    diff: list[ModelSwitchLine]
+    #: What the file held when this was computed; sent back as ``seen``.
+    fingerprint: str
+
+
+class ModelSwitchOut(BaseModel):
+    agent_uid: str
+    agent_name: str
+    #: The connection the agent runs on after the switch; ``null``: its built-in login.
+    connection_name: str | None = None
+    files: list[ModelSwitchFile]

@@ -42,7 +42,7 @@ describe("age", () => {
   });
 
   test("the hook row says when it last fired, or that it never has", () => {
-    expect(formatLastFired(t, ago(2 * 3600_000), now)).toBe(" · last fired 2h ago");
+    expect(formatLastFired(t, ago(2 * 3600_000), now)).toBe(" · fired 2h ago");
     expect(formatLastFired(t, null, now)).toBe(" · never fired");
   });
 });

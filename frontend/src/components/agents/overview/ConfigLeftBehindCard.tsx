@@ -1,23 +1,27 @@
 // src/components/agents/overview/ConfigLeftBehindCard.tsx — the Overview when the agent's program is gone but its folder stays (board 2.1.13).
 //
 // Coffer can't connect an agent that isn't installed and leaves the folder as
-// it is, so the tab says what it found (the directory and the files still in
-// it, no program on PATH) and the one way out: install it and check again.
-// Revealing the folder or taking the agent off the list stay in the ⋯ menu.
-import { Trans, useTranslation } from "react-i18next";
+// it is. Two sections, no banner: "Install {name}" (one line, Check again and
+// the hand-off to an agent) and "Left in {dir}" (what Coffer last knew: the
+// version, the files, the model and provider, when it was last seen).
+import { useTranslation } from "react-i18next";
+import { RefreshCw } from "lucide-react";
 
+import { AskAgentButton } from "@/components/handoff/AskAgentButton";
+import { Section } from "@/components/Section";
+import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgentConfigFiles } from "@/lib/hooks/useAgents";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { formatMoment } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 import type { OverviewActions } from "../AgentOverviewTab";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-
-import { FixWay, LastKnownRows, ProblemBanner } from "./FixParts";
-import { useDetectionCheck } from "./useDetectionCheck";
-import { Section } from "@/components/Section";
-import { InfoRow, InlineCode } from "./OverviewParts";
+import { InfoRow, SectionLine } from "./OverviewParts";
 import { baseName } from "./paths";
+import { useDetectionCheck } from "./useDetectionCheck";
+import { useProviderLabel } from "./useProviderLabel";
 
 const K = "agents.overviewTab.problem";
 
@@ -28,52 +32,59 @@ interface Props {
 }
 
 export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
-  const { t } = useTranslation();
-  const { checkedAt } = useDetectionCheck();
+  const { t, i18n } = useTranslation();
+  const { checking, check } = useDetectionCheck();
   const configFiles = useAgentConfigFiles(agent.uid);
+  const models = useFeatureEnabled("models") === true;
+  const provider = useProviderLabel(agent);
   const files = (configFiles.data ?? []).filter((f) => f.exists).map((f) => baseName(f.path));
   const name = agentTypeLabel(agent.type);
   const dir = abbreviateHomePath(agent.config_dir);
   const version = typeRow.version ?? agent.version;
 
   return (
-    <div className="flex flex-col gap-10 lg:flex-row">
-      <div className="flex min-w-0 flex-[1.35_1_0] flex-col gap-6">
-        <ProblemBanner tone="warn" title={t(`${K}.leftBehind.title`, { name })}>
-          <Trans
-            i18nKey={`${K}.leftBehind.${files.length > 0 ? "body" : "bodyNoFiles"}`}
-            values={{
-              time: checkedAt,
-              dir,
-              files: files.join(", "),
-              program: agentProgramName(agent.type),
-            }}
-            components={{ code: <InlineCode /> }}
-          />
-        </ProblemBanner>
-        <Section title={t(`${K}.waysToFix`)}>
-          <ul className="flex flex-col">
-            <FixWay title={t(`${K}.install.title`, { name })} body={t(`${K}.install.body`)}>
-              {agent.install_handoff ? (
-                <AgentHandoff prompt={agent.install_handoff.prompt} size="sm" />
-              ) : null}
-            </FixWay>
-          </ul>
-        </Section>
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-[22px]">
-        <Section title={t(`${K}.leftIn`, { dir })}>
-          <dl className="flex flex-col">
-            <InfoRow label={t(`${K}.files`)} mono={files.length > 0}>
-              {files.length > 0 ? files.join(", ") : t("common.emptyValue")}
+    <div className="flex max-w-[920px] flex-col gap-8">
+      <Section
+        title={t(`${K}.install.title`, { name })}
+        as="h2"
+        help={<p className="text-xs">{t(`${K}.install.help`)}</p>}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={check} disabled={checking}>
+              <RefreshCw aria-hidden className={cn(checking && "animate-spin")} />
+              {t(`${K}.checkAgain`)}
+            </Button>
+            {agent.install_handoff ? (
+              <AskAgentButton prompt={agent.install_handoff.prompt} />
+            ) : null}
+          </>
+        }
+      >
+        <SectionLine>
+          {t(`${K}.leftBehind.line`, { dir, program: agentProgramName(agent.type) })}
+        </SectionLine>
+      </Section>
+      <Section title={t(`${K}.leftIn`, { dir })} as="h2">
+        <dl className="flex flex-col">
+          <InfoRow label={t(`${K}.lastVersion`)} mono={!!version}>
+            {version ? `v${version.replace(/^v/, "")}` : t("common.emptyValue")}
+          </InfoRow>
+          <InfoRow label={t(`${K}.files`)} mono={files.length > 0}>
+            {files.length > 0 ? files.join(", ") : t("common.emptyValue")}
+          </InfoRow>
+          <InfoRow label={t("agents.overviewTab.model.model")} mono={!!agent.model}>
+            {agent.model ?? t("common.emptyValue")}
+          </InfoRow>
+          {models ? (
+            <InfoRow label={t("agents.overviewTab.model.provider")}>
+              {provider ?? t("common.emptyValue")}
             </InfoRow>
-            <InfoRow label={t(`${K}.lastVersion`)} mono={!!version}>
-              {version ?? t("common.emptyValue")}
-            </InfoRow>
-            <LastKnownRows agent={agent} />
-          </dl>
-        </Section>
-      </div>
+          ) : null}
+          <InfoRow label={t(`${K}.lastSeen`)}>
+            {formatMoment(agent.updated_at, i18n.language, t)}
+          </InfoRow>
+        </dl>
+      </Section>
     </div>
   );
 }

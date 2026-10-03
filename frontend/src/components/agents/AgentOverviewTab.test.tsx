@@ -6,7 +6,7 @@
 // is faked (`fakeApi`), answering each request by path.
 import type { PropsWithChildren } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -171,7 +171,6 @@ function actions(): OverviewActions {
     onConnection: vi.fn(),
     onEnable: vi.fn(),
     onChangeConfigDir: vi.fn(),
-    onRemove: vi.fn(),
   };
 }
 
@@ -195,16 +194,15 @@ function renderTab(over: { agent?: Partial<AgentOut>; typeRow?: Partial<AgentTyp
 }
 
 describe("AgentOverviewTab — connection card", () => {
-  test("connected: says so, lists both parts with their files, offers Disconnect", async () => {
-    const acts = renderTab();
-    expect(await screen.findByText("Connected to Coffer")).toBeInTheDocument();
+  test("connected: lists both parts with their files and offers no fix button", async () => {
+    renderTab();
+    expect(await screen.findByText(/reaches Coffer through one MCP entry/)).toBeInTheDocument();
     expect(screen.getByText("MCP entry")).toBeInTheDocument();
     expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
     expect(screen.getByText("Memory hook")).toBeInTheDocument();
-    expect(screen.getByText(/last fired 2h ago/)).toBeInTheDocument();
+    expect(screen.getByText(/fired 2h ago/)).toBeInTheDocument();
     expect(screen.getAllByText("Current")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-    expect(acts.onConnection).toHaveBeenCalledWith("disconnect");
+    expect(screen.queryByRole("button", { name: /Connect|Repair|Turn on|Disconnect/ })).toBeNull();
   });
 
   test("not connected: names the files it would write and offers Connect", async () => {
@@ -213,9 +211,8 @@ describe("AgentOverviewTab — connection card", () => {
       parts: CONNECTED.parts.map((p) => ({ ...p, installed: false, detail: null })),
     };
     const acts = renderTab();
-    expect(await screen.findByText("Not connected")).toBeInTheDocument();
-    expect(screen.getByText(/You review the exact lines/)).toBeInTheDocument();
-    expect(screen.getAllByText("Missing")).toHaveLength(2);
+    expect(await screen.findByText(/You review the lines first/)).toBeInTheDocument();
+    expect(screen.getAllByText("Not set")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
@@ -224,8 +221,9 @@ describe("AgentOverviewTab — connection card", () => {
     world.connection = { ...CONNECTED, state: "partial" };
     world.hook = { ...HOOK, health: "stale" };
     const acts = renderTab();
-    expect(await screen.findByText("Needs repair")).toBeInTheDocument();
-    expect(screen.getByText(/runs a command this Coffer no longer accepts/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/runs a command this Coffer no longer accepts/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Out of date")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Repair" }));
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
@@ -234,60 +232,90 @@ describe("AgentOverviewTab — connection card", () => {
   test("disabled: parts read Idle, MCP and Skills serve nothing, offers Turn on", async () => {
     world.enabled = false;
     const acts = renderTab();
-    expect(await screen.findByText("Off")).toBeInTheDocument();
-    expect(screen.getAllByText("Idle")).toHaveLength(2);
+    expect(await screen.findAllByText("Idle")).toHaveLength(2);
     expect(await screen.findAllByText(/None while off/)).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     expect(acts.onEnable).toHaveBeenCalled();
   });
 
+  acceptance("agent-registry", "the Overview offers the action the state calls for", async () => {
+    const button = (n: string) => screen.queryByRole("button", { name: n });
+    // Not connected: Connect.
+    world.connection = {
+      state: "disconnected",
+      parts: CONNECTED.parts.map((p) => ({ ...p, installed: false, detail: null })),
+    };
+    renderTab();
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeInTheDocument();
+    cleanup();
+    // Connected: no button at all.
+    world.connection = CONNECTED;
+    renderTab();
+    expect(await screen.findByText(/reaches Coffer through one MCP entry/)).toBeInTheDocument();
+    expect(button("Connect")).toBeNull();
+    expect(button("Repair")).toBeNull();
+    expect(button("Turn on")).toBeNull();
+    cleanup();
+    // Partial: Repair.
+    world.connection = { ...CONNECTED, state: "partial" };
+    world.hook = { ...HOOK, health: "stale" };
+    renderTab();
+    expect(await screen.findByRole("button", { name: "Repair" })).toBeInTheDocument();
+    cleanup();
+    // Off: Turn on.
+    world.connection = CONNECTED;
+    world.hook = HOOK;
+    world.enabled = false;
+    renderTab();
+    expect(await screen.findByRole("button", { name: "Turn on" })).toBeInTheDocument();
+  });
+
   test("the memory hook row appears only when the connection lists that part", async () => {
     world.connection = { state: "connected", parts: [CONNECTED.parts[0]] };
     renderTab();
-    expect(await screen.findByText("Connected to Coffer")).toBeInTheDocument();
+    expect(await screen.findByText("MCP entry")).toBeInTheDocument();
     expect(screen.queryByText("Memory hook")).not.toBeInTheDocument();
   });
 });
 
-describe("AgentOverviewTab — summary, model, details, sessions", () => {
+describe("AgentOverviewTab — tiles, model, details", () => {
   // Overview shows no Title or Name field, and its summary rows each open their tab.
-  acceptance("agent-registry", "the agent detail page carries nine tabs", async () => {
-    renderTab();
-    const mcp = await screen.findByRole("link", { name: /MCP servers/ });
-    expect(mcp).toHaveAttribute("href", "/agents/claude_code/mcp-servers");
-    expect(
-      await within(mcp).findByText("1 through Coffer · 1 directly in .claude.json"),
-    ).toBeInTheDocument();
-    expect(within(mcp).getByText("1 to review")).toBeInTheDocument();
-    const skills = screen.getByRole("link", { name: /^Skills/ });
-    expect(skills).toHaveAttribute("href", "/agents/claude_code/skills");
-    expect(
-      await within(skills).findByText(
-        "1 delivered by Coffer · 2 on disk that Coffer doesn’t manage",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^Plugins/ })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/plugins",
-    );
-    const hooks = screen.getByRole("link", { name: /^Hooks/ });
-    expect(hooks).toHaveAttribute("href", "/agents/claude_code/hooks");
-    expect(
-      await within(hooks).findByText("2 hooks in settings.json · 1 is Coffer’s"),
-    ).toBeInTheDocument();
-    expect(await screen.findByText("settings.json")).toBeInTheDocument();
-    expect(screen.queryByText(/^(Title|Name)$/)).not.toBeInTheDocument();
-  });
+  acceptance(
+    "agent-registry",
+    "the agent detail page carries six tabs and a More menu",
+    async () => {
+      renderTab();
+      const mcp = await screen.findByRole("link", { name: /MCP servers/ });
+      expect(mcp).toHaveAttribute("href", "/agents/claude_code/mcp-servers");
+      expect(
+        await within(mcp).findByText("1 through Coffer · 1 in .claude.json"),
+      ).toBeInTheDocument();
+      const skills = screen.getByRole("link", { name: /^Skills/ });
+      expect(skills).toHaveAttribute("href", "/agents/claude_code/skills");
+      expect(
+        await within(skills).findByText("1 from Coffer · 2 not managed by Coffer"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /^Plugins/ })).toHaveAttribute(
+        "href",
+        "/agents/claude_code/plugins",
+      );
+      const hooks = screen.getByRole("link", { name: /^Hooks/ });
+      expect(hooks).toHaveAttribute("href", "/agents/claude_code/hooks");
+      expect(
+        await within(hooks).findByText("In settings.json · 1 is Coffer’s"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/^(Title|Name)$/)).not.toBeInTheDocument();
+    },
+  );
 
-  test("the Model block reads provider, model and effort, and links to the Model tab", async () => {
+  test("the Model section reads provider, model, effort and route, and Change… opens the dialog", async () => {
     renderTab();
     expect(await screen.findByText("Built-in login (Anthropic account)")).toBeInTheDocument();
     expect(screen.getByText("claude-opus-5-5")).toBeInTheDocument();
     expect(screen.getByText("High")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Change" })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/model",
-    );
+    expect(screen.getByText("Straight to Anthropic, not through Coffer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    expect(await screen.findByText("Change Claude Code’s model")).toBeInTheDocument();
   });
 
   acceptance(
@@ -303,7 +331,7 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
         expect(screen.getByText("High")).toBeInTheDocument();
         expect(screen.queryByText("Provider")).toBeNull();
         expect(screen.queryByText(/Built-in login/)).toBeNull();
-        expect(screen.queryByRole("link", { name: "Change" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Change…" })).toBeNull();
         expect(screen.queryByText(/switched off|needs/i)).toBeNull();
       } finally {
         modelsOn = true;
@@ -311,36 +339,19 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
     },
   );
 
-  test("Codex says Default effort too, and a null effort reads Chosen by the agent", async () => {
+  test("a null effort reads Chosen by the agent", async () => {
     renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
-    expect(await screen.findByText("Default effort")).toBeInTheDocument();
+    expect(await screen.findByText("Effort")).toBeInTheDocument();
     expect(screen.getAllByText("Chosen by the agent").length).toBeGreaterThan(0);
   });
 
-  test("details carry type, config directory, uid and registered date", async () => {
+  test("details carry version first, config directory, uid and registered date", async () => {
     renderTab();
-    expect(await screen.findByText("Claude Code")).toBeInTheDocument();
+    expect(await screen.findByText("v2.1.281")).toBeInTheDocument();
+    expect(screen.queryByText("Type")).toBeNull();
     expect(screen.getByText(`${HOME}/.claude`)).toBeInTheDocument();
     expect(screen.getByText("u-cc")).toBeInTheDocument();
-    expect(screen.getByText("2026-06-12")).toBeInTheDocument();
-  });
-
-  test("recent sessions open the session in the Sessions tab; All N opens the tab", async () => {
-    renderTab();
-    const row = await screen.findByRole("link", { name: /Fix SeaTalk reconnect/ });
-    expect(row).toHaveAttribute("href", "/agents/claude_code/sessions?session=%2Fs%2F1.jsonl");
-    expect(within(row).getByText("5h")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All" })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/sessions",
-    );
-  });
-
-  test("recent sessions are hidden when there are none", async () => {
-    world.transcripts = [];
-    renderTab();
-    expect(await screen.findByText("Connected to Coffer")).toBeInTheDocument();
-    expect(screen.queryByText("Recent sessions")).not.toBeInTheDocument();
+    expect(screen.getByText("12 Jun 2026")).toBeInTheDocument();
   });
 });
 
@@ -348,31 +359,27 @@ describe("AgentOverviewTab — problem states replace the tab", () => {
   const CODEX = { type: "codex" as const, config_dir: `${HOME}/.codex` };
 
   test("config left behind: what is still there and the reinstall prompt", async () => {
-    const acts = renderTab({
+    renderTab({
       agent: { ...CODEX, install_handoff: { prompt: "Please reinstall OpenAI Codex." } },
       typeRow: { ...CODEX, state: "config_only", standard_config_dir: `${HOME}/.codex` },
     });
-    expect(
-      screen.getByText("Codex’s config is left behind — the program isn’t installed"),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(screen.getByText("Install Codex")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/npm|install -g/);
     expect(screen.queryByText("Connection")).not.toBeInTheDocument();
     expect(screen.getByText("Left in ~/.codex")).toBeInTheDocument();
-    // Revealing the folder and removing the agent stay in the ⋯ menu.
-    expect(screen.queryByRole("button", { name: "Remove from list" })).not.toBeInTheDocument();
-    expect(acts.onRemove).not.toHaveBeenCalled();
+    expect(screen.getByText("Last version")).toBeInTheDocument();
   });
 
-  test("not found: reinstall, change config directory, remove from Coffer; check again re-reads", async () => {
+  test("not found: reinstall, change config directory; check again re-reads", async () => {
     const acts = renderTab({ agent: CODEX, typeRow: { ...CODEX, state: "missing" } });
     expect(screen.getByText("Codex can’t be found at ~/.codex")).toBeInTheDocument();
     expect(screen.getByText("~/.codex/config.toml")).toBeInTheDocument();
     expect(screen.getByText("Last known configuration")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Change config directory" }));
     expect(acts.onChangeConfigDir).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Remove from Coffer" }));
-    expect(acts.onRemove).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Remove from Coffer" })).toBeNull();
     await screen.findByText(/Checked at \d\d:\d\d/);
     callMock.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
