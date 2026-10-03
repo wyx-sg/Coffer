@@ -100,13 +100,18 @@ def test_a_static_group_header_that_looks_like_a_secret_is_refused():
         HttpApiTransport(base_url="https://api.example", headers={"Authorization": "Bearer abc"})
 
 
-def test_a_group_carries_one_secret_on_its_auth_header_only():
-    with pytest.raises(ValidationError, match="only secret"):
+def test_a_header_appears_once_in_a_group_whether_plain_or_secret():
+    with pytest.raises(ValidationError, match="once"):
         HttpApiTransport(
             base_url="https://api.example",
-            auth_header="Authorization",
-            secret_refs={"X-Other": "secret/x"},
+            headers={"authorization": "x"},
+            secret_refs={"Authorization": "secret/x"},
         )
+
+
+def test_a_secret_header_must_be_a_valid_header_name():
+    with pytest.raises(ValidationError, match="not a valid header name"):
+        HttpApiTransport(base_url="https://api.example", secret_refs={"bad name": "secret/x"})
 
 
 def test_tool_names_are_unique_in_a_group():

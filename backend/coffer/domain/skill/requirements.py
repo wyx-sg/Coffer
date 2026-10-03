@@ -25,8 +25,22 @@ requires:
   secrets: [GITHUB_TOKEN]       # names in Coffer's secret store; never values
 ```
 
-A mapping key other than ``commands`` and ``secrets`` is refused: it is
-reported as a warning and nothing under it is read.
+The mapping form also names the MCP servers and custom-tool groups a skill
+calls (spec skill-manager "Declare the tools a skill requires"), by the name each
+has in Coffer; an entry may be a mapping with a ``why``:
+
+```yaml
+requires:
+  tools: [github, {name: billing-api, why: Reads invoices.}]
+```
+
+A mapping key other than ``commands``, ``secrets`` and ``tools`` is refused: it
+is reported as a warning and nothing under it is read. Whether a tool name is
+one Coffer knows is not decided here (this module reads text only); the
+requirement service skips an unknown one with a warning.
+
+``metadata.requires`` is a different thing — the other skills this one loads —
+read by :func:`required_skills_from_skill_md`.
 
 Parsed leniently: the frontmatter is third-party, like ``allowed-tools``, so
 an entry that is not understood is skipped and reported as a warning, never a
@@ -47,8 +61,10 @@ from coffer.domain.skill.validator import parse_frontmatter
 COMMAND_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _MIN_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 _TEXT_MAX = 200
+#: A resource name as Coffer files MCP servers and tool groups under.
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 #: The keys the mapping form of ``requires:`` may carry.
-_MAPPING_KEYS = ("commands", "secrets")
+_MAPPING_KEYS = ("commands", "secrets", "tools")
 _KEYS = frozenset(
     {"command", "name", "title", "min_version", "version", "login_check", "login", "why"}
 )
@@ -71,10 +87,20 @@ class CommandRequirement:
 
 
 @dataclass(frozen=True)
+class ToolRequirement:
+    """One MCP server or custom-tool group a skill calls, by its Coffer name."""
+
+    name: str
+    why: str | None = None
+
+
+@dataclass(frozen=True)
 class RequirementsParse:
     requirements: tuple[CommandRequirement, ...] = ()
     #: The Coffer secret names the skill needs, in the order declared.
     secrets: tuple[str, ...] = ()
+    #: The MCP servers and custom-tool groups the skill calls, in declared order.
+    tools: tuple[ToolRequirement, ...] = ()
     #: One sentence per entry that was skipped (or field that was dropped).
     warnings: tuple[str, ...] = ()
 
@@ -96,17 +122,19 @@ def parse_requires(value: object) -> RequirementsParse:
     each one that cannot. A command or secret named twice keeps its first entry."""
     warnings: list[str] = []
     secrets: tuple[str, ...] = ()
+    tools: tuple[ToolRequirement, ...] = ()
     if isinstance(value, dict):
         unknown = sorted(str(k) for k in value if k not in _MAPPING_KEYS)
         if unknown:
             warnings.append(
                 f"requires: unknown key(s) {', '.join(unknown)} refused; "
-                "only commands and secrets are read"
+                "only commands, secrets and tools are read"
             )
         secrets = _secrets(value.get("secrets"), warnings)
+        tools = _tools(value.get("tools"), warnings)
         value = value.get("commands")
     commands = _commands(value, warnings)
-    return RequirementsParse(commands, secrets, tuple(warnings))
+    return RequirementsParse(commands, secrets, tools, tuple(warnings))
 
 
 def _commands(value: object, warnings: list[str]) -> tuple[CommandRequirement, ...]:
@@ -154,6 +182,46 @@ def _secrets(value: object, warnings: list[str]) -> tuple[str, ...]:
             continue
         out.append(name)
     return tuple(out)
+
+
+def _tools(value: object, warnings: list[str]) -> tuple[ToolRequirement, ...]:
+    """The ``tools:`` list of the mapping form: names, each optionally with a why."""
+    if isinstance(value, str):
+        value = [value]
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        warnings.append("requires tools: expected a list of tool names; ignored")
+        return ()
+    out: list[ToolRequirement] = []
+    for index, entry in enumerate(value, start=1):
+        why: str | None = None
+        if isinstance(entry, dict):
+            why = _text(entry.get("why"), "why", [])
+            entry = entry.get("name")
+        name = entry.strip() if isinstance(entry, str) else None
+        if not name or not _TOOL_NAME_RE.match(name):
+            warnings.append(f"requires tool {index}: {entry!r} is not a tool name; skipped")
+            continue
+        if any(t.name == name for t in out):
+            warnings.append(f"requires tool {name}: declared twice; later entry skipped")
+            continue
+        out.append(ToolRequirement(name, why))
+    return tuple(out)
+
+
+def required_skills_from_skill_md(text: str) -> tuple[str, ...]:
+    """The skills a SKILL.md says it loads (``metadata.requires``: a list of
+    skill names), in declared order; empty when there are none or it is not a list."""
+    data = parse_frontmatter(text)
+    metadata = data.get("metadata") if data else None
+    value = metadata.get("requires") if isinstance(metadata, dict) else None
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return ()
+    names = [v.strip() for v in value if isinstance(v, str) and v.strip()]
+    return tuple(dict.fromkeys(names))
 
 
 def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
@@ -250,6 +318,8 @@ __all__ = [
     "COMMAND_RE",
     "CommandRequirement",
     "RequirementsParse",
+    "ToolRequirement",
     "parse_requires",
+    "required_skills_from_skill_md",
     "requirements_from_skill_md",
 ]

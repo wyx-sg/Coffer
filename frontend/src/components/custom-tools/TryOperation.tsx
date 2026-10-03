@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { OpenApiReading } from "@/lib/api/customTools";
+import { headersIn } from "./headerRows";
 import { argsFromSchema } from "@/lib/customTools/schemaArgs";
 import type { GroupDraft } from "./addFlow";
 import { ToolTestSection } from "./ToolTestSection";
@@ -43,7 +44,13 @@ export function TryOperation({ reading, group, picked }: Props) {
       </Select>
       <ToolTestSection
         key={op.key}
-        target={{ unsaved: { name: group.name, base_url: group.baseUrl.trim(), headers: {} } }}
+        target={{
+          unsaved: {
+            name: group.name,
+            base_url: group.baseUrl.trim(),
+            headers: headersIn(group.headers),
+          },
+        }}
         secret={null}
         timeoutSeconds={30}
         args={argsFromSchema(op.tool.input_schema ?? {})}

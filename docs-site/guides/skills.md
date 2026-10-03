@@ -48,7 +48,7 @@ Coffer validates every folder before it accepts it:
 | Symlinks inside the folder | none may point outside the folder or at a folder (a link to a file counts as that file's bytes) |
 | Total folder size | at most 50 MB |
 
-Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis), and the Coffer secrets it needs (see [Secrets a skill needs](#secrets-a-skill-needs)). Any other frontmatter key is kept and ignored.
+Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis), the Coffer secrets it needs (see [Secrets a skill needs](#secrets-a-skill-needs)) and the MCP servers and custom tools it calls (see [Tools a skill needs](#tools-a-skill-needs)). Any other frontmatter key is kept and ignored.
 
 A folder that breaks a rule is refused with the reason, and nothing is written to the vault.
 
@@ -63,9 +63,9 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 ## The Skills page
 
-**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, a **Reach** filter (All, Off, All agents, Chosen agents) and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box and **Check copies**, and groups skills by what needs you: **Needs attention**, **In use**, **Unused**, **Off** and **Built-in**. A row shows the skill's name and its reach as a badge, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Tool off**, **Secret missing**, **Source unreachable** or **Update available**. There is no Reach filter; the reach is on each row. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the search box and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
-The open skill's header carries its reach button and a **⋯** menu: **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, an update — with the one action that answers it.
+The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
 
 Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with four tabs:
 
@@ -73,7 +73,7 @@ Choosing a skill opens it on the right, at its own address (`/skills/<name>`), w
 | --- | --- |
 | **Files** | The skill's files beside the open file, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Edit** edits a file in place. A binary file offers **Open in default app** and **Reveal in Finder**; a very large file shows its start, read-only. A Git skill shows its source above the files. |
 | **Delivery** | Every agent and the state of its copy: **Linked**, **Copied, not linked** (where links are not allowed), a folder in the way (with **Review…**), or not delivered and why. **Check again** looks at every copy afresh. |
-| **Requires** | The commands the skill says it needs, each with its state and **Open in CLIs**. Installing and logging in happen on the CLIs page. |
+| **Requires** | What the skill says it needs, in four lists: **Commands** (each with its state and a link to the CLIs page), **Secrets** (set or not, with **Open Secrets**), **Tools** (the MCP servers and custom tool groups it calls, each on or off and linking to its page) and **Skills** (the other skills it loads). Installing and logging in happen on the CLIs page. |
 | **History** | Every version of the skill's folder, newest first, with who wrote each (you, edited on disk, an agent, Coffer, sync), each version's changes file by file, and **Restore** to put a version back as a new one. |
 
 The Skills page lists only the skills Coffer manages. Skills an agent has that Coffer does not manage are on that agent's **Skills** tab, where you can adopt them (see [below](#adopt-skills-an-agent-already-has)).
@@ -299,7 +299,7 @@ Two settings on the skill decide where it is delivered, and nothing else does:
 | --- | --- |
 | All agents (no scope) | Delivered to every registered agent, including agents you register later. This is the default. |
 | Chosen agents | Delivered only to the agents you pick. |
-| No agent (Chosen agents with nothing ticked) | Delivered to nobody. The skill stays in the library, listed and synced. |
+| No agent selected (Chosen agents with nothing ticked) | Delivered to nobody. The skill stays in the library, listed and synced. |
 
 A skill is delivered to an agent if and only if the skill is enabled **and** its reach includes that agent. There is no per-agent switch for "this agent gets no skills"; to keep an agent away from a skill, leave it out of that skill's reach.
 
@@ -324,13 +324,13 @@ coffer skill enable release-checklist
 ```
 
 ```text [Web UI]
-Skills → the Reach button on the skill's row (or on its detail page)
+Skills → the Reach button on the skill's detail page
        → Off | All agents | Chosen agents
 ```
 
 :::
 
-The reach button is labelled with the current answer, for example **All agents**, the badges of the chosen agents or **Off**. Every switch and tick in the panel is saved at once. To change several skills at once, select their rows and use **Reach for the selected**.
+The Reach button shows a badge for the current answer — the marks of its agents, **All agents** or **Off**, never a count. The panel saves every change as you make it ("Applying…", then "✓ Saved"); **All agents** includes agents you register later. Saving a change delivers it agent by agent: if one agent's copy can't be placed, its row says why and offers **Retry** or **Untick**. To change several skills at once, select their rows and use the selection bar's reach control.
 
 ::: info Reach is set per machine
 Reach and the enabled flag apply to the machine you set them on. [Vault sync](/guides/vault-sync) carries the skill itself — its files and metadata — to your other machines, but each machine keeps its own reach.
@@ -389,7 +389,7 @@ requires: [jq, "gh>=2.40", uv]
 ---
 ```
 
-Each entry is a command name, optionally with a minimum version (`gh>=2.40`); `requires: {commands: [...]}` and entries like `{command: gh, version: "2.40"}` are read too. The skill's **Requires** tab lists them, each linking to its page on the CLIs page, and `coffer skill show <name> --json` carries them as `requires`. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is installed.
+Each entry is a command name, optionally with a minimum version (`gh>=2.40`); `requires: {commands: [...]}` and entries like `{command: gh, version: "2.40"}` are read too. The skill's **Requires** tab lists them under **Commands**, each linking to its page on the CLIs page, and `coffer skill show <name> --json` carries them as `requires`. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is installed.
 
 ## Secrets a skill needs
 
@@ -405,7 +405,7 @@ requires:
 ---
 ```
 
-Each entry is a secret's name in Coffer's secret store, never its value. Only the mapping form carries `secrets:`; the list form (`requires: [jq, gh]`) names commands only. A name the secret store would not accept, or one given twice, is skipped with a warning, and a key other than `commands` and `secrets` is refused: Coffer reports it as a warning and reads nothing under it.
+Each entry is a secret's name in Coffer's secret store, never its value. Only the mapping form carries `secrets:`; the list form (`requires: [jq, gh]`) names commands only. A name the secret store would not accept, or one given twice, is skipped with a warning, and a key other than `commands`, `secrets` and `tools` is refused: Coffer reports it as a warning and reads nothing under it.
 
 You set the value yourself on the [Secrets page](/guides/secrets); the skill's commands receive it when they run under `coffer run --secret`, which sets it only in that command's environment:
 
@@ -414,6 +414,26 @@ coffer run --secret GITHUB_TOKEN -- gh issue list
 ```
 
 The skill's **Requires** tab lists each declared secret below its commands, as **Set** or "secret GITHUB_TOKEN is not set" with **Open Secrets**. Coffer answers that from the secret store by name alone and never reads the value. A skill with a secret that is not set also says so in its row and in a banner above its tabs, and appears on the Overview's **Needs you** list, whose action opens the Secrets page. `coffer skill show <name> --json` carries the same list as `requires_secrets`, each with `name` and `is_set`. As with commands, the skill is delivered whether or not its secrets are set.
+
+## Tools a skill needs
+
+A skill that calls an MCP server or a custom tool names it under `tools:`, next to `commands:` and `secrets:`, in the mapping form of `requires`:
+
+```yaml
+---
+name: invoice-chaser
+description: Find overdue invoices and draft reminders.
+requires:
+  commands: [jq]
+  secrets: [BILLING_TOKEN]
+  tools: [github, {name: billing-api, why: Reads invoices.}]
+---
+```
+
+Each entry is the name the MCP server or the custom tool group has in Coffer, either bare or as a mapping with a `why` line. Only the mapping form carries `tools:`. A name Coffer does not know (no MCP server or tool group by that name) is skipped with a warning, shown on the [CLIs page](/guides/clis); it never stops the skill from being imported or delivered.
+
+The skill's **Requires** tab lists each tool under **Tools** as on, off or failing, linking to its page. A required tool that is off puts the skill under **Needs attention** with the banner **Tool off**, whose action turns it on. As with commands and secrets, the skill is delivered whether or not its tools are on.
+
 
 ## Skill names and descriptions
 
@@ -479,7 +499,7 @@ The diff shows what happens to the side you are not keeping. Coffer never makes 
 
 ### Folders not in your library
 
-A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid and how many files it holds. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking. The pane's prompt asks your agent to read the folder and tell you which of the two to choose.
+A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid, how many files it holds and when Coffer found it. Its files open in the same locked file tree and viewer as a skill's **Files** tab, read-only. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking. The pane's prompt asks your agent to read the folder and tell you which of the two to choose.
 
 ### When the master folder is gone
 
@@ -537,7 +557,7 @@ Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist
 Removing a skill deletes `~/.coffer/vault/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, disable it or set its reach to no agent instead.
 :::
 
-If an agent's copy is no longer Coffer's link, the delete is refused and nothing changes: the dialog names the folder, and you either restore it from master first or delete that folder yourself.
+If an agent's copy is no longer Coffer's link (it is a regular folder now), Coffer will not remove it. The delete stops with "Nothing was deleted" and names the folder; the dialog then offers **Delete, keep <agent>'s folder**, which deletes the skill and leaves that folder to the agent, or you cancel and review the edit first (see [Resolve a folder in the way](#resolve-a-folder-in-the-way)). Selecting several skills and choosing **Delete…** reports each one: the dialog says "Deleted N of M" and names those it refused, with **Delete N skills, keep their folders** for the rest.
 
 Removing an agent from Coffer also removes that agent's skill links. The master folders stay.
 

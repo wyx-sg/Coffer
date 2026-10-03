@@ -1,7 +1,7 @@
 // frontend/src/components/mcp/server/McpCallsLog.test.tsx
 // A server's calls tab is the Activity calls table scoped to it (spec web-ui).
 import { vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { McpCallsLog } from "./McpCallsLog";
@@ -75,14 +75,21 @@ acceptance(
     });
     getApiClientMock.mockReturnValue({ GET: get } as unknown as ReturnType<typeof getApiClient>);
 
-    // The server's Invocations tab (the drawer's calls list): that server's
-    // calls, no server column, the newest opened below the list.
-    const scoped = render(wrap(<McpCallsLog serverUid="u-filesystem" agents={[]} />));
+    // The server's Invocations tab: that server's calls, no server column; a
+    // row opens its call in a drawer.
+    const scoped = render(
+      wrap(<McpCallsLog serverUid="u-filesystem" serverName="fs" transport="stdio" agents={[]} />),
+    );
     await waitFor(() => expect(screen.getAllByText("read_file").length).toBeGreaterThan(0));
     expect(get.mock.calls.every((c) => c[1]?.params?.path?.uid === "u-filesystem")).toBe(true);
     expect(get.mock.calls[0][0]).toBe("/resources/mcp_server/{uid}/invocations");
     expect(screen.queryByRole("columnheader", { name: /server/i })).not.toBeInTheDocument();
-    expect(screen.getByTestId("mcp-call-detail")).toHaveTextContent("read_file");
+    expect(screen.queryByTestId("mcp-call-drawer")).toBeNull();
+    fireEvent.click(screen.getAllByText("read_file")[0]);
+    const drawer = await screen.findByTestId("mcp-call-drawer");
+    expect(drawer).toHaveTextContent("read_file");
+    expect(drawer).toHaveTextContent("fs · stdio");
+    expect(screen.getByRole("button", { name: "View server log" })).toBeInTheDocument();
     scoped.unmount();
 
     // Activity's MCP calls tab reads the same log unscoped: every server's

@@ -31,6 +31,8 @@ from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.probe import UrlGuard, probe_server
 from coffer.infrastructure.net.ssrf_guard import check_url
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+from coffer.surfaces.http.mcp.handoff_views import unsaved_test_prompt
 from coffer.surfaces.http.mcp.probe_schemas import McpConfigTestIn, McpTestResultOut, result_out
 
 router = APIRouter(
@@ -38,6 +40,11 @@ router = APIRouter(
     tags=["mcp"],
     dependencies=[Depends(require_token)],
 )
+
+#: Failures that depend on this machine — the launcher is missing, the process
+#: fails to start or exits, the network refuses or times out — and so go to an
+#: agent. Not auth rejected, a stored secret, or what the server itself answers.
+_MACHINE_CODES = frozenset({"spawn_failed", "exited", "timeout", "connect_failed"})
 
 #: How often the route checks whether the client is still there.
 _DISCONNECT_POLL_SECONDS = 0.25
@@ -103,7 +110,18 @@ async def test_mcp_server_config(
             url_guard=url_guard if isinstance(transport, HttpTransport) else None,
         ),
     )
-    return result_out(result)
+    if result.ok or result.error_code not in _MACHINE_CODES:
+        return result_out(result)
+    # Names only: the typed secret values and the stored refs never reach the prompt.
+    config = {"transport": body.transport.model_dump(exclude={"secret_refs"}, mode="json")}
+    prompt = await asyncio.to_thread(
+        unsaved_test_prompt,
+        name=body.name or "this server",
+        config=config,
+        error=result.error_message,
+        stderr=list(result.stderr_tail),
+    )
+    return result_out(result, handoff=HandoffOut(prompt=prompt))
 
 
 __all__ = ["cancel_on_disconnect", "get_url_guard", "router"]

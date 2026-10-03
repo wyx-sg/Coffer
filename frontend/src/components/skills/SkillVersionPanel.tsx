@@ -1,172 +1,127 @@
 // frontend/src/components/skills/SkillVersionPanel.tsx
-//
-// One version of a skill folder on its History tab: who and when, the diff of
-// every file it changed, and Restore this version — confirmed first, because
-// it puts the whole folder back (a file the version did not have is removed),
-// and written as a NEW version naming you, so the restore can itself be undone
-// the same way. A refusal (a file edited on disk since) is shown in the dialog,
-// which stays open.
-import { useState } from "react";
+// The right half of a skill's History (canvas 4.3.19, 4.3.20): for the chosen
+// version, what it was compared with — From (the version before it) and To (this
+// one), with a sentence on who made it and, at its right, Restore this version…
+// (the newest version is current and offers none) — then, for every file the
+// version touched, its name, operation, line counts and diff. Comparing two
+// other versions is not offered yet: the daemon reads what one version did to
+// one file, not a range.
+import { ArrowRight } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { RotateCcw } from "lucide-react";
 
-import { KnowledgeDiff } from "@/components/knowledge/KnowledgeDiff";
+import { FileDiff } from "@/components/change-preview/FileDiff";
+import { versionNote, versionWhen } from "@/components/skills/versionLabels";
+import { diffItem, useVersionDiffs } from "@/components/skills/useVersionDiffs";
+import { relPath } from "@/components/skills/versionLabels";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/components/ui/toast";
+import { agentTypeLabel } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
-import type { VaultPathChangeOut, VaultVersionOut } from "@/lib/api/vault";
-import { parseUnifiedDiff } from "@/lib/knowledge/unifiedDiff";
-import { useRestoreVaultVersion, useVaultDiff } from "@/lib/hooks/useVaultHistory";
-import { TruncatedText } from "@/components/ui/truncated-text";
-import { cn, formatDateTime } from "@/lib/utils";
+import type { ChangeItem } from "@/lib/changePreview/changeCounts";
+import type { VaultVersionOut } from "@/lib/api/vault";
 import { vaultWriterLabel } from "@/lib/vault/writers";
 
 interface Props {
-  /** The skill's vault folder, ending in `/`. */
   folder: string;
-  version: VaultVersionOut;
-  isCurrent: boolean;
+  /** The folder's versions, newest first. */
+  versions: readonly VaultVersionOut[];
+  /** The chosen version's position in that list. */
+  index: number;
+  onRestore: () => void;
 }
 
-export function SkillVersionPanel({ folder, version, isCurrent }: Props) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const restore = useRestoreVaultVersion();
-  const [confirming, setConfirming] = useState(false);
-  const short = version.version.slice(0, 7);
-  // One file's diff at a time, the first changed file until another is picked.
-  const [filePath, setFilePath] = useState<string | null>(null);
-  const file = version.paths.find((p) => p.path === filePath) ?? version.paths[0];
-
-  const confirm = () =>
-    restore
-      .mutateAsync({ path: folder, version: version.version, expected_fingerprint: null })
-      .then((done) =>
-        toast.success(
-          done.version
-            ? t("skills.history.restored", { version: short })
-            : t("skills.history.unchanged"),
-        ),
-      );
-
+function Pick({ label, version }: { label: string; version: VaultVersionOut | null }) {
+  const { t, i18n } = useTranslation();
   return (
-    <section
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3"
-      aria-label={t("skills.history.versionLabel")}
-    >
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <p className="text-sm">
-          <span className="font-semibold">{formatDateTime(version.time)}</span>
-          <span className="text-text-subtle"> · {vaultWriterLabel(t, version.display_writer)}</span>
-          {version.restored_from ? (
-            <span className="text-text-subtle">
-              {" "}
-              · {t("skills.history.restoredFrom", { version: version.restored_from.slice(0, 7) })}
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="text-2xs text-text-muted">{label}</span>
+      <div className="flex h-[30px] min-w-0 items-center gap-2 rounded-item border border-border bg-surface-raised px-2.5">
+        {version ? (
+          <>
+            <span className="font-mono text-xs font-medium text-text">
+              {version.version.slice(0, 7)}
             </span>
-          ) : null}
-        </p>
-        {!isCurrent ? (
-          <Button
-            className="ml-auto"
-            variant="outline"
-            size="sm"
-            disabled={restore.isPending}
-            onClick={() => setConfirming(true)}
-          >
-            <RotateCcw aria-hidden /> {t("skills.history.restore")}
-          </Button>
-        ) : null}
+            <span className="min-w-0 truncate text-xs text-text-muted">
+              {versionWhen(t, version, i18n.language)} ·{" "}
+              {vaultWriterLabel(t, version.display_writer)}
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-text-muted">{t("skills.history.start")}</span>
+        )}
       </div>
-      {version.paths.length === 0 ? (
-        <p className="text-sm text-text-subtle">{t("skills.history.noFiles")}</p>
-      ) : (
-        <>
-          <ul
-            aria-label={t("skills.history.changedFiles")}
-            className="max-h-32 shrink-0 divide-y divide-border-subtle overflow-auto rounded-md border border-border-subtle"
-          >
-            {version.paths.map((change) => (
-              <li key={change.path}>
-                <button
-                  type="button"
-                  data-testid={`skill-version-file-${relName(folder, change.path)}`}
-                  aria-current={change.path === file.path ? "true" : undefined}
-                  onClick={() => setFilePath(change.path)}
-                  className={cn(
-                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
-                    change.path === file.path ? "bg-surface-selected" : "hover:bg-surface-hover",
-                  )}
-                >
-                  <TruncatedText
-                    mono
-                    text={relName(folder, change.path)}
-                    className="min-w-0 flex-1"
-                  />
-                  <span className="shrink-0 text-text-subtle">
-                    {t(`skills.history.status.${change.status}`, { defaultValue: change.status })}
-                  </span>
-                  <span className="shrink-0 text-success">+{change.added}</span>
-                  <span className="shrink-0 text-danger">−{change.removed}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <SkillVersionFileDiff folder={folder} change={file} version={version.version} />
-        </>
-      )}
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        title={t("skills.history.confirmTitle")}
-        description={t("skills.history.confirmBody", { version: short })}
-        confirmLabel={t("skills.history.restore")}
-        variant="default"
-        pending={restore.isPending}
-        onConfirm={confirm}
-      />
-    </section>
+    </div>
   );
 }
 
-function relName(folder: string, path: string): string {
-  return path.startsWith(folder) ? path.slice(folder.length) : path;
-}
+export function SkillVersionPanel({ folder, versions, index, onRestore }: Props) {
+  const { t, i18n } = useTranslation();
+  const version = versions[index];
+  const previous = versions[index + 1] ?? null;
+  const current = index === 0;
+  const requests = useMemo(
+    () => version.paths.map((p) => ({ path: p.path, version: version.version })),
+    [version],
+  );
+  const { pending, error, diffs } = useVersionDiffs(requests);
+  const items = useMemo<ChangeItem[]>(
+    () =>
+      version.paths.flatMap((p, i) => {
+        const d = diffs[i];
+        return d ? [{ ...diffItem(p.path, relPath(folder, p.path), p.status, d) }] : [];
+      }),
+    [version, diffs, folder],
+  );
+  const agentName = version.display_writer.startsWith("agent:")
+    ? agentTypeLabel(version.display_writer.slice(6).replace(/-/g, "_"))
+    : "";
 
-function SkillVersionFileDiff({
-  folder,
-  change,
-  version,
-}: {
-  folder: string;
-  change: VaultPathChangeOut;
-  version: string;
-}) {
-  const { t } = useTranslation();
-  const diff = useVaultDiff(change.path, version);
-  const name = relName(folder, change.path);
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1" data-testid="skill-version-diff">
-      <p className="shrink-0 text-xs">
-        <span className="font-mono">{name}</span>
-        <span className="text-text-subtle">
-          {" "}
-          · {t(`skills.history.status.${change.status}`, { defaultValue: change.status })} · +
-          {change.added} −{change.removed}
-        </span>
-      </p>
-      {diff.isPending ? (
-        <Skeleton className="h-16 w-full" />
-      ) : diff.error ? (
-        <p role="alert" className="text-sm text-danger">
-          {translateApiError(t, diff.error)}
-        </p>
-      ) : diff.data.diff ? (
-        <KnowledgeDiff className="min-h-0 flex-1" rows={parseUnifiedDiff(diff.data.diff)} />
-      ) : (
-        <p className="text-xs text-text-subtle">{t("skills.history.noTextChange")}</p>
-      )}
-    </div>
+    <section
+      aria-label={t("skills.history.versionLabel")}
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto"
+    >
+      <div className="flex shrink-0 flex-col gap-2.5 p-3">
+        <div className="flex items-end gap-2">
+          <Pick label={t("skills.history.from")} version={previous} />
+          <span className="flex h-[30px] items-center text-text-subtle">
+            <ArrowRight className="size-3.5" aria-hidden />
+          </span>
+          <Pick label={t("skills.history.to")} version={version} />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 text-xs text-text-muted">
+            {versionNote(t, version, folder, versions, current, i18n.language, agentName)}
+          </span>
+          {current ? null : (
+            <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={onRestore}>
+              {t("skills.history.restore")}
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col gap-3.5 p-3 pt-1">
+        {version.paths.length === 0 ? (
+          <p className="text-sm text-text-muted">{t("skills.history.noFiles")}</p>
+        ) : error ? (
+          <p role="alert" className="text-sm text-danger">
+            {translateApiError(t, error)}
+          </p>
+        ) : pending ? (
+          <Skeleton className="h-24 w-full" />
+        ) : (
+          items.map((item) =>
+            item.diff && item.diff.length > 0 ? (
+              <FileDiff key={item.id} item={item} />
+            ) : (
+              <p key={item.id} className="text-xs text-text-muted">
+                <span className="font-mono">{item.path}</span> · {t("skills.history.noTextChange")}
+              </p>
+            ),
+          )
+        )}
+      </div>
+    </section>
   );
 }

@@ -15,25 +15,25 @@ Sibling ops modules keep this file under the 400-LOC ceiling (mirroring
 `skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
 `resource_scope_ops`, `set_enabled`'s in `resource_enable_ops`, `rename`'s in
 `resource_rename_ops`, `set_title`'s in `resource_title_ops`, `delete`'s
-secret-release step in `resource_delete_ops`, and every question about what
+secret-release step in `resource_delete_ops`, the registration secret probe in
+`resource_secret_ops`, and every question about what
 a kind *declares* — where it is stored, what redacts, what cites a secret, what
 it will accept as a name — in `resource_kind_ops`.
 """
 
 from __future__ import annotations
 
-import asyncio
 import builtins
 import inspect
 import logging
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from pydantic import ValidationError
 
-from coffer.application import resource_kind_ops
+from coffer.application import resource_kind_ops, resource_secret_ops
 from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
 from coffer.application.resource_actor import acting_as
@@ -47,7 +47,6 @@ from coffer.domain.errors import (
 )
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
-from coffer.domain.secret_errors import SecretMissing
 from coffer.domain.vault.layout import StorageClass
 
 _logger = logging.getLogger(__name__)
@@ -77,12 +76,14 @@ class ResourceService:
         audit: AuditService,
         secrets: _SecretStorePort | None = None,
         bindings: BindingSettlerPort | None = None,
+        awaiting_secret: Callable[[str], bool] | None = None,
     ) -> None:
         self._kinds = kinds
         self._repo = repo
         self._audit = audit
         self._secrets = secrets
         self._bindings = bindings
+        self._awaiting_secret = awaiting_secret  # see resource_secret_ops
 
     def set_binding_settler(self, settler: BindingSettlerPort | None) -> None:
         """Install the post-register seam, once every kind has declared where
@@ -91,21 +92,11 @@ class ResourceService:
         self._bindings = settler
 
     async def _probe_secrets(self, kind_def: Kind, config: dict[str, Any]) -> None:
-        """Raise SecretMissing if any cited secret_ref is absent from the secret store.
-
-        Called BEFORE persisting a Resource so a missing secret never
-        leaves a partial resource file behind. Skipped if no secret
-        store is wired (tests that need no secret checks).
-
-        The store's ``get`` is a blocking file read, so it runs in a worker
-        thread: on the loop it would stall every other request for as long as
-        the read (and any lock it waits on) takes.
-        """
-        if self._secrets is None:
-            return
-        for _key, ref in resource_kind_ops.secret_refs(kind_def, config).items():
-            if await asyncio.to_thread(self._secrets.get, ref) is None:
-                raise SecretMissing(ref)
+        """Raise SecretMissing if a cited secret_ref has no value (resource_secret_ops)."""
+        if self._secrets is not None:
+            await resource_secret_ops.probe_secrets(
+                self._secrets, self._awaiting_secret, kind_def, config
+            )
 
     def _require_kind(self, kind: str) -> Kind:
         if kind not in self._kinds:

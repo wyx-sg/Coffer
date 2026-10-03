@@ -3,7 +3,7 @@
 // One derivation for the list's groups and reasons and the server pane's pill
 // and callout, so the two never disagree (design 4.1: the list is grouped by
 // what needs the user — failing, launcher missing, secret missing — then
-// healthy, not checked yet, and off). Off wins, because a server no agent can
+// not checked yet, healthy, and off). Off wins, because a server no agent can
 // use needs nothing until it is turned on; then a missing launcher and a
 // missing secret, which name their cause; then the health word.
 import type { StatusTone } from "@/lib/statusTone";
@@ -21,7 +21,7 @@ type ServerStateKind =
 
 export type ServerGroup = "attention" | "healthy" | "unknown" | "off";
 
-export const GROUP_ORDER: readonly ServerGroup[] = ["attention", "healthy", "unknown", "off"];
+export const GROUP_ORDER: readonly ServerGroup[] = ["attention", "unknown", "healthy", "off"];
 
 export interface ServerState {
   kind: ServerStateKind;
@@ -102,6 +102,14 @@ export function shortTime(iso: string, now = new Date()): string {
         hour: "2-digit",
         minute: "2-digit",
       });
+}
+
+/** A date alone: "Sep 26". */
+export function shortDate(iso: string): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? iso
+    : at.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** A call's tone: OK quiet, a problem in its status colour. */

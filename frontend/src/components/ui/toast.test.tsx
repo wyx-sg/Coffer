@@ -223,4 +223,26 @@ describe("toast timing", () => {
     expect(texts()).toHaveLength(5);
     expect(texts()[0]).toContain("failure 1");
   });
+
+  test("a description renders as a second line under the title", () => {
+    render(
+      <ToastProvider>
+        <Trigger kind="success" message="Added github" options={{ description: "Test passed" }} />
+      </ToastProvider>,
+    );
+    fire();
+    const card = screen.getByRole("status");
+    expect(card).toHaveTextContent("Added github");
+    expect(screen.getByText("Test passed")).toHaveClass("text-text-muted");
+  });
+
+  test("a toast without a description renders one line only", () => {
+    render(
+      <ToastProvider>
+        <Trigger kind="success" message="Saved" />
+      </ToastProvider>,
+    );
+    fire();
+    expect(screen.getByRole("status").querySelectorAll("p")).toHaveLength(1);
+  });
 });

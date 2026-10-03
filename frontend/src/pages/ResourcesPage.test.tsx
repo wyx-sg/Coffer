@@ -223,7 +223,9 @@ describe("ResourcesPage", () => {
     renderAt();
     const welcome = screen.getByTestId("mcp-welcome");
     expect(within(welcome).getByText(/no mcp servers yet/i)).toBeInTheDocument();
-    fireEvent.click(within(welcome).getByRole("button", { name: /add server/i }));
+    // The welcome repeats no Add; the page header's button opens the dialog.
+    expect(within(welcome).queryByRole("button", { name: /add server/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /add server/i }));
     expect(screen.getByRole("dialog")).toHaveTextContent("add dialog: paste");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("listitem")).toBeNull();
@@ -234,9 +236,9 @@ describe("ResourcesPage", () => {
   acceptance("web-ui", "the add dialog links to importing from agents", () => {
     stubQuery({ data: [server("u1", "github")] });
     renderAt();
-    // The page header's Add and the right pane's Nothing selected Add.
+    // Only the page header holds Add; the Nothing selected pane has none.
     const adds = screen.getAllByRole("button", { name: /add server/i });
-    expect(adds).toHaveLength(2);
+    expect(adds).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /paste json|import json/i })).toBeNull();
   });
 
@@ -295,26 +297,23 @@ describe("ResourcesPage", () => {
     expect(screen.getByText("linear")).toBeInTheDocument();
   });
 
-  test("the Reach filter narrows the list to one reach state", async () => {
+  test("the list has no Reach filter, only the search", () => {
+    stubQuery({ data: [server("u1", "github")] });
+    renderAt();
+    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: /filter servers/i })).toBeInTheDocument();
+  });
+
+  test("several ticked servers: the right pane says how many and offers Turn off N servers", async () => {
     stubQuery({
-      data: [
-        server("u1", "github"),
-        server("u2", "linear", { scope: { agents: ["ag-1"] } }),
-        server("u3", "sentry", { enabled: false }),
-      ],
+      data: [server("u1", "github"), server("u2", "linear"), server("u3", "sentry")],
     });
     renderAt();
-    const choose = async (name: string) => {
-      fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
-      fireEvent.click(await screen.findByRole("option", { name }));
-    };
-    await choose("Chosen agents");
-    await waitFor(() => expect(screen.queryByText("github")).toBeNull());
-    expect(screen.getByText("linear")).toBeInTheDocument();
-    expect(screen.queryByText("sentry")).toBeNull();
-    await choose("Off");
-    await waitFor(() => expect(screen.getByText("sentry")).toBeInTheDocument());
-    expect(screen.queryByText("linear")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /github/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /linear/ }));
+    expect(await screen.findByText("2 servers selected")).toBeInTheDocument();
+    expect(screen.getByText(/github and linear\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Turn off 2 servers" })).toBeInTheDocument();
   });
 
   test("ticking rows shows the selection bar with the reach choice and Delete", async () => {
@@ -374,7 +373,7 @@ describe("ResourcesPage", () => {
       expect(await screen.findByTestId("mcp-builtin-pane")).toBeInTheDocument();
       expect(screen.getByText("coffer__search_tools", { exact: false })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^(Test|Edit)$/ })).toBeNull();
-      expect(screen.getByText("All connected agents")).toBeInTheDocument();
+      expect(screen.getAllByText("All agents").length).toBeGreaterThan(0);
     },
   );
 

@@ -22,6 +22,7 @@ vi.mock("@/components/mcp/CapabilityList", () => ({
   CapabilityList: ({ type }: { type: string }) => <div>{`capability list: ${type}`}</div>,
 }));
 vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkills: vi.fn(() => ({ data: [], isPending: false, error: null })),
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -65,6 +66,8 @@ const SKILL: SkillOut = {
   bindings: [],
   requires: [],
   requires_secrets: [],
+  requires_tools: [],
+  requires_skills: [],
   source_status: null,
 };
 

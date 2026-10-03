@@ -23,6 +23,11 @@ export function formatDay(date: Date, lang: string): string {
   return dayText(date, lang, true);
 }
 
+/** A Date -> "30 Sep" ("9月30日" in Chinese), no year. */
+export function formatDayShort(date: Date, lang: string): string {
+  return dayText(date, lang, false);
+}
+
 /** A Date -> "14:02", 24-hour, local time. */
 export function formatClock(date: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");

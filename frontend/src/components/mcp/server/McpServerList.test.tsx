@@ -1,4 +1,6 @@
-// src/components/mcp/server/McpServerList.test.tsx — the MCP servers list column: filter rows, hover checkboxes, the selection bar at the top, and the built-in group obeying the filters.
+// src/components/mcp/server/McpServerList.test.tsx — the MCP servers list column: the search, hover checkboxes, the selection bar at the top, groups in order, and the built-in group obeying the search.
+import { useState } from "react";
+import { acceptance } from "@/test/acceptance";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -33,19 +35,28 @@ function server(uid: string, name: string, extra: Partial<ResourceOut> = {}): Re
 
 const SERVERS = [server("u-gh", "github"), server("u-ln", "linear", { enabled: false })];
 
-function renderList() {
+function Harness({ servers }: { servers: ResourceOut[] }) {
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  return (
+    <McpServerList
+      servers={servers}
+      isLoading={false}
+      selectedName={null}
+      hrefFor={(n) => `/mcp-servers/${n}`}
+      picked={picked}
+      onPickedChange={setPicked}
+    />
+  );
+}
+
+function renderList(servers: ResourceOut[] = SERVERS) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
         <ToastProvider>
           <MemoryRouter>
-            <McpServerList
-              servers={SERVERS}
-              isLoading={false}
-              selectedName={null}
-              hrefFor={(n) => `/mcp-servers/${n}`}
-            />
+            <Harness servers={servers} />
           </MemoryRouter>
         </ToastProvider>
       </TooltipProvider>
@@ -61,13 +72,22 @@ describe("McpServerList", () => {
     builtin.data = { name: "coffer", url: "http://127.0.0.1:8000/mcp", tool_count: 2 };
   });
 
-  test("the search has its own row and the Reach pill sits on the next", () => {
+  test("the search is the only filter: no Reach filter", () => {
     renderList();
-    const search = screen.getByRole("textbox", { name: "Filter servers" });
-    const reach = screen.getByRole("button", { name: "Reach" });
-    const row = reach.parentElement?.parentElement;
-    expect(row?.contains(search)).toBe(false);
-    expect(screen.queryByRole("button", { name: "Kind" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Filter servers" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
+  });
+
+  test("the groups read Off after Healthy, and an off server leaves its Reach column empty", () => {
+    renderList();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings.indexOf("Healthy")).toBeLessThan(headings.indexOf("Off"));
+    const off = screen.getByRole("link", { name: /linear/ });
+    expect(within(off).queryByText("Off")).toBeNull();
+    expect(within(off).queryByText("All agents")).toBeNull();
+    expect(
+      within(screen.getByRole("link", { name: /github/ })).getByText("All agents"),
+    ).toBeInTheDocument();
   });
 
   test("a row's checkbox shows on hover or focus only, and on every row once any is ticked", () => {
@@ -80,14 +100,17 @@ describe("McpServerList", () => {
     expect(checkboxSlot(other).className).not.toContain("hidden");
   });
 
-  test("ticking a row puts the selection bar at the top: N of M, no select-all, Esc clears", () => {
+  acceptance("web-ui", "ticking a server puts the selection bar at the top", () => {
     renderList();
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: github/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: linear/ }));
     const bar = screen.getByRole("region", { name: "Selected MCP servers" });
     expect(screen.queryByRole("textbox", { name: "Filter servers" })).toBeNull();
-    expect(within(bar).getByText("1 of 2 selected")).toBeInTheDocument();
+    expect(within(bar).getByText("2 of 2 selected")).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: /Reach/ })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Delete" })).toBeInTheDocument();
     expect(within(bar).queryByRole("checkbox")).toBeNull();
-    fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "Clear selection" }));
     expect(screen.queryByRole("region", { name: "Selected MCP servers" })).toBeNull();
     expect(screen.getByRole("textbox", { name: "Filter servers" })).toBeInTheDocument();
   });
@@ -100,14 +123,11 @@ describe("McpServerList", () => {
     expect(all.indeterminate).toBe(true);
     fireEvent.click(all);
     expect(screen.getByText("2 of 2 selected")).toBeInTheDocument();
-    expect((screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement).checked).toBe(
-      true,
-    );
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     expect(screen.queryByRole("region", { name: "Selected MCP servers" })).toBeNull();
   });
 
-  test("the built-in server has no checkbox and is not counted in the bar", () => {
+  test("the built-in server has no checkbox and is not counted; Esc clears the selection", () => {
     renderList();
     const group = screen.getByRole("region", { name: "Built-in" });
     expect(within(group).queryByRole("checkbox")).toBeNull();

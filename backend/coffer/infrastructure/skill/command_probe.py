@@ -58,13 +58,6 @@ class CommandProbe:
         except OSError:
             return None
 
-    def fingerprint(self, path: str) -> str | None:
-        try:
-            st = pathlib.Path(path).stat()
-        except OSError:
-            return None
-        return f"{st.st_size}:{st.st_mtime_ns}"
-
     def version(self, path: str) -> str | None:
         """What ``<path> --version`` prints, read up to ``MAX_VERSION_OUTPUT``
         bytes: a command that never stops printing cannot fill the daemon's memory."""

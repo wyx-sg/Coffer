@@ -29,7 +29,18 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/skills")>()),
   skillsApi: {
     list: vi.fn(async () => ({ items: h.skills })),
-    remove: vi.fn(async () => undefined),
+    remove: vi.fn(async () => ({ kept_copies: [] })),
+    bulkDelete: vi.fn(async (uids: string[]) => ({
+      results: uids.map((uid) => ({
+        uid,
+        name: uid,
+        deleted: true,
+        kept_copies: [],
+        error_code: null,
+        error_message: null,
+        error_details: null,
+      })),
+    })),
     filesTree: vi.fn(async () => ({ root: null })),
     fileContent: vi.fn(),
     writeFileContent: vi.fn(),
@@ -79,38 +90,31 @@ async function libraryRows() {
   return within(list).queryAllByRole("link");
 }
 
-test("the library's reach filter keeps only the skills in the chosen reach state", async () => {
-  h.skills = [
-    makeSkill({ uid: "sk-1", name: "everywhere-skill" }),
-    makeSkill({ uid: "sk-2", name: "off-skill", enabled: false }),
-    makeSkill({ uid: "sk-3", name: "scoped-skill", scope: { agents: [CC.uid] } }),
-  ];
-  renderSkillsPage("/skills");
-  expect(await libraryRows()).toHaveLength(3);
-
-  const choose = async (name: string) => {
-    fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
-    fireEvent.click(await screen.findByRole("option", { name }));
-  };
-  await choose("Off");
-  await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
-  expect((await libraryRows())[0]).toHaveTextContent("off-skill");
-
-  await choose("Chosen agents");
-  await waitFor(async () => expect((await libraryRows())[0]).toHaveTextContent("scoped-skill"));
-
-  await choose("All agents");
-  await waitFor(async () => expect((await libraryRows())[0]).toHaveTextContent("everywhere-skill"));
-  expect(await libraryRows()).toHaveLength(1);
-});
+acceptance(
+  "web-ui",
+  "the library has no reach filter and groups skills by what they need",
+  async () => {
+    h.skills = [
+      makeSkill({ uid: "sk-1", name: "everywhere-skill" }),
+      makeSkill({ uid: "sk-2", name: "off-skill", enabled: false }),
+      makeSkill({ uid: "sk-3", name: "scoped-skill", scope: { agents: [CC.uid] } }),
+    ];
+    renderSkillsPage("/skills");
+    expect(await libraryRows()).toHaveLength(3);
+    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
+    const off = within(screen.getByRole("region", { name: "Off" }));
+    expect(off.getByRole("link", { name: /off-skill/ })).toBeInTheDocument();
+    const inUse = within(screen.getByRole("region", { name: "In use" }));
+    expect(inUse.getAllByRole("link")).toHaveLength(2);
+  },
+);
 
 acceptance("skill-manager", "desktop and CLI cover every operation", async () => {
   renderSkillsPage("/skills");
   expect(screen.getByRole("heading", { name: /^skills$/i })).toBeInTheDocument();
   expect(await screen.findByRole("link", { name: /hello/ })).toBeInTheDocument();
-  // Search, the Reach filter and Check copies sit over the library.
+  // Search and Check copies sit side by side over the library.
   expect(screen.getByRole("textbox", { name: "Filter skills" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /^Reach/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
 
   // One Add skill action, opening the add dialog.
@@ -169,7 +173,7 @@ acceptance(
     renderSkillsPage("/skills/hello/delivery");
     const row = await screen.findByTestId("skill-delivery-claude-code");
     expect(row).toHaveTextContent("Copied, not linked");
-    expect(row).toHaveTextContent("Links aren't allowed in ~/.claude/skills on this machine");
+    expect(row).toHaveTextContent("Links aren’t allowed in ~/.claude/skills on this Mac");
     expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
   },
 );
@@ -202,28 +206,30 @@ acceptance("skill-manager", "check agents' copies from the skills page", async (
   await libraryRows();
 
   fireEvent.click(screen.getByRole("button", { name: "Check copies" }));
-  const panel = await screen.findByRole("region", { name: "Check agents’ copies" });
+  const panel = await screen.findByRole("region", { name: "Check copies" });
   const findings = await within(panel).findAllByTestId("skill-copy-finding");
   expect(findings).toHaveLength(2);
   expect(findings[0]).toHaveTextContent("deep-research");
   expect(findings[0]).toHaveTextContent("Codex");
-  expect(findings[0]).toHaveTextContent("~/.codex/skills/deep-research");
   expect(findings[0]).toHaveTextContent("Link missing");
+  expect(findings[0]).toHaveTextContent("~/.codex/skills/deep-research");
   expect(findings[1]).toHaveTextContent("Folder in the way");
-  // Repair is the fix for the missing link; the folder in the way is handed off.
+  // Repair is the fix for the missing link; the folder in the way is a choice
+  // the person makes in the compare dialog, so no hand-off sits beside it.
   expect(findings[0]).toHaveTextContent("Repair puts it back");
-  expect(within(findings[0]).queryByRole("button", { name: "Copy prompt" })).toBeNull();
-  expect(within(findings[1]).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+  expect(within(findings[1]).queryByRole("button", { name: "Copy prompt" })).toBeNull();
   // Checking is read-only: nothing has been repaired yet.
   expect(skillsApi.repair).not.toHaveBeenCalled();
 
   fireEvent.click(within(panel).getByRole("button", { name: "Repair" }));
   await waitFor(() => expect(skillsApi.repair).toHaveBeenCalledTimes(1));
-  // The missing link is put back; the foreign folder is left and stays listed.
-  await waitFor(() => expect(within(panel).getByText("Re-linked by Coffer")).toBeInTheDocument());
-  const after = within(panel).getAllByTestId("skill-copy-finding");
-  const stays = after.find((f) => f.textContent?.includes("frontend-design"));
-  expect(stays).toHaveTextContent("Left alone · needs you");
+  // The missing link is put back and moves to Fixed by Coffer; the foreign
+  // folder is left and stays under Needs you.
+  await waitFor(() => expect(within(panel).getByText("Fixed by Coffer")).toBeInTheDocument());
+  expect(within(panel).getByText("Link put back")).toBeInTheDocument();
+  const stays = within(panel)
+    .getAllByTestId("skill-copy-finding")
+    .find((f) => f.textContent?.includes("frontend-design"));
   expect(within(stays as HTMLElement).getByRole("button", { name: "Review…" })).toBeInTheDocument();
 });
 
@@ -251,30 +257,20 @@ describe("SkillsPage library", () => {
     expect(screen.queryByRole("button", { name: /hide list/i })).toBeNull();
   });
 
-  test("the Reach filter and the search narrow the library", async () => {
+  test("the search narrows the library; an off skill sits in Off without a reach word", async () => {
     h.skills = [
       makeSkill({ uid: "a", name: "alpha" }),
       makeSkill({ uid: "b", name: "beta", enabled: false, description: "second" }),
     ];
     renderSkillsPage("/skills");
     expect(await libraryRows()).toHaveLength(2);
+    const off = within(screen.getByRole("region", { name: "Off" }));
+    expect(off.getByRole("link", { name: /beta/ })).toHaveTextContent("second");
 
-    fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
-    fireEvent.click(await screen.findByRole("option", { name: "Off" }));
-    await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
-    let rows = await libraryRows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveTextContent("beta");
-    // An off skill says so where its reach would be.
-    expect(rows[0]).toHaveTextContent("Off");
-
-    // Picking the chosen state again clears the filter.
-    fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
-    fireEvent.click(await screen.findByRole("option", { name: "Off" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "alp" },
     });
-    rows = await libraryRows();
+    const rows = await libraryRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent("alpha");
   });
@@ -314,9 +310,11 @@ describe("SkillsPage library", () => {
     ];
     renderSkillsPage("/skills");
     const rows = await libraryRows();
-    expect(rows.find((r) => r.textContent?.includes("upd"))).toHaveTextContent("Update available");
+    expect(rows.find((r) => r.textContent?.includes("upd"))).toHaveTextContent(
+      "Update available · Git",
+    );
     expect(rows.find((r) => r.textContent?.includes("err"))).toHaveTextContent(
-      "Source unreachable",
+      "Git source unreachable",
     );
   });
 
@@ -333,12 +331,12 @@ describe("SkillsPage library", () => {
     fireEvent.click(within(bar).getByRole("button", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete 1 skill?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete 1 skill" }));
-    await waitFor(() => expect(skillsApi.remove).toHaveBeenCalledWith("sk-11aa"));
+    await waitFor(() => expect(skillsApi.bulkDelete).toHaveBeenCalledWith(["sk-11aa"]));
   });
 
   acceptance(
     "web-ui",
-    "selected skills are set or deleted together from the reading pane",
+    "selected skills are set or deleted together from the bar above the list",
     async () => {
       h.skills = [BUILTIN_SKILL, makeSkill(), makeSkill({ uid: "sk-pdf", name: "pdf" })];
       renderSkillsPage("/skills");
@@ -347,15 +345,18 @@ describe("SkillsPage library", () => {
       fireEvent.click(screen.getByRole("checkbox", { name: /pdf/ }));
       expect(await screen.findByText("2 skills selected")).toBeInTheDocument();
       expect(
-        screen.getByText(/hello and pdf\. Set who gets them together, or delete them\./),
+        screen.getByText(/hello and pdf\. Set who gets them or delete them from the bar/),
       ).toBeInTheDocument();
       expect(
-        screen.getByText("coffer-guide can't be selected.", { exact: false }),
+        screen.getByText("coffer-guide can’t be selected", { exact: false }),
       ).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Delete 2 skills…" }));
+      // The pane repeats nothing the bar has; it offers Check copies of the selection.
+      expect(screen.getAllByRole("button", { name: /^Delete/ })).toHaveLength(1);
+      expect(screen.getByRole("button", { name: "Check copies of 2 skills" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
       const dialog = await screen.findByRole("dialog", { name: "Delete 2 skills?" });
       fireEvent.click(within(dialog).getByRole("button", { name: "Delete 2 skills" }));
-      await waitFor(() => expect(skillsApi.remove).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(skillsApi.bulkDelete).toHaveBeenCalledWith(["sk-11aa", "sk-pdf"]));
     },
   );
 

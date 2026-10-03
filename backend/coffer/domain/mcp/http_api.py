@@ -5,11 +5,13 @@ Spec mcp-gateway "Serve an HTTP API as a group of custom tools". A group is an
 answers ``tools/list`` from :attr:`HttpApiTransport.tools` and makes each
 tool's HTTP request itself (``infrastructure/mcp/http_api_client.py``).
 
-The one secret a group may carry is the value of its auth header. It is cited
-the way the other transports cite theirs — ``secret_refs`` maps the slot
-(the header's name) to the ref — so every mechanism that walks secret refs
-(the missing-secret probe, the attention source, the secret boundary's
-destinations) covers a group unchanged. A tool's per-agent reach override is
+A group's headers are rows of a name and a value. A value is plain text
+(``headers``) or a stored secret that holds the WHOLE header value, with no
+``Bearer`` or ``Token`` prefix assembled around it (``secret_refs`` maps the
+slot — the header's name — to the ref, the way the other transports cite
+theirs), so every mechanism that walks secret refs (the missing-secret probe,
+the attention source, the secret boundary's destinations) covers a group
+unchanged. A tool's per-agent reach override is
 not here: reach is machine-local and this config travels with sync, so the
 overrides live in their own table (design add-http-custom-tools §2).
 
@@ -40,6 +42,10 @@ _SECRET_PATTERNS = (
     re.compile(r"^(ghp_|gho_|github_pat_|sk-|xox[abp]-)"),
     re.compile(r"^eyJ[A-Za-z0-9_-]{20,}"),
 )
+
+
+#: How much of one operation's spec text a tool keeps.
+SOURCE_TEXT_LIMIT = 20_000
 
 
 def _check_headers(values: dict[str, str], *, allow_holes: bool) -> dict[str, str]:
@@ -84,6 +90,9 @@ class HttpApiTool(BaseModel):
     changes_data: bool | None = None
     #: ``"<METHOD> <path>"`` of the OpenAPI operation this tool was imported from.
     operation: str | None = None
+    #: The operation's text in the spec it was imported from, so a re-import
+    #: can show what changed in it.
+    source_text: str | None = Field(default=None, max_length=SOURCE_TEXT_LIMIT)
 
     @field_validator("name")
     @classmethod
@@ -164,10 +173,9 @@ class HttpApiTransport(BaseModel):
 
     type: Literal["http_api"] = "http_api"
     base_url: HttpUrl
+    #: Plain header values.
     headers: dict[str, str] = Field(default_factory=dict)
-    auth_header: str | None = None
-    auth_prefix: str = Field(default="", max_length=64)
-    #: ``{auth_header: ref}`` — the one secret, when the auth header is bound.
+    #: ``{header name: ref}`` — headers whose whole value is a stored secret.
     secret_refs: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     source: OpenApiSource | None = None
@@ -187,11 +195,12 @@ class HttpApiTransport(BaseModel):
     def _headers(cls, v: dict[str, str]) -> dict[str, str]:
         return _check_headers(v, allow_holes=False)
 
-    @field_validator("auth_header")
+    @field_validator("secret_refs")
     @classmethod
-    def _auth_header(cls, v: str | None) -> str | None:
-        if v is not None and not _HEADER_NAME_RE.match(v):
-            raise ValueError(f"{v!r} is not a valid header name")
+    def _secret_header_names(cls, v: dict[str, str]) -> dict[str, str]:
+        for name in v:
+            if not _HEADER_NAME_RE.match(name):
+                raise ValueError(f"{name!r} is not a valid header name")
         return v
 
     @model_validator(mode="after")
@@ -200,18 +209,13 @@ class HttpApiTransport(BaseModel):
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
             raise ValueError("tool names must be unique in a group: " + ", ".join(dupes))
-        if self.secret_refs and (
-            self.auth_header is None or set(self.secret_refs) != {self.auth_header}
-        ):
-            raise ValueError("a group's only secret is its auth header's value")
+        seen = [n.lower() for n in (*self.headers, *self.secret_refs)]
+        if len(seen) != len(set(seen)):
+            raise ValueError("a header may appear once in a group")
         return self
 
     def tool(self, name: str) -> HttpApiTool | None:
         return next((t for t in self.tools if t.name == name), None)
-
-    @property
-    def secret_ref(self) -> str | None:
-        return self.secret_refs.get(self.auth_header or "") if self.auth_header else None
 
 
 def http_api_target(transport: HttpApiTransport) -> str:
@@ -221,6 +225,7 @@ def http_api_target(transport: HttpApiTransport) -> str:
 
 __all__ = [
     "HTTP_METHODS",
+    "SOURCE_TEXT_LIMIT",
     "TOOL_NAME_RE",
     "HttpApiTool",
     "HttpApiTransport",

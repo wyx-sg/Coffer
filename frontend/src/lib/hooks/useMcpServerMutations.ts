@@ -30,7 +30,7 @@ export function useSaveMcpServerEdit() {
       // Saved, but a replaced secret keeps its old value until someone
       // approves in the Coffer app — say so, since the dialog just closes.
       if (awaitingApproval) {
-        toast.info(t("secrets.savedAwaitingApproval"));
+        toast.info(t("secrets.pending.toast"));
       }
     },
   });

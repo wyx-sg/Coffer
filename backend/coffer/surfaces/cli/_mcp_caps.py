@@ -14,7 +14,7 @@ too long"). The flag only informs: the tool stays enabled and listed.
 ``cap expose <server> auto|listed|search tool:<name>...`` sets how tools are
 exposed to agents: ``listed`` pins them into the tool list, ``search`` leaves
 them to ``coffer__search_tools``, ``auto`` lets usage decide (spec mcp-gateway
-"Forward tools, resources and prompts"). ``cap list`` shows each tool's setting and
+"Choose how each tool is exposed"). ``cap list`` shows each tool's setting and
 what agents get.
 
 Like the rest of ``coffer mcp``, these take the server's NAME and resolve it to a

@@ -29,6 +29,8 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     orphans: vi.fn(async () => ({ items: [] })),
     adoptOrphan: vi.fn(),
     removeOrphan: vi.fn(async () => undefined),
+    orphanFiles: vi.fn(),
+    orphanFileContent: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/clis", () => ({
@@ -70,15 +72,15 @@ acceptance(
     renderSkillsPage("/skills");
     const list = await screen.findByTestId("skill-library");
     expect(await within(list).findByText("Needs jq · not installed")).toBeInTheDocument();
-    expect(within(list).getByText("Update available")).toBeInTheDocument();
+    expect(within(list).getByText("Update available · Git")).toBeInTheDocument();
   },
 );
 
 test("the open skill repeats a missing command as a banner", async () => {
   renderSkillsPage("/skills/hello");
   const banner = await screen.findByTestId("skill-banner-requires");
-  expect(banner).toHaveTextContent("1 command this skill needs is missing");
-  expect(banner).toHaveTextContent("jq is not installed.");
+  expect(banner).toHaveTextContent("jq isn’t installed");
+  expect(banner).toHaveTextContent("hello is still delivered");
 });
 
 acceptance(
@@ -107,6 +109,85 @@ acceptance(
   },
 );
 
+acceptance(
+  "web-ui",
+  "a skill whose tool is off says so in the list, the pill and a banner that opens the tool",
+  async () => {
+    h.skills = [
+      makeSkill({
+        requires_tools: [
+          { name: "github", uid: "t-1", kind: "mcp_server", status: "off", why: null },
+        ],
+      }),
+    ];
+    renderSkillsPage("/skills/hello");
+    const list = await screen.findByTestId("skill-library");
+    expect(await within(list).findByText("Needs github · off")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Needs attention" })).getAllByRole("link"),
+    ).toHaveLength(1);
+    const banner = await screen.findByTestId("skill-banner-tool");
+    expect(banner).toHaveTextContent("github is off, so hello can’t call it");
+    expect(within(banner).getByRole("link", { name: "Open github" })).toHaveAttribute(
+      "href",
+      "/mcp-servers/github",
+    );
+    // Turning a tool on is the person's choice: no hand-off in the banner.
+    expect(within(banner).queryByRole("button", { name: /Copy prompt|Ask an agent/ })).toBeNull();
+    const header = screen
+      .getByRole("heading", { name: "hello", level: 2 })
+      .closest("header") as HTMLElement;
+    expect(within(header).getByText("Tool off")).toBeInTheDocument();
+  },
+);
+
+test("a failing custom-tool group links to the group's page and says why", async () => {
+  h.skills = [
+    makeSkill({
+      requires_tools: [
+        {
+          name: "billing-api",
+          uid: "t-2",
+          kind: "custom_tools",
+          status: "failing",
+          why: "401 from the API",
+        },
+      ],
+    }),
+  ];
+  renderSkillsPage("/skills/hello");
+  const banner = await screen.findByTestId("skill-banner-tool");
+  expect(banner).toHaveTextContent("billing-api is failing");
+  expect(banner).toHaveTextContent("401 from the API");
+  expect(within(banner).getByRole("link", { name: "Open billing-api" })).toHaveAttribute(
+    "href",
+    "/custom-tools/billing-api",
+  );
+});
+
+test("a failing MCP server without a reason says failing, not off, in the body", async () => {
+  h.skills = [
+    makeSkill({
+      requires_tools: [
+        { name: "smk-http", uid: "t-3", kind: "mcp_server", status: "failing", why: null },
+      ],
+    }),
+  ];
+  renderSkillsPage("/skills/hello");
+  const banner = await screen.findByTestId("skill-banner-tool");
+  expect(banner).toHaveTextContent("smk-http is failing");
+  expect(banner).toHaveTextContent("while the smk-http MCP server is failing");
+  expect(banner).not.toHaveTextContent("is off");
+});
+
+test("the commands banner carries one hand-off for every command that needs the person", async () => {
+  renderSkillsPage("/skills/hello");
+  const banner = await screen.findByTestId("skill-banner-requires");
+  expect(
+    within(banner).getAllByRole("button", { name: /Ask an agent|Copy prompt/ }).length,
+  ).toBeGreaterThan(0);
+});
+
 test("a Git skill with an update offers Review update… above its tabs", async () => {
   renderSkillsPage("/skills/terraform-plan");
   const banner = await screen.findByTestId("skill-banner-update");
@@ -123,7 +204,7 @@ test("an unreachable source says so and offers Check again", async () => {
   api.checkSource.mockResolvedValue(h.skills[0].source_status!);
   renderSkillsPage("/skills/terraform-plan");
   const banner = await screen.findByTestId("skill-banner-unreachable");
-  expect(banner).toHaveTextContent("Can't reach github.com/acme/agent-skills");
+  expect(banner).toHaveTextContent("Can’t reach github.com/acme/agent-skills");
   expect(banner).toHaveTextContent("only updates are paused");
   fireEvent.click(within(banner).getByRole("button", { name: "Check again" }));
   await waitFor(() => expect(api.checkSource).toHaveBeenCalledWith("sk-1"));
@@ -139,15 +220,44 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
         file_count: 3,
         description: "Team lint rules.",
         message: null,
+        found_at: "2026-09-27T10:00:00Z",
       },
     ],
+  });
+  const file = (name: string) => ({
+    name,
+    path: name,
+    abs_path: `/Users/me/.coffer/skills/lint-rules/${name}`,
+    folder_abs_path: "/Users/me/.coffer/skills/lint-rules",
+    type: "file" as const,
+    size: 9,
+    truncated: false,
+    children: [],
+  });
+  api.orphanFiles.mockResolvedValue({
+    root: { ...file(""), type: "dir", children: [file("SKILL.md"), file("rules.md")] },
+  });
+  api.orphanFileContent.mockResolvedValue({
+    ...file("SKILL.md"),
+    content: "# Lint rules",
+    truncated: false,
+    binary: false,
+    size: 12,
+    fingerprint: "fp",
   });
   api.adoptOrphan.mockResolvedValue(makeSkill({ uid: "sk-lr", name: "lint-rules" }));
   renderSkillsPage("/skills");
   const section = await screen.findByRole("list", { name: "Not in your library" });
   fireEvent.click(within(section).getByRole("link", { name: /lint-rules/ }));
   await waitFor(() => expect(where.url).toBe("/skills?orphan=lint-rules"));
-  expect(await screen.findByText(/has a valid SKILL\.md · 3 files/)).toBeInTheDocument();
+  expect(await screen.findByText(/Valid SKILL\.md/)).toBeInTheDocument();
+  // The meta line counts the files and says when it was found; the files show
+  // in the read-only tree and reader.
+  expect(screen.getByText("3 files")).toBeInTheDocument();
+  expect(screen.getByText(/Found \d+ Sep/)).toBeInTheDocument();
+  const tree = await screen.findByRole("tree", { name: "Files" });
+  expect(within(tree).getByRole("treeitem", { name: /rules\.md/ })).toBeInTheDocument();
+  await waitFor(() => expect(api.orphanFileContent).toHaveBeenCalledWith("lint-rules", "SKILL.md"));
 
   fireEvent.click(screen.getByRole("button", { name: "Delete folder…" }));
   const dialog = await screen.findByRole("dialog", { name: "Delete the folder lint-rules?" });
@@ -155,7 +265,7 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(api.removeOrphan).not.toHaveBeenCalled();
 
-  fireEvent.click(screen.getByRole("button", { name: "Add to library…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add to library" }));
   await waitFor(() => expect(api.adoptOrphan).toHaveBeenCalledWith("lint-rules"));
   await waitFor(() => expect(where.url).toBe("/skills/lint-rules"));
 });

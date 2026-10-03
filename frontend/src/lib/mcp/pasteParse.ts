@@ -12,7 +12,7 @@ import type { ParsedServer, PasteResult, PasteSource } from "./pasteTypes";
 import { unreadable } from "./pasteTypes";
 import { finaliseNames, nameFromUrl } from "./serverNames";
 
-export type { ParsedEnvVar, ParsedServer, PasteResult } from "./pasteTypes";
+export type { ParsedServer, PasteResult } from "./pasteTypes";
 export { MCP_SERVER_NAME_MAX, isValidServerName, serverNameTooLong } from "./serverNames";
 
 /**

@@ -1,9 +1,8 @@
 // frontend/src/components/mcp/McpServerDetailTabs.tsx — the tab strip and panes of the open MCP server.
 //
-// Overview · Tools · Resources · Prompts · Invocations, no counts on the labels
-// (layout principle 9), the tab in the path (`/mcp-servers/<name>/tools`; spec
-// web-ui "Lay out every detail page's tabs alike"). The pane hands in every
-// tab's content.
+// Overview · Tools · Resources · Prompts · Invocations, the tab in the path
+// (`/mcp-servers/<name>/tools`; spec web-ui "Lay out every detail page's tabs
+// alike"). No counts in the labels. The pane hands in every tab's content.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 

@@ -15,6 +15,7 @@ from collections.abc import Callable
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
+from coffer.application.mcp.server_requires import ServerRequirements
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
@@ -47,6 +48,21 @@ def get_mcp_session_factory() -> McpSessionFactory:
     if _mcp_session_factory is None:
         raise RuntimeError("MCP session factory not initialised")
     return _mcp_session_factory
+
+
+_server_requirements: ServerRequirements | None = None
+
+
+def set_server_requirements(requirements: ServerRequirements | None) -> None:
+    """Called by the composition root once on startup."""
+    global _server_requirements
+    _server_requirements = requirements
+
+
+def get_server_requirements() -> ServerRequirements | None:
+    """FastAPI Depends() target; ``None`` before the composition root wires it
+    (a status read then lists no requirements)."""
+    return _server_requirements
 
 
 _capability_discovery: CapabilityDiscovery | None = None

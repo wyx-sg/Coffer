@@ -1,66 +1,73 @@
-// frontend/src/components/reach/ReachPanel.tsx
-// The body of a ReachControl's popover: title, note, the three mode choices
-// with their inline failure, the agent list and the footer.
+// src/components/reach/ReachPanel.tsx — the body of a reach popover, shared by the full and the inherited control.
+//
+// Foundations-Reach "Reach popover": a head ("Available to" + the resource name
+// in mono), the radio modes, the agent list and the footer. Which modes it
+// offers and what picking one does belong to the caller — ReachControl offers
+// Off / All agents / Chosen agents, InheritedReachControl swaps Off for "Same
+// as the group" — so this owns no state and fires no request.
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentPicker, type RowFailure } from "@/components/reach/AgentPicker";
-import { ReachPanelFooter, type SaveState } from "@/components/reach/ReachPanelFooter";
-import type { Failure } from "@/components/reach/useReachWrites";
-import { WARNING_CLASS, type PickableAgent, type ReachMode } from "@/lib/reach/reachState";
+import { AgentPicker } from "@/components/reach/AgentPicker";
+import { ReachChoice } from "@/components/reach/ReachChoice";
+import { ReachPanelFooter } from "@/components/reach/ReachPanelFooter";
+import { Button } from "@/components/ui/button";
+import { WARNING_CLASS, type PickableAgent, type ReachFailure } from "@/lib/reach/reachState";
+import type { SaveState } from "@/lib/reach/useReachWrites";
 
-interface Props {
-  resourceName?: string;
-  note?: string;
-  choices: React.ReactNode;
-  failure: Failure | null;
-  registered: PickableAgent[];
-  selected: string[];
-  partial: string[];
-  inactive: boolean;
-  busy: boolean;
-  picked: ReachMode | null;
-  total: number;
-  save: SaveState;
-  onToggle: (uid: string, checked: boolean) => void;
-  onApply?: () => void;
-  applyDisabled: boolean;
+interface ReachModeRow<M extends string> {
+  value: M;
+  text: string;
+  sub: string;
 }
 
-export function ReachPanel({
+interface Props<M extends string> {
+  resourceName?: string;
+  /** Why this resource is inactive here, in amber, above the modes. */
+  note?: string;
+  modes: ReachModeRow<M>[];
+  picked: M | null;
+  /** The one mode under which the agent list is live. */
+  listMode: M;
+  onPick: (mode: M) => void;
+  registered: PickableAgent[];
+  selected: string[];
+  onToggle: (uid: string, checked: boolean) => void;
+  /** A quiet line under the list (the inherited control's "turn its switch off"). */
+  footnote?: string;
+  summary: string;
+  saveState?: SaveState;
+  failure?: ReachFailure | null;
+  busy?: boolean;
+}
+
+export function ReachPanel<M extends string>({
   resourceName,
   note,
-  choices,
-  failure,
+  modes,
+  picked,
+  listMode,
+  onPick,
   registered,
   selected,
-  partial,
-  inactive,
-  busy,
-  picked,
-  total,
-  save,
   onToggle,
-  onApply,
-  applyDisabled,
-}: Props) {
+  footnote,
+  summary,
+  saveState,
+  failure = null,
+  busy = false,
+}: Props<M>) {
   const { t } = useTranslation();
-  const summary =
-    picked === "disabled"
-      ? t("common.disabled")
-      : picked === "everywhere"
-        ? t("scope.everywhere")
-        : picked === "restricted"
-          ? t("scope.countOf", { selected: selected.length, total })
-          : "";
-  const rowFailure: RowFailure | null =
-    failure?.uid !== undefined
-      ? { uid: failure.uid, message: failure.message, onRetry: failure.retry }
-      : null;
+  const group = useId();
   return (
     <>
-      <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-3">
         <p className="text-xs font-semibold text-text">{t("scope.availableTo")}</p>
-        {resourceName ? <p className="truncate text-xs text-text-subtle">{resourceName}</p> : null}
+        {resourceName ? (
+          <span className="min-w-0 truncate font-mono text-xs text-text-subtle">
+            {resourceName}
+          </span>
+        ) : null}
       </div>
 
       {note ? <p className={WARNING_CLASS}>{note}</p> : null}
@@ -70,41 +77,52 @@ export function ReachPanel({
         aria-label={t("scope.choicesLabel")}
         className="border-b border-border-subtle pb-2.5"
       >
-        {choices}
-        {failure && failure.uid === undefined ? (
-          <p
-            role="alert"
-            data-testid="scope-mode-failed"
-            className="mt-1.5 flex items-center gap-1.5 text-xs text-danger"
-          >
-            <span className="min-w-0 flex-1">
-              {t("scope.rowFailed")} — {failure.message}
-            </span>
-            <button type="button" className="shrink-0 font-label underline" onClick={failure.retry}>
-              {t("common.retry")}
-            </button>
-          </p>
-        ) : null}
+        {modes.map((m) => (
+          <ReachChoice
+            key={m.value}
+            group={group}
+            checked={picked === m.value}
+            disabled={busy}
+            text={m.text}
+            sub={m.sub}
+            onPick={() => onPick(m.value)}
+          />
+        ))}
       </div>
 
+      {failure && failure.uid === null ? (
+        <div
+          role="alert"
+          className="flex flex-col gap-1 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger"
+        >
+          <span>{failure.message}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={failure.retry}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : null}
+
       <AgentPicker
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="flex-1"
         registered={registered}
         selected={selected}
-        partial={partial}
-        inactive={inactive}
+        dormant={picked === listMode && selected.length === 0}
+        active={picked === listMode}
         busy={busy}
-        failure={rowFailure}
+        failure={failure}
+        onRetry={failure?.retry}
         onToggle={onToggle}
       />
 
-      <ReachPanelFooter
-        summary={summary}
-        save={save}
-        busy={busy}
-        onApply={onApply}
-        applyDisabled={applyDisabled}
-      />
+      {footnote ? <p className="text-xs text-text-muted">{footnote}</p> : null}
+
+      <ReachPanelFooter summary={summary} saveState={saveState} failed={failure !== null} />
     </>
   );
 }

@@ -215,7 +215,7 @@ describe("AgentMemoryStorePage", () => {
     stubContent({ truncated: true });
     renderAt();
     fireEvent.click(screen.getByText("port-drift.md"));
-    expect(screen.getByText(/content truncated/i)).toBeInTheDocument();
+    expect(screen.getByText(/read-only here/i)).toBeInTheDocument();
   });
 
   test("a URL with no store says so instead of querying for nothing", () => {

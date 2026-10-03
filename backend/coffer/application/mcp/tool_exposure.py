@@ -1,5 +1,5 @@
 """How each tool is exposed to agents: the person's override and the reason
-for the effective state (spec mcp-gateway "Forward tools, resources and prompts").
+for the effective state (spec mcp-gateway "Choose how each tool is exposed").
 
 ``auto`` (the default) leaves the decision to the budget: the most-used tools
 stay listed in ``tools/list``, the rest are reached through

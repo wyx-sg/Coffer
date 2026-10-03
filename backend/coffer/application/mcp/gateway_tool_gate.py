@@ -17,7 +17,7 @@ from collections.abc import Sequence
 
 from pydantic import ValidationError
 
-from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
+from coffer.application.mcp.custom_tool_ports import ToolReach, ToolReachRepoPort
 from coffer.domain.mcp.http_api import HttpApiTransport
 from coffer.domain.mcp.namespace import prefix_tool
 from coffer.domain.mcp.server_config import MCPServerConfig
@@ -37,8 +37,10 @@ def http_api_transport(resource: Resource) -> HttpApiTransport | None:
     return None
 
 
-def _admits(override: list[str] | None, agent_uid: str | None) -> bool:
-    return override is None or is_active(Scope(agents=override), agent_uid)
+def _admits(override: ToolReach | None, agent_uid: str | None) -> bool:
+    if override is None or override == "all":
+        return True
+    return is_active(Scope(agents=override), agent_uid)
 
 
 async def hidden_tool_names(

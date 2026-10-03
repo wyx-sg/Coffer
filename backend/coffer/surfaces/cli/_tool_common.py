@@ -110,15 +110,21 @@ def as_tool_in(tool: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def header_rows(plain: dict[str, str], secrets: dict[str, str]) -> list[dict[str, Any]]:
+    """Group header rows as the API takes them: a value or a secret each."""
+    return [
+        *({"name": n, "value": v, "secret": None} for n, v in plain.items()),
+        *({"name": n, "value": None, "secret": v} for n, v in secrets.items()),
+    ]
+
+
 def print_group(group: dict[str, Any]) -> None:
-    auth = group.get("auth")
     typer.echo(f"name:        {group['name']}")
     typer.echo(f"health:      {group['health']}")
     typer.echo(f"base URL:    {group['base_url']}")
-    if auth:
-        secret = auth.get("secret") or "—"
-        state = auth["secret_state"]
-        typer.echo(f"auth:        {auth['header']}: {auth['prefix']}<secret {secret}> ({state})")
+    for h in group["headers"]:
+        shown = f"<secret {h['secret']}> ({h['secret_state']})" if h["secret"] else h["value"]
+        typer.echo(f"header:      {h['name']}: {shown}")
     if group.get("source"):
         src = group["source"]
         typer.echo(f"source:      {src['kind']} {src['location']} (fetched {src['fetched_at']})")
@@ -132,7 +138,7 @@ def print_group(group: dict[str, Any]) -> None:
             flags.append("off")
         if t["changes_data"]:
             flags.append("changes data")
-        if t.get("reach_override") is not None:
+        if t.get("reach_mode", "inherit") != "inherit":
             flags.append("reach override")
         extra = f"  [{', '.join(flags)}]" if flags else ""
         typer.echo(f"  {t['agent_name']:<40} {t['method']:<6} {t['path']}{extra}")

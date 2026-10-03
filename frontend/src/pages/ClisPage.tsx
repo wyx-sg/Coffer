@@ -1,13 +1,15 @@
-// src/pages/ClisPage.tsx — the CLIs page (/clis, /clis/:command[/:tab]): every command-line tool, beside the selected one.
+// src/pages/ClisPage.tsx — the CLIs page (/clis, /clis/:command): every command-line tool, beside the selected one.
 //
 // Spec web-ui "Show every CLI a skill requires on the CLIs page". A tool is
 // listed because a skill or MCP server requires it, or because the person added
-// it by hand (Add a command-line tool: no skill needed). The header counts the
-// tools and holds Add and Check again, which re-probes every one. The
-// list pane groups them into Needs you (problems first, the daemon's order)
-// and Ready; the detail pane shows the command in the address, or the first
-// row when there is none. A command that needs the person offers the daemon's
-// prompt for their agent — nothing installs or logs in from here.
+// it by hand (Add CLI: no skill needed). The header holds Check again (the
+// primary button, which re-probes every tool) and Add CLI; on the first run
+// there are none and the empty state carries Add CLI. Skipped `requires:`
+// entries are one grey line under the subtitle. The list pane groups the tools
+// into Needs attention (problems first, the daemon's order) and Ready; the
+// detail pane shows the command in the address, or the first row when there is
+// none. A command that needs the person offers the daemon's prompt for their
+// agent — nothing installs or logs in from here.
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -38,8 +40,7 @@ export function ClisPage() {
   let body: JSX.Element;
   if (firstRun) {
     body = (
-      <div className="space-y-3 overflow-y-auto px-6 py-6 md:px-8">
-        <ClisWarnings warnings={warnings} />
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 pb-20">
         <ClisEmptyState onAdd={() => setAdding(true)} />
       </div>
     );
@@ -63,8 +64,7 @@ export function ClisPage() {
           />
         }
         detail={
-          <div className="space-y-3 px-7 py-5">
-            <ClisWarnings warnings={warnings} />
+          <div className="px-7 py-5">
             {selected ? (
               <CliPane
                 key={selected}
@@ -81,23 +81,26 @@ export function ClisPage() {
 
   return (
     <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="shrink-0 border-b border-border-subtle px-6 py-5 md:px-8">
+      <div className="flex shrink-0 flex-col gap-1.5 px-6 py-5 md:px-8">
         <PageHeader
           title={t("clis.title")}
           subtitle={t("clis.subtitle")}
           actions={
-            <>
-              <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
-                <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
-                {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
-              </Button>
-              <Button onClick={() => setAdding(true)}>
-                <Plus aria-hidden />
-                {t("clis.addTool")}
-              </Button>
-            </>
+            firstRun ? undefined : (
+              <>
+                <Button disabled={check.isPending} onClick={() => check.mutate()}>
+                  <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
+                  {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
+                </Button>
+                <Button variant="outline" onClick={() => setAdding(true)}>
+                  <Plus aria-hidden />
+                  {t("clis.addTool")}
+                </Button>
+              </>
+            )
           }
         />
+        <ClisWarnings warnings={warnings} />
       </div>
       {body}
       <AddCliDialog

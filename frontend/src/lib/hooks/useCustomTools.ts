@@ -20,7 +20,7 @@ import {
   type OpenApiReadIn,
 } from "@/lib/api/customTools";
 import { translateApiError } from "@/lib/api/errors";
-import { scopeApi } from "@/lib/api/scope";
+import { resourcesApi } from "@/lib/api/resources";
 import {
   customToolGroupKey,
   customToolsKey,
@@ -61,6 +61,31 @@ function useApprovalNotice() {
   };
 }
 
+/** Re-read a group and the lists it shows in — after a secret it names was added elsewhere. */
+export function useRefreshCustomTools(name: string): () => void {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: customToolGroupKey(name) });
+    void qc.invalidateQueries({ queryKey: customToolsKey });
+  };
+}
+
+/** The Off banner's Turn on: the group's own switch (its reach is left as it was). */
+export function useTurnOnCustomToolGroup(group: CustomToolGroup) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: () => resourcesApi.enable(group.uid),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: customToolGroupKey(group.name) });
+      void qc.invalidateQueries({ queryKey: customToolsKey });
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+    },
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
 export function useCreateCustomToolGroup() {
   const qc = useQueryClient();
   const notice = useApprovalNotice();
@@ -73,24 +98,12 @@ export function useCreateCustomToolGroup() {
   });
 }
 
-/** Edit group's Save: the group, then its reach when it changed (`agents`:
- *  uids, `null` for every agent, `undefined` unchanged). */
+/** Edit group's Save. Its reach is the header's Reach control, not part of the form. */
 export function useUpdateCustomToolGroup(name: string) {
   const qc = useQueryClient();
   const notice = useApprovalNotice();
   return useMutation({
-    mutationFn: async ({
-      body,
-      agents,
-    }: {
-      body: CustomToolGroupPatch;
-      agents?: string[] | null;
-    }) => {
-      const saved = await customToolsApi.update(name, body);
-      if (agents === undefined) return saved;
-      await scopeApi.put(saved.uid, agents === null ? null : { agents });
-      return customToolsApi.get(name);
-    },
+    mutationFn: (body: CustomToolGroupPatch) => customToolsApi.update(name, body),
     onSuccess: (group) => {
       settle(qc, group);
       notice(group);
@@ -111,34 +124,23 @@ export function useDeleteCustomToolGroup(name: string) {
   });
 }
 
-/** What the drawer's Save sends: a new tool (`tool: null`) or a change to one,
- *  and the reach override when it changed. */
+/** What the drawer's Save sends: a new tool (`tool: null`) or a change to one. */
 interface ToolSave {
   /** The saved tool's current name; `null` adds a new one. */
   tool: string | null;
   /** The whole tool; on a change every editable field is sent, and a `null`
    *  flag goes back to following the method. */
   body: CustomToolIn;
-  /** The override to write after the tool (`undefined` = unchanged). */
-  reach?: string[] | null;
 }
 
-/** The drawer's Save — the tool, then its reach override under the name it
- *  saved as. Rendered inline there. */
+/** The drawer's Save, rendered inline there. A tool's reach is its own control in
+ *  the table (`useToolReach`), not part of this save. */
 export function useSaveCustomTool(group: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tool, body, reach }: ToolSave) => {
-      let saved =
-        tool === null
-          ? await customToolsApi.addTool(group, body)
-          : await customToolsApi.updateTool(group, tool, body);
-      if (reach !== undefined) saved = await customToolsApi.setToolReach(group, body.name, reach);
-      return saved;
-    },
+    mutationFn: ({ tool, body }: ToolSave) =>
+      tool === null ? customToolsApi.addTool(group, body) : customToolsApi.updateTool(group, tool, body),
     onSuccess: (next) => settle(qc, next),
-    // A tool may have saved before its reach failed: show what is stored.
-    onError: () => void qc.invalidateQueries({ queryKey: customToolGroupKey(group) }),
   });
 }
 

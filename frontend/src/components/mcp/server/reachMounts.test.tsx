@@ -75,7 +75,7 @@ acceptance("web-ui", "row, header and selection bar mount the same reach control
             onEdit={vi.fn()}
             onOpenLog={vi.fn()}
             onCopyConfig={vi.fn()}
-            onTurn={vi.fn()}
+            onTurnOff={vi.fn()}
             onDelete={vi.fn()}
           />
           <McpServersBulkBar servers={[FILES]} total={1} onDone={vi.fn()} />
@@ -105,8 +105,8 @@ acceptance("web-ui", "row, header and selection bar mount the same reach control
   const fromBulk = panelOf(bulkButton);
   expect(fromHeader.radios).toEqual([
     expect.stringMatching(/^off$/i),
-    expect.stringMatching(/all agents/i),
-    expect.stringMatching(/chosen agents/i),
+    expect.stringMatching(/^all agents$/i),
+    expect.stringMatching(/^chosen agents$/i),
   ]);
   expect(fromBulk).toEqual(fromHeader);
 });

@@ -1,6 +1,6 @@
 """PATCH a tool's exposure, one or many: persistence, the tiering read that
 reports it, the gateway-facing overrides, and the audit entry (spec mcp-gateway
-"Forward tools, resources and prompts")."""
+"Choose how each tool is exposed")."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ async def _tiering(ctx, uid: str) -> dict:  # noqa: F811
     return (await ctx.client.get(f"/api/v1/resources/mcp_server/{uid}/tiering")).json()
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="a server's page reads its tiering split")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="a tool's exposure is chosen by the person")
 async def test_patch_one_tool_pins_it_and_the_tiering_read_says_so(ctx, monkeypatch):  # noqa: F811
     monkeypatch.setenv("COFFER_TOOL_TIERING_BUDGET", "2")
     srv = await ctx.server("smart", _stdio())

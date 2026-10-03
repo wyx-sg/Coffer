@@ -1,19 +1,16 @@
 // src/components/mcp/server/McpServerHeader.tsx — the open server's header in the MCP servers page's pane (design 4.1.02).
 //
 // An icon tile tinted by the state, the fixed name in mono with the state
-// pill, one truncated line `transport · command or URL`; and the actions in
-// the one detail order — reach, then the state's own next step (Test, Test
-// again, Turn on, Replace secret), Edit, and the "⋯" menu: Calls and server
-// log · Copy config as JSON · Delete…. Edit is the visible button and on/off is
-// the reach control's, so the menu does not repeat them.
+// pill, one truncated line `transport · command or URL`; and the actions, fixed
+// whatever the state — Reach · Test · Edit · "⋯" (Server log, stdio only · Copy
+// config as JSON · Turn off · Delete…). A problem's fix lives in the Overview's
+// banner, never here.
 import { useTranslation } from "react-i18next";
 import {
   CircleAlert,
   KeyRound,
   Pencil,
   Play,
-  Power,
-  RefreshCw,
   Server,
   TriangleAlert,
   type LucideIcon,
@@ -46,10 +43,10 @@ interface Props {
   state: ServerState;
   testing: boolean;
   onTest: () => void;
-  onEdit: (focus?: "secret") => void;
+  onEdit: () => void;
   onOpenLog: () => void;
   onCopyConfig: () => void;
-  onTurn: (on: boolean) => void;
+  onTurnOff: () => void;
   onDelete: () => void;
 }
 
@@ -61,39 +58,21 @@ export function McpServerHeader({
   onEdit,
   onOpenLog,
   onCopyConfig,
-  onTurn,
+  onTurnOff,
   onDelete,
 }: Props) {
   const { t } = useTranslation();
   const transport = transportOf(resource.config);
-  const off = state.kind === "off";
-
-  let primary: JSX.Element;
-  if (off) {
-    primary = (
-      <Button size="sm" variant="outline" onClick={() => onTurn(true)}>
-        <Power aria-hidden /> {t("mcp.page.turnOn")}
-      </Button>
-    );
-  } else if (state.kind === "secretMissing") {
-    primary = (
-      <Button size="sm" variant="outline" onClick={() => onEdit("secret")}>
-        <KeyRound aria-hidden /> {t("mcp.page.replaceSecret")}
-      </Button>
-    );
-  } else {
-    const again = state.kind === "failing" || state.kind === "launcherMissing";
-    primary = (
-      <Button size="sm" variant="outline" onClick={onTest} disabled={testing}>
-        {again ? <RefreshCw aria-hidden /> : <Play aria-hidden />}
-        {testing ? t("mcp.page.testing") : again ? t("mcp.page.testAgain") : t("mcp.page.test")}
-      </Button>
-    );
-  }
 
   const actions: MenuAction[] = [
-    { key: "log", label: t("mcp.page.menu.log"), onSelect: onOpenLog },
+    // A Streamable HTTP server runs somewhere else: Coffer keeps no log for it.
+    ...(transport.type === "http"
+      ? []
+      : [{ key: "log", label: t("mcp.page.menu.log"), onSelect: onOpenLog }]),
     { key: "copy", label: t("mcp.page.menu.copyConfig"), onSelect: onCopyConfig },
+    ...(state.kind === "off"
+      ? []
+      : [{ key: "off", label: t("mcp.page.menu.turnOff"), onSelect: onTurnOff }]),
     {
       key: "delete",
       label: t("mcp.page.menu.delete"),
@@ -146,8 +125,10 @@ export function McpServerHeader({
           enabled={resource.enabled}
           scope={resource.scope ?? null}
         />
-        {primary}
-        <Button size="sm" variant="outline" onClick={() => onEdit()}>
+        <Button size="sm" variant="outline" onClick={onTest} disabled={testing}>
+          <Play aria-hidden /> {testing ? t("mcp.page.testing") : t("mcp.page.test")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onEdit}>
           <Pencil aria-hidden /> {t("mcp.page.edit")}
         </Button>
         <ActionMenu label={t("mcp.page.menu.label", { name: resource.name })} actions={actions} />

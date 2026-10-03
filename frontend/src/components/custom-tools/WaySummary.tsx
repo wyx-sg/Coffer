@@ -7,12 +7,16 @@ import type { AddWay } from "./addFlow";
 
 interface Props {
   way: AddWay;
+  /** The group the way ends in, named after the title: "· into deploy-api". */
+  into?: string;
+  /** Written after the title as "· new group" when there is no group yet. */
+  newGroup?: boolean;
   /** The line under the way's title. */
   sub: string;
   onChange: () => void;
 }
 
-export function WaySummary({ way, sub, onChange }: Props) {
+export function WaySummary({ way, into, newGroup = false, sub, onChange }: Props) {
   const { t } = useTranslation();
   const Icon = way === "import" ? FileJson : List;
   return (
@@ -23,6 +27,8 @@ export function WaySummary({ way, sub, onChange }: Props) {
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-label text-text">
           {t(way === "import" ? "customTools.ways.importTitle" : "customTools.ways.handTitle")}
+          {into ? ` · ${t("customTools.add.into", { group: into })}` : null}
+          {newGroup ? ` · ${t("customTools.add.newGroupTag")}` : null}
         </span>
         <span className="block text-xs text-text-muted">{sub}</span>
       </span>

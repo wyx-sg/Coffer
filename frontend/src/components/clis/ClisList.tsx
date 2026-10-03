@@ -1,7 +1,7 @@
-// src/components/clis/ClisList.tsx — the CLIs list pane: a filter ("/" focuses it), then Needs you and Ready.
+// src/components/clis/ClisList.tsx — the CLIs list pane: a filter ("/" focuses it), then Needs attention and Ready.
 //
-// Needs you holds the commands that are missing, too old or not logged in, in
-// the daemon's order; Ready the rest. Each group carries its count. A row opens
+// Needs attention holds the commands that are missing, too old or not logged in, in
+// the daemon's order; Ready the rest. A row opens
 // `/clis/<command>` in the detail pane beside it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,9 +25,9 @@ interface Props {
 export function ClisList({ items, loading, error, onRetry, selected, onOpen }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
-  const { needsYou, ready } = groupClis(items, filter);
+  const { needsAttention, ready } = groupClis(items, filter);
   const groups = [
-    { key: "needsYou", rows: needsYou },
+    { key: "needsAttention", rows: needsAttention },
     { key: "ready", rows: ready },
   ].filter((g) => g.rows.length > 0);
 
@@ -40,7 +40,7 @@ export function ClisList({ items, loading, error, onRetry, selected, onOpen }: P
         ariaLabel={t("clis.search")}
         shortcut="/"
       />
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {error ? (
           <ListLoadError kind="clis" error={error} onRetry={() => onRetry?.()} />
         ) : loading ? (
@@ -49,13 +49,12 @@ export function ClisList({ items, loading, error, onRetry, selected, onOpen }: P
           <ListNoMatch kind="clis" query={filter} onClear={() => setFilter("")} />
         ) : (
           groups.map(({ key, rows }) => (
-            <section key={key} aria-label={t(`clis.list.${key}`)}>
+            <section key={key} className="mb-3" aria-label={t(`clis.list.${key}`)}>
               <h2
                 aria-hidden
-                className="mb-1 flex items-center justify-between px-2 text-2xs font-semibold uppercase tracking-wider text-text-subtle"
+                className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted"
               >
                 {t(`clis.list.${key}`)}
-                <span className="font-normal">{rows.length}</span>
               </h2>
               <ul>
                 {rows.map((cli) => (

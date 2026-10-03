@@ -138,9 +138,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # The commands skills require (spec skill-manager "Serve required commands
     # on REST, the command line and the web"): read, probe again, and print
     # the hand-off prompt for the person's agent; `add`, `edit` and `rm`
-    # declare a tool by hand, with no skill (spec skill-manager "Declare the
-    # commands a skill requires"), and `show` prints the interface read from
-    # the tool's help.
+    # declare a tool by hand, with no skill (spec skill-manager "Declare a
+    # command-line tool without a skill").
     "cli": {"list", "show", "check", "prompt", "add", "edit", "rm"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under
@@ -343,6 +342,10 @@ _FILE_BACKED_ROUTES: dict[str, str] = {
     "GET /skills/{uid}/files": "path skill <name>",
     "GET /skills/{uid}/files/content": "path skill <name>",
     "PUT /skills/{uid}/files/content": "path skill <name>",
+    # An orphan folder sits in the vault's skills store under its own name
+    # (spec skill-manager "Act on a folder in the skills store that no skill claims").
+    "GET /skills/orphans/{name}/files": "path vault",
+    "GET /skills/orphans/{name}/files/content": "path vault",
     "GET /agents/{uid}/config-files": "path agent <name> config",
     "GET /agents/{uid}/config-files/{key}": "path agent <name> config",
     "GET /agents/{uid}/config-files/{key}/files/{relpath}": "path agent <name> config",

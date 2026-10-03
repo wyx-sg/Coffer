@@ -14,7 +14,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+ToolReachMode = Literal["inherit", "all", "chosen"]
 GroupHealthName = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretStateName = Literal["none", "present", "missing", "pending_approval"]
 #: How a test run failed before the API answered: the request could not be
@@ -40,6 +43,8 @@ class CustomToolIn(BaseModel):
     #: ``null`` follows the method: on for every method but GET.
     changes_data: bool | None = None
     operation: str | None = None
+    #: The operation's spec text, kept from an import for the re-import diff.
+    source_text: str | None = None
 
 
 class CustomToolPatch(BaseModel):
@@ -72,23 +77,31 @@ class CustomToolOut(BaseModel):
     #: Whether the flag was set by hand rather than following the method.
     changes_data_set: bool
     operation: str | None
-    #: Agent uids the tool is narrowed to; ``null`` follows the group.
+    #: How the tool's own reach stands: ``inherit`` follows the group, ``all`` is
+    #: every agent (later ones too), ``chosen`` is ``reach_override``.
+    reach_mode: ToolReachMode
+    #: Agent uids the tool is narrowed to; ``null`` unless ``reach_mode`` is ``chosen``.
     reach_override: list[str] | None
     calls_24h: int
     failures_24h: int
 
 
-class CustomToolAuthIn(BaseModel):
-    header: str = "Authorization"
-    prefix: str = ""
-    #: The secret's name on the Secrets page; ``null`` leaves the header unbound.
+class CustomToolHeaderIn(BaseModel):
+    """One group header row: a plain value, or a stored secret that holds the
+    WHOLE value (no ``Bearer`` prefix is put around it). Send one of the two."""
+
+    name: str
+    value: str | None = None
+    #: The secret's name on the Secrets page.
     secret: str | None = None
 
 
-class CustomToolAuthOut(BaseModel):
-    header: str
-    prefix: str
+class CustomToolHeaderOut(BaseModel):
+    name: str
+    #: The plain value; ``null`` when the value is a secret.
+    value: str | None
     secret: str | None
+    #: ``none`` for a plain row.
     secret_state: SecretStateName
 
 
@@ -114,8 +127,7 @@ class CustomToolGroupIn(BaseModel):
     name: str
     description: str | None = None
     base_url: str
-    headers: dict[str, str] = Field(default_factory=dict)
-    auth: CustomToolAuthIn | None = None
+    headers: list[CustomToolHeaderIn] = Field(default_factory=list)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     #: The group's reach: agent uids, or ``null`` for every agent.
     agents: list[str] | None = None
@@ -124,12 +136,11 @@ class CustomToolGroupIn(BaseModel):
 
 
 class CustomToolGroupPatch(BaseModel):
-    """A partial change to a group; ``auth: null`` removes the auth header."""
+    """A partial change to a group; ``headers`` replaces the whole list."""
 
     description: str | None = None
     base_url: str | None = None
-    headers: dict[str, str] | None = None
-    auth: CustomToolAuthIn | None = None
+    headers: list[CustomToolHeaderIn] | None = None
     timeout_seconds: int | None = Field(default=None, ge=1, le=300)
 
 
@@ -139,8 +150,7 @@ class CustomToolGroupOut(BaseModel):
     description: str | None
     enabled: bool
     base_url: str
-    headers: dict[str, str]
-    auth: CustomToolAuthOut | None
+    headers: list[CustomToolHeaderOut]
     timeout_seconds: int
     #: The group's reach as agent uids; ``null`` is every agent.
     scope: list[str] | None
@@ -151,9 +161,15 @@ class CustomToolGroupOut(BaseModel):
     secret_state: SecretStateName
     #: The secret approvals this group waits on.
     pending_approvals: list[str]
+    #: The names of the secrets whose approval is pending, for "<secret> waits
+    #: for approval".
+    pending_secrets: list[str]
     calls_24h: int
     failures_24h: int
     last_call_at: datetime | None
+    #: A failing group (its last call failed): the prompt that hands finding why to
+    #: an agent. ``null`` otherwise.
+    handoff: HandoffOut | None = None
     tools: list[CustomToolOut]
     created_at: datetime
     updated_at: datetime
@@ -164,8 +180,12 @@ class CustomToolGroupListOut(BaseModel):
 
 
 class CustomToolReachIn(BaseModel):
-    #: Agent uids the tool is narrowed to; ``null`` clears the override.
-    agents: list[str] | None = None
+    """One tool's own reach: ``inherit`` clears the override (same as the group),
+    ``all`` is every agent the group reaches (agents added later too), ``chosen``
+    narrows it to ``agents``."""
+
+    mode: ToolReachMode
+    agents: list[str] = Field(default_factory=list)
 
 
 class CustomToolTestIn(BaseModel):
@@ -176,12 +196,12 @@ class CustomToolTestIn(BaseModel):
 class CustomToolUnsavedTestIn(BaseModel):
     """A request tested before its group exists: the group's settings inline.
 
-    No secret travels: an unsaved group has no approved binding, so the test
-    is sent without the auth header.
+    No secret travels: an unsaved group has no approved binding, so a secret
+    header row is left out of the test.
     """
 
     base_url: str
-    headers: dict[str, str] = Field(default_factory=dict)
+    headers: list[CustomToolHeaderIn] = Field(default_factory=list)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     tool: CustomToolIn
     arguments: dict[str, Any] = Field(default_factory=dict)
@@ -199,6 +219,9 @@ class CustomToolTestOut(BaseModel):
     error: str | None
     #: Set when no answer came back; ``null`` when the API answered.
     failure: TestFailureName | None = None
+    #: A test that could not connect or timed out: the prompt that hands the
+    #: network problem to an agent. ``null`` for anything else.
+    handoff: HandoffOut | None = None
 
 
 class OpenApiReadIn(BaseModel):
@@ -209,20 +232,33 @@ class OpenApiReadIn(BaseModel):
     filename: str | None = None
 
 
+class OpenApiSourceTextOut(BaseModel):
+    """An operation's text in the document, for the viewer beside the list."""
+
+    #: 1-based, inclusive line numbers in the document.
+    start_line: int
+    end_line: int
+    text: str
+
+
 class OpenApiOperationOut(BaseModel):
     key: str
     summary: str | None
     #: The operation's first tag, for grouping in the import form.
     tag: str | None = None
     tool: CustomToolIn
+    #: ``null`` when the operation could not be located in the document.
+    source: OpenApiSourceTextOut | None = None
 
 
 class OpenApiReadOut(BaseModel):
     title: str | None
     version: str | None
     base_url: str | None
+    #: The header the spec's security scheme puts a credential in (``Authorization``
+    #: for bearer, basic and OAuth; the key's name for an API key); the form
+    #: pre-fills one such header row with no value.
     auth_header: str | None
-    auth_prefix: str
     source_kind: Literal["url", "file"]
     location: str
     operations: list[OpenApiOperationOut]
@@ -246,6 +282,14 @@ class CustomToolReimportChangeOut(BaseModel):
     new_required: list[str]
     #: The method, path or body template moved.
     request_changed: bool
+    #: ``"<METHOD> <path>"`` of the operation.
+    operation: str
+    #: The operation's spec text as last imported; ``null`` for a tool imported
+    #: before Coffer kept it. The change preview diffs this against ``new_text``.
+    old_text: str | None = None
+    new_text: str | None = None
+    new_start_line: int | None = None
+    new_end_line: int | None = None
 
 
 class CustomToolReimportPreviewOut(BaseModel):

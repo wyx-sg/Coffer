@@ -39,8 +39,25 @@ def _machine(machine: str) -> str:
     return f"This machine: {machine}."
 
 
+def _verify_step(name: str, saved: bool) -> str:
+    """How the fix is checked: a saved server by the CLI, an unsaved config
+    (the Add / Edit dialog's test) by pressing Test there again."""
+    if saved:
+        return f"Verify the fix with `{_test_command(name)}`."
+    return (
+        "Then tell me to press Test again in Coffer's server dialog — this config is not "
+        "saved yet, so the CLI cannot test it."
+    )
+
+
 def launcher_handoff(
-    *, name: str, config: Mapping[str, Any], runner: str, machine: str, path: str
+    *,
+    name: str,
+    config: Mapping[str, Any],
+    runner: str,
+    machine: str,
+    path: str,
+    saved: bool = True,
 ) -> str:
     """The prompt to install ``runner`` so Coffer can start the server ``name``."""
     command = command_line_of(config) or runner
@@ -61,8 +78,12 @@ def launcher_handoff(
             steps=(
                 "Install it the way that fits this machine, so that a process started from "
                 "the GUI can find it (in one of the PATH directories above).",
-                f"Then run `{_test_command(name)}` to confirm the server starts, or tell me "
-                "to press Test on its page in Coffer.",
+                (
+                    f"Then run `{_test_command(name)}` to confirm the server starts, or tell me "
+                    "to press Test on its page in Coffer."
+                )
+                if saved
+                else _verify_step(name, saved),
             ),
         )
     )
@@ -84,13 +105,19 @@ def diagnose_handoff(
     stderr: Sequence[str],
     machine: str,
     log_path: str | None = None,
+    saved: bool = True,
 ) -> str:
     """The prompt to find why the server ``name`` fails and propose the fix.
 
     ``stderr`` is oldest first; only the newest :data:`STDERR_LINES` are kept,
     and every quoted line and the error pass through
     :func:`~coffer.domain.mcp.config_summary.scrub`."""
-    facts: list[str] = [f"The MCP server is named {name} in Coffer.", *config_summary(config)]
+    facts: list[str] = [
+        f"The MCP server is named {name} in Coffer."
+        if saved
+        else f"The MCP server is being set up in Coffer as {name}; it is not saved yet.",
+        *config_summary(config),
+    ]
     facts.append(
         f"The last error: {scrub(error)[:_LINE_MAX]}"
         if error
@@ -114,7 +141,7 @@ def diagnose_handoff(
                 "or a package that won't start — and tell me the fix before you change anything.",
                 "Do not read or change the secrets Coffer stores for this server; if one is "
                 "wrong, tell me and I will replace it on the server's page.",
-                f"Verify the fix with `{_test_command(name)}`.",
+                _verify_step(name, saved),
             ),
         )
     )

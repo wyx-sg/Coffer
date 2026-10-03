@@ -95,7 +95,10 @@ from coffer.surfaces.http.reconcile_wiring import (
     wire_attention,
 )
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.secret_boundary_wiring import remember_destination_sources
+from coffer.surfaces.http.secret_boundary_wiring import (
+    awaiting_secret_value,
+    remember_destination_sources,
+)
 from coffer.surfaces.http.secret_composition import (
     init_secret_store,
     make_secret_resolver,
@@ -173,11 +176,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds=app.state.kinds,
         repo=HintingResourceRepo(vault.resources, events.hint_sink),
         audit=audit,
-        # Wired so register/update_config can probe secret_refs against
-        # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
-        # servers as resources": a missing secret must fail registration
-        # with a named ref, no partial state).
+        # Probed before persisting (spec mcp-gateway "Manage MCP servers as resources").
         secrets=secret_store,
+        awaiting_secret=awaiting_secret_value,
     )
 
     retention_svc = build_retention_service(sm, audit=audit)

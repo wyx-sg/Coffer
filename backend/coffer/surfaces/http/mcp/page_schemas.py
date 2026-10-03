@@ -11,6 +11,22 @@ from coffer.infrastructure.mcp.invocation_summary import InvocationSummary
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
+class McpRequirementOut(BaseModel):
+    """One thing a server needs from this machine, worked out from its config."""
+
+    kind: Literal["cli", "secret"]
+    #: The launcher command (``npx``), or the environment variable or header
+    #: that holds the secret.
+    name: str
+    #: A CLI is ``found`` or ``not_found``; a secret is ``set``, ``missing`` on
+    #: this machine or ``waiting_approval``.
+    status: Literal["found", "not_found", "set", "missing", "waiting_approval"]
+    #: A found CLI's version, when it printed one.
+    version: str | None = None
+    #: A secret's name on the Secrets page, for "View in Secrets".
+    secret: str | None = None
+
+
 class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn).
 
@@ -49,6 +65,9 @@ class McpServerStatusOut(BaseModel):
     #: missing stdio launcher", "Hand a failing MCP server's diagnosis to an
     #: agent"). Null for a server that is healthy, unknown or missing a secret.
     handoff: HandoffOut | None = None
+    #: The launcher CLI and the secrets the server's command and settings need,
+    #: in that order; an HTTP server has no launcher.
+    requires: list[McpRequirementOut] = Field(default_factory=list)
 
 
 class CallCountOut(BaseModel):

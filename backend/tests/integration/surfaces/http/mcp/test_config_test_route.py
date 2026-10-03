@@ -115,6 +115,46 @@ def test_a_missing_command_is_spawn_failed(app_client: TestClient) -> None:
 
 
 @pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="a failed unsaved test that depends on this machine carries a hand-off",
+)
+def test_a_machine_failure_of_an_unsaved_config_carries_a_handoff_without_secrets(
+    app_client: TestClient,
+) -> None:
+    missing = app_client.post(
+        _URL,
+        json={
+            "name": "gh",
+            "transport": {
+                "type": "stdio",
+                "command": "coffer-no-such-cmd",
+                "args": ["--token", "tok-123456789"],
+            },
+        },
+    ).json()
+    assert missing["error_code"] == "spawn_failed"
+    assert "coffer-no-such-cmd" in missing["handoff"]["prompt"]
+    assert "tok-123456789" not in missing["handoff"]["prompt"]
+
+    script = "import sys; sys.stderr.write('boom\\n'); sys.exit(3)"
+    exited = app_client.post(
+        _URL, json={**_stdio("-c", script, env={"API_KEY": "plain-value-xyz"}), "name": "x"}
+    ).json()
+    assert exited["error_code"] == "exited"
+    prompt = exited["handoff"]["prompt"]
+    assert "boom" in prompt and "API_KEY" in prompt
+    assert "plain-value-xyz" not in prompt
+
+
+def test_a_failure_a_person_must_fix_carries_no_handoff(app_client: TestClient) -> None:
+    out = app_client.post(
+        _URL, json=_stdio("-c", "pass", secret_refs={"GITHUB_TOKEN": "mcp/gh/t"})
+    ).json()
+    assert out["error_code"] == "stored_secret_not_released"
+    assert out["handoff"] is None
+
+
+@pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a config citing a stored secret is not started"
 )
 def test_a_config_citing_a_stored_secret_is_not_started(

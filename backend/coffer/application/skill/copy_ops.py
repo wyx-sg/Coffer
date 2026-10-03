@@ -177,8 +177,22 @@ async def resolve(
     return skill
 
 
-async def refuse_foreign_copies(service: SkillService, skill: Resource) -> None:
-    """Refuse a delete that would leave (or wipe) a folder Coffer did not make."""
+@dataclass(frozen=True)
+class KeptCopy:
+    """An agent's folder a delete left alone because it is not Coffer's link."""
+
+    agent_name: str
+    path: str
+
+
+async def refuse_foreign_copies(
+    service: SkillService, skill: Resource, *, keep: list[KeptCopy] | None = None
+) -> None:
+    """Refuse a delete that would leave (or wipe) a folder Coffer did not make.
+
+    With ``keep`` given the delete goes ahead instead: each such folder is
+    appended to ``keep`` and left where it is (spec skill-manager "Refuse
+    deleting a skill whose copy Coffer did not make")."""
     master = pathlib.Path(service._store.paths_for(skill.name).folder)
     agents = {a.uid: a for a in await service.list_agents()}
     for b in await service._bindings.list_for_skill(skill.uid):
@@ -187,7 +201,10 @@ async def refuse_foreign_copies(service: SkillService, skill: Resource) -> None:
         link = pathlib.Path(b.last_link_path)
         if _is_foreign(service, link, master, b.link_mode):
             agent = agents.get(b.agent_uid)
-            raise SkillCopyNotOurs(skill.name, str(link), agent.name if agent else "")
+            name = agent.name if agent else ""
+            if keep is None:
+                raise SkillCopyNotOurs(skill.name, str(link), name)
+            keep.append(KeptCopy(name, str(link)))
 
 
-__all__ = ["CopyCompare", "compare", "refuse_foreign_copies", "resolve"]
+__all__ = ["CopyCompare", "KeptCopy", "compare", "refuse_foreign_copies", "resolve"]

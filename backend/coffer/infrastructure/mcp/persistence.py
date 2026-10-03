@@ -10,7 +10,7 @@ Whether a person switched a capability off is theirs, and travels: it is
 Only the switched-off capabilities are listed — a capability nobody touched
 is on, so a new upstream tool writes nothing into the vault. ``tool_exposure``
 likewise holds only the tools whose person-chosen exposure is not ``auto``
-(spec mcp-gateway "Forward tools, resources and prompts"). When this machine
+(spec mcp-gateway "Choose how each tool is exposed"). When this machine
 first and last saw each capability is an observation it makes again, so those
 times are in ``derived/derived.db`` (``mcp_capability_seen``) and never
 committed.

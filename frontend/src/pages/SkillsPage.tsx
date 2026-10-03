@@ -68,6 +68,7 @@ export function SkillsPage() {
       selected={selected}
       onClearSelection={clearSelection}
       onAdd={openAdd}
+      onCheckCopies={checkCopies}
       onDeleted={onDeleted}
     />
   );
@@ -76,7 +77,7 @@ export function SkillsPage() {
     // Full-bleed like the chat page: Layout pads every page, and this one is a
     // workspace whose two panes each scroll on their own.
     <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="shrink-0 border-b border-border-subtle px-6 py-3.5">
+      <div className="shrink-0 px-6 pb-3 pt-4 md:px-8">
         <PageHeader
           title={t("skills.title")}
           subtitle={t("skills.subtitle")}
@@ -90,7 +91,7 @@ export function SkillsPage() {
 
       <SplitView
         storageKey="skills.list"
-        defaultListWidth={320}
+        defaultListWidth={300}
         label={t("splitView.resizeList")}
         className="min-h-0 flex-1"
         detailClassName="overflow-y-auto"

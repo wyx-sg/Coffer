@@ -28,7 +28,7 @@ export function SkillFirstRun({ hasBuiltin, onAdd }: Props) {
         description={t("skills.firstRun.body")}
         action={
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button onClick={() => onAdd("folder")}>
+            <Button variant="outline" onClick={() => onAdd("folder")}>
               <Folder aria-hidden /> {t("skills.firstRun.fromFolder")}
             </Button>
             <Button variant="outline" onClick={() => onAdd("archive")}>

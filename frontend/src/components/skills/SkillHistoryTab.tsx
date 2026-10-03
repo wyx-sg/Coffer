@@ -1,35 +1,38 @@
 // frontend/src/components/skills/SkillHistoryTab.tsx
 //
-// A skill's History (spec vault-storage "Show, compare and restore any
-// version of a vault file"; ADR
-// every-vault-write-is-a-validated-commit-naming-its-writer — the skill's
-// History tab is its first consumer): the versions of the skill's master
-// folder `skills/<name>/`, newest first, each with who wrote it and when; for
-// the chosen one, the diff of every file it changed; and Restore this version,
-// which puts the whole folder back as a NEW version naming you. Coffer's own
+// A skill's History (canvas 4.3.19, 4.3.20; spec vault-storage "Show, compare
+// and restore any version of a vault file"; ADR
+// every-vault-write-is-a-validated-commit-naming-its-writer): the same card as
+// Files — the versions of the skill's master folder `skills/<name>/` on the
+// left under a "Versions" header, newest first, each with what it did and "who
+// · when" (You, Coffer or Git), the newest wearing a Current chip; on the right
+// what the chosen version changed and Restore this version…, which opens the
+// 1060 review before the folder goes back (SkillRestoreDialog). Coffer's own
 // skill is rebuilt from the build at every start, so it has no history here.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { History } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { FILE_PANE_COLUMN, FILE_PANE_SCROLL, useFillToBottom } from "@/components/filePane";
+import { useFillToBottom } from "@/components/filePane";
+import { LoadErrorRow } from "@/components/LoadErrorRow";
 import { SplitView } from "@/components/SplitView";
+import { SkillRestoreDialog } from "@/components/skills/SkillRestoreDialog";
 import { SkillVersionPanel } from "@/components/skills/SkillVersionPanel";
-import { Button } from "@/components/ui/button";
+import { sourceIcon, versionTitle, versionWhen } from "@/components/skills/versionLabels";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import { useVaultHistory } from "@/lib/hooks/useVaultHistory";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { vaultWriterLabel } from "@/lib/vault/writers";
 
 export function SkillHistoryTab({ skill }: { skill: SkillOut }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // The vault folder the skill's master copy lives in.
   const folder = `skills/${skill.name}/`;
   const history = useVaultHistory(skill.builtin ? null : folder);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const fill = useFillToBottom();
 
   if (skill.builtin) {
@@ -52,13 +55,11 @@ export function SkillHistoryTab({ skill }: { skill: SkillOut }) {
   }
   if (history.error) {
     return (
-      <div role="alert" className="space-y-2 rounded-md border border-border-subtle p-4">
-        <p className="text-sm font-semibold">{t("skills.history.failedTitle")}</p>
-        <p className="text-sm text-text-muted">{translateApiError(t, history.error)}</p>
-        <Button size="sm" variant="outline" onClick={() => void history.refetch()}>
-          {t("common.retry")}
-        </Button>
-      </div>
+      <LoadErrorRow
+        title={t("skills.history.failedTitle")}
+        error={history.error}
+        onRetry={() => void history.refetch()}
+      />
     );
   }
 
@@ -72,19 +73,24 @@ export function SkillHistoryTab({ skill }: { skill: SkillOut }) {
       />
     );
   }
-  const selected = versions.find((v) => v.version === chosen) ?? versions[0];
+  const index = Math.max(
+    0,
+    versions.findIndex((v) => v.version === chosen),
+  );
 
   const list = (
-    <div className={FILE_PANE_COLUMN}>
-      <p className="shrink-0 px-1 text-xs text-text-subtle">
-        {t("skills.history.count", { count: versions.length })}
-      </p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-border-subtle px-3">
+        <span className="text-sm font-semibold text-text">{t("skills.history.listLabel")}</span>
+        <span className="ml-auto text-xs text-text-subtle">{versions.length}</span>
+      </div>
       <ul
-        className={cn("divide-y divide-border-subtle", FILE_PANE_SCROLL)}
+        className="flex min-h-0 flex-1 flex-col gap-px overflow-auto p-1"
         aria-label={t("skills.history.listLabel")}
       >
         {versions.map((v, i) => {
-          const active = v.version === selected.version;
+          const active = i === index;
+          const Icon = sourceIcon(v.display_writer);
           return (
             <li key={v.version}>
               <button
@@ -92,19 +98,32 @@ export function SkillHistoryTab({ skill }: { skill: SkillOut }) {
                 onClick={() => setChosen(v.version)}
                 aria-current={active ? "true" : undefined}
                 className={cn(
-                  "flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md px-3 py-2 text-left text-sm",
+                  "flex w-full items-center gap-2.5 rounded-item p-2 text-left",
                   active ? "bg-surface-selected" : "hover:bg-surface-hover",
                 )}
               >
-                <span className="font-medium">{vaultWriterLabel(t, v.display_writer)}</span>
-                <span className="text-xs text-text-subtle">{formatDateTime(v.time)}</span>
-                {i === 0 ? (
-                  <span className="rounded-sm bg-chip px-1.5 text-2xs text-text-muted">
-                    {t("skills.history.current")}
+                <span className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-chip text-text-muted">
+                  <Icon className="size-3.5" aria-hidden />
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "min-w-0 truncate text-sm text-text",
+                        active ? "font-label" : "font-medium",
+                      )}
+                    >
+                      {versionTitle(t, v, folder, versions, i18n.language)}
+                    </span>
+                    {i === 0 ? (
+                      <span className="inline-flex h-[18px] shrink-0 items-center rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted">
+                        {t("skills.history.current")}
+                      </span>
+                    ) : null}
                   </span>
-                ) : null}
-                <span className="w-full truncate text-xs text-text-muted">
-                  {t("skills.history.filesChanged", { count: v.paths.length })}
+                  <span className="truncate text-xs text-text-muted">
+                    {vaultWriterLabel(t, v.display_writer)} · {versionWhen(t, v, i18n.language)}
+                  </span>
                 </span>
               </button>
             </li>
@@ -115,22 +134,37 @@ export function SkillHistoryTab({ skill }: { skill: SkillOut }) {
   );
 
   return (
-    <div ref={fill.ref} style={fill.style} className="flex min-h-0">
+    <div
+      ref={fill.ref}
+      style={fill.style}
+      className="flex min-h-0 overflow-hidden rounded-xl border border-border-subtle"
+    >
       <SplitView
         storageKey="skill-history"
         label={t("splitView.resizeList")}
-        defaultListWidth={288}
+        defaultListWidth={250}
         className="min-h-0 flex-1"
         list={list}
         detail={
           <SkillVersionPanel
-            key={selected.version}
+            key={versions[index].version}
             folder={folder}
-            version={selected}
-            isCurrent={selected.version === versions[0].version}
+            versions={versions}
+            index={index}
+            onRestore={() => setRestoring(true)}
           />
         }
       />
+      {restoring ? (
+        <SkillRestoreDialog
+          skill={skill}
+          versions={versions}
+          target={versions[index]}
+          folder={folder}
+          open
+          onOpenChange={(open) => !open && setRestoring(false)}
+        />
+      ) : null}
     </div>
   );
 }

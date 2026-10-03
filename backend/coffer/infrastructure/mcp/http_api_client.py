@@ -129,8 +129,8 @@ def build_request(
     arguments: dict[str, Any] | None,
     header_overlay: dict[str, str],
 ) -> RenderedRequest:
-    """The request for ``tool``, the auth header added last (so no tool
-    header can replace it)."""
+    """The request for ``tool``, the group's secret headers added last (so no
+    tool header can replace them)."""
     rendered = render_request(
         base_url=str(transport.base_url),
         method=tool.method,
@@ -141,13 +141,11 @@ def build_request(
         input_schema=tool.input_schema,
         arguments=arguments,
     )
-    if transport.auth_header and transport.auth_header in header_overlay:
+    for header, value in header_overlay.items():
         # Header names compare case-insensitively: drop any spelling a tool gave.
-        for name in [n for n in rendered.headers if n.lower() == transport.auth_header.lower()]:
+        for name in [n for n in rendered.headers if n.lower() == header.lower()]:
             del rendered.headers[name]
-        rendered.headers[transport.auth_header] = (
-            transport.auth_prefix + header_overlay[transport.auth_header]
-        )
+        rendered.headers[header] = value
     return rendered
 
 

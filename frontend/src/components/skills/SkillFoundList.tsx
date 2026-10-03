@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { SkillStaging, StagedSkill } from "@/lib/api/skills";
 import { cn, formatBytes } from "@/lib/utils";
-import { isChoosable } from "./skillSourceHelpers";
+import { isChoosable, shortCommit } from "./skillSourceHelpers";
 
 interface Props {
   stage: SkillStaging;
@@ -40,16 +40,18 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function SingleSkill({ skill, kind }: { skill: StagedSkill; kind: SkillStaging["kind"] }) {
+function SingleSkill({ skill, stage }: { skill: StagedSkill; stage: SkillStaging }) {
   const { t } = useTranslation();
   const ok = skill.valid && !skill.protected;
+  // A Git source read from a folder of the repository names that folder, not "the top".
+  const folder = skill.folder === "." ? stage.subpath.replace(/^\/+|\/+$/g, "") : skill.folder;
   const heading = !skill.valid
     ? t("skillSources.found.invalid")
-    : kind === "folder"
+    : stage.kind === "folder"
       ? t("skillSources.found.validFolder")
-      : skill.folder === "."
-        ? t("skillSources.found.top")
-        : t("skillSources.found.inFolder", { folder: skill.folder });
+      : folder
+        ? t("skillSources.found.inFolder", { folder })
+        : t("skillSources.found.top");
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5 overflow-hidden rounded-lg border border-border bg-surface-raised px-3 pb-1 pt-2.5">
@@ -82,6 +84,13 @@ function SingleSkill({ skill, kind }: { skill: StagedSkill; kind: SkillStaging["
           {skill.protected ? (
             <Field label={t("skillSources.found.why")}>{t("skillSources.found.protected")}</Field>
           ) : null}
+          {stage.kind === "git" && stage.commit ? (
+            <Field label={t("skillSources.found.pinned")}>
+              <span className="font-mono text-xs">
+                {stage.ref ?? t("skillSources.found.defaultBranch")} · {shortCommit(stage.commit)}
+              </span>
+            </Field>
+          ) : null}
         </div>
       </div>
       {skill.valid && skill.taken && !skill.protected && skill.name ? (
@@ -99,11 +108,6 @@ function SingleSkill({ skill, kind }: { skill: StagedSkill; kind: SkillStaging["
             </span>
           </div>
         </div>
-      ) : null}
-      {skill.valid && skill.taken && !skill.protected && skill.name ? (
-        <p className="text-xs text-text-muted">
-          {t("skillSources.found.takenNote", { name: skill.name })}
-        </p>
       ) : null}
     </div>
   );
@@ -181,7 +185,7 @@ function SkillRow({
 
 export function SkillFoundList({ stage, selected, onToggle }: Props) {
   const { t } = useTranslation();
-  if (stage.skills.length === 1) return <SingleSkill skill={stage.skills[0]} kind={stage.kind} />;
+  if (stage.skills.length === 1) return <SingleSkill skill={stage.skills[0]} stage={stage} />;
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
       <p className="border-b border-border-subtle bg-surface-sunken px-3 py-2 text-xs font-label text-text">

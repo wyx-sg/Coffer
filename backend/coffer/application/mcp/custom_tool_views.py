@@ -19,12 +19,14 @@ from coffer.application.mcp.custom_tool_ports import (
     BoundaryCheckPort,
     SecretPresencePort,
     ToolOutcomesPort,
+    ToolReach,
     ToolReachRepoPort,
 )
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import standalone_name
 
 GroupHealth = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretState = Literal["none", "present", "missing", "pending_approval"]
@@ -37,7 +39,8 @@ WINDOW = timedelta(hours=24)
 @dataclass(frozen=True)
 class ToolView:
     tool: HttpApiTool
-    reach_override: list[str] | None
+    #: ``None`` follows the group; ``"all"`` is every agent; a list is the chosen agents.
+    reach_override: ToolReach | None
     calls: int
     failures: int
 
@@ -48,11 +51,20 @@ class GroupView:
     transport: HttpApiTransport
     health: GroupHealth
     health_reason: str | None
+    #: The worst state across the group's secret headers (missing, then
+    #: waiting for approval, then present); ``none`` with no secret header.
     secret_state: SecretState
+    #: Each secret header's own state, keyed by header name.
+    header_states: dict[str, SecretState]
     pending_approvals: list[str]
+    #: The names of the secrets whose approval is pending.
+    pending_secrets: list[str]
     calls: int
     failures: int
     last_call_at: datetime | None
+    #: The newest call's status and error text, for the failing group's hand-off.
+    last_call_status: str | None
+    last_call_error: str | None
     tools: list[ToolView]
 
 
@@ -72,23 +84,29 @@ class GroupViewer:
         self._boundary = boundary
         self._clock = clock
 
-    async def _secret_state(
+    async def _secret_states(
         self, resource: Resource, transport: HttpApiTransport
-    ) -> tuple[SecretState, list[str]]:
-        ref = transport.secret_ref
-        if ref is None:
-            return "none", []
-        if self._secrets is not None and not await asyncio.to_thread(self._secrets.exists, ref):
-            return "missing", []
+    ) -> tuple[dict[str, SecretState], list[str], list[str]]:
+        """``(state per secret header, pending approval ids, pending secret names)``."""
+        states: dict[str, SecretState] = {}
+        present: dict[str, str] = {}
+        for header, ref in transport.secret_refs.items():
+            if self._secrets is not None and not await asyncio.to_thread(self._secrets.exists, ref):
+                states[header] = "missing"
+            else:
+                states[header] = "present"
+                present[header] = ref
         boundary = self._boundary()
-        if boundary is None:
-            return "present", []
+        if boundary is None or not present:
+            return states, [], []
         config = MCPServerConfig(transport=transport)
         dest = mcp_destination(resource.uid, resource.name, config)
-        pending = await asyncio.to_thread(boundary.check, dest, dict(transport.secret_refs))
-        if pending:
-            return "pending_approval", [a.id for a in pending]
-        return "present", []
+        pending = await asyncio.to_thread(boundary.check, dest, present)
+        for approval in pending:
+            if approval.slot in states:
+                states[approval.slot] = "pending_approval"
+        names = [standalone_name(a.ref or "") or (a.ref or "") for a in pending]
+        return states, [a.id for a in pending], names
 
     async def views(self, groups: list[tuple[Resource, HttpApiTransport]]) -> list[GroupView]:
         if not groups:
@@ -103,7 +121,8 @@ class GroupViewer:
         )
         out: list[GroupView] = []
         for resource, transport in groups:
-            secret_state, pending = await self._secret_state(resource, transport)
+            header_states, pending, pending_secrets = await self._secret_states(resource, transport)
+            secret_state = _worst(header_states)
             last = (
                 await self._outcomes.last_tool_call(resource.uid, since=since)
                 if self._outcomes is not None
@@ -127,15 +146,26 @@ class GroupViewer:
                     health=health,
                     health_reason=reason,
                     secret_state=secret_state,
+                    header_states=header_states,
                     pending_approvals=pending,
+                    pending_secrets=pending_secrets,
                     calls=sum(c for c, _ in per_tool.values()),
                     failures=sum(f for _, f in per_tool.values()),
                     last_call_at=last.timestamp if last else None,
+                    last_call_status=last.status if last else None,
+                    last_call_error=last.error_message if last else None,
                     tools=tools,
                 )
             )
         out.sort(key=lambda v: (HEALTH_ORDER[v.health], v.resource.name))
         return out
+
+
+def _worst(states: dict[str, SecretState]) -> SecretState:
+    for state in ("missing", "pending_approval", "present"):
+        if state in states.values():
+            return state
+    return "none"
 
 
 def _health(

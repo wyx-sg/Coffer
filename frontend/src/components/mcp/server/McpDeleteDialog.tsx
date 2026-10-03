@@ -1,15 +1,21 @@
-// src/components/mcp/server/McpDeleteDialog.tsx — Delete <name>? with what it costs (boards 1.1.10, 1.1.11).
+// src/components/mcp/server/McpDeleteDialog.tsx — Delete <name>? with what it costs (design 4.1.19; 420 wide).
 //
-// A confirmation says what the delete takes and what it leaves, in one fact
-// list: the tools that disappear from the agents that reach them, and each
-// secret the server cites — always kept, the Secrets page owns them. A footnote
-// says past calls stay in Activity. It closes only when the delete succeeded
-// (ConfirmDialog); a refusal stays in the dialog under "Couldn’t delete <name>".
+// Says who loses how many tools and that its call history stays in Activity.
+// A secret only this server cites can go with it — an unticked box, "Also
+// delete the secret <NAME>", so a delete never takes a credential by surprise;
+// one other things use is never offered. It closes only when the delete
+// succeeded (ConfirmDialog); a refusal stays in the dialog under "Couldn’t
+// delete <name>".
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { ConfirmDialog, ConfirmFacts } from "@/components/ui/confirm-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/components/ui/toast";
+import { translateApiError } from "@/lib/api/errors";
 import type { ResourceOut } from "@/lib/api/resources";
+import { useDeleteSecret, useSecrets } from "@/lib/hooks/useSecrets";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { secretLabel } from "@/lib/mcp/serverState";
 
@@ -38,34 +44,36 @@ export function McpDeleteDialog({
   onDeleted,
 }: Props) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const del = useDeleteResource();
+  const delSecret = useDeleteSecret();
+  const secrets = useSecrets(open);
+  const [alsoDelete, setAlsoDelete] = useState<ReadonlySet<string>>(new Set());
 
-  const facts: { label: string; value: string }[] = [];
-  if (agentNames) {
-    facts.push({
-      label: t("mcp.page.delete.toolsLabel"),
-      value:
-        toolCount > 0
-          ? t("mcp.page.delete.toolsGone", { count: toolCount, agents: agentNames })
-          : t("mcp.page.delete.toolsGoneAny", { agents: agentNames }),
-    });
-  }
-  for (const ref of citedRefs(resource.config)) {
-    facts.push({
-      label: t("mcp.page.delete.secretLabel"),
-      value: t("mcp.page.delete.secretStays", { name: secretLabel(ref) }),
-    });
-  }
+  // Secrets only this server cites: the others stay with whatever else uses them.
+  const own = citedRefs(resource.config).filter((ref) => {
+    const row = secrets.data?.refs.find((r) => r.ref === ref);
+    return !!row && row.cited_by.length > 0 && row.cited_by.every((c) => c.uid === resource.uid);
+  });
+  const tools =
+    toolCount > 0 ? t("mcp.page.itsTools", { count: toolCount }) : t("mcp.page.itsToolsAny");
 
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) del.reset();
+        if (!next) {
+          del.reset();
+          setAlsoDelete(new Set());
+        }
       }}
       title={t("mcp.page.delete.title", { name: resource.name })}
-      description={t("mcp.page.delete.description")}
+      description={
+        agentNames
+          ? t("mcp.page.delete.body", { agents: agentNames, tools })
+          : t("mcp.page.delete.bodyNone")
+      }
       confirmLabel={t("mcp.page.delete.confirm")}
       confirmIcon={<Trash2 aria-hidden />}
       pendingLabel={t("common.deleting")}
@@ -77,6 +85,10 @@ export function McpDeleteDialog({
           { kind: "mcp_server", uid: resource.uid },
           {
             onSuccess: () => {
+              for (const ref of alsoDelete)
+                delSecret.mutate(ref, {
+                  onError: (err) => toast.error(translateApiError(t, err)),
+                });
               onOpenChange(false);
               onDeleted();
             },
@@ -84,8 +96,30 @@ export function McpDeleteDialog({
         )
       }
     >
-      {facts.length > 0 ? <ConfirmFacts items={facts} /> : null}
-      <p className="text-xs text-text-subtle">{t("mcp.page.delete.footnote")}</p>
+      {own.map((ref) => (
+        <label key={ref} className="flex items-start gap-2.5 text-sm text-text">
+          <Checkbox
+            className="mt-0.5"
+            checked={alsoDelete.has(ref)}
+            onChange={(e) =>
+              setAlsoDelete((prev) => {
+                const next = new Set(prev);
+                if (e.target.checked) next.add(ref);
+                else next.delete(ref);
+                return next;
+              })
+            }
+          />
+          <span className="flex flex-col gap-0.5">
+            <span>
+              {t("mcp.page.delete.alsoSecret")}{" "}
+              <span className="font-mono text-xs font-label">{secretLabel(ref)}</span>
+            </span>
+            <span className="text-xs text-text-muted">{t("mcp.page.delete.secretOnlyHere")}</span>
+          </span>
+        </label>
+      ))}
+      <p className="text-xs text-text-muted">{t("mcp.page.delete.footnote")}</p>
     </ConfirmDialog>
   );
 }

@@ -3,9 +3,9 @@
 // The text of a viewed file under its toolbar. Markdown reads as a document in
 // one 720 column: its front matter as a key / value grid (mono key, the value
 // beside it, a hairline under the grid), then the rendered body. Source — and
-// every file that is not Markdown — is the line-numbered code view. A file too
-// big to show says so in one line under the text.
-import { useTranslation } from "react-i18next";
+// every file that is not Markdown — is the line-numbered code view, optionally
+// wrapped. A file read only in part shows as code; the viewer puts the grey
+// TruncatedBar (FileStates) over it.
 
 import { isMarkdownPath } from "@/components/files/middlePath";
 import type { FileView } from "@/components/files/ViewerToolbar";
@@ -36,39 +36,33 @@ export function FileBody({
   text,
   view,
   truncated,
+  wrap,
 }: {
   path: string;
   text: string;
   view: FileView;
-  /** Only the start of the file was read. */
+  /** Only the start of the file was read: shown as code, never rendered. */
   truncated?: boolean;
+  /** Wrap long lines of code instead of scrolling sideways. */
+  wrap?: boolean;
 }) {
-  const { t } = useTranslation();
   const markdown = isMarkdownPath(path) && !truncated;
   const { entries, body } = markdown ? splitFrontmatter(text) : { entries: [], body: text };
-  return (
-    <>
-      {markdown && view === "preview" ? (
-        <div className="min-h-0 flex-1 overflow-auto px-8 py-6">
-          <div className="mx-auto max-w-[720px]">
-            {entries.length > 0 ? <FrontMatterGrid entries={entries} /> : null}
-            <FindableMarkdown frontmatter={false}>{body}</FindableMarkdown>
-          </div>
-        </div>
-      ) : (
-        <CodeView
-          value={text}
-          filename={path}
-          fill
-          ariaLabel={path}
-          className="rounded-none border-0"
-        />
-      )}
-      {truncated ? (
-        <p className="shrink-0 border-t border-border-subtle px-3 py-1.5 text-xs text-text-muted">
-          {t("files.truncated")}
-        </p>
-      ) : null}
-    </>
+  return markdown && view === "preview" ? (
+    <div className="min-h-0 flex-1 overflow-auto px-8 py-6">
+      <div className="mx-auto max-w-[720px]">
+        {entries.length > 0 ? <FrontMatterGrid entries={entries} /> : null}
+        <FindableMarkdown frontmatter={false}>{body}</FindableMarkdown>
+      </div>
+    </div>
+  ) : (
+    <CodeView
+      value={text}
+      filename={path}
+      fill
+      wrap={wrap}
+      ariaLabel={path}
+      className="rounded-none border-0"
+    />
   );
 }

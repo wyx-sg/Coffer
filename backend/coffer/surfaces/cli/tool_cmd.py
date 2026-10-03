@@ -18,7 +18,7 @@ import typer
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
 from coffer.surfaces.cli._kind_verbs import KindVerbs, _agent_uids, register_kind_verbs, verbose_of
-from coffer.surfaces.cli._tool_common import get_group, pairs, print_group
+from coffer.surfaces.cli._tool_common import get_group, header_rows, pairs, print_group
 from coffer.surfaces.cli.tool_op_cmd import op_app
 
 app = typer.Typer(help="Manage custom tools: HTTP API requests your agents call as tools")
@@ -91,11 +91,11 @@ def add_cmd(
         None, "--base-url", help="Every tool's path is added to it"
     ),
     description: str | None = typer.Option(None, "--description"),
-    header: list[str] = typer.Option([], "--header", help="Static header KEY=VALUE (repeatable)"),  # noqa: B008
-    auth_header: str | None = typer.Option(None, "--auth-header", help="e.g. Authorization"),
-    auth_prefix: str | None = typer.Option(None, "--auth-prefix", help='e.g. "Bearer "'),
-    secret: str | None = typer.Option(
-        None, "--secret", help="Secrets-page name for the auth header"
+    header: list[str] = typer.Option([], "--header", help="Header NAME=VALUE (repeatable)"),  # noqa: B008
+    secret_header: list[str] = typer.Option(  # noqa: B008
+        [],
+        "--secret-header",
+        help="Header NAME=SECRET whose whole value is a Secrets-page secret (repeatable)",
     ),
     timeout: int = typer.Option(30, "--timeout", help="Per-request timeout in seconds (1-300)"),
     agents: str | None = typer.Option(None, "--agents", help="Only these agents (a,b)"),
@@ -144,23 +144,15 @@ def add_cmd(
                 "skipped": sorted(keys - {op["key"] for op in chosen}),
             }
             base_url = base_url or reading.get("base_url")
-            if secret and auth_header is None and reading.get("auth_header"):
-                auth_header = reading["auth_header"]
-                auth_prefix = reading.get("auth_prefix", "") if auth_prefix is None else auth_prefix
         if not base_url:
             typer.echo("--base-url is required (the document names no server)", err=True)
             raise typer.Exit(2)
-        if secret and not auth_header:
-            auth_header = "Authorization"
         payload: dict[str, Any] = {
             "name": name,
             "description": description,
             "base_url": base_url,
-            "headers": pairs("--header", header),
-            "auth": (
-                {"header": auth_header, "prefix": auth_prefix or "", "secret": secret}
-                if auth_header
-                else None
+            "headers": header_rows(
+                pairs("--header", header), pairs("--secret-header", secret_header)
             ),
             "timeout_seconds": timeout,
             "tools": tools,
@@ -182,20 +174,17 @@ def edit_cmd(
     name: str = typer.Argument(..., help="Group name"),
     description: str | None = typer.Option(None, "--description"),
     base_url: str | None = typer.Option(None, "--base-url"),
-    header: list[str] = typer.Option([], "--header", help="Static header KEY=VALUE (repeatable)"),  # noqa: B008
-    clear_headers: bool = typer.Option(
-        False, "--clear-headers", help="Drop every static header first"
+    header: list[str] = typer.Option([], "--header", help="Header NAME=VALUE (repeatable)"),  # noqa: B008
+    secret_header: list[str] = typer.Option(  # noqa: B008
+        [],
+        "--secret-header",
+        help="Header NAME=SECRET whose whole value is a Secrets-page secret (repeatable)",
     ),
-    auth_header: str | None = typer.Option(None, "--auth-header"),
-    auth_prefix: str | None = typer.Option(None, "--auth-prefix"),
-    secret: str | None = typer.Option(
-        None, "--secret", help="Secrets-page name for the auth header"
-    ),
-    clear_auth: bool = typer.Option(False, "--clear-auth", help="Remove the auth header"),
+    clear_headers: bool = typer.Option(False, "--clear-headers", help="Drop every header first"),
     timeout: int | None = typer.Option(None, "--timeout", help="Per-request timeout (1-300)"),
     wait: bool = WAIT_OPTION,
 ) -> None:
-    """Change a group's description, base URL, headers, auth or timeout (its name is fixed).
+    """Change a group's description, base URL, headers or timeout (its name is fixed).
 
     Moving the base URL or binding another secret waits for approval in the
     Coffer app before the secret is sent there.
@@ -210,18 +199,17 @@ def edit_cmd(
             body["base_url"] = base_url
         if timeout is not None:
             body["timeout_seconds"] = timeout
-        if header or clear_headers:
-            current = {} if clear_headers else get_group(c, name, verbose=verbose)["headers"]
-            body["headers"] = {**current, **pairs("--header", header)}
-        if clear_auth:
-            body["auth"] = None
-        elif auth_header is not None or auth_prefix is not None or secret is not None:
-            now = get_group(c, name, verbose=verbose).get("auth") or {}
-            body["auth"] = {
-                "header": auth_header or now.get("header") or "Authorization",
-                "prefix": now.get("prefix", "") if auth_prefix is None else auth_prefix,
-                "secret": secret if secret is not None else now.get("secret"),
-            }
+        if header or secret_header or clear_headers:
+            current = [] if clear_headers else get_group(c, name, verbose=verbose)["headers"]
+            given = {*pairs("--header", header), *pairs("--secret-header", secret_header)}
+            kept = [
+                {"name": h["name"], "value": h["value"], "secret": h["secret"]}
+                for h in current
+                if h["name"] not in given
+            ]
+            body["headers"] = kept + header_rows(
+                pairs("--header", header), pairs("--secret-header", secret_header)
+            )
         if not body:
             typer.echo("nothing to change", err=True)
             raise typer.Exit(2)

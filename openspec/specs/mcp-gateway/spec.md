@@ -190,7 +190,9 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
   health report the failure, the server is marked unhealthy until reachable, and there MUST be no silent
   retry storm.
 - Registering a server whose secret is missing MUST fail with a message naming the missing secret and
-  pointing the user at the secret setup path, persisting no partial state.
+  pointing the user at the secret setup path, persisting no partial state. A secret whose new value is
+  waiting for approval is not missing: the server is registered citing it, and its value reaches the server
+  only once the change is approved.
 - Registering a server with a name that already exists within the kind MUST be rejected with a clear error;
   a partial write is impossible.
 - The `coffer mcp` group MUST offer the lifecycle verbs `list`, `show`, `add`, `edit`, `rm`, `enable`,
@@ -496,6 +498,28 @@ MUST carry the length on every tool row. Flagging MUST NOT disable, rename or hi
 - **THEN** the long tool is flagged on both surfaces with its length and a note that some clients drop names above 60 characters, and the short one is not flagged
 - **AND** both tools stay enabled and are still listed to clients under their usual names
 
+### Requirement: Choose how each tool is exposed
+A person MUST be able to set, per tool of a server, how it is exposed to agents: `auto` (the default) leaves the decision to the tool-listing budget, so the most-used tools stay in `tools/list` and the rest are reached through `coffer__search_tools`; `listed` pins the tool into the list; `search` leaves it to `coffer__search_tools` only. The setting is the person's, kept per (server, tool) in the server's preference document in the vault, and survives a restart and switching the tool off and on; `auto` clears it. It changes only how a tool is listed, never whether it can be called. `PATCH /api/v1/resources/mcp_server/{uid}/tools/{tool}/exposure` sets one tool and `PATCH .../tools/exposure` sets several in one call (`{tools, mode}`); an unknown tool or a set containing one is refused with 404 and nothing changes, and a mode other than the three with 422. The server's tiering read reports each tool's setting, whether it is effectively listed or behind search, and why (`pinned`, `search_only`, `within_budget`, `top_by_use`, `low_use`). `coffer mcp cap expose <server> auto|listed|search tool:<name>...` does the same from the command line and `cap list` shows each tool's setting and what agents get. Each change is audited as `tool_exposure_changed`.
+
+The server page's Tools tab MUST list every tool, not only a first page: fifty rows are shown with "Showing 50 of N" and **Show N more** reveals the rest, and its search runs over all of them. Each tool row carries its exposure as a choice that reads, for example, "Auto · Listed" or "Auto · Behind search". The Resources and Prompts tabs MUST be listed in full the same way, with a search over every item.
+
+#### Scenario: a server's Tools tab lists every tool
+- **GIVEN** a server with 78 tools
+- **WHEN** the user opens its Tools tab and chooses Show 28 more
+- **THEN** 50 rows are shown first with "Showing 50 of 78", then all 78 with "Showing 78 of 78" and no Show more button
+- **AND** searching for one tool's name finds it among all 78
+
+#### Scenario: a server's resources and prompts are listed in full
+- **GIVEN** a server with 120 prompts
+- **WHEN** the user opens its Prompts tab and chooses Show more until none is left
+- **THEN** all 120 are listed with "Showing 120 of 120", and searching for the last one's name finds it
+
+#### Scenario: a tool's exposure is chosen by the person
+- **GIVEN** a budget of two and a server with tools `a`, `b` and `c`, where `b` is the most used
+- **WHEN** the person sets `c` to `listed`
+- **THEN** the tiering read reports `c` as mode `listed`, effectively listed because it is pinned, `b` as `auto` and listed, and `a` as `auto` and behind search for low use
+- **AND** the Tools tab shows each tool's choice, such as "Auto · Listed" or "Auto · Behind search"
+
 ### Requirement: Spawn a server with a secret only once its binding is approved
 Before it spawns a stdio server or connects to an HTTP server with secret
 refs, the gateway MUST ask the secret boundary whether each ref may go to that
@@ -531,10 +555,12 @@ gateway injects itself, and a stdio server with no secret, carry false.
 The gateway MUST support a third upstream transport, `http_api`, whose server
 is a **custom-tool group**: an `mcp_server` whose tools are HTTP requests the
 gateway makes itself, with no process to run and no MCP server at the other
-end. A group MUST carry a base URL (`http` or `https`), optional static
-headers, an optional auth header whose value is one stored secret (with an
-optional prefix such as `Bearer `), a per-request timeout between 1 and 300
-seconds (30 by default) and its tools. Each tool MUST carry a name unique in
+end. A group MUST carry a base URL (`http` or `https`), optional **header
+rows**, a per-request timeout between 1 and 300 seconds (30 by default) and its
+tools. A header row is a name and a value: plain text, or a stored secret that
+holds the WHOLE header value — nothing is put around it, so a bearer token is
+stored as `Bearer <token>`. A row carries a value or a secret, never both, and a
+header name appears once. Each tool MUST carry a name unique in
 the group, a description, a method (GET, POST, PUT, PATCH or DELETE), a path
 template relative to the base URL whose `{argument}` holes may sit in the path
 or the query, optional headers, an optional JSON body template, the JSON
@@ -550,6 +576,12 @@ nothing persisted.
 - **WHEN** an agent lists the gateway's tools
 - **THEN** it is offered `billing__list_invoices` with the tool's description and argument schema
 
+#### Scenario: a group's headers are rows whose value is plain or a whole secret
+- **GIVEN** a stored secret `billing-token`
+- **WHEN** a group is created with the headers `X-Team` = `billing` and `Authorization` bound to `billing-token`, then its headers are replaced with `X-Team` = `ops`
+- **THEN** the group first lists both rows, the secret one naming `billing-token` and its state and never its value, and a row giving both a value and a secret is refused
+- **AND** after the replacement it lists one plain row and no secret
+
 #### Scenario: a tool naming an undeclared argument is refused
 - **GIVEN** a group `billing`
 - **WHEN** a tool with path `/invoices/{id}` and an argument schema that declares no `id` is added
@@ -560,8 +592,8 @@ On `tools/call` for a custom tool the gateway MUST render the request from the
 arguments — each path hole percent-encoded so a value cannot change the path,
 the query or the host; a query pair whose hole's argument is absent dropped;
 the body template filled with JSON values, or, with no template, the unused
-arguments sent as a JSON object for POST, PUT and PATCH — add the auth header
-with the secret's value last, send it with the group's timeout without
+arguments sent as a JSON object for POST, PUT and PATCH — add the group's
+secret headers with each secret's value last, send it with the group's timeout without
 following redirects, read at most 1 MiB of the response, and return one text
 result that starts with the HTTP status line. A status of 400 or more MUST be
 returned as an in-band tool error; a redirect MUST be returned, not followed;
@@ -571,7 +603,7 @@ record: an occurrence in the response is masked as `***`. Every call MUST be
 recorded like any other tool call ("Record invocations without content").
 
 #### Scenario: a custom tool call sends the rendered request with the secret
-- **GIVEN** a group with base URL `https://api.example/v2`, auth header `Authorization` with prefix `Bearer ` bound to an approved secret, and a tool `GET /invoices/{id}?status={status}`
+- **GIVEN** a group with base URL `https://api.example/v2`, an `Authorization` header bound to an approved secret holding `Bearer <token>`, and a tool `GET /invoices/{id}?status={status}`
 - **WHEN** an agent calls it with `id` = `a/b` and no `status`
 - **THEN** the gateway sends `GET https://api.example/v2/invoices/a%2Fb` with `Authorization: Bearer <secret>`
 - **AND** the agent receives `HTTP 200 OK` and the body, and the invocation log records one `ok` call with no arguments or content
@@ -608,9 +640,10 @@ but GET, and a person MAY turn it off or on for any tool.
 A custom tool switched off, or whose **reach override** does not admit the
 session's agent, MUST be left out of `tools/list` and of
 `coffer__search_tools` results, and a call on it MUST be recorded as `denied`
-and answered with TOOL_DISABLED. A reach override is a list of agent uids that
-narrows the group's reach for that one tool — an agent the group does not
-reach is not reached by any of its tools — and, like every reach, it is kept on
+and answered with TOOL_DISABLED. A reach override is either a list of agent uids that
+narrows the group's reach for that one tool, or `all` — every agent the group
+reaches, agents added later included — and no override at all follows the
+group; an agent the group does not reach is not reached by any of its tools. Like every reach, an override is kept on
 this machine only, in `~/.coffer/local/tool-reach.json`, and never travels with sync. Removing a tool or its group
 MUST remove its override.
 
@@ -625,13 +658,27 @@ MUST remove its override.
 - **THEN** Codex is offered every tool but that one, and Claude Code is offered all of them
 - **AND** the override is absent from what the vault syncs
 
+#### Scenario: a tool's own reach can be every agent, apart from the group's
+- **GIVEN** a group reaching Claude Code and a tool with no override
+- **WHEN** the tool's reach is set to every agent, then to Claude Code only, then cleared
+- **THEN** the tool reads `all`, then `chosen` with Claude Code, then follows the group
+- **AND** `all` is stored as `all`, not as a list of today's agents
+
 ### Requirement: Import custom tools from an OpenAPI document
 The system MUST read an OpenAPI 3.0 or 3.1 document, JSON or YAML, given as a
 file or fetched from a URL, into draft tools — one per operation, named from
 its `operationId`, with its path and query parameters as holes, its JSON
 request body as a `body` argument, and local `$ref`s resolved — and suggest
-the base URL from its `servers` and the auth header from its security schemes.
-A URL typed into the import MUST pass the SSRF guard before it is fetched, and
+the base URL from its `servers` and the header a credential goes in from its
+security schemes (`Authorization` for bearer, basic and OAuth; the key's name for
+an API key), which the form pre-fills as one header row with no value. Each
+draft operation MUST carry its text in the document with its first and last
+line, and its text is kept on the tool it becomes. A document that cannot be
+parsed MUST be refused with the line and column where it broke. A URL that does
+not answer — its host name does not resolve, the connection is refused, or it
+times out — MUST be refused with the distinct code `OPENAPI_UNREACHABLE`, the
+reason, and a hand-off prompt about checking the URL, the network, VPN or proxy
+(Principle IV, AI-Native). A URL typed into the import MUST pass the SSRF guard before it is fetched, and
 the document MUST be at most 5 MiB. The chosen operations become the tools of
 a new group, which records where the document came from and the operations
 left out. **Re-import** MUST read the source again and first preview the
@@ -644,8 +691,23 @@ never removed by a re-import.
 #### Scenario: an OpenAPI document becomes draft tools
 - **GIVEN** an OpenAPI 3.1 document with five operations, a server URL and a bearer security scheme
 - **WHEN** it is read for import
-- **THEN** five draft tools are returned with their methods, paths and argument schemas, the server URL as the base URL and `Authorization` with `Bearer ` as the auth header
+- **THEN** five draft tools are returned with their methods, paths and argument schemas, the server URL as the base URL and `Authorization` as the suggested header
 - **AND** creating a group from three of them yields exactly those three tools, each switched on, and records the other two as left out
+
+#### Scenario: the import preview shows each operation's source
+- **GIVEN** an OpenAPI document written over several lines
+- **WHEN** it is read for import
+- **THEN** each operation carries its first and last line and its text in the document, and the tool drafted from it keeps that text
+
+#### Scenario: an unreadable spec says where it broke
+- **GIVEN** a JSON document with a missing comma on line 5, and a YAML document with an unclosed bracket
+- **WHEN** each is read for import
+- **THEN** each is refused as `OPENAPI_UNREADABLE` with the line and column where it broke
+
+#### Scenario: an unreachable spec URL says why
+- **GIVEN** an import URL whose host name does not resolve, one that refuses the connection, and one that times out
+- **WHEN** each is read for import
+- **THEN** each is refused as `OPENAPI_UNREACHABLE` with the reason `dns`, `refused` or `timeout` and a hand-off prompt naming the URL
 
 #### Scenario: an OpenAPI URL on a private address is refused
 - **GIVEN** an import URL whose host resolves to a loopback or private address
@@ -659,19 +721,21 @@ never removed by a re-import.
 - **AND** after applying, the dropped tool and its override are gone, the new tool is on, and the kept tools keep their switch and reach override
 
 ### Requirement: Wait for approval before a custom tool sends its secret
-Binding a stored secret to a group's auth header MUST be treated as a new
+Binding a stored secret to one of a group's headers MUST be treated as a new
 destination whose target is the group's base URL and whose slot is the header
 name ([secret](../secret/spec.md) "Hold a secret for a new
 destination until a person approves it"): no call and no Test carries the
 secret until a person approves it for that base URL, a call before then fails
 with `SECRET_BINDING_PENDING`, and changing the base URL or the header asks
-again. The group MUST report its secret as `present`, `missing` or
-`pending_approval`, with the ids of the approvals it waits on.
+again. The group MUST report each secret header's state as `present`, `missing`
+or `pending_approval` and, as a whole, the worst of them (`none` with no secret
+header), with the ids of the approvals it waits on and the names of the secrets
+concerned.
 
 #### Scenario: binding a stored secret to a group waits for approval
 - **GIVEN** a stored secret `billing-token`
-- **WHEN** a group is created with its auth header bound to `billing-token`, and an agent calls one of its tools
-- **THEN** the group reports `pending_approval` naming one approval for its base URL, and the call fails with `SECRET_BINDING_PENDING` having sent nothing
+- **WHEN** a group is created with its `Authorization` header bound to `billing-token`, and an agent calls one of its tools
+- **THEN** the group reports `pending_approval` naming one approval for its base URL and the secret `billing-token`, and the call fails with `SECRET_BINDING_PENDING` having sent nothing
 - **AND** once the approval is applied the next call carries the secret
 
 #### Scenario: moving a group's base URL asks again
@@ -698,7 +762,7 @@ approval, `healthy` after a successful last call, and `idle` with no call in
 
 #### Scenario: the command line creates a group and adds a tool
 - **GIVEN** the daemon is running and a stored secret `deploy-token` whose binding is approved
-- **WHEN** the user runs `coffer tool add deploy --base-url https://deploy.example/v1 --auth-header Authorization --auth-prefix "Bearer " --secret deploy-token`, then `coffer tool op add deploy rollback --method POST --path /services/{service}/rollback --arg service:string:required`
+- **WHEN** the user runs `coffer tool add deploy --base-url https://deploy.example/v1 --secret-header Authorization=deploy-token`, then `coffer tool op add deploy rollback --method POST --path /services/{service}/rollback --arg service:string:required`
 - **THEN** `coffer tool show deploy --json` lists the `rollback` tool with the changes-data flag on
 - **AND** `coffer tool op test deploy rollback --arg-value service=web` prints the upstream's status line
 
@@ -712,8 +776,22 @@ approval, `healthy` after a successful last call, and `idle` with no call in
 - **WHEN** the groups are listed
 - **THEN** the failing group comes first with health `failing`, then the healthy one, and the disabled one last with health `off`
 
+### Requirement: Hand a failing custom tool group to an agent
+A group whose last call failed, and a test of a request that could not connect
+or timed out (for a saved or an unsaved group), MUST carry a hand-off prompt
+that hands the network problem to an agent — the group, the method and URL with
+credentials and secret-looking query values redacted, the error and the machine;
+no header value — and no other result does. The prompt is written by the daemon,
+so a surface passes it on as served and never assembles one.
+
+#### Scenario: a failing group carries a hand-off prompt and a healthy one does not
+- **GIVEN** one group whose last call failed, one whose last call succeeded and one disabled
+- **WHEN** the groups are listed
+- **THEN** only the failing group carries a hand-off prompt, and it names the group
+- **AND** a disabled group carries none
+
 ### Requirement: Test an unsaved server config before adding it
-The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed`, `auth_rejected` (an HTTP server answered 401 or 403) or `stored_secret_not_released`.
+The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed`, `auth_rejected` (an HTTP server answered 401 or 403) or `stored_secret_not_released`. A failure that depends on this machine — `spawn_failed`, `exited`, `timeout` or `connect_failed` — MUST also carry a hand-off prompt (the missing launcher to install, else the cause to find) built from the config's names with no secret value; `url_refused`, `auth_rejected`, `stored_secret_not_released` and `initialize_failed` carry none.
 
 #### Scenario: a stdio config is tested without saving anything
 - **GIVEN** the daemon is running and no MCP server is registered
@@ -735,6 +813,12 @@ The daemon MUST test an MCP server config that is not registered, so the Add dia
 - **GIVEN** a stdio config whose command prints the secret typed into the form on stderr and exits with status 3
 - **WHEN** the Add dialog tests it with that secret typed in
 - **THEN** the result is a failure with code `exited` and exit code 3, and its stderr tail shows the line with the secret redacted
+
+#### Scenario: a failed unsaved test that depends on this machine carries a hand-off
+- **GIVEN** a stdio config whose command is not found, or whose process exits, and whose environment holds a plain value
+- **WHEN** the Add dialog tests it
+- **THEN** the result carries a hand-off prompt naming the command, the error and the variable's name, and no secret or plain value
+- **AND** a failure the person must fix themselves, such as a cited stored secret, carries no hand-off
 
 #### Scenario: a test past its time limit stops the server's whole process group
 - **GIVEN** a stdio server that forks a child and never completes `initialize`
@@ -767,12 +851,12 @@ The capability list of one MCP server MUST also be readable from its saved switc
 - **THEN** the answer lists those tools from the saved switches without asking the server, and a server never listed reads as empty lists
 
 ### Requirement: Test a custom tool request before its group is saved
-The daemon MUST run a request of a custom-tool group that is not saved yet — its base URL, headers and timeout given inline with the draft tool and sample arguments — once, and return what came back in the same shape as a saved group's test, saving nothing and logging no invocation. No stored secret is sent: an unsaved group has no approved binding, so the request goes without its auth header. Its base URL was typed into a form, so it MUST pass the SSRF guard before anything is sent (Principles → Network defaults); a refused address is reported as not tested. Every test result — saved group or not — MUST say how a request failed when no answer came back: the request could not be built, it timed out, it could not connect, or its address was refused.
+The daemon MUST run a request of a custom-tool group that is not saved yet — its base URL, headers and timeout given inline with the draft tool and sample arguments — once, and return what came back in the same shape as a saved group's test, saving nothing and logging no invocation. No stored secret is sent: an unsaved group has no approved binding, so the request goes without its secret headers. Its base URL was typed into a form, so it MUST pass the SSRF guard before anything is sent (Principles → Network defaults); a refused address is reported as not tested. Every test result — saved group or not — MUST say how a request failed when no answer came back: the request could not be built, it timed out, it could not connect, or its address was refused.
 
 #### Scenario: a request of an unsaved group is tested without its secret
 - **GIVEN** no group exists and an HTTP API answering on a public address
 - **WHEN** a draft request with a base URL, a header and sample arguments is tested
-- **THEN** the API receives the request with that header and no auth header, the answer's status and body come back, and still no group exists
+- **THEN** the API receives the request with that header and no secret header, the answer's status and body come back, and still no group exists
 
 #### Scenario: an unsaved group on a private address is not tested
 - **GIVEN** a draft request whose base URL resolves to a loopback address
@@ -783,14 +867,20 @@ The daemon MUST run a request of a custom-tool group that is not saved yet — i
 - **GIVEN** a draft request whose base URL has nothing listening, and one whose path names an argument it does not declare
 - **WHEN** each is tested
 - **THEN** the first reports it could not connect and the second that the request could not be built, while a request the API answers reports no failure
+- **AND** only the one that could not connect carries a hand-off prompt
 
 ### Requirement: List what a re-import changes in the tools it keeps
-A re-import's preview MUST name, besides the operations it would add and the tools it would remove, every kept tool whose operation the spec now describes differently — an argument it now requires, or a changed method, path or body template — and an OpenAPI reading MUST carry each operation's first tag, so the import form can group operations by it.
+A re-import's preview MUST name, besides the operations it would add and the tools it would remove, every kept tool whose operation the spec now describes differently — an argument it now requires, or a changed method, path or body template — with the operation's text as last imported and as it now reads (the old text is absent for a tool imported before Coffer kept it), and an OpenAPI reading MUST carry each operation's first tag, so the import form can group operations by it.
 
 #### Scenario: a re-import preview names the tools the spec changed
 - **GIVEN** a group imported from a spec whose `POST /invoices` took no arguments
 - **WHEN** the spec now requires a `currency` query argument there and the group is previewed for re-import
 - **THEN** the preview names `create_invoice` as changed with the new required argument `currency`, and the group's tools are unchanged
+
+#### Scenario: a re-import preview shows an operation's old and new text
+- **GIVEN** a group imported from a multi-line spec, and a spec whose `POST /invoices` request body now requires `currency`
+- **WHEN** the group is previewed for re-import
+- **THEN** the changed tool carries its operation key, the operation's old text, its new text and the new text's first and last line
 
 ### Requirement: Hand a failing MCP server's diagnosis to an agent
 Finding why a server will not start or answer depends on the machine, so a failing server MUST offer its
@@ -849,6 +939,15 @@ value is never read for this; a server that cites none never asks the secret sto
 - **GIVEN** an HTTP server whose `Authorization` header cites a secret with no value in this machine's store
 - **WHEN** its status is read
 - **THEN** it names `Authorization` as the key and the secret's reference, and once the value is stored it names none
+
+### Requirement: Show what an MCP server requires
+A server's status read MUST also list what its command and settings need from this machine, worked out from the config alone and without starting the server: for a stdio server its **launcher** (the command's executable — `npx`, `uvx`, `docker`, `bunx`, `node`, `python` and the like) as a CLI that is `found`, with its version when it prints one, or `not_found`; and every **secret** its environment or headers cite — through a stored secret bound to the variable or header, or a `coffer://secret/<name>` written in a plain value — as `set`, `missing` on this machine or `waiting_approval`, naming the variable or header and the secret. A launcher's version is read once and kept until the daemon restarts; one that is not found is looked up again on every read. An HTTP server has no launcher, and no secret's value is read.
+
+#### Scenario: a server's page lists what it requires
+- **GIVEN** a stdio server started with `npx` whose environment binds one stored secret that is set, one that is missing, and one that waits for approval
+- **WHEN** its status is read
+- **THEN** it lists the `npx` launcher as found with its version, then each secret as `set`, `missing` and `waiting_approval` by its variable name
+- **AND** a launcher that is not on this machine reads `not_found`, and an HTTP server lists its header secrets and no launcher
 
 ### Requirement: Record why a registered server's test failed
 A test of a registered server that fails MUST store, with the failing health record, why it failed as one

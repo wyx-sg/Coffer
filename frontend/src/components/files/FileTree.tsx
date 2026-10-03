@@ -59,8 +59,8 @@ export function FileTreePanel({
   children,
 }: {
   title: ReactNode;
-  /** A read-only tree: a lock after the title. */
-  locked?: boolean;
+  /** A read-only tree: a lock after the title. A string says why ("Written by Coffer — read-only"). */
+  locked?: boolean | string;
   /** The header's right end (an icon button). */
   action?: ReactNode;
   children: ReactNode;
@@ -71,11 +71,16 @@ export function FileTreePanel({
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border-subtle pl-3 pr-2">
         <span className="min-w-0 truncate text-sm font-semibold text-text">{title}</span>
         {locked ? (
-          <Lock
-            role="img"
-            aria-label={t("files.readOnly")}
-            className="size-3 shrink-0 text-text-subtle"
-          />
+          <span
+            title={typeof locked === "string" ? locked : undefined}
+            className="inline-flex shrink-0 text-text-subtle"
+          >
+            <Lock
+              role="img"
+              aria-label={typeof locked === "string" ? locked : t("files.readOnly")}
+              className="size-3"
+            />
+          </span>
         ) : null}
         {action ? <span className="ml-auto inline-flex shrink-0">{action}</span> : null}
       </div>

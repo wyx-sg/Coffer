@@ -32,6 +32,7 @@ from coffer.application.mcp.custom_tools import CustomToolService
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
+from coffer.application.mcp.server_requires import ServerRequirements
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.supervisor_failures import UpstreamFailureLedger
 from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
@@ -63,6 +64,7 @@ from coffer.infrastructure.mcp.persistence import (
 )
 from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.surfaces.http.cli_wiring import build_command_probe
 from coffer.surfaces.http.mcp.custom_tool_dependencies import set_custom_tool_services
 from coffer.surfaces.http.mcp.dependencies import (
     set_capability_discovery,
@@ -70,6 +72,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     set_invocation_repo,
     set_mcp_session_factory,
     set_preferences_repo,
+    set_server_requirements,
 )
 from coffer.surfaces.http.secret_boundary_wiring import (
     optional_secret_boundary,
@@ -213,6 +216,11 @@ def wire_mcp_kind(
     set_invocation_repo(inv_repo)
     set_health_repo(health_repo)
     set_mcp_session_factory(mcp_session_factory)
+    set_server_requirements(
+        ServerRequirements(
+            probe=build_command_probe(), secrets=secret_store, boundary=optional_secret_boundary
+        )
+    )
     wire_custom_tools(resource_svc, audit, secret_store, tool_reach, inv_repo)
     return McpWiring(
         process_supervisor=process_supervisor,

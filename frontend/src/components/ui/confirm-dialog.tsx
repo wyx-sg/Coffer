@@ -76,6 +76,8 @@ interface Props {
   errorTitle?: string;
   /** The confirm label after a failure; defaults to "Try again". */
   retryLabel?: string;
+  /** The Cancel button's label, when the question wants its own words ("Keep editing"). */
+  cancelLabel?: string;
   /** Returning a promise hands the closing rule to this dialog: resolve closes
    *  it, reject keeps it open with the reason shown. Returning nothing leaves
    *  the closing to the caller. */
@@ -101,6 +103,7 @@ export function ConfirmDialog({
   error,
   errorTitle,
   retryLabel,
+  cancelLabel,
   onConfirm,
   children,
 }: Props) {
@@ -168,7 +171,7 @@ export function ConfirmDialog({
         ) : null}
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
-            {t("common.cancel")}
+            {cancelLabel ?? t("common.cancel")}
           </Button>
           <Button variant={variant} loading={busy} disabled={confirmDisabled} onClick={confirm}>
             {busy ? null : failure ? <RotateCw aria-hidden /> : confirmIcon}

@@ -1,5 +1,5 @@
 // frontend/src/components/mcp/ServerTimeoutFields.tsx — the per-server
-// timeouts, side by side (boards Mcp-EditStdio / Mcp-Edit): Start timeout
+// timeouts, one above the other (boards Mcp-EditStdio / Mcp-Edit): Start timeout
 // (stdio only — an HTTP server is not started) and Request timeout.
 //
 // Measured across one vault, average call latency spanned three orders of
@@ -39,7 +39,7 @@ export function ServerTimeoutFields({ value, onChange, idPrefix, showSpawn = tru
     },
   ];
   return (
-    <div className="flex flex-wrap gap-6">
+    <div className="flex flex-col gap-4">
       {fields.map((f) => (
         <div key={f.key} className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-${f.key}`}>{t(f.labelKey)}</Label>

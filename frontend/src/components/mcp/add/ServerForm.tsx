@@ -7,7 +7,8 @@
 // what it found before Add server; nothing is saved by it, and an edit after
 // the test retires its result. Add registers the server, which is tested once
 // more on its page. A name another server has is said under the field, both
-// before submit (from the list) and when the daemon answers 409.
+// before submit (from the list) and when the daemon answers 409. The footer is
+// Test (left) · Cancel · Add server; the type bar's Change goes back to step 1.
 import { useEffect, useState } from "react";
 import { Play, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,16 +18,19 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSecretChoices } from "@/components/secret/useSecretChoices";
+import type { KeyValueSecretRow } from "@/components/secret/secretValue";
 import { translateApiError } from "@/lib/api/errors";
 import { useMcpConfigTest } from "@/lib/hooks/useMcpAddFlow";
-import type { ParsedEnvVar, ParsedServer } from "@/lib/mcp/pasteParse";
+import type { ParsedServer } from "@/lib/mcp/pasteParse";
 import { shellSplit } from "@/lib/mcp/shellTokens";
 import type { FailedServer, NewServer, ReachIntent } from "@/lib/mcp/importMcpServers";
 import { missingSecretValues } from "@/lib/mcp/importMcpServers";
-import { WorkingDirInput } from "../env/TransportInputs";
+import { askedKeysOf, keptRows, promoteAsked, rowsFromParsed } from "@/lib/mcp/serverRows";
+import { EnvRowsField } from "../env/EnvRowsField";
+import { TransportInputs, WorkingDirInput } from "../env/TransportInputs";
 import { AddTestResult } from "./AddTestResult";
 import { addTestBodyOf, testKeyOf } from "./addTestBody";
-import { KeyValueRows } from "./KeyValueRows";
 import { NameField } from "./NameField";
 import { nameSendable } from "./nameProblem";
 import { ReachPick } from "./ReachPick";
@@ -35,8 +39,8 @@ interface Props {
   initial: ParsedServer;
   /** Names already registered. */
   taken: ReadonlySet<string>;
-  /** Set when the form came from a paste: offers Back to the paste box. */
-  onBack?: () => void;
+  /** The type bar's Change: back to the paste box and the type choice. */
+  onChangeType: () => void;
   onCancel: () => void;
   pending: boolean;
   /** The daemon's refusal of the last attempt, if any. */
@@ -53,21 +57,26 @@ function quoteArg(arg: string): string {
 export function ServerForm({
   initial,
   taken,
-  onBack,
+  onChangeType,
   onCancel,
   pending,
   failure,
   onSubmit,
 }: Props) {
   const { t } = useTranslation();
-  const [type, setType] = useState(initial.transportType);
+  const type = initial.transportType;
+  const { names: secretNames } = useSecretChoices();
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState("");
   const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState(initial.command);
   const [argsText, setArgsText] = useState(initial.args.map(quoteArg).join(" "));
   const [url, setUrl] = useState(initial.url);
-  const [rows, setRows] = useState<ParsedEnvVar[]>(initial.env);
+  const [rows, setRows] = useState<KeyValueSecretRow[]>(() =>
+    rowsFromParsed(initial.env, new Set(secretNames), true),
+  );
+  const [asked] = useState(() => askedKeysOf(initial.env));
+  const [focusRow, setFocusRow] = useState<number | undefined>();
   const [reach, setReach] = useState<ReachIntent>({ mode: "everywhere" });
   const test = useMcpConfigTest();
   const [testedKey, setTestedKey] = useState<string | null>(null);
@@ -77,7 +86,6 @@ export function ServerForm({
 
   const takenNow = failure?.nameTaken && failure.name === name ? new Set([...taken, name]) : taken;
   const args = shellSplit(argsText);
-  const kept = rows.filter((r) => r.key.trim() !== "");
   const server: NewServer = {
     name,
     description,
@@ -86,8 +94,15 @@ export function ServerForm({
     command: type === "stdio" ? command.trim() : "",
     args: type === "stdio" ? (args ?? []) : [],
     url: type === "http" ? url.trim() : "",
-    env: kept.map((r) => ({ ...r, key: r.key.trim() })),
+    env: promoteAsked(keptRows(rows), asked, secretNames).map((r) => ({
+      ...r,
+      key: r.key.trim(),
+    })),
   };
+  // Keys the paste flagged secret without a value stay asked for until typed in.
+  const unfilled = rows.filter(
+    (r) => asked.has(r.key.trim()) && r.value.kind === "plain" && r.value.value === "",
+  );
   const targetOk =
     type === "stdio"
       ? server.command !== "" && args !== null
@@ -95,16 +110,25 @@ export function ServerForm({
   const testBody = addTestBodyOf(server);
   const formKey = testKeyOf(testBody);
   const result = test.data && testedKey === formKey ? test.data : null;
-  const canTest = !test.isPending && targetOk && missingSecretValues(server).length === 0;
+  const canTest =
+    !test.isPending && targetOk && missingSecretValues(server).length === 0 && unfilled.length === 0;
   const runTest = () => {
     setTestedKey(formKey);
     test.mutate(testBody);
+  };
+  /** "Add the variable": a row for what the server said it needs. */
+  const addVariable = (key: string) => {
+    const at = rows.findIndex((r) => r.key === key);
+    if (at >= 0) return setFocusRow(at);
+    setRows([...rows, { key, value: { kind: "plain", value: "" } }]);
+    setFocusRow(rows.length);
   };
   const canAdd =
     !pending &&
     nameSendable(name, takenNow) &&
     targetOk &&
-    missingSecretValues(server).length === 0;
+    missingSecretValues(server).length === 0 &&
+    unfilled.length === 0;
 
   return (
     <>
@@ -115,7 +139,8 @@ export function ServerForm({
           variant="link"
           size="sm"
           className="ml-auto h-auto px-0"
-          onClick={() => setType(type === "stdio" ? "http" : "stdio")}
+          onClick={onChangeType}
+          disabled={pending}
         >
           {t("mcp.add.change")}
         </Button>
@@ -138,62 +163,35 @@ export function ServerForm({
           />
           <p className="text-xs text-text-muted">{t("mcp.edit.descriptionHelp")}</p>
         </div>
-        {type === "stdio" ? (
-          <>
-            <div className="space-y-1.5">
-              <Label htmlFor="add-server-command" required>
-                {t("mcp.add.command")}
-              </Label>
-              <Input
-                id="add-server-command"
-                className="font-mono"
-                spellCheck={false}
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="add-server-args">{t("mcp.add.args")}</Label>
-              <Input
-                id="add-server-args"
-                className="font-mono"
-                spellCheck={false}
-                value={argsText}
-                aria-invalid={args === null || undefined}
-                onChange={(e) => setArgsText(e.target.value)}
-              />
-              {args === null ? (
-                <p className="text-xs text-danger" role="alert">
-                  {t("mcp.add.argsQuote")}
-                </p>
-              ) : null}
-            </div>
-          </>
-        ) : (
-          <div className="space-y-1.5">
-            <Label htmlFor="add-server-url" required>
-              {t("mcp.add.url")}
-            </Label>
-            <Input
-              id="add-server-url"
-              className="font-mono"
-              spellCheck={false}
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-            <p className="text-xs text-text-muted">{t("mcp.add.urlHelp")}</p>
-          </div>
-        )}
-        <KeyValueRows
-          idPrefix="add-server-row"
-          label={type === "stdio" ? t("mcp.add.env") : t("mcp.add.headers")}
-          keyPlaceholder={type === "stdio" ? "API_KEY" : "Authorization"}
-          rows={rows}
-          onChange={setRows}
-          storedSecrets
+        <TransportInputs
+          idPrefix="add-server"
+          http={type === "http"}
+          url={url}
+          command={command}
+          argsText={argsText}
+          argsInvalid={args === null}
+          urlHelp={t("mcp.add.urlHelp")}
+          onUrl={setUrl}
+          onCommand={setCommand}
+          onArgs={setArgsText}
         />
-        {type === "stdio" ? <WorkingDirInput value={cwd} onChange={setCwd} /> : null}
-        {result ? <AddTestResult result={result} transport={type} server={name} /> : null}
+        <EnvRowsField http={type === "http"} rows={rows} onChange={setRows} focusRow={focusRow} />
+        {unfilled.map((r) => (
+          <p key={r.key} className="text-xs text-text-muted">
+            {t("mcp.add.secretMissing", { key: r.key })}
+          </p>
+        ))}
+        {type === "stdio" ? (
+          <WorkingDirInput idPrefix="add-server" value={cwd} onChange={setCwd} />
+        ) : null}
+        {result ? (
+          <AddTestResult
+            result={result}
+            transport={type}
+            server={name}
+            onAddVariable={addVariable}
+          />
+        ) : null}
         {test.error && testedKey === formKey ? (
           <Alert variant="error">
             <AlertDescription>{translateApiError(t, test.error)}</AlertDescription>
@@ -207,11 +205,6 @@ export function ServerForm({
         <ReachPick value={reach} onChange={setReach} busy={pending} />
       </div>
       <DialogFooter>
-        {onBack ? (
-          <Button variant="ghost" onClick={onBack} disabled={pending}>
-            {t("mcp.add.back")}
-          </Button>
-        ) : null}
         <Button variant="outline" className="sm:mr-auto" disabled={!canTest} onClick={runTest}>
           {result ? <RefreshCw aria-hidden /> : <Play aria-hidden />}
           {test.isPending
@@ -220,7 +213,7 @@ export function ServerForm({
               ? t("mcp.edit.testAgain")
               : t("mcp.edit.test")}
         </Button>
-        <Button variant="outline" onClick={onCancel} disabled={pending}>
+        <Button variant="ghost" onClick={onCancel} disabled={pending}>
           {t("common.cancel")}
         </Button>
         <Button disabled={!canAdd} onClick={() => onSubmit(server, reach)}>

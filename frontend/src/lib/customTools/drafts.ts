@@ -1,73 +1,11 @@
-// src/lib/customTools/drafts.ts — what the group forms hold, and the request bodies they send.
-import type {
-  CustomTool,
-  CustomToolAuthIn,
-  CustomToolGroup,
-  CustomToolIn,
-} from "@/lib/api/customTools";
+// src/lib/customTools/drafts.ts — what a tool form starts from.
+import type { CustomTool, CustomToolIn } from "@/lib/api/customTools";
 
 /** A group name: lowercase, digits and `-`, up to 24 characters. */
 const GROUP_NAME_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
 
 export function isGroupName(name: string): boolean {
   return GROUP_NAME_RE.test(name);
-}
-
-/** The auth header as a group form holds it. */
-export interface AuthDraft {
-  header: string;
-  prefix: string;
-  secret: string | null;
-}
-
-export const DEFAULT_AUTH: AuthDraft = { header: "Authorization", prefix: "Bearer", secret: null };
-
-/** A prefix ending in a word gets the space before the value ("Bearer "). */
-function normalisedPrefix(prefix: string): string {
-  const trimmed = prefix.trimStart();
-  if (trimmed === "") return "";
-  return /[A-Za-z0-9]$/.test(trimmed) ? `${trimmed} ` : trimmed;
-}
-
-/** The request's auth: bound to a secret, or none at all. */
-export function authBody(draft: AuthDraft): CustomToolAuthIn | null {
-  if (!draft.secret) return null;
-  return {
-    header: draft.header.trim() || "Authorization",
-    prefix: normalisedPrefix(draft.prefix),
-    secret: draft.secret,
-  };
-}
-
-/** A group's stored auth, back into the form. */
-export function authDraftOf(group: CustomToolGroup): AuthDraft {
-  if (!group.auth) return { ...DEFAULT_AUTH };
-  return { header: group.auth.header, prefix: group.auth.prefix.trim(), secret: group.auth.secret };
-}
-
-/** "Authorization: Bearer" — how an auth header reads before its secret. */
-export function authLine(header: string, prefix: string): string {
-  const p = prefix.trim();
-  return p ? `${header}: ${p}` : `${header}:`;
-}
-
-/** The auth headers the Auth header select offers; anything else is Custom. */
-export const AUTH_PRESETS = [
-  { key: "bearer", header: "Authorization", prefix: "Bearer" },
-  { key: "token", header: "Authorization", prefix: "Token" },
-  { key: "basic", header: "Authorization", prefix: "Basic" },
-  { key: "apiKey", header: "X-API-Key", prefix: "" },
-] as const;
-
-export type AuthPreset = (typeof AUTH_PRESETS)[number]["key"] | "custom";
-
-/** Which preset a draft's header and prefix are, or `custom`. */
-export function presetOf(draft: Pick<AuthDraft, "header" | "prefix">): AuthPreset {
-  const prefix = draft.prefix.trim();
-  const found = AUTH_PRESETS.find(
-    (p) => p.header.toLowerCase() === draft.header.trim().toLowerCase() && p.prefix === prefix,
-  );
-  return found ? found.key : "custom";
 }
 
 /** A saved tool as the draft its editor starts from. */

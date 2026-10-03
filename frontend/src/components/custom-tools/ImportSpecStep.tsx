@@ -11,10 +11,10 @@ import type { OpenApiReading } from "@/lib/api/customTools";
 import { agentPrefix } from "@/lib/customTools/groups";
 import { isGroupName } from "@/lib/customTools/drafts";
 import { useReadOpenApi } from "@/lib/hooks/useCustomTools";
-import { defaultPicks, type GroupDraft, type ImportDraft } from "./addFlow";
-import { AuthFields } from "./AuthFields";
-import { DraftReachField } from "./DraftReachField";
+import { defaultPicks, headerRowsFromSpec, type GroupDraft, type ImportDraft } from "./addFlow";
 import { FormField } from "./FormField";
+import { GroupHeaderRows } from "./GroupHeaderRows";
+import { GroupReachField } from "./GroupReachField";
 import { OperationPicker } from "./OperationPicker";
 import { SpecField } from "./SpecField";
 import { TryOperation } from "./TryOperation";
@@ -45,9 +45,8 @@ export function ImportSpecStep(props: Props) {
     onGroup({
       ...group,
       baseUrl: reading.base_url ?? group.baseUrl,
-      auth: reading.auth_header
-        ? { ...group.auth, header: reading.auth_header, prefix: reading.auth_prefix.trim() }
-        : group.auth,
+      // The spec's security scheme names one header; a row of the person's own stays.
+      headers: group.headers.length > 0 ? group.headers : headerRowsFromSpec(reading.auth_header),
     });
   };
   const loadUrl = () => {
@@ -64,7 +63,7 @@ export function ImportSpecStep(props: Props) {
   };
 
   const nameError = useGroupNameError(group.name, props.taken);
-  const reading = read.isPending ? null : spec.reading;
+  const reading = read.isPending || read.error ? null : spec.reading;
   const ready =
     isGroupName(group.name) && !nameError && reading !== null && group.baseUrl.trim() !== "";
   const specError = tooLarge ? new Error(t("customTools.import.tooLarge")) : read.error;
@@ -74,6 +73,7 @@ export function ImportSpecStep(props: Props) {
       <div className="flex flex-col gap-4">
         <WaySummary
           way="import"
+          newGroup
           sub={t("customTools.add.importSummary")}
           onChange={props.onChangeWay}
         />
@@ -106,6 +106,7 @@ export function ImportSpecStep(props: Props) {
           loading={read.isPending}
           reading={spec.reading}
           error={specError}
+          fileText={spec.mode === "file" ? spec.document : undefined}
         />
         {reading ? (
           <>
@@ -130,21 +131,21 @@ export function ImportSpecStep(props: Props) {
                 />
               </FormField>
             )}
-            <AuthFields
-              schemes
-              value={group.auth}
-              onChange={(auth) => onGroup({ ...group, auth })}
-              headerHelp={reading.auth_header ? t("customTools.import.authFromSpec") : undefined}
+            <GroupHeaderRows
+              rows={group.headers}
+              onChange={(headers) => onGroup({ ...group, headers })}
+              help={t(
+                reading.auth_header
+                  ? "customTools.import.headersHelpSpec"
+                  : "customTools.fields.headersHelp",
+              )}
+              group={group.name}
             />
-            <FormField
-              label={t("customTools.fields.availableTo")}
+            <GroupReachField
+              value={group.reach}
+              onChange={(reach) => onGroup({ ...group, reach })}
               help={t("customTools.import.availableToHelp")}
-            >
-              <DraftReachField
-                value={group.agents}
-                onChange={(agents) => onGroup({ ...group, agents })}
-              />
-            </FormField>
+            />
             {trying ? <TryOperation reading={reading} group={group} picked={spec.picked} /> : null}
           </>
         ) : null}
@@ -159,7 +160,7 @@ export function ImportSpecStep(props: Props) {
           <span />
         )}
         <div className="flex gap-2">
-          <Button variant="outline" onClick={props.onCancel}>
+          <Button variant="ghost" onClick={props.onCancel}>
             {t("common.cancel")}
           </Button>
           <Button disabled={!ready || spec.picked.length === 0} onClick={props.onNext}>

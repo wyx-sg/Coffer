@@ -87,15 +87,37 @@ describe("useRemoveSkill", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   test("DELETEs the skill addressed by its uid, not its name", async () => {
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(null, { status: 204 }));
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ kept_copies: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     resetApiClient();
     const { result } = renderHook(() => useRemoveSkill(), {
       wrapper: wrapper(),
     });
-    await result.current.mutateAsync(SAMPLE_SKILL.uid);
+    await result.current.mutateAsync({ uid: SAMPLE_SKILL.uid });
     const request = fetchMock.mock.calls[0][0] as Request;
     expect(request.url).toMatch(/\/skills\/sk-5d20$/);
     expect(request.method).toBe("DELETE");
+  });
+
+  test("keepForeignCopies asks the daemon to leave an agent's own folder alone", async () => {
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ kept_copies: [{ agent_name: "codex", path: "/c/pdf" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    resetApiClient();
+    const { result } = renderHook(() => useRemoveSkill(), { wrapper: wrapper() });
+    await result.current.mutateAsync({ uid: SAMPLE_SKILL.uid, keepForeignCopies: true });
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.url).toMatch(/\/skills\/sk-5d20\?keep_foreign_copies=true$/);
   });
 });

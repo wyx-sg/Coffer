@@ -13,6 +13,8 @@ export function gitSkill(status: Partial<SkillSourceStatus> | null = {}): SkillO
     bindings: [],
     requires: [],
     requires_secrets: [],
+    requires_tools: [],
+    requires_skills: [],
     master_missing: false,
     master_path: "/home/me/.coffer/skills/terraform-plan",
     version_hash: "h",

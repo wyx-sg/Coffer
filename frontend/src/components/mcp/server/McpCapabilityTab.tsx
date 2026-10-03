@@ -1,18 +1,16 @@
-// src/components/mcp/server/McpCapabilityTab.tsx — the open server's Resources or Prompts tab (design 4.1.26, 4.1.27).
+// src/components/mcp/server/McpCapabilityTab.tsx — the open server's Resources or Prompts tab (design 4.1.11, 4.1.12).
 //
-// "Resources · 3 of 4 on", Search, All on · All off; each row its switch, URI
-// or name, one-line description (a prompt's arguments after it) and its
-// last-24-hours reads or uses; every item is loaded, 50 rows at a time ("Showing
-// N of M", Show more). The gateway lists every resource and prompt as the server
-// offers it, so there is no exposure setting here: a closing line says what the
-// switch means to agents.
+// Search, "N of M on", All on · All off; each row its switch, URI or name,
+// one-line description (a prompt's arguments after it) and its last-24-hours
+// reads or uses; every item is loaded, 50 rows at a time ("Showing N of M",
+// Show more). The gateway lists every resource and prompt as the server
+// offers it, so there is no exposure setting here; the Prompts tab says above
+// its toolbar where they show up.
 import { useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
-import { Section } from "@/components/Section";
-import { SearchInput } from "@/components/SearchInput";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { Skeleton } from "@/components/ui/skeleton";
 import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
@@ -22,7 +20,8 @@ import { useShowMore } from "@/lib/hooks/useShowMore";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
 import { ToggleSwitch } from "../CapabilityRowCells";
-import { relativeTime, usageByTool } from "@/lib/mcp/serverState";
+import { CapabilityToolbar } from "./CapabilityToolbar";
+import { usageByTool } from "@/lib/mcp/serverState";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
@@ -93,16 +92,6 @@ export function McpCapabilityTab({
         capabilitiesApi.setEnabled(op, { serverUid, capabilityType: kind, capabilityKey: r.key }),
     );
 
-  const help =
-    rows.length === 0
-      ? undefined
-      : kind === "resource"
-        ? t(
-            capabilities?.from_cache ? "mcp.page.resources.noteCached" : "mcp.page.resources.note",
-            { ago: capabilities ? relativeTime(capabilities.fetched_at) : "" },
-          )
-        : t("mcp.page.prompts.note");
-
   let body: JSX.Element;
   if (pending) body = <Skeleton className="h-32 w-full" />;
   else if (rows.length === 0)
@@ -154,41 +143,20 @@ export function McpCapabilityTab({
     );
 
   return (
-    <Section
-      title={t(`mcp.server.tabs.${ns}`)}
-      gap="snug"
-      help={help}
-      actions={
-        <>
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={t("mcp.page.filterCaps")}
-            ariaLabel={t("mcp.page.filterCaps")}
-            className="w-48"
-          />
-          <Button
-            variant="link"
-            size="sm"
-            disabled={bulk.isPending || rows.length === 0 || on === rows.length}
-            onClick={() => setAll("enable")}
-          >
-            {t("mcp.page.allOn")}
-          </Button>
-          <span aria-hidden className="text-text-subtle">
-            ·
-          </span>
-          <Button
-            variant="link"
-            size="sm"
-            disabled={bulk.isPending || on === 0}
-            onClick={() => setAll("disable")}
-          >
-            {t("mcp.page.allOff")}
-          </Button>
-        </>
-      }
-    >
+    <div className="flex flex-col gap-3">
+      {kind === "prompt" && rows.length > 0 ? (
+        <p className="text-xs text-text-muted">{t("mcp.page.prompts.note")}</p>
+      ) : null}
+      <CapabilityToolbar
+        placeholder={t(kind === "resource" ? "mcp.page.searchResources" : "mcp.page.searchPrompts")}
+        query={query}
+        onQueryChange={setQuery}
+        on={on}
+        total={rows.length}
+        busy={bulk.isPending}
+        onAllOn={() => setAll("enable")}
+        onAllOff={() => setAll("disable")}
+      />
       {body}
       {shown.length > 0 ? (
         <p className="flex items-center gap-2 px-2 text-xs text-text-muted">
@@ -202,6 +170,6 @@ export function McpCapabilityTab({
           ) : null}
         </p>
       ) : null}
-    </Section>
+    </div>
   );
 }

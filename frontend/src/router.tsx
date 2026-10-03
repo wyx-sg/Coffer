@@ -108,7 +108,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
   // One command-line tool, by the command itself, open beside the list; its
   // tab (Overview bare, Commands) is the path.
   { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
-  { path: "clis/:command/:tab", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),

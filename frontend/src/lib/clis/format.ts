@@ -21,13 +21,13 @@ export function cliTone(status: CliStatus): StatusTone {
 export function groupClis(
   items: readonly Cli[],
   filter: string,
-): { needsYou: Cli[]; ready: Cli[] } {
+): { needsAttention: Cli[]; ready: Cli[] } {
   const q = filter.trim().toLowerCase();
   const shown = q
     ? items.filter((c) => `${c.command} ${c.title ?? ""}`.toLowerCase().includes(q))
     : items;
   return {
-    needsYou: shown.filter((c) => c.status !== "ready"),
+    needsAttention: shown.filter((c) => c.status !== "ready"),
     ready: shown.filter((c) => c.status === "ready"),
   };
 }
@@ -57,11 +57,6 @@ export function relativeTime(iso: string, locale: string, now: number = Date.now
   return rtf.format(0, "second");
 }
 
-/** The skills that need the command, by name, comma-joined. */
-export function skillNames(cli: Pick<Cli, "needed_by">): string {
-  return cli.needed_by.map((n) => n.skill_name).join(", ");
-}
-
 /** The MCP servers started with the command, by name, comma-joined. */
 export function serverNames(cli: Pick<Cli, "needed_by_servers">): string {
   return cli.needed_by_servers.map((s) => s.server_name).join(", ");
@@ -69,13 +64,11 @@ export function serverNames(cli: Pick<Cli, "needed_by_servers">): string {
 
 type T = (key: string, options?: Record<string, unknown>) => string;
 
-/** How the three places word who needs a command: the list row ("1 server ·
- *  1 skill"), the Needed by heading ("1 MCP server · 1 skill") and the
- *  sentences ("1 MCP server and 1 skill"). */
+/** How the two places word who needs a command: the list row ("1 MCP server,
+ *  1 skill") and the sentences ("1 MCP server and 1 skill"). */
 const NEEDED_STYLE = {
-  row: { server: "clis.serverCount", pair: "clis.countPair" },
-  heading: { server: "clis.mcpServerCount", pair: "clis.countPair" },
-  sentence: { server: "clis.mcpServerCount", pair: "clis.neededPair" },
+  list: "clis.listPair",
+  sentence: "clis.neededPair",
 } as const;
 
 /** Who needs the command, counted: "2 skills", "1 MCP server and 1 skill". */
@@ -84,12 +77,24 @@ export function neededByCount(
   cli: Pick<Cli, "needed_by" | "needed_by_servers">,
   style: keyof typeof NEEDED_STYLE = "sentence",
 ): string {
-  const keys = NEEDED_STYLE[style];
   const skills = cli.needed_by.length;
   const servers = cli.needed_by_servers.length;
   const skillPart = t("clis.skillCount", { count: skills });
   if (servers === 0) return skillPart;
-  const serverPart = t(keys.server, { count: servers });
+  const serverPart = t("clis.mcpServerCount", { count: servers });
   if (skills === 0) return serverPart;
-  return t(keys.pair, { servers: serverPart, skills: skillPart });
+  return t(NEEDED_STYLE[style], { servers: serverPart, skills: skillPart });
+}
+
+/** "today at 14:32", or "3 Oct at 14:32" for an older probe, in the reader's language. */
+export function checkedWhen(t: T, iso: string, locale: string, now: number = Date.now()): string {
+  const at = new Date(iso);
+  const time = at.toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  if (at.toDateString() === new Date(now).toDateString()) return t("clis.detail.today", { time });
+  const date = at.toLocaleDateString(locale, { day: "numeric", month: "short" });
+  return t("clis.detail.onDate", { date, time });
 }

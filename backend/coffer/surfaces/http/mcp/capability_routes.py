@@ -22,6 +22,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.mcp.runner_detect import missing_runner_of
+from coffer.application.mcp.server_requires import ServerRequirements
 from coffer.application.mcp.server_status import failure_run, missing_secret, secret_refs_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
@@ -48,10 +49,11 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
+    get_server_requirements,
     require_mcp_server,
 )
 from coffer.surfaces.http.mcp.handoff_views import diagnose_prompt, launcher_prompt
-from coffer.surfaces.http.mcp.page_schemas import McpServerStatusOut
+from coffer.surfaces.http.mcp.page_schemas import McpRequirementOut, McpServerStatusOut
 from coffer.surfaces.http.schemas import CapabilityKeyBody, CapabilityListOut
 from coffer.surfaces.http.secret_composition import get_secret_store
 
@@ -182,6 +184,7 @@ async def get_server_status(
     invocations: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
     store: Any = Depends(get_secret_store),  # noqa: B008
+    requirements: ServerRequirements | None = Depends(get_server_requirements),  # noqa: B008
 ) -> McpServerStatusOut:
     """Per-server status from persisted state — health record (from /test),
     discovered capabilities, or last invocation — and what the page says about
@@ -208,6 +211,12 @@ async def get_server_status(
         "last_ok_capability": ok[0].capability_key if ok else None,
         "missing_secret": secret[0] if secret else None,
         "missing_secret_ref": secret[1] if secret else None,
+        "requires": [
+            McpRequirementOut(
+                kind=r.kind, name=r.name, status=r.status, version=r.version, secret=r.secret
+            )
+            for r in (await requirements.of(resource) if requirements else [])
+        ],
     }
 
     # T7: prefer the persisted health state written by POST /test. Both the

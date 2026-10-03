@@ -1,19 +1,18 @@
-// src/components/custom-tools/ToolsTable.tsx — a group's tools: each one's switch, request, changes-data
-// flag, reach override and last 24 hours; All on · All off; the pencil (or the row) opens the drawer.
+// src/components/custom-tools/ToolsTable.tsx — a group's tools (4.2.01): each one's switch, request, changes-data
+// flag, reach (inherited control: Same as the group by default) and last 24 hours; "N of M on · All on · All off"
+// on the title row; the pencil (or the row) opens the drawer.
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus } from "lucide-react";
 
 import { Section } from "@/components/Section";
-import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
-import { pickableAgents } from "@/lib/reach/reachState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import type { CustomTool, CustomToolGroup } from "@/lib/api/customTools";
-import { toolsOn } from "@/lib/customTools/groups";
-import { useAgents } from "@/lib/hooks/useAgents";
+import type { CustomToolGroup } from "@/lib/api/customTools";
+import { agentPrefix, toolsOn } from "@/lib/customTools/groups";
 import { useSetAllCustomTools, useToggleCustomTool } from "@/lib/hooks/useCustomTools";
 import { cn } from "@/lib/utils";
+import { ToolReachCell } from "./ToolReachCell";
 
 interface Props {
   group: CustomToolGroup;
@@ -21,7 +20,7 @@ interface Props {
   onAddRequest: () => void;
 }
 
-const GRID = "grid grid-cols-[40px_minmax(0,1fr)_150px_80px_56px_32px] items-center gap-3 px-2";
+const GRID = "grid grid-cols-[40px_minmax(0,1fr)_168px_72px_56px_32px] items-center gap-3 px-2";
 
 /** A 24-hour count; a tool with no call in 24 hours reads "—" in both columns. */
 function Count({
@@ -42,8 +41,6 @@ function Count({
 
 export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
   const { t } = useTranslation();
-  const { data: agents } = useAgents();
-  const known = pickableAgents(agents);
   const toggle = useToggleCustomTool(group.name);
   const setAll = useSetAllCustomTools(group.name);
   const on = toolsOn(group.tools);
@@ -51,11 +48,6 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
     setAll.mutate({
       enabled,
       tools: group.tools.filter((tool) => tool.enabled !== enabled).map((tool) => tool.name),
-    });
-  const overrideBadges = (tool: CustomTool) =>
-    (tool.reach_override ?? []).map((uid) => {
-      const found = known.find((a) => a.uid === uid);
-      return { type: found?.type ?? "", name: found?.name ?? uid };
     });
 
   return (
@@ -65,7 +57,11 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
       gap="tight"
       labelled
       actions={
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-text-muted">
+            {t("customTools.tools.countOn", { on, total: group.tools.length })}
+          </span>
+          <span className="text-text-subtle">·</span>
           <button
             type="button"
             className="font-label text-accent-text hover:underline disabled:opacity-disabled disabled:no-underline"
@@ -86,6 +82,9 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
         </div>
       }
     >
+      <p className="text-xs text-text-muted">
+        {t("customTools.tools.description", { prefix: agentPrefix(group.name) })}
+      </p>
       <div role="table" aria-label={t("customTools.tools.heading")}>
         <div
           role="row"
@@ -147,15 +146,9 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
                 ) : null}
               </span>
             </span>
-            <span role="cell" className="flex items-center gap-1.5 text-xs">
-              {tool.reach_override === null ? (
-                <span className="text-text-muted">{t("customTools.tools.groupDefault")}</span>
-              ) : (
-                <>
-                  <AgentBadgeGroup agents={overrideBadges(tool)} />
-                  <span className="text-warning">{t("customTools.tools.override")}</span>
-                </>
-              )}
+            {/* The control opens its own popover; it never also opens the row. */}
+            <span role="cell" onClick={(e) => e.stopPropagation()} className="inline-flex">
+              <ToolReachCell group={group} tool={tool} />
             </span>
             <span role="cell" className="text-right">
               <Count value={tool.calls_24h} none={tool.calls_24h === 0} />

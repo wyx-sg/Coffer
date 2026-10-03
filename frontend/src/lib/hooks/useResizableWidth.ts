@@ -22,8 +22,8 @@ export const DEFAULT_LIST_WIDTH = 320;
 
 /** The list's upper bound in a split `containerWidth` px wide: half of it, or
  *  what leaves the detail its minimum — whichever is less. */
-export function listMaxWidth(containerWidth: number): number {
-  return Math.min(containerWidth / 2, containerWidth - DETAIL_MIN_WIDTH);
+export function listMaxWidth(containerWidth: number, detailMin = DETAIL_MIN_WIDTH): number {
+  return Math.min(containerWidth / 2, containerWidth - detailMin);
 }
 
 /** Clamp `value` into [min, max], rounded to whole px. When the bounds cross

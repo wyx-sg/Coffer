@@ -36,6 +36,8 @@ interface CodeViewProps {
   fill?: boolean;
   /** Show the line-number gutter (default true). */
   lineNumbers?: boolean;
+  /** Wrap long lines instead of scrolling sideways (the reader's wrap toggle). */
+  wrap?: boolean;
   /** Accessible label for the editor region. */
   ariaLabel?: string;
   className?: string;
@@ -74,6 +76,7 @@ export function CodeView({
   maxHeight,
   fill = false,
   lineNumbers = true,
+  wrap = false,
   ariaLabel,
   className,
 }: CodeViewProps) {
@@ -109,8 +112,9 @@ export function CodeView({
     ];
     const lang = languageExtension(language ?? languageForFile(filename));
     if (lang) exts.push(lang);
+    if (wrap) exts.push(EditorView.lineWrapping);
     return exts;
-  }, [language, filename]);
+  }, [language, filename, wrap]);
 
   useEffect(() => {
     if (find.open) inputRef.current?.focus();

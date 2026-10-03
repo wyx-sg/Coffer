@@ -1,24 +1,14 @@
 // frontend/src/lib/hooks/useScope.ts
 //
 // TanStack Query bindings over `lib/api/scope.ts` for the generic per-agent
-// activation scope (ADR per-agent-resource-scope). The requests themselves live
-// in the api module, because the bulk reach bar needs them without a hook.
-import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { useCallback } from "react";
+// activation scope (ADR per-agent-resource-scope).
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import {
-  agentsKey,
-  ownListKeysForKind,
-  resourceScopeKey,
-  resourcesKey,
-  scopeKey,
-} from "@/lib/api/queryKeys";
-import { resourcesApi } from "@/lib/api/resources";
+import { agentsKey, ownListKeysForKind, resourceScopeKey, resourcesKey } from "@/lib/api/queryKeys";
 import { scopeApi, type Scope } from "@/lib/api/scope";
 import { useToast } from "@/components/ui/toast";
-import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /**
  * The scope shape itself (`{agents}`, `null` = unrestricted, `[]` = matches
@@ -54,11 +44,7 @@ export function useResourceScope(uid: string, enabled = true) {
  * list key to refresh afterwards — the same reason `useResourceMutations`
  * carries it.
  */
-export function useUpdateResourceScope(
-  kind: string,
-  uid: string,
-  options: { quiet?: boolean } = {},
-) {
+export function useUpdateResourceScope(kind: string, uid: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -77,38 +63,6 @@ export function useUpdateResourceScope(
         void qc.invalidateQueries({ queryKey: own });
       }
     },
-    // `quiet`: the caller shows the failure itself (the reach panel, inline).
-    onError: (error) => {
-      if (!options.quiet) toast.error(translateApiError(t, error));
-    },
+    onError: (error) => toast.error(translateApiError(t, error)),
   });
-}
-
-/**
- * Apply one reach choice to a whole table selection: every row is attempted,
- * one summary toast says how many landed, and the generic lists plus the kind's
- * own (`invalidate`) refresh once (see `useBulkMutate`). "Enable" with a scope
- * is two writes per row (enable, then PUT the scope) inside one fan-out unit, so
- * a row that fails to enable is counted as failed rather than half-applied.
- */
-export function useBulkReach(invalidate: QueryKey[] = []) {
-  const bulk = useBulkMutate({
-    invalidate: [resourcesKey, scopeKey, agentsKey, ...invalidate],
-    // The reach panel says a partial failure itself, with a Retry.
-    quietFailures: true,
-  });
-  const { run } = bulk;
-  const disable = useCallback(
-    (rows: { uid: string }[]) => run(rows, (r) => resourcesApi.disable(r.uid)),
-    [run],
-  );
-  const enable = useCallback(
-    (rows: { uid: string }[], scope: Scope | null) =>
-      run(rows, async (r) => {
-        await resourcesApi.enable(r.uid);
-        await scopeApi.put(r.uid, scope);
-      }),
-    [run],
-  );
-  return { disable, enable, isPending: bulk.isPending };
 }

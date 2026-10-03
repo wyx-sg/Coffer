@@ -1,34 +1,32 @@
 // frontend/src/components/skills/SkillCopiesPanel.tsx
-// "Check agents' copies" (canvas 4.3.21; spec skill-manager "Report skill
-// drift on request"): every agent's copy of every skill compared with the
-// library, one row per finding — the skill, the agent (or Library), what
-// differs and what it means, whether it needs the reader, and the one action
-// that answers it: Review… a folder in the way (the compare dialog), a missing
-// master (its page) or a folder that is not in the library (its pane); Repair
-// a missing or repointed link. Checking changes nothing on disk; Coffer
-// repairs a missing link on its own and never overwrites a folder it didn't
-// make, so those wait here for the reader — each with the backend's hand-off
-// (compare the folder, say what an orphan is, find a lost master) beside its
-// button (spec skill-manager "Hand unsettled skill drift to an agent with a
-// prompt").
+// "Check copies" (canvas 4.3.25; spec skill-manager "Report skill drift on
+// request"): every agent's copy of every skill compared with the library. A
+// 32 icon block, the title at 18/650 with one meta line, and Check again at the
+// right; then two groups — Needs you and Fixed by Coffer — each finding one row:
+// the skill, the agent (or Library), what differs and what it means, and the one
+// button that answers it: Open skill (a missing master), Review… (a folder in the
+// way — the compare dialog), Open (a folder that is not in the library) or Repair
+// (a link that is missing or points elsewhere). Checking changes nothing on disk;
+// Coffer repairs a missing link on its own and never overwrites a folder it
+// didn't make, so those wait here for the reader.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, RefreshCw, X } from "lucide-react";
+import { CheckCircle2, RefreshCw } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { EmptyState } from "@/components/EmptyState";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillCopyDialog } from "@/components/skills/SkillCopyDialog";
-import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { SkillDriftEntry, SkillRepairReport } from "@/lib/api/skills";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useRepairSkillCopies, useSkillCopies, useSkills } from "@/lib/hooks/useSkills";
+import { cn } from "@/lib/utils";
 
 interface Props {
+  /** Leaves the panel when a finding's button goes to a skill or a folder's own pane. */
   onClose: () => void;
 }
 
@@ -46,45 +44,71 @@ function Finding({
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
   const agent = agents.find((a) => a.name === entry.agent_name);
-  const repairable = entry.kind === "missing_link" || entry.kind === "tampered_link";
-  const status = repaired
-    ? t("skills.copies.repaired")
-    : entry.kind === "replaced_with_regular"
-      ? t("skills.copies.leftAlone")
-      : t("skills.copies.needsYou");
+  const action =
+    entry.kind === "missing_link" || entry.kind === "tampered_link"
+      ? t("skills.copies.repair")
+      : entry.kind === "replaced_with_regular"
+        ? t("skills.review")
+        : entry.kind === "orphan_master"
+          ? t("skills.copies.open")
+          : t("skills.copies.openSkill");
+  const dot = entry.kind === "missing_master" ? "bg-danger" : "bg-warning";
   return (
     <li
       data-testid="skill-copy-finding"
-      className="grid grid-cols-[minmax(0,8rem)_8rem_minmax(0,1fr)_8.5rem_6rem] items-center gap-4 py-3"
+      className="grid grid-cols-[minmax(0,8rem)_8rem_minmax(0,1fr)_auto] items-start gap-3 py-2.5"
     >
-      <span className="truncate font-mono text-xs font-label text-text">{entry.skill_name}</span>
-      <span className="min-w-0">
+      <span className="truncate font-mono text-sm font-medium text-text">{entry.skill_name}</span>
+      <span className="min-w-0 pt-px">
         {agent ? (
           <AgentBadge type={agent.type} name={agent.display_name} showName size="sm" />
         ) : (
-          <span className="text-xs text-text-muted">{t("skills.copies.library")}</span>
+          <span className="text-sm text-text-muted">{t("skills.copies.library")}</span>
         )}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm text-text">{t(`skills.driftKind.${entry.kind}`)}</span>
-        <span className="text-xs text-text-muted">
-          {t(`skills.copies.about.${entry.kind}`, { path: abbreviateHomePath(entry.target_path) })}
+        <span className="flex items-center gap-1.5 text-sm font-medium text-text">
+          {repaired ? null : (
+            <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", dot)} />
+          )}
+          {repaired ? t("skills.copies.fixedTitle") : t(`skills.driftKind.${entry.kind}`)}
         </span>
-        {entry.handoff && !repaired ? (
-          <span className="pt-1">
-            <AgentHandoff prompt={entry.handoff.prompt} size="sm" />
-          </span>
-        ) : null}
+        <span className="text-xs text-text-muted">
+          {repaired
+            ? t(`skills.copies.fixed.${entry.kind}`)
+            : t(`skills.copies.about.${entry.kind}`, {
+                path: abbreviateHomePath(entry.target_path),
+              })}
+        </span>
       </span>
-      <StatusWord tone={repaired ? "ok" : "warn"}>{status}</StatusWord>
       <span className="justify-self-end">
         {repaired ? null : (
           <Button variant="outline" size="sm" disabled={busy} onClick={() => onAction(entry)}>
-            {repairable ? t("skills.copies.repair") : t("skills.review")}
+            {action}
           </Button>
         )}
       </span>
     </li>
+  );
+}
+
+function Group({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section aria-label={title} className="flex flex-col">
+      <h3 className="flex items-center pb-1.5 pt-3.5 text-2xs font-semibold text-text-subtle">
+        {title}
+        <span className="ml-auto font-normal">{count}</span>
+      </h3>
+      <ul className="divide-y divide-border-subtle">{children}</ul>
+    </section>
   );
 }
 
@@ -119,19 +143,19 @@ export function SkillCopiesPanel({ onClose }: Props) {
   };
 
   return (
-    <section aria-label={t("skills.copies.title")} className="flex flex-col gap-4">
-      <header className="flex items-start gap-3 border-b border-border-subtle pb-4">
-        <span className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
+    <section aria-label={t("skills.copies.title")} className="flex flex-col gap-2.5">
+      <header className="flex items-center gap-3">
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
           <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h2 className="text-lg font-bold">{t("skills.copies.title")}</h2>
-          <p className="text-sm text-text-muted">
-            {t("skills.copies.body")}{" "}
+          <p className="text-xs text-text-muted">
+            {t("skills.copies.meta")}
             {checking
-              ? t("skills.copies.checking")
+              ? ` · ${t("skills.copies.checking")}`
               : copies.data || repairResult
-                ? t("skills.copies.summary", { count: total, fixed: remediated.length })
+                ? ` · ${t("skills.copies.checkedNow")}`
                 : null}
           </p>
         </div>
@@ -146,9 +170,6 @@ export function SkillCopiesPanel({ onClose }: Props) {
         >
           <RefreshCw aria-hidden className={checking ? "animate-spin" : undefined} />
           {t("skills.copies.checkAgain")}
-        </Button>
-        <Button variant="ghost" size="icon-sm" aria-label={t("common.close")} onClick={onClose}>
-          <X aria-hidden />
         </Button>
       </header>
 
@@ -166,27 +187,33 @@ export function SkillCopiesPanel({ onClose }: Props) {
         />
       ) : (
         <>
-          <ul className="-mt-4 divide-y divide-border-subtle">
-            {remaining.map((e) => (
-              <Finding
-                key={`r:${e.skill_name}:${e.agent_name}:${e.kind}`}
-                entry={e}
-                repaired={false}
-                onAction={act}
-                busy={repair.isPending}
-              />
-            ))}
-            {remediated.map((e) => (
-              <Finding
-                key={`f:${e.skill_name}:${e.agent_name}:${e.kind}`}
-                entry={e}
-                repaired
-                onAction={act}
-                busy={false}
-              />
-            ))}
-          </ul>
-          <p className="text-xs text-text-muted">{t("skills.copies.repairHint")}</p>
+          {remaining.length > 0 ? (
+            <Group title={t("skills.copies.needsYou")} count={remaining.length}>
+              {remaining.map((e) => (
+                <Finding
+                  key={`r:${e.skill_name}:${e.agent_name}:${e.kind}`}
+                  entry={e}
+                  repaired={false}
+                  onAction={act}
+                  busy={repair.isPending}
+                />
+              ))}
+            </Group>
+          ) : null}
+          {remediated.length > 0 ? (
+            <Group title={t("skills.copies.fixedGroup")} count={remediated.length}>
+              {remediated.map((e) => (
+                <Finding
+                  key={`f:${e.skill_name}:${e.agent_name}:${e.kind}`}
+                  entry={e}
+                  repaired
+                  onAction={act}
+                  busy={false}
+                />
+              ))}
+            </Group>
+          ) : null}
+          <p className="pt-2 text-xs text-text-muted">{t("skills.copies.repairHint")}</p>
         </>
       )}
 

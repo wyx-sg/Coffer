@@ -1,22 +1,19 @@
 """/api/v1/clis/* — the command-line tools Coffer knows: required by managed
 skills or MCP servers, or added by hand (spec skill-manager "Serve required
 commands on REST, the command line and the web", "Declare a command-line tool
-without a skill", "Serve required commands on REST, the command line and the web")."""
+without a skill")."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Response, status
 
-from coffer.application.skill.cli_interface import CliInterfaceService
 from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.skill.cli_tools import CliToolService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.cli_dependencies import (
-    get_cli_interface_service,
     get_cli_requirement_service,
     get_cli_tool_service,
 )
-from coffer.surfaces.http.cli_interface_schemas import CliInterfaceOut, cli_interface_out
 from coffer.surfaces.http.cli_schemas import (
     CliAddIn,
     CliEditIn,
@@ -128,23 +125,3 @@ async def remove_cli(
     added by hand."""
     await tools.remove(command, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get("/{command}/interface", response_model=CliInterfaceOut)
-async def get_cli_interface(
-    command: str,
-    service: CliInterfaceService = Depends(get_cli_interface_service),  # noqa: B008
-) -> CliInterfaceOut:
-    """The interface read from the tool's help, as kept for this version of
-    it. Never runs the tool: ``not_read`` until a POST reads it."""
-    return cli_interface_out(await service.get(command))
-
-
-@router.post("/{command}/interface", response_model=CliInterfaceOut)
-async def read_cli_interface(
-    command: str,
-    service: CliInterfaceService = Depends(get_cli_interface_service),  # noqa: B008
-) -> CliInterfaceOut:
-    """Run the tool's help — ``--help``, ``-h`` and each subcommand's, nothing
-    else — and keep the tree. May take up to 30 seconds."""
-    return cli_interface_out(await service.read(command))

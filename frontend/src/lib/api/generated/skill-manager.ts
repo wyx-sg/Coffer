@@ -224,32 +224,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/clis/{command}/interface": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Cli Interface
-         * @description The interface read from the tool's help, as kept for this version of
-         *     it. Never runs the tool: ``not_read`` until a POST reads it.
-         */
-        get: operations["get_cli_interface_api_v1_clis__command__interface_get"];
-        put?: never;
-        /**
-         * Read Cli Interface
-         * @description Run the tool's help — ``--help``, ``-h`` and each subcommand's, nothing
-         *     else — and keep the tree. May take up to 30 seconds.
-         */
-        post: operations["read_cli_interface_api_v1_clis__command__interface_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/skills": {
         parameters: {
             query?: never;
@@ -261,6 +235,27 @@ export interface paths {
         get: operations["list_skills_api_v1_skills_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Delete Skills
+         * @description Delete each skill in turn; one that is refused never stops the others,
+         *     and every skill gets its own result.
+         */
+        post: operations["bulk_delete_skills_api_v1_skills_bulk_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -329,6 +324,46 @@ export interface paths {
         put?: never;
         /** Adopt Orphan */
         post: operations["adopt_orphan_api_v1_skills_orphans__name__adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/orphans/{name}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Orphan Files
+         * @description The orphan folder as a read-only file tree — the walk of a managed skill's.
+         */
+        get: operations["list_orphan_files_api_v1_skills_orphans__name__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/orphans/{name}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Orphan File
+         * @description Read one file of an orphan folder; a path outside it is refused with 400.
+         */
+        get: operations["read_orphan_file_api_v1_skills_orphans__name__files_content_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -778,84 +813,6 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        /** CliHelpArgumentOut */
-        CliHelpArgumentOut: {
-            /** Description */
-            description: string | null;
-            /** Name */
-            name: string;
-            /** Required */
-            required: boolean;
-        };
-        /**
-         * CliHelpNodeOut
-         * @description One command of the tool: the tool itself (empty ``path``) or a
-         *     subcommand. ``raw`` is the help as the tool printed it.
-         */
-        CliHelpNodeOut: {
-            /** Arguments */
-            arguments: components["schemas"]["CliHelpArgumentOut"][];
-            /** Description */
-            description: string | null;
-            /** Error */
-            error: string | null;
-            /** Options */
-            options: components["schemas"]["CliHelpOptionOut"][];
-            /** Path */
-            path: string[];
-            /** Raw */
-            raw: string;
-            /** Structured */
-            structured: boolean;
-            /** Subcommands */
-            subcommands: components["schemas"]["CliHelpSubcommandOut"][];
-            /** Truncated */
-            truncated: boolean;
-            /** Usage */
-            usage: string | null;
-        };
-        /** CliHelpOptionOut */
-        CliHelpOptionOut: {
-            /** Default */
-            default: string | null;
-            /** Description */
-            description: string | null;
-            /** Metavar */
-            metavar: string | null;
-            /** Names */
-            names: string[];
-            /** Required */
-            required: boolean;
-        };
-        /** CliHelpSubcommandOut */
-        CliHelpSubcommandOut: {
-            /** Name */
-            name: string;
-            /** Summary */
-            summary: string | null;
-        };
-        /**
-         * CliInterfaceOut
-         * @description ``not_read`` carries no nodes: nothing has been run for this version of
-         *     the tool yet (a GET never runs it; POST reads it).
-         */
-        CliInterfaceOut: {
-            /** Discovered At */
-            discovered_at: string | null;
-            /** Incomplete */
-            incomplete: boolean;
-            /** Message */
-            message: string | null;
-            /** Nodes */
-            nodes: components["schemas"]["CliHelpNodeOut"][];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "not_read" | "ok" | "unavailable" | "no_help";
-            /** Version */
-            version: string | null;
-        };
         /** CliListOut */
         CliListOut: {
             /** Items */
@@ -1059,6 +1016,16 @@ export interface components {
             prompt: string;
         };
         /**
+         * KeptCopyOut
+         * @description An agent's folder a delete left where it was.
+         */
+        KeptCopyOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Path */
+            path: string;
+        };
+        /**
          * LinkMode
          * @description How a binding's target was realised on disk.
          * @enum {string}
@@ -1121,6 +1088,40 @@ export interface components {
             last_linked_at: string | null;
             link_mode: components["schemas"]["LinkMode"] | null;
         };
+        /** SkillBulkDeleteIn */
+        SkillBulkDeleteIn: {
+            /**
+             * Keep Foreign Copies
+             * @default false
+             */
+            keep_foreign_copies?: boolean;
+            /** Uids */
+            uids: string[];
+        };
+        /** SkillBulkDeleteOut */
+        SkillBulkDeleteOut: {
+            /** Results */
+            results: components["schemas"]["SkillBulkDeleteResult"][];
+        };
+        /** SkillBulkDeleteResult */
+        SkillBulkDeleteResult: {
+            /** Deleted */
+            deleted: boolean;
+            /** Error Code */
+            error_code: string | null;
+            /** Error Details */
+            error_details: {
+                [key: string]: unknown;
+            } | null;
+            /** Error Message */
+            error_message: string | null;
+            /** Kept Copies */
+            kept_copies: components["schemas"]["KeptCopyOut"][];
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+        };
         /** SkillCommitOut */
         SkillCommitOut: {
             /** Id */
@@ -1158,6 +1159,11 @@ export interface components {
              * @enum {string}
              */
             keep: "master" | "agent";
+        };
+        /** SkillDeleteOut */
+        SkillDeleteOut: {
+            /** Kept Copies */
+            kept_copies: components["schemas"]["KeptCopyOut"][];
         };
         /** SkillFileChangeOut */
         SkillFileChangeOut: {
@@ -1262,6 +1268,11 @@ export interface components {
             description: string | null;
             /** File Count */
             file_count: number;
+            /**
+             * Found At
+             * Format: date-time
+             */
+            found_at: string;
             /** Message */
             message: string | null;
             /** Name */
@@ -1298,6 +1309,10 @@ export interface components {
             requires: components["schemas"]["SkillRequirementOut"][];
             /** Requires Secrets */
             requires_secrets: components["schemas"]["SkillSecretRequirementOut"][];
+            /** Requires Skills */
+            requires_skills: components["schemas"]["SkillSkillRequirementOut"][];
+            /** Requires Tools */
+            requires_tools: components["schemas"]["SkillToolRequirementOut"][];
             scope: components["schemas"]["ScopeOut"] | null;
             /** Source */
             source: components["schemas"]["LocalImportSourceOut"] | components["schemas"]["ArchiveImportSourceOut"] | components["schemas"]["GitImportSourceOut"] | components["schemas"]["BuiltinSourceOut"];
@@ -1347,6 +1362,22 @@ export interface components {
             is_set: boolean;
             /** Name */
             name: string;
+        };
+        /**
+         * SkillSkillRequirementOut
+         * @description One skill this one loads (``metadata.requires``).
+         */
+        SkillSkillRequirementOut: {
+            /** Delivered To Same Agents */
+            delivered_to_same_agents: boolean;
+            /** Found */
+            found: boolean;
+            /** Missing Agent Names */
+            missing_agent_names: string[];
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string | null;
         };
         /**
          * SkillSourceStatusOut
@@ -1431,6 +1462,30 @@ export interface components {
             text: string | null;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * SkillToolRequirementOut
+         * @description One MCP server or custom-tool group the skill's SKILL.md says it calls
+         *     (``requires: {tools: [...]}``), with its state now. Only names Coffer has
+         *     are listed; an unknown one is skipped with a warning on the CLIs list.
+         */
+        SkillToolRequirementOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mcp_server" | "custom_tools";
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "healthy" | "off" | "failing";
+            /** Uid */
+            uid: string;
+            /** Why */
+            why: string | null;
         };
         /** SkillUpdateApplyRequest */
         SkillUpdateApplyRequest: {
@@ -2182,90 +2237,6 @@ export interface operations {
             };
         };
     };
-    get_cli_interface_api_v1_clis__command__interface_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                command: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CliInterfaceOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_cli_interface_api_v1_clis__command__interface_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                command: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CliInterfaceOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     list_skills_api_v1_skills_get: {
         parameters: {
             query?: never;
@@ -2284,6 +2255,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    bulk_delete_skills_api_v1_skills_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillBulkDeleteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillBulkDeleteOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -2453,6 +2469,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_orphan_files_api_v1_skills_orphans__name__files_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileTreeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_orphan_file_api_v1_skills_orphans__name__files_content_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileContentOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -2819,7 +2921,9 @@ export interface operations {
     };
     delete_skill_api_v1_skills__uid__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                keep_foreign_copies?: boolean;
+            };
             header?: {
                 "x-coffer-token"?: string | null;
                 "x-coffer-actor"?: string | null;
@@ -2832,11 +2936,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SkillDeleteOut"];
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

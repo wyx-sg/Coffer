@@ -8,7 +8,7 @@
 // tab, which reads its master folder `skills/<name>/`.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { skillsKey, vaultDiffKey, vaultHistoryKey, vaultKey } from "@/lib/api/queryKeys";
+import { skillsKey, vaultHistoryKey, vaultKey } from "@/lib/api/queryKeys";
 import { vaultApi, type VaultRestoreIn } from "@/lib/api/vault";
 
 /** A file's or folder's versions, newest first. No retry: a history that
@@ -19,16 +19,6 @@ export function useVaultHistory(path: string | null) {
     queryFn: () => vaultApi.history(path as string),
     enabled: Boolean(path),
     retry: false,
-  });
-}
-
-/** What one version did to one file. A version never changes, so its diff is
- *  read once. */
-export function useVaultDiff(path: string, version: string) {
-  return useQuery({
-    queryKey: vaultDiffKey(path, version),
-    queryFn: () => vaultApi.diff(path, version),
-    staleTime: Infinity,
   });
 }
 

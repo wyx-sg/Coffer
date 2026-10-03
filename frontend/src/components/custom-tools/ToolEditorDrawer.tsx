@@ -1,6 +1,7 @@
-// src/components/custom-tools/ToolEditorDrawer.tsx — one saved tool's editor, in a drawer over the group's
-// page (the address stays `/custom-tools/<group>`): the request, a reach override, headers, body,
-// arguments and Test; On and Delete tool in the footer. Nothing is saved until Save.
+// src/components/custom-tools/ToolEditorDrawer.tsx — one saved tool's editor (4.2.08), a 640 drawer under the title
+// bar over the group's page (the address stays `/custom-tools/<group>`): the request, headers, body, arguments and
+// Test with its result; Delete tool (outline danger) · Cancel · Save in the footer. The tool's switch and reach are
+// in the table, not here. Nothing is saved until Save.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Trash2 } from "lucide-react";
@@ -16,16 +17,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolGroup } from "@/lib/api/customTools";
+import { firstSecret } from "./headerRows";
 import { useDeleteCustomTool, useSaveCustomTool } from "@/lib/hooks/useCustomTools";
 import { ToolArgumentsField } from "./ToolArgumentsField";
 import { ToolHeadersField } from "./ToolHeadersField";
-import { ToolReachField } from "./ToolReachField";
 import { BodyField, ChangesDataField, DescriptionField, RequestField } from "./ToolRequestFields";
 import { ToolTestSection } from "./ToolTestSection";
-import { formOf, formReady, groupAuthOf, sameReach, toolOf, type ToolForm } from "./toolForm";
+import { formOf, formReady, toolOf, type ToolForm } from "./toolForm";
 
 interface Props {
   group: CustomToolGroup;
@@ -33,9 +33,11 @@ interface Props {
   toolName: string | null;
   open: boolean;
   onClose: () => void;
+  /** A timed-out test's Change timeout: close the drawer and open Edit group. */
+  onEditGroup: () => void;
 }
 
-export function ToolEditorDrawer({ group, toolName, open, onClose }: Props) {
+export function ToolEditorDrawer({ group, toolName, open, onClose, onEditGroup }: Props) {
   const { t } = useTranslation();
   const tool = toolName === null ? null : (group.tools.find((x) => x.name === toolName) ?? null);
   const [form, setForm] = useState<ToolForm>(() => formOf(tool));
@@ -51,17 +53,7 @@ export function ToolEditorDrawer({ group, toolName, open, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the drawer (re)opens
   }, [open, toolName]);
 
-  const onSave = () => {
-    const original = tool?.reach_override ?? null;
-    save.mutate(
-      {
-        tool: toolName,
-        body: toolOf(form),
-        reach: sameReach(form.reach, original) ? undefined : form.reach,
-      },
-      { onSuccess: onClose },
-    );
-  };
+  const onSave = () => save.mutate({ tool: toolName, body: toolOf(form) }, { onSuccess: onClose });
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
@@ -79,13 +71,8 @@ export function ToolEditorDrawer({ group, toolName, open, onClose }: Props) {
           <RequestField form={form} onChange={setForm} baseUrl={group.base_url} />
           <DescriptionField form={form} onChange={setForm} />
           <ChangesDataField form={form} onChange={setForm} />
-          <ToolReachField
-            group={group}
-            value={form.reach}
-            onChange={(reach) => setForm({ ...form, reach })}
-          />
           <ToolHeadersField
-            auth={groupAuthOf(group)}
+            groupHeaders={group.headers}
             headers={form.headers}
             onChange={(headers) => setForm({ ...form, headers })}
             forThisRequest
@@ -94,12 +81,16 @@ export function ToolEditorDrawer({ group, toolName, open, onClose }: Props) {
           <ToolArgumentsField args={form.args} onChange={(args) => setForm({ ...form, args })} />
           <ToolTestSection
             target={{ group: group.name }}
-            secret={group.auth?.secret ?? null}
+            secret={firstSecret(group) || null}
             timeoutSeconds={group.timeout_seconds}
             args={form.args}
             draft={() => toolOf(form)}
             ready={form.path.trim() !== ""}
             saveWord="save"
+            onChangeTimeout={() => {
+              onClose();
+              onEditGroup();
+            }}
           />
           {save.error ? (
             <div role="alert" className="flex items-start gap-2 text-sm text-danger">
@@ -109,20 +100,12 @@ export function ToolEditorDrawer({ group, toolName, open, onClose }: Props) {
           ) : null}
         </SheetBody>
         <SheetFooter>
-          <label className="inline-flex items-center gap-2 text-xs text-text-muted">
-            <Switch
-              checked={form.enabled}
-              aria-label={t("customTools.editor.enabled")}
-              onCheckedChange={(enabled) => setForm({ ...form, enabled })}
-            />
-            {t("customTools.tools.on")}
-          </label>
-          <Button variant="ghost" className="text-danger" onClick={() => setConfirmDelete(true)}>
+          <Button variant="danger" onClick={() => setConfirmDelete(true)}>
             <Trash2 aria-hidden />
             {t("customTools.editor.delete")}
           </Button>
           <div className="ml-auto flex gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose}>
               {t("common.cancel")}
             </Button>
             <Button disabled={!formReady(form) || save.isPending} onClick={onSave}>

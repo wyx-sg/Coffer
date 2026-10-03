@@ -38,6 +38,9 @@ export type ChangePreviewState =
   | "applied"
   | "failed";
 
+/** The order op counts are listed in: Modify, Add, Remove. */
+export const OP_ORDER: readonly ChangeOp[] = ["modify", "add", "remove"];
+
 export interface AgentGroup {
   key: string;
   agentType: string;

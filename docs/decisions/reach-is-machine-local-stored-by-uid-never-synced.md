@@ -57,9 +57,9 @@ repository, no ignore rule, no forgotten exporter field and no hand-run
 `git add -f` can publish it. Cons: a resource does not arrive with the reach it
 has elsewhere — a newly arrived MCP server is live here for every agent until
 the user narrows it, exactly as if it had been created here; and "restrict this
-on every machine" is N edits, one per machine. The docs must say that reach is
-local, because a user who assumes it syncs would be assuming the more dangerous
-half (the reach panel itself carries no such line).
+on every machine" is N edits, one per machine. The docs must say
+that reach is local, because a user who assumes it syncs would be assuming the
+more dangerous half; the reach panel itself carries no such line.
 
 It wins because it is the only option in which the person setting reach can
 verify it from where they are sitting, in which two machines cannot disagree
@@ -199,7 +199,7 @@ reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output
 - Two machines can legitimately disagree about one resource's reach, and
   neither is wrong.
 - The docs state that reach is for this machine only and is not synced; an
-  empty agent list reads "No agent" on the control.
+  empty agent list reads "No agent selected" on the control.
 - The machine registry belongs to sync alone; nothing about permissions reads
   it.
 - A newly converged resource is live here at its kind's default reach; a user

@@ -17,6 +17,7 @@ vi.mock("./SkillOrphanList", () => ({ SkillOrphanList: () => null }));
 
 const SKILLS: SkillOut[] = [
   BUILTIN_SKILL,
+  makeSkill({ uid: "u-bad", name: "delta", master_missing: true }),
   makeSkill({ uid: "u-on", name: "alpha" }),
   makeSkill({ uid: "u-off", name: "beta", enabled: false }),
   makeSkill({ uid: "u-none", name: "gamma", scope: { agents: [] } }),
@@ -64,19 +65,28 @@ const names = (el: HTMLElement) =>
     .map((a) => a.textContent);
 
 describe("SkillLibrary", () => {
-  test("groups In use, Unused, then Built-in with a count each", () => {
+  test("groups Needs attention, In use, Off, then Built-in, no count on the titles", () => {
     renderLibrary();
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(headings).toEqual(["In use1", "Unused2", "Built-in1"]);
+    expect(headings).toEqual(["Needs attention", "In use", "Off", "Built-in"]);
+    expect(names(group("Needs attention")!)[0]).toContain("delta");
+    expect(names(group("Needs attention")!)[0]).toContain("Master missing");
     expect(names(group("In use")!)[0]).toContain("alpha");
-    expect(names(group("Unused")!).join()).toMatch(/beta.*gamma|gamma.*beta/);
+    expect(names(group("Off")!).join()).toMatch(/beta.*gamma|gamma.*beta/);
     expect(names(group("Built-in")!)[0]).toContain("coffer-guide");
     expect(within(group("Built-in")!).getByTestId("skill-builtin-badge")).toBeInTheDocument();
   });
 
-  test("there is no Kind filter; search and Reach apply to built-ins too", () => {
+  test("a row shows its description unless something needs saying, and Off rows carry no reach word", () => {
     renderLibrary();
-    expect(screen.queryByRole("combobox", { name: "Kind" })).toBeNull();
+    expect(within(group("In use")!).getByText("Say hello nicely.")).toBeInTheDocument();
+    expect(names(group("Off")!).every((n) => !n?.includes("Off"))).toBe(true);
+  });
+
+  test("there is no Reach filter or Kind filter; search applies to built-ins too", () => {
+    renderLibrary();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "zzz" },
     });
@@ -95,7 +105,7 @@ describe("SkillLibrary", () => {
     const all = screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement;
     expect(all.indeterminate).toBe(true);
     fireEvent.click(all);
-    expect(screen.getByText("3 of 3 selected")).toBeInTheDocument();
+    expect(screen.getByText("4 of 4 selected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     expect(screen.queryByRole("region", { name: "Selected skills" })).toBeNull();
   });
@@ -106,7 +116,7 @@ describe("SkillLibrary", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
     const bar = screen.getByRole("region", { name: "Selected skills" });
     expect(screen.queryByRole("textbox", { name: "Filter skills" })).toBeNull();
-    expect(within(bar).getByText("1 of 3 selected")).toBeInTheDocument();
+    expect(within(bar).getByText("1 of 4 selected")).toBeInTheDocument();
     expect(within(bar).queryByRole("checkbox")).toBeNull();
     fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
     expect(screen.queryByRole("region", { name: "Selected skills" })).toBeNull();

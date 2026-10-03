@@ -17,12 +17,9 @@ const grafana = makeGroup({
   health: "attention",
   health_reason: "secret_missing",
   secret_state: "missing",
-  auth: {
-    header: "Authorization",
-    prefix: "Bearer ",
-    secret: "grafana-token",
-    secret_state: "missing",
-  },
+  headers: [
+    { name: "Authorization", value: null, secret: "grafana-token", secret_state: "missing" },
+  ],
   tools: [makeTool({ name: "search_dashboards", path: "/search" })],
 });
 const deploy = makeGroup({ name: "deploy-api", health: "failing" });
@@ -43,6 +40,7 @@ export const billing = makeGroup({
       method: "POST",
       path: "/invoices",
       changes_data: true,
+      reach_mode: "chosen",
       reach_override: ["ag-cc"],
     }),
   ],

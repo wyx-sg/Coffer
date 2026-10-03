@@ -1,13 +1,15 @@
 // frontend/src/components/mcp/add/ReviewCard.tsx — one server in the review
 // step (board Mcp-Import-Review), as one row: include tick, the name it will
 // keep (editable until added, flagged over 24 characters), how it runs, and
-// what it carries — a Secret toggle per environment / header key.
-import { useState } from "react";
+// what it carries as the shared header / env rows (a value that looks like a
+// secret arrives as a new secret, switchable back from its 🔑 menu). A server added
+// by an earlier attempt shows a check, its fixed name and "Added".
 import { useTranslation } from "react-i18next";
+import { Check } from "lucide-react";
 
+import { KeyValueSecretRows } from "@/components/secret/KeyValueSecretRows";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PasswordInput } from "@/components/ui/password-input";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { NewServer } from "@/lib/mcp/importMcpServers";
 import { NameField } from "./NameField";
@@ -21,6 +23,8 @@ interface Props {
   taken: ReadonlySet<string>;
   /** Why the last attempt did not add it (not a name clash — that shows under the name). */
   error?: string;
+  /** The keys that arrived flagged secret without a value: the person types one. */
+  asked: ReadonlySet<string>;
   onInclude: (on: boolean) => void;
   onChange: (server: NewServer) => void;
 }
@@ -38,18 +42,13 @@ export function ReviewCard({
   added,
   taken,
   error,
+  asked,
   onInclude,
   onChange,
 }: Props) {
   const { t } = useTranslation();
-  // The keys that arrived without a value (a `bearer_token_env_var` header):
-  // their box stays while the value is typed.
-  const [asked] = useState(
-    () => new Set(server.env.filter((e) => e.value === "").map((e) => e.key)),
-  );
-  const setEnv = (i: number, patch: Partial<NewServer["env"][number]>) =>
-    onChange({ ...server, env: server.env.map((e, j) => (j === i ? { ...e, ...patch } : e)) });
   const http = server.transportType === "http";
+  const label = http ? t("mcp.add.headers") : t("mcp.add.env");
   return (
     <div
       className={cn(
@@ -57,19 +56,19 @@ export function ReviewCard({
         !include && "opacity-disabled",
       )}
     >
-      <Checkbox
-        className="mt-2"
-        checked={include}
-        disabled={added}
-        aria-label={t("mcp.add.include", { name: server.name })}
-        onChange={(e) => onInclude(e.target.checked)}
-      />
+      {added ? (
+        <Check aria-hidden className="mt-2 size-4 text-success" />
+      ) : (
+        <Checkbox
+          className="mt-2"
+          checked={include}
+          aria-label={t("mcp.add.include", { name: server.name })}
+          onChange={(e) => onInclude(e.target.checked)}
+        />
+      )}
       <div className="min-w-0">
         {added ? (
-          <p className="pt-1.5 font-mono text-sm font-label">
-            {server.name}{" "}
-            <span className="font-sans text-xs text-success">{t("mcp.add.added")}</span>
-          </p>
+          <p className="pt-1.5 font-mono text-xs font-label text-text">{server.name}</p>
         ) : (
           <NameField
             id={`review-name-${index}`}
@@ -82,41 +81,38 @@ export function ReviewCard({
       </div>
       <p className="pt-1.5 text-xs text-text-muted">{summary(t, server)}</p>
       <div className="min-w-0 space-y-1.5 pt-1.5 text-xs text-text-muted">
+        {added ? (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">{t("mcp.add.added")}</Badge>
+            {t("mcp.add.testingBackground")}
+          </div>
+        ) : null}
         {server.originalName && server.originalName !== server.name ? (
           <p>{t("mcp.add.renamedFrom", { name: server.originalName })}</p>
         ) : null}
-        {server.env.length === 0 ? <p>{t(http ? "mcp.add.noHeaders" : "mcp.add.noEnv")}</p> : null}
-        {server.env.map((e, i) => (
-          <div key={e.key} className="space-y-1">
-            <div className="flex items-start gap-2">
-              <span className="min-w-0 flex-1">
-                {e.isSecret ? (
-                  t("mcp.add.secretLine", { key: e.key })
-                ) : (
-                  <span className="font-mono text-text">{e.key}</span>
-                )}
-              </span>
-              <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
-                <Switch
-                  checked={e.isSecret}
-                  disabled={added}
-                  aria-label={t("mcp.add.secretFor", { key: e.key })}
-                  onCheckedChange={(on) => setEnv(i, { isSecret: on })}
-                />
-                {t("mcp.add.secret")}
-              </label>
-            </div>
-            {e.isSecret && (e.value === "" || asked.has(e.key)) && !added ? (
-              <PasswordInput
-                aria-label={t("mcp.add.rowValue", { key: e.key })}
-                placeholder={t("mcp.add.secretMissing", { key: e.key })}
-                value={e.value}
-                onChange={(ev) => setEnv(i, { value: ev.target.value })}
-              />
-            ) : null}
-          </div>
-        ))}
-        {error ? (
+        {added ? null : (
+          <>
+            <KeyValueSecretRows
+              rows={server.env}
+              onChange={(env) => onChange({ ...server, env })}
+              label={label}
+              keyPlaceholder={http ? "Authorization" : "API_KEY"}
+              addLabel={http ? t("mcp.env.addHeader") : t("mcp.env.addVariable")}
+            />
+            {server.env.length === 0 ? <p>{t(http ? "mcp.add.noHeaders" : "mcp.add.noEnv")}</p> : null}
+            {server.env
+              .filter((e) => e.value.kind === "new")
+              .map((e) => (
+                <p key={e.key}>{t("mcp.add.secretLine", { key: e.key })}</p>
+              ))}
+            {server.env
+              .filter((e) => asked.has(e.key) && e.value.kind === "plain" && e.value.value === "")
+              .map((e) => (
+                <p key={e.key}>{t("mcp.add.secretMissing", { key: e.key })}</p>
+              ))}
+          </>
+        )}
+        {error && !added ? (
           <p className="text-danger" role="alert">
             {error}
           </p>

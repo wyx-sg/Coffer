@@ -34,7 +34,7 @@ function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): voi
 export const ENABLE_KEY = ["resource", "enable"] as const;
 export const DISABLE_KEY = ["resource", "disable"] as const;
 
-export function useEnableResource(options: { quiet?: boolean } = {}) {
+export function useEnableResource() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -42,13 +42,11 @@ export function useEnableResource(options: { quiet?: boolean } = {}) {
     mutationKey: ENABLE_KEY,
     mutationFn: ({ uid }: ResourceWriteInput) => resourcesApi.enable(uid),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
-    onError: (error) => {
-      if (!options.quiet) toast.error(translateApiError(t, error));
-    },
+    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 
-export function useDisableResource(options: { quiet?: boolean } = {}) {
+export function useDisableResource() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -56,9 +54,7 @@ export function useDisableResource(options: { quiet?: boolean } = {}) {
     mutationKey: DISABLE_KEY,
     mutationFn: ({ uid }: ResourceWriteInput) => resourcesApi.disable(uid),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
-    onError: (error) => {
-      if (!options.quiet) toast.error(translateApiError(t, error));
-    },
+    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 

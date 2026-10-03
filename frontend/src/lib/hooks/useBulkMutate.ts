@@ -20,9 +20,6 @@ interface BulkOptions {
   /** Query keys to invalidate once after the batch settles (single burst).
    *  Pass builders from `lib/api/queryKeys.ts`, never inline arrays. */
   invalidate?: QueryKey[];
-  /** Skip the failure toasts (the caller reads `{ok, failed}` and says so
-   *  itself, in place). The all-succeeded toast is unaffected. */
-  quietFailures?: boolean;
 }
 
 /**
@@ -38,7 +35,7 @@ export function useBulkMutate(options: BulkOptions = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [isPending, setPending] = useState(false);
-  const { invalidate, quietFailures = false } = options;
+  const { invalidate } = options;
 
   const run = useCallback(
     async <T>(
@@ -53,8 +50,6 @@ export function useBulkMutate(options: BulkOptions = {}) {
 
         if (failed === 0) {
           toast.success(t("common.bulk.summary.allOk", { count: ok }));
-        } else if (quietFailures) {
-          // the caller reports it in place
         } else if (ok === 0) {
           toast.error(t("common.bulk.summary.allFailed", { count: failed }));
         } else {
@@ -69,7 +64,7 @@ export function useBulkMutate(options: BulkOptions = {}) {
         setPending(false);
       }
     },
-    [t, toast, qc, invalidate, quietFailures],
+    [t, toast, qc, invalidate],
   );
 
   return { run, isPending };

@@ -6,6 +6,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { StatusDot } from "@/components/status/StatusDot";
 import { useSkillOrphans } from "@/lib/hooks/useSkillCopies";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
@@ -32,13 +33,16 @@ export function SkillOrphanList({ selected }: Props) {
               to={`/skills?orphan=${encodeURIComponent(o.name)}`}
               aria-current={selected === o.name ? "page" : undefined}
               className={cn(
-                "flex flex-col gap-0.5 rounded-lg px-2.5 py-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
+                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
                 selected === o.name ? "bg-surface-selected" : "hover:bg-surface-hover",
               )}
             >
-              <span className="truncate font-mono text-xs font-label text-text">{o.name}</span>
-              <span className={cn("truncate text-xs", toneTextClass("warn"))}>
-                {t("skills.orphan.row")}
+              <StatusDot tone="warn" size={7} />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate font-mono text-xs font-label text-text">{o.name}</span>
+                <span className={cn("truncate text-xs", toneTextClass("warn"))}>
+                  {t("skills.orphan.row")}
+                </span>
               </span>
             </Link>
           </li>

@@ -1,7 +1,7 @@
 // src/components/ui/toast-card.tsx
 // The toast stack and its cards (Foundations · Feedback · Toast): bottom-right
 // at a 24px inset, min 280 / max 420 wide, p 10 14, r10, the raised surface
-// with the overlay shadow, a 15px status icon, one 13/600 action 12px after
+// with the overlay shadow, a 15px status icon, an optional 12px muted second line under a 13/550 title, one 13/600 action 12px after
 // the message. A card that will leave on its own draws a 2px line along its
 // bottom edge that shrinks with the time it has left, and stops with the clock
 // while the pointer or focus is on the card; an error stays until dismissed
@@ -127,7 +127,19 @@ function ToastCard({ toast, onDismiss, onPause, onResume }: CardProps) {
           className={cn("size-[15px] shrink-0 stroke-[1.75]", VARIANT_ICON_CLS[toast.variant])}
         />
         <div className="min-w-0 flex-1">
-          <p className={expanded ? "break-words" : "truncate"}>{toast.message}</p>
+          <p
+            className={cn(
+              expanded ? "break-words" : "truncate",
+              toast.description && "font-[550]",
+            )}
+          >
+            {toast.message}
+          </p>
+          {toast.description ? (
+            <p className="mt-0.5 break-words text-xs leading-[1.45] text-text-muted">
+              {toast.description}
+            </p>
+          ) : null}
           {expanded && toast.details ? (
             <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-[1.45] text-text-muted">
               {toast.details}

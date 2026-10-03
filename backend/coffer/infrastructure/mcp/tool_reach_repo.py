@@ -6,7 +6,10 @@ or narrow one custom tool"); like every reach it is a fact about this machine
 (ADR reach-is-machine-local-stored-by-uid-never-synced), so it is local state
 beside ``local/reach.json`` and never in the group's vault file::
 
-    {"<group uid>": {"<tool name>": ["<agent uid>", ...]}}
+    {"<group uid>": {"<tool name>": ["<agent uid>", ...] | "all"}}
+
+``"all"`` is the tool's own "every agent the group reaches", distinct from no
+entry (same as the group) so an agent added later is included.
 
 Keyed by the group's uid and the tool's name, so a group keeps its overrides
 as its config changes. A tool with no entry reaches wherever its group does.
@@ -18,6 +21,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+from coffer.application.mcp.custom_tool_ports import ToolReach
 from coffer.infrastructure.vault.home import local_root
 from coffer.infrastructure.vault.json_store import JsonStore
 
@@ -32,31 +36,32 @@ class MCPToolReachStore:
     def __init__(self, path: Path | Callable[[], Path] = tool_reach_path) -> None:
         self._store = JsonStore(path)
 
-    async def overrides_for(self, resource_uids: Sequence[str]) -> dict[str, dict[str, list[str]]]:
+    async def overrides_for(self, resource_uids: Sequence[str]) -> dict[str, dict[str, ToolReach]]:
         wanted = set(resource_uids)
         if not wanted:
             return {}
-        out: dict[str, dict[str, list[str]]] = {}
+        out: dict[str, dict[str, ToolReach]] = {}
         for uid, tools in self._store.read().items():
             if uid not in wanted or not isinstance(tools, dict):
                 continue
-            kept = {
-                str(tool): [str(a) for a in agents]
-                for tool, agents in tools.items()
-                if isinstance(agents, list)
-            }
+            kept: dict[str, ToolReach] = {}
+            for tool, agents in tools.items():
+                if agents == "all":
+                    kept[str(tool)] = "all"
+                elif isinstance(agents, list):
+                    kept[str(tool)] = [str(a) for a in agents]
             if kept:
                 out[uid] = kept
         return out
 
-    async def set_override(self, resource_uid: str, tool: str, agents: list[str] | None) -> None:
+    async def set_override(self, resource_uid: str, tool: str, reach: ToolReach | None) -> None:
         def change(doc: dict[str, Any]) -> None:
             tools = doc.get(resource_uid)
             tools = dict(tools) if isinstance(tools, dict) else {}
-            if agents is None:
+            if reach is None:
                 tools.pop(tool, None)
             else:
-                tools[tool] = list(agents)
+                tools[tool] = reach if reach == "all" else list(reach)
             if tools:
                 doc[resource_uid] = tools
             else:

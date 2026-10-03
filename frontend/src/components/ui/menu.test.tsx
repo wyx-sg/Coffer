@@ -25,6 +25,20 @@ function renderMenu(onRemove = vi.fn(), onCopy = vi.fn()) {
 }
 
 describe("ActionMenu", () => {
+  test("a separated item that comes first draws no separator above it", () => {
+    render(
+      <ActionMenu
+        label="More actions"
+        actions={[
+          { key: "rm", label: "Remove", onSelect: vi.fn(), destructive: true, separated: true },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    expect(screen.queryByRole("separator")).toBeNull();
+  });
+
   test("opening lists the items as menu items, with a separator before the grouped one", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: "More actions for Codex" }));
