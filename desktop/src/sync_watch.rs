@@ -80,9 +80,8 @@ fn apply(app: &AppHandle, action: &AlertAction) {
     match action {
         AlertAction::Raise(status) => {
             log::warn!("sync.attention raised status={status}");
-            // The menu bar's attention dot, and the name its "needs you" entry
-            // gives a single sync problem (`tray_state.rs`).
-            set_sync_alert(app, Some(status));
+            // The menu bar's count (`tray_state.rs`).
+            set_sync_alert(app, true);
             set_dock_badge(app, Some(DOCK_BADGE));
             let lang = tray_locale::current();
             if let Err(e) = app
@@ -97,7 +96,7 @@ fn apply(app: &AppHandle, action: &AlertAction) {
         }
         AlertAction::Clear => {
             log::info!("sync.attention cleared");
-            set_sync_alert(app, None);
+            set_sync_alert(app, false);
             set_dock_badge(app, None);
         }
         AlertAction::Nothing => {}

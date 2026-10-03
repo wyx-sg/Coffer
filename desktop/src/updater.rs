@@ -113,13 +113,12 @@ fn record(app: &AppHandle, change: impl FnOnce(&mut UpdateStatus)) -> UpdateStat
     status.clone()
 }
 
-/// Tell the page and the menu bar what the record now says.
+/// Tell the page what the record now says.
 fn announce(app: &AppHandle, snapshot: &UpdateStatus) {
     let _ = app.emit(UPDATE_EVENT, snapshot);
-    crate::tray::set_update(app, snapshot.clone());
 }
 
-/// Change the record, then tell the page and the menu bar.
+/// Change the record, then tell the page.
 fn publish(app: &AppHandle, change: impl FnOnce(&mut UpdateStatus)) -> UpdateStatus {
     let snapshot = record(app, change);
     announce(app, &snapshot);

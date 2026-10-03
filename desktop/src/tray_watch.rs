@@ -1,30 +1,30 @@
-//! The poll that keeps the menu bar true: whether the daemon is serving, how
-//! many things on Overview need the user, and whether Start at login is on.
+//! The poll that keeps the menu bar true: whether the daemon is serving and how
+//! many things on Overview need the user.
 //!
 //! One light loop over loopback. Every tick reads `daemon.json` and the
 //! daemon's own status — the probe `resolve.rs` gates its take-over on — and
-//! lets the sync watcher run its own slow poll on a tick that reached it. The attention list and the login service change on a human
-//! timescale, so they are read every minute, and at once whenever the daemon
-//! comes (back) up. A tray action that changes something (a restart, the Start
-//! at login switch) wakes the loop instead of waiting out the tick.
+//! lets the sync watcher run its own slow poll on a tick that reached it. The attention list changes on a human timescale, so it is read
+//! every minute, and at once whenever the daemon comes (back) up. A tray
+//! action that changes something (a restart) wakes the loop instead of waiting
+//! out the tick.
 
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use serde_json::{json, Value};
+use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-use crate::daemon_http::{fetch_ok, json_or_error, put_json, DEFAULT_READ_TIMEOUT};
+use crate::daemon_http::fetch_ok;
 use crate::discovery::read_daemon_info;
 use crate::sync_watch::SyncWatch;
 use crate::tray::update_state;
-use crate::tray_state::{Attention, Daemon, Login};
+use crate::tray_state::{Attention, Daemon};
 
 /// How often the daemon's status is read — and so how long the menu bar may
 /// lag a daemon going down.
 pub const STATUS_TICK: Duration = Duration::from_secs(10);
-/// How often the attention list and the login service are re-read.
+/// How often the attention list is re-read.
 const SLOW_TICK: Duration = Duration::from_secs(60);
 /// A short pause before the first tick, so it does not race the launch
 /// handshake's detect-or-spawn.
@@ -79,15 +79,10 @@ fn run(app: AppHandle, wake: Receiver<()>) {
                 slow_read = Some(Instant::now());
                 let attention =
                     fetch_ok(port, &token, "/api/v1/attention").and_then(|b| parse_attention(&b));
-                let login = fetch_ok(port, &token, "/api/v1/daemon/residency")
-                    .and_then(|b| parse_login(&b));
                 update_state(&app, |s| {
                     // A read that failed keeps what was last known.
                     if let Some(a) = attention {
                         s.attention = a;
-                    }
-                    if login.is_some() {
-                        s.login = login;
                     }
                 });
             }
@@ -122,60 +117,12 @@ pub fn parse_version(body: &str) -> String {
         .unwrap_or_default()
 }
 
-/// The count and, for a single item, its kind, from `GET /api/v1/attention`.
+/// The count of `items` in `GET /api/v1/attention` — the list the Overview
+/// shows, which leaves out what the user has ignored.
 pub fn parse_attention(body: &str) -> Option<Attention> {
     let v: Value = serde_json::from_str(body).ok()?;
     let items = v.get("items")?.as_array()?;
-    let only_kind = match items.as_slice() {
-        [one] => one.get("kind").and_then(Value::as_str).map(str::to_owned),
-        _ => None,
-    };
-    Some(Attention {
-        count: items.len(),
-        only_kind,
-    })
-}
-
-/// The login service from `GET`/`PUT /api/v1/daemon/residency`.
-pub fn parse_login(body: &str) -> Option<Login> {
-    let v: Value = serde_json::from_str(body).ok()?;
-    Some(Login {
-        installed: v.get("login_service_installed")?.as_bool()?,
-        supported: v.get("login_service_supported")?.as_bool()?,
-    })
-}
-
-/// Flip Start at login — the same setting as Settings › Daemon — and show what
-/// the daemon says is true afterwards, which may not be what was asked.
-pub fn toggle_login(app: AppHandle) {
-    std::thread::spawn(move || {
-        let current = crate::tray::snapshot(&app).and_then(|s| s.login);
-        let (Some(current), Some((port, token))) = (current, read_daemon_info()) else {
-            crate::tray::render(&app);
-            return;
-        };
-        let body = json!({ "login_service_installed": !current.installed });
-        let result = put_json(
-            port,
-            &token,
-            "/api/v1/daemon/residency",
-            &body,
-            DEFAULT_READ_TIMEOUT,
-        )
-        .and_then(json_or_error);
-        match result {
-            Ok(v) => {
-                let login = parse_login(&v.to_string());
-                log::info!("tray.start_at_login -> {:?}", login.map(|l| l.installed));
-                update_state(&app, |s| s.login = login.or(s.login));
-            }
-            Err(e) => {
-                log::warn!("tray.start_at_login failed: {e}");
-                // The native item toggled its own check; put the truth back.
-                crate::tray::render(&app);
-            }
-        }
-    });
+    Some(Attention { count: items.len() })
 }
 
 #[cfg(test)]

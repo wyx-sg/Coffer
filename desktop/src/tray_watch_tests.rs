@@ -43,44 +43,16 @@ fn the_status_version_is_read_and_absent_is_empty() {
     assert_eq!(parse_version("not json"), "");
 }
 
+// acceptance(spec = "desktop-app", scenario = "the menu bar counts what needs the user")
 #[test]
-fn the_attention_list_is_counted_and_a_single_item_named() {
+fn the_attention_list_is_counted() {
     let two =
         r#"{"items":[{"kind":"mcp_server"},{"kind":"sync"}],"errors":[],"counts_by_kind":{}}"#;
-    assert_eq!(
-        parse_attention(two),
-        Some(Attention {
-            count: 2,
-            only_kind: None
-        })
-    );
-    let one = r#"{"items":[{"kind":"sync","title":"Sync"}]}"#;
-    assert_eq!(
-        parse_attention(one).unwrap().only_kind.as_deref(),
-        Some("sync")
-    );
+    assert_eq!(parse_attention(two), Some(Attention { count: 2 }));
     assert_eq!(parse_attention(r#"{"items":[]}"#).unwrap().count, 0);
     // An unreadable answer is no answer, never "nothing needs you".
     assert_eq!(parse_attention("{}"), None);
     assert_eq!(parse_attention("oops"), None);
-}
-
-#[test]
-fn the_login_service_is_read_from_residency() {
-    let on = r#"{"login_service_installed":true,"login_service_supported":true}"#;
-    assert_eq!(
-        parse_login(on),
-        Some(Login {
-            installed: true,
-            supported: true
-        })
-    );
-    let unsupported = r#"{"login_service_installed":false,"login_service_supported":false}"#;
-    assert!(!parse_login(unsupported).unwrap().supported);
-    assert_eq!(parse_login("{}"), None);
-    // The daemon always states whether a login service is supported; an
-    // answer without it is not read as "supported".
-    assert_eq!(parse_login(r#"{"login_service_installed":true}"#), None);
 }
 
 #[test]
