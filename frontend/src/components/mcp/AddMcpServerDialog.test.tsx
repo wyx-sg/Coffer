@@ -139,6 +139,12 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(screen.getByText("Review before adding")).toBeInTheDocument();
     expect(screen.getByText("3 servers found")).toBeInTheDocument();
     expect(screen.getByText(/NOTION_TOKEN looks like a secret/)).toBeInTheDocument();
+    // No Secret switch: the value is the shared row, a new secret from its 🔑 menu.
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "NOTION_TOKEN: secret notion_token" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("New · saved on Add")).toBeInTheDocument();
     expect(screen.getByTestId("add-server-reach")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add 3 servers" }));

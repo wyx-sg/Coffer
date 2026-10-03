@@ -81,7 +81,7 @@ describe("McpServerList", () => {
   test("the groups read Off after Healthy, and an off server leaves its Reach column empty", () => {
     renderList();
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(headings.indexOf("Healthy1")).toBeLessThan(headings.indexOf("Off1"));
+    expect(headings.indexOf("Healthy")).toBeLessThan(headings.indexOf("Off"));
     const off = screen.getByRole("link", { name: /linear/ });
     expect(within(off).queryByText("Off")).toBeNull();
     expect(within(off).queryByText("All agents")).toBeNull();

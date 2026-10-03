@@ -6,17 +6,16 @@
 // A batch that only partly went in stays open (board Mcp-Add-ReviewPartial): the
 // added rows say Added, a refused one says why and its name can be changed, and
 // Add N server(s) tries only those; Close ends it.
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useSecretChoices } from "@/components/secret/useSecretChoices";
-import { defaultSecretName } from "@/components/secret/secretValue";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
 import type { FailedServer, NewServer, ReachIntent } from "@/lib/mcp/importMcpServers";
 import { missingSecretValues } from "@/lib/mcp/importMcpServers";
-import { rowsFromParsed } from "@/lib/mcp/serverRows";
+import { askedKeysOf, keptRows, promoteAsked, rowsFromParsed } from "@/lib/mcp/serverRows";
 import { nameSendable } from "./nameProblem";
 import { ReachPick } from "./ReachPick";
 import { ReviewCard } from "./ReviewCard";
@@ -39,6 +38,8 @@ interface Props {
 interface Row {
   server: NewServer;
   include: boolean;
+  /** Keys that arrived flagged secret without a value. */
+  asked: Set<string>;
 }
 
 export function ReviewStep({ initial, taken, added, failures, pending, onBack, onClose, onSubmit }: Props) {
@@ -48,18 +49,11 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
     // One set across the batch, so two servers' API_KEY never share a name.
     const names = new Set(secretNames);
     return initial.map((server) => ({
-      server: { ...server, env: rowsFromParsed(server.env, names) },
+      server: { ...server, env: rowsFromParsed(server.env, names, true) },
       include: true,
+      asked: askedKeysOf(server.env),
     }));
   });
-  const newNames = useMemo(
-    () =>
-      new Set(
-        rows.flatMap((r) => r.server.env.flatMap((e) => (e.value.kind === "new" ? [e.value.name] : []))),
-      ),
-    [rows],
-  );
-  const nameSecret = (key: string) => defaultSecretName(key, new Set([...secretNames, ...newNames]));
   const [reach, setReach] = useState<ReachIntent>({ mode: "everywhere" });
   const patch = (i: number, next: Partial<Row>) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...next } : r)));
@@ -75,14 +69,25 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
     });
     return out;
   };
+  // An asked key stays asked for until its value is typed in.
+  const unfilled = (r: Row) =>
+    r.server.env.some((e) => r.asked.has(e.key.trim()) && e.value.kind === "plain" && e.value.value === "");
   const pendingRows = rows.filter((r) => r.include && !added.has(r.server.name));
   const blocked = rows.some(
     (r, i) =>
       r.include &&
       !added.has(r.server.name) &&
-      (!nameSendable(r.server.name, takenFor(i)) || missingSecretValues(r.server).length > 0),
+      (!nameSendable(r.server.name, takenFor(i)) ||
+        missingSecretValues(r.server).length > 0 ||
+        unfilled(r)),
   );
-  const included = rows.filter((r) => r.include).map((r) => r.server);
+  // What was flagged secret and typed in becomes a new secret, never plain text.
+  const included = rows
+    .filter((r) => r.include)
+    .map((r) => ({
+      ...r.server,
+      env: promoteAsked(keptRows(r.server.env), r.asked, secretNames),
+    }));
 
   return (
     <>
@@ -103,7 +108,7 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
               added={added.has(row.server.name)}
               taken={takenFor(i)}
               error={failure && !failure.nameTaken ? failure.message : undefined}
-              nameSecret={nameSecret}
+              asked={row.asked}
               onInclude={(include) => patch(i, { include })}
               onChange={(server) => patch(i, { server })}
             />

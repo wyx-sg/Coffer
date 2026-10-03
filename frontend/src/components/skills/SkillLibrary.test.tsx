@@ -65,10 +65,10 @@ const names = (el: HTMLElement) =>
     .map((a) => a.textContent);
 
 describe("SkillLibrary", () => {
-  test("groups Needs attention, In use, Off, then Built-in with a count each", () => {
+  test("groups Needs attention, In use, Off, then Built-in, no count on the titles", () => {
     renderLibrary();
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(headings).toEqual(["Needs attention1", "In use1", "Off2", "Built-in1"]);
+    expect(headings).toEqual(["Needs attention", "In use", "Off", "Built-in"]);
     expect(names(group("Needs attention")!)[0]).toContain("delta");
     expect(names(group("Needs attention")!)[0]).toContain("Master missing");
     expect(names(group("In use")!)[0]).toContain("alpha");

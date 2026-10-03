@@ -2,8 +2,7 @@
 //
 // "Filter servers" (name, title and command or URL), then the servers grouped
 // by what needs the user — Needs attention (failing, launcher missing, secret
-// missing, each with its reason), Not checked yet, Healthy, Off — with a count
-// each, then Built-in (Coffer's own `coffer` server, read-only). The search
+// missing, each with its reason), Not checked yet, Healthy, Off — then Built-in (Coffer's own `coffer` server, read-only). The search
 // filters every row, the built-in one included. While rows are ticked the
 // selection bar takes the search's place at the top; which rows are ticked
 // belongs to the page, whose right pane summarises the selection. Each row
@@ -129,7 +128,6 @@ export function McpServerList({
               <section key={group} className="mb-3" aria-label={t(`mcp.page.group.${group}`)}>
                 <h2 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted">
                   {t(`mcp.page.group.${group}`)}
-                  <span className="ml-auto font-book">{rows.length}</span>
                 </h2>
                 <ul className="flex flex-col gap-0.5">
                   {rows.map((i) => {

@@ -47,7 +47,6 @@ export function GroupList({ groups, loading, error, onRetry, selected, onOpen }:
                 className="mb-1 flex items-center justify-between px-2.5 text-xs font-semibold text-text-muted"
               >
                 {t(`customTools.list.section.${section}`)}
-                <span className="font-normal tabular-nums">{inSection.length}</span>
               </h2>
               <ul>
                 {inSection.map((group) => (

@@ -1,7 +1,7 @@
 // src/components/clis/ClisList.tsx — the CLIs list pane: a filter ("/" focuses it), then Needs attention and Ready.
 //
 // Needs attention holds the commands that are missing, too old or not logged in, in
-// the daemon's order; Ready the rest. Each group carries its count. A row opens
+// the daemon's order; Ready the rest. A row opens
 // `/clis/<command>` in the detail pane beside it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -55,7 +55,6 @@ export function ClisList({ items, loading, error, onRetry, selected, onOpen }: P
                 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted"
               >
                 {t(`clis.list.${key}`)}
-                <span className="ml-auto font-book">{rows.length}</span>
               </h2>
               <ul>
                 {rows.map((cli) => (

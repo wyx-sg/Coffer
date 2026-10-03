@@ -4,7 +4,7 @@
 // description) with Check copies beside it on the same row; then the skills
 // grouped Needs attention (a problem — lib/skills/attention.ts), In use
 // (reaches at least one agent), Off (switched off, or limited to nobody) and,
-// last, Built-in (what Coffer ships), a count on each heading; then the
+// last, Built-in (what Coffer ships), no count on the headings; then the
 // folders no skill claims (SkillOrphanList). The filter applies to the
 // built-in rows too. While rows are ticked the selection bar (SkillsBulkBar)
 // takes the filter's place and every row shows its checkbox; otherwise a row
@@ -154,7 +154,6 @@ export function SkillLibrary({
                 <section key={group} className="mb-3" aria-label={t(`skills.group.${group}`)}>
                   <h2 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted">
                     {t(`skills.group.${group}`)}
-                    <span className="ml-auto font-book">{rows.length}</span>
                   </h2>
                   <ul className="flex flex-col gap-0.5">
                     {rows.map((s) => (
