@@ -67,7 +67,8 @@ def _resources(machine: Machine) -> dict[str, bytes]:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
+    spec="vault-sync",
+    scenario="two machines upgrade and keep syncing through the replaced remote",
 )
 def test_the_old_remote_is_replaced_then_the_second_machine_joins_as_new(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

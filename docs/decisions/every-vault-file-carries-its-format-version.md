@@ -120,9 +120,11 @@ data migration can be rolled back, with the old data kept untouched.
      re-apply; it leaves a hold marker that `coffer migrate --resume` lifts.
      `coffer migrate --rehearse` runs the migration against a copy in an
      isolated `HOME` and reports the difference. A remote at the old layout is
-     never converted: a build at the new layout refuses it (`remote_too_old`)
-     and it is rebuilt from an upgraded machine, and an older build refuses a
-     remote at a newer layout (`remote_too_new`).
+     never converted: a build at the new layout replaces it with its own vault
+     (a fast-forward push whose parents are this machine's commit and the old
+     tip, so the old history stays in git), and a build refuses a remote at a
+     newer layout (`remote_too_new`). The upgraded vault is the source of
+     truth; converting a remote would invent a second migration path.
 
 Pros: an upgrade on one machine no longer stops convergence on the others; a
 field added by one build survives a round trip through another; the rewrite
@@ -218,8 +220,8 @@ aside, never a downgrade.
 ## Consequences
 
 - `manifest.json`'s `schema_version` is the vault's **layout** number, not a
-  per-file gate. A remote at a different layout is refused in both directions
-  (`remote_too_new`, `remote_too_old`); a per-file version never stops a round.
+  per-file gate. A remote at a newer layout is refused (`remote_too_new`); one at an older
+  layout is replaced by this vault; a per-file version never stops a round.
 - Kind configs keep `extra="forbid"`. Only a document's top-level fields are
   preserved; a key a kind's config does not declare is refused with a finding,
   and an additive config field is a format step that older builds flag as

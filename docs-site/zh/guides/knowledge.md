@@ -400,7 +400,7 @@ Knowledge → choose the collection → ⋯ → Delete collection
 :::
 
 ::: tip 删除可以恢复
-在 Web 界面里，删除会立刻执行：没有确认框，也不用输入名称，只弹出一条提示 *已删除 <name>*，带**撤销**。被删除的文档或知识集仍在[历史](#history-and-undo)里，所以即使提示消失了，**撤销**也能把它放回来。**最近改动**会列出这次删除并带有**恢复**，它会完整放回被删掉的东西：文档回到它的知识集，知识集连同它的文档、README 和收件箱里等待的条目一起回来，作为一次由你写入的新改动。在 CLI 下，用 `coffer knowledge changes` 找到这次删除，再运行 `coffer knowledge restore --deleted <version>`。如果同一路径上已经又有了文档，或者同名知识集已经重新存在，恢复会被拒绝，不写入任何东西。
+在 Web 界面里，删除会立刻执行：没有确认框，也不用输入名称，只弹出一条提示 *已删除 `<name>`*，带**撤销**。被删除的文档或知识集仍在[历史](#history-and-undo)里，所以即使提示消失了，**撤销**也能把它放回来。**最近改动**会列出这次删除并带有**恢复**，它会完整放回被删掉的东西：文档回到它的知识集，知识集连同它的文档、README 和收件箱里等待的条目一起回来，作为一次由你写入的新改动。在 CLI 下，用 `coffer knowledge changes` 找到这次删除，再运行 `coffer knowledge restore --deleted <version>`。如果同一路径上已经又有了文档，或者同名知识集已经重新存在，恢复会被拒绝，不写入任何东西。
 :::
 
 ## 不要放进知识的东西 {#what-not-to-put-in-knowledge}

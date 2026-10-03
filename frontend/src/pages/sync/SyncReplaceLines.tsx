@@ -1,7 +1,8 @@
 // frontend/src/pages/sync/SyncReplaceLines.tsx — the lines of a "replace" join preview.
 //
 // The remote holds an older layout of the vault; this Mac's vault is the
-// source of truth and replaces it (spec vault-sync "Refuse a remote at another layout"). Stated before the button: what goes up, which files only
+// source of truth and replaces it (spec vault-sync "Refuse a newer-layout remote
+// and replace an older one"). Stated before the button: what goes up, which files only
 // the old remote had go away, that git history keeps them, and that machines
 // still on the older layout must upgrade.
 import { useTranslation } from "react-i18next";
