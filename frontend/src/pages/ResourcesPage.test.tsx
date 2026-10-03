@@ -223,7 +223,9 @@ describe("ResourcesPage", () => {
     renderAt();
     const welcome = screen.getByTestId("mcp-welcome");
     expect(within(welcome).getByText(/no mcp servers yet/i)).toBeInTheDocument();
-    fireEvent.click(within(welcome).getByRole("button", { name: /add server/i }));
+    // The welcome repeats no Add; the page header's button opens the dialog.
+    expect(within(welcome).queryByRole("button", { name: /add server/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /add server/i }));
     expect(screen.getByRole("dialog")).toHaveTextContent("add dialog: paste");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("listitem")).toBeNull();
@@ -234,9 +236,9 @@ describe("ResourcesPage", () => {
   acceptance("web-ui", "the add dialog links to importing from agents", () => {
     stubQuery({ data: [server("u1", "github")] });
     renderAt();
-    // The page header's Add and the right pane's Nothing selected Add.
+    // Only the page header holds Add; the Nothing selected pane has none.
     const adds = screen.getAllByRole("button", { name: /add server/i });
-    expect(adds).toHaveLength(2);
+    expect(adds).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /paste json|import json/i })).toBeNull();
   });
 

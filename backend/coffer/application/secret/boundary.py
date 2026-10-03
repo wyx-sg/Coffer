@@ -280,6 +280,14 @@ class SecretBoundary:
         """Whether replacing ``ref``'s value changes what an approved place gets."""
         return is_standalone_ref(ref) or self._store.has_any_binding(ref)
 
+    def awaiting_value(self, ref: str) -> bool:
+        """Whether a new value for ``ref`` is held, sealed, for a person to approve.
+
+        A destination may be registered citing such a ref: the value arrives with
+        the approval, and until then the destination simply has no secret.
+        """
+        return bool(self._store.pending_of_op("add_secret", ref))
+
     def write(self, ref: str, value: str, *, actor: str) -> SecretApproval | None:
         """Store ``value`` now, or hold it, sealed, for the desktop app.
 

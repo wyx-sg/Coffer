@@ -387,6 +387,8 @@
       "partialSub_other": "{{added}} 已添加。{{tail}}",
       "renameTail_one": "重命名 {{names}} 即可一并添加。",
       "renameTail_other": "重命名 {{names}} 即可一并添加。",
+      "failedTail_one": "{{names}} 未能添加，原因见其卡片。",
+      "failedTail_other": "{{names}} 未能添加，原因见各自的卡片。",
       "approval": {
         "sub_one": "{{names}} 已添加。它的一个密钥需要批准后才能启动。",
         "sub_other": "{{names}} 已添加。它们的密钥需要批准后才能启动。",
@@ -1597,7 +1599,7 @@
     "noMatchFilters": "没有{{kind}}符合这些筛选条件",
     "clearFilter": "清除筛选",
     "nothingSelected": "未选择任何项",
-    "nothingSelectedBody": "从列表中选一项，或添加你要找的那一项。",
+    "nothingSelectedBody": "从列表中选一项。",
     "notFound": {
       "lastSeen": "最后一次出现",
       "lastSeenValue": "{{when}} · {{actor}}",
@@ -2994,8 +2996,14 @@
         "failing": "{{tool}} 出错，所以 {{name}} 无法依赖它"
       },
       "toolBody": {
-        "mcp_server": "{{name}} 仍会投递，但 {{tool}} MCP 服务器关闭期间，调用它的步骤会失败。打开它会对所有智能体立即生效。",
-        "custom_tools": "{{name}} 仍会投递，但 {{tool}} 工具组关闭期间，调用它的步骤会失败。打开它会对所有智能体立即生效。"
+        "off": {
+          "mcp_server": "{{name}} 仍会投递，但 {{tool}} MCP 服务器关闭期间，调用它的步骤会失败。打开它会对所有智能体立即生效。",
+          "custom_tools": "{{name}} 仍会投递，但 {{tool}} 工具组关闭期间，调用它的步骤会失败。打开它会对所有智能体立即生效。"
+        },
+        "failing": {
+          "mcp_server": "{{name}} 仍会投递，但 {{tool}} MCP 服务器出错期间，调用它的步骤会失败。修好它会对所有智能体立即生效。",
+          "custom_tools": "{{name}} 仍会投递，但 {{tool}} 工具组出错期间，调用它的步骤会失败。修好它会对所有智能体立即生效。"
+        }
       },
       "openTool": "打开 {{tool}}",
       "unreachablePrompt": "Coffer 连不上技能 {{name}} 导入时所用的 Git 仓库 {{url}}。最近一次错误：{{error}}\n\n请检查这台机器的网络、VPN 或 git 凭据能否访问该仓库（例如运行 `git ls-remote {{url}}`），修好阻碍访问的问题，并告诉我你改了什么。不要改动技能本身。"

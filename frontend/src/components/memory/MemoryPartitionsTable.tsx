@@ -8,8 +8,8 @@
 // There is NO status or reach column, no selection and no search. The `memory`
 // kind is not toggleable: every partition is served to every agent (spec
 // memory "Serve every partition to every agent"), so a control there would
-// offer a choice with nothing behind it (spec web-ui "Show reach as a labelled
-// button on every list and detail page").
+// offer a choice with nothing behind it (spec web-ui "Show reach as one button
+// that names it").
 //
 // Status is a grey dot plus its words ("Distilled 2 h ago"); a partition whose
 // repository is no longer on disk says so in warning colour instead of hiding,

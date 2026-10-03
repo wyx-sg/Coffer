@@ -123,9 +123,7 @@ vi.mock("@/lib/api/resources", async (orig) => ({
   },
 }));
 vi.mock("@/components/mcp/EditMcpServerDialog", () => ({
-  EditMcpServerDialog: () => (
-    <div role="dialog">edit dialog</div>
-  ),
+  EditMcpServerDialog: () => <div role="dialog">edit dialog</div>,
 }));
 vi.mock("@/components/ScopeControl", () => ({ ScopeControl: () => <button>Every agent</button> }));
 
@@ -203,35 +201,39 @@ describe("McpServerPane", () => {
     api.gets = [];
   });
 
-  test("a failing HTTP server says its last error, since when and its last success, with View errors", async () => {
-    api.status = {
-      status: "failing",
-      last_error: "Connection refused by mcp.sentry.dev",
-      last_error_at: new Date().toISOString(),
-      failing_since: new Date().toISOString(),
-      last_ok_at: new Date().toISOString(),
-      last_ok_capability: "list_issues",
-    };
-    renderPane();
-    const callout = await screen.findByTestId("mcp-callout-failing");
-    expect(within(callout).getByText("Connection refused by mcp.sentry.dev")).toBeInTheDocument();
-    expect(callout).toHaveTextContent(/failing since/);
-    expect(callout).toHaveTextContent(/Last successful call .*list_issues/);
-    expect(callout).toHaveTextContent(/Claude Code and Codex can't call its 5 tools/);
-    expect(screen.getByText("Failing")).toBeInTheDocument();
-    // The header never changes with the state: Test, not Test again.
-    expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /test again/i })).toBeNull();
-    // A server Coffer does not start has no log: View errors opens the Invocations tab on its errors.
-    expect(within(callout).queryByRole("button", { name: /view log/i })).toBeNull();
-    fireEvent.click(within(callout).getByRole("button", { name: /view errors/i }));
-    expect(await screen.findByRole("button", { name: /^Errors/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
+  acceptance(
+    "web-ui",
+    "a failing HTTP server says why and offers View errors, not a log",
+    async () => {
+      api.status = {
+        status: "failing",
+        last_error: "Connection refused by mcp.sentry.dev",
+        last_error_at: new Date().toISOString(),
+        failing_since: new Date().toISOString(),
+        last_ok_at: new Date().toISOString(),
+        last_ok_capability: "list_issues",
+      };
+      renderPane();
+      const callout = await screen.findByTestId("mcp-callout-failing");
+      expect(within(callout).getByText("Connection refused by mcp.sentry.dev")).toBeInTheDocument();
+      expect(callout).toHaveTextContent(/failing since/);
+      expect(callout).toHaveTextContent(/Last successful call .*list_issues/);
+      expect(callout).toHaveTextContent(/Claude Code and Codex can't call its 5 tools/);
+      expect(screen.getByText("Failing")).toBeInTheDocument();
+      // The header never changes with the state: Test, not Test again.
+      expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /test again/i })).toBeNull();
+      // A server Coffer does not start has no log: View errors opens the Invocations tab on its errors.
+      expect(within(callout).queryByRole("button", { name: /view log/i })).toBeNull();
+      fireEvent.click(within(callout).getByRole("button", { name: /view errors/i }));
+      expect(await screen.findByRole("button", { name: /^Errors/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    },
+  );
 
-  test("a failing stdio server's View log opens the Server log drawer", async () => {
+  acceptance("web-ui", "a failing stdio server opens its Server log", async () => {
     api.status = { status: "failing", last_error: "exited with status 1" };
     renderPane(DUCKDB);
     const callout = await screen.findByTestId("mcp-callout-failing");
@@ -343,72 +345,76 @@ describe("McpServerPane", () => {
     expect(dialog).not.toHaveTextContent("edit dialog");
   });
 
-  test("an Off server explains itself and offers Turn on", async () => {
+  acceptance("web-ui", "an Off server explains itself and offers Turn on", async () => {
     renderPane({ ...SENTRY, enabled: false } as ResourceOut);
     expect(await screen.findByTestId("mcp-callout-off")).toHaveTextContent(/no agent can use it/i);
     fireEvent.click(screen.getAllByRole("button", { name: /turn on/i })[0]);
     await waitFor(() => expect(resourcesApi.enable).toHaveBeenCalledWith("u-sentry"));
   });
 
-  test("the Overview stacks the last 24 hours by agent, what it requires and the busiest tools", async () => {
-    api.summary = {
-      since: "",
-      calls: 312,
-      errors: 41,
-      last_call_at: new Date().toISOString(),
-      by_agent: [
-        { agent_uid: "a-cc", calls: 201, errors: 30, last_call_at: new Date().toISOString() },
-        { agent_uid: null, calls: 3, errors: 0, last_call_at: null },
-      ],
-      by_tool: [{ tool: "get_issue", calls: 96, errors: 12, last_call_at: null }],
-    };
-    api.tiering = {
-      ...api.tiering,
-      listed: ["list_issues"],
-      behind_search: ["get_issue", "search_events"],
-    };
-    api.status = {
-      status: "healthy",
-      requires: [
-        { kind: "cli", name: "npx", status: "found", version: "10.9.2", secret: null },
-        {
-          kind: "secret",
-          name: "SENTRY_AUTH_TOKEN",
-          status: "missing",
-          version: null,
-          secret: "SENTRY_AUTH_TOKEN",
-        },
-      ],
-    };
-    renderPane();
-    expect(await screen.findByTestId("mcp-24h-totals")).toHaveTextContent("312 calls");
-    expect(screen.getByTestId("mcp-24h-totals")).toHaveTextContent("41 errors");
-    expect(
-      screen.getByText("Calls your agents made to sentry, and how many failed."),
-    ).toBeVisible();
-    const calledBy = screen.getByRole("table", { name: /called by/i });
-    expect(within(calledBy).getByText("201")).toBeInTheDocument();
-    expect(within(calledBy).getByText(/session that named no agent/i)).toBeInTheDocument();
-    // No Agents section, no tiering banner: banner → Last 24 hours → Requires → Most-called tools.
-    expect(screen.queryByText("Reach is set on this Mac only")).toBeNull();
-    expect(screen.queryByTestId("mcp-callout-tiering")).toBeNull();
-    expect(await screen.findByText("Found · 10.9.2")).toBeInTheDocument();
-    expect(screen.getByText("View in CLIs")).toHaveAttribute("href", "/clis/npx");
-    expect(screen.getByText("Missing")).toBeInTheDocument();
-    expect(screen.getByText("View in Secrets")).toHaveAttribute("href", "/secrets");
-    // Busiest first, four shown, read-only (no switches), the rest one link away.
-    const tools = await screen.findByRole("table", { name: "Most-called tools" });
-    const rows = within(tools).getAllByRole("row");
-    // A header row, then four tools.
-    expect(rows).toHaveLength(5);
-    expect(rows[1]).toHaveTextContent("get_issue");
-    expect(rows[1]).toHaveTextContent("Behind search");
-    expect(within(tools).queryByRole("switch")).toBeNull();
-    expect(screen.getByRole("link", { name: /show all 5 in tools/i })).toHaveAttribute(
-      "href",
-      "/mcp-servers/sentry/tools",
-    );
-  });
+  acceptance(
+    "web-ui",
+    "the Overview stacks the last 24 hours by agent, what it requires and the busiest tools",
+    async () => {
+      api.summary = {
+        since: "",
+        calls: 312,
+        errors: 41,
+        last_call_at: new Date().toISOString(),
+        by_agent: [
+          { agent_uid: "a-cc", calls: 201, errors: 30, last_call_at: new Date().toISOString() },
+          { agent_uid: null, calls: 3, errors: 0, last_call_at: null },
+        ],
+        by_tool: [{ tool: "get_issue", calls: 96, errors: 12, last_call_at: null }],
+      };
+      api.tiering = {
+        ...api.tiering,
+        listed: ["list_issues"],
+        behind_search: ["get_issue", "search_events"],
+      };
+      api.status = {
+        status: "healthy",
+        requires: [
+          { kind: "cli", name: "npx", status: "found", version: "10.9.2", secret: null },
+          {
+            kind: "secret",
+            name: "SENTRY_AUTH_TOKEN",
+            status: "missing",
+            version: null,
+            secret: "SENTRY_AUTH_TOKEN",
+          },
+        ],
+      };
+      renderPane();
+      expect(await screen.findByTestId("mcp-24h-totals")).toHaveTextContent("312 calls");
+      expect(screen.getByTestId("mcp-24h-totals")).toHaveTextContent("41 errors");
+      expect(
+        screen.getByText("Calls your agents made to sentry, and how many failed."),
+      ).toBeVisible();
+      const calledBy = screen.getByRole("table", { name: /called by/i });
+      expect(within(calledBy).getByText("201")).toBeInTheDocument();
+      expect(within(calledBy).getByText(/session that named no agent/i)).toBeInTheDocument();
+      // No Agents section, no tiering banner: banner → Last 24 hours → Requires → Most-called tools.
+      expect(screen.queryByText("Reach is set on this Mac only")).toBeNull();
+      expect(screen.queryByTestId("mcp-callout-tiering")).toBeNull();
+      expect(await screen.findByText("Found · 10.9.2")).toBeInTheDocument();
+      expect(screen.getByText("View in CLIs")).toHaveAttribute("href", "/clis/npx");
+      expect(screen.getByText("Missing")).toBeInTheDocument();
+      expect(screen.getByText("View in Secrets")).toHaveAttribute("href", "/secrets");
+      // Busiest first, four shown, read-only (no switches), the rest one link away.
+      const tools = await screen.findByRole("table", { name: "Most-called tools" });
+      const rows = within(tools).getAllByRole("row");
+      // A header row, then four tools.
+      expect(rows).toHaveLength(5);
+      expect(rows[1]).toHaveTextContent("get_issue");
+      expect(rows[1]).toHaveTextContent("Behind search");
+      expect(within(tools).queryByRole("switch")).toBeNull();
+      expect(screen.getByRole("link", { name: /show all 5 in tools/i })).toHaveAttribute(
+        "href",
+        "/mcp-servers/sentry/tools",
+      );
+    },
+  );
 
   test("an Off server's last 24 hours says only its last call; its header menu has no Turn off", async () => {
     api.summary = {
@@ -504,7 +510,7 @@ describe("McpServerPane", () => {
     expect(items).toEqual(["Server log", "Copy config as JSON", "Turn off", "Delete…"]);
   });
 
-  test("an HTTP server's ⋯ menu has no Server log", async () => {
+  acceptance("web-ui", "an HTTP server's menu has no Server log", async () => {
     renderPane();
     fireEvent.click(await screen.findByRole("button", { name: /more actions for sentry/i }));
     const items = screen.getAllByRole("menuitem").map((i) => i.textContent);
@@ -643,7 +649,7 @@ describe("McpServerPane", () => {
     expect(within(table).getAllByRole("row")).toHaveLength(2);
   });
 
-  test("an Invocations row opens a drawer with its attributes; HTTP servers have no View server log", async () => {
+  acceptance("web-ui", "a call opens in a drawer with its attributes", async () => {
     api.invocations = [
       {
         id: 7,

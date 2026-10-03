@@ -348,6 +348,7 @@ coffer tool op scope [OPTIONS] GROUP TOOL
 | `GROUP` <span class="cli-chip">参数</span> | text | 必填 | Group name |
 | `TOOL` <span class="cli-chip">参数</span> | text | 必填 | Tool name |
 | `--agents` <span class="cli-chip">选项</span> | text |  | Narrow to these agents (a,b) |
+| `--all` <span class="cli-chip">选项</span> | 开关 |  | Reach every agent, later ones too |
 | `--group` <span class="cli-chip">选项</span> | 开关 |  | Clear the override |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 

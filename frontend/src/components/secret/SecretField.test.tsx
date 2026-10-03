@@ -2,6 +2,7 @@
 // header / env rows: choose stored, paste new, New secret…, plain value,
 // Missing, and the "Store it in Coffer?" hint. Only `secretsApi` is mocked.
 import { useState } from "react";
+import { acceptance } from "@/test/acceptance";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -87,25 +88,29 @@ describe("SecretField", () => {
     expect(screen.getByText("deploy-token")).toBeInTheDocument();
   });
 
-  test("pasting a value makes a new secret named after the thing, written only on persist", async () => {
-    wrap(<FieldHarness />);
-    await screen.findByPlaceholderText("Choose a secret, or paste a new value");
-    // openai-key is taken, so the default name gets a suffix.
-    await waitFor(() => expect(api.list).toHaveBeenCalled());
-    await screen.findByRole("button", { name: /choose a secret/i });
-    fireEvent.paste(screen.getByPlaceholderText("Choose a secret, or paste a new value"), {
-      clipboardData: { getData: () => "sk-abc123" },
-    });
-    await waitFor(() =>
-      expect(current("value")).toEqual({ kind: "new", name: "openai-key-2", value: "sk-abc123" }),
-    );
-    expect(screen.getByText("New · saved on Add")).toBeInTheDocument();
-    expect(screen.queryByDisplayValue("sk-abc123")).not.toBeInTheDocument();
-    expect(api.set).not.toHaveBeenCalled();
+  acceptance(
+    "web-ui",
+    "a pasted value becomes a new secret written when the form is saved",
+    async () => {
+      wrap(<FieldHarness />);
+      await screen.findByPlaceholderText("Choose a secret, or paste a new value");
+      // openai-key is taken, so the default name gets a suffix.
+      await waitFor(() => expect(api.list).toHaveBeenCalled());
+      await screen.findByRole("button", { name: /choose a secret/i });
+      fireEvent.paste(screen.getByPlaceholderText("Choose a secret, or paste a new value"), {
+        clipboardData: { getData: () => "sk-abc123" },
+      });
+      await waitFor(() =>
+        expect(current("value")).toEqual({ kind: "new", name: "openai-key-2", value: "sk-abc123" }),
+      );
+      expect(screen.getByText("New · saved on Add")).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("sk-abc123")).not.toBeInTheDocument();
+      expect(api.set).not.toHaveBeenCalled();
 
-    await persistNewSecrets([current("value")]);
-    expect(api.set).toHaveBeenCalledWith("secret/openai-key-2", "sk-abc123");
-  });
+      await persistNewSecrets([current("value")]);
+      expect(api.set).toHaveBeenCalledWith("secret/openai-key-2", "sk-abc123");
+    },
+  );
 
   test("New secret… writes to Secrets and selects it", async () => {
     wrap(<FieldHarness />);
@@ -133,7 +138,7 @@ describe("KeyValueSecretRows", () => {
     value: { kind: "plain", value },
   });
 
-  test("value is plain text; the key button picks a secret, Type a plain value goes back", async () => {
+  acceptance("web-ui", "a header row's value is plain until a secret is picked", async () => {
     wrap(<RowsHarness initial={[plain("Authorization", "")]} />);
     fireEvent.click(screen.getByRole("button", { name: "Choose a secret for Authorization" }));
     fireEvent.click(await screen.findByRole("option", { name: /deploy-token/ }));
@@ -153,7 +158,7 @@ describe("KeyValueSecretRows", () => {
     expect(current("rows")).toEqual([]);
   });
 
-  test("a secret-looking plain value gets the Store it in Coffer? hint", () => {
+  acceptance("web-ui", "a secret-looking plain value offers to be stored in Coffer", () => {
     wrap(<RowsHarness initial={[plain("X-Api-Token", "abc")]} />);
     fireEvent.click(screen.getByRole("button", { name: "Store it in Coffer?" }));
     expect(current("rows")).toEqual([

@@ -3,6 +3,7 @@
 // (plain text, a stored secret, a new secret), Test on the unsaved form, and a
 // failed save that stays in the dialog with Retry.
 import { useState } from "react";
+import { acceptance } from "@/test/acceptance";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -128,7 +129,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(secretsApi.list).mockResolvedValue({
     refs: [
-      { ref: OWN, present: true, locked: false, bindings: [], cited_by: [], mentioned_by_skills: [] },
+      {
+        ref: OWN,
+        present: true,
+        locked: false,
+        bindings: [],
+        cited_by: [],
+        mentioned_by_skills: [],
+      },
       {
         ref: "secret/github-pat",
         present: true,
@@ -283,7 +291,9 @@ describe("EditMcpServerDialog", () => {
     expect(
       await screen.findByText("Test failed after 3.0 s · couldn't connect"),
     ).toBeInTheDocument();
-    expect(screen.getByText(/isn't accepting connections\. Nothing was saved\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/isn't accepting connections\. Nothing was saved\./),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("add-test-result")).toHaveClass("bg-danger-soft");
     expect(api.PATCH).not.toHaveBeenCalled();
   });
@@ -308,20 +318,24 @@ describe("EditMcpServerDialog", () => {
     expect(keys[keys.length - 1].value).toBe("GITLAB_PERSONAL_ACCESS_TOKEN");
   });
 
-  test("a failed save stays in the dialog, edits intact, and Save becomes Retry", async () => {
-    const api = client();
-    api.PATCH.mockResolvedValueOnce({
-      data: undefined,
-      error: { error: { code: "INTERNAL_ERROR", message: "The daemon didn't answer." } },
-      response: new Response(null, { status: 500 }),
-    });
-    openDialog();
-    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Repos" } });
-    save();
-    expect(await screen.findByText("Couldn't save gh")).toBeInTheDocument();
-    expect(screen.getByText(/Your edits are still here/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Description")).toHaveValue("Repos");
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
-  });
+  acceptance(
+    "web-ui",
+    "a failed save stays in the Edit dialog and Save becomes Retry",
+    async () => {
+      const api = client();
+      api.PATCH.mockResolvedValueOnce({
+        data: undefined,
+        error: { error: { code: "INTERNAL_ERROR", message: "The daemon didn't answer." } },
+        response: new Response(null, { status: 500 }),
+      });
+      openDialog();
+      fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Repos" } });
+      save();
+      expect(await screen.findByText("Couldn't save gh")).toBeInTheDocument();
+      expect(screen.getByText(/Your edits are still here/)).toBeInTheDocument();
+      expect(screen.getByLabelText("Description")).toHaveValue("Repos");
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
+    },
+  );
 });

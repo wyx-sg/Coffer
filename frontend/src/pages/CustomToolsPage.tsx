@@ -69,11 +69,7 @@ export function CustomToolsPage() {
                 onAddRequest={() => setAdding({ target: selected, step: "request" })}
               />
             ) : (
-              <NothingSelected
-                icon={Wrench}
-                addLabel={t("customTools.add.action")}
-                onAdd={() => setAdding({})}
-              />
+              <NothingSelected icon={Wrench} />
             )
           }
         />

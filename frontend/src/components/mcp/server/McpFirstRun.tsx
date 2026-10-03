@@ -1,12 +1,12 @@
 // src/components/mcp/server/McpFirstRun.tsx — the MCP servers page with nothing registered yet (design 4.1.20; spec web-ui "Welcome an empty list with one next action").
 //
-// The page's whole width, no list: a welcome with a short pitch and one action,
-// Add server — no empty table, no ghost row. When the agents' own config files
+// The page's whole width, no list: a welcome with a short pitch and no action of its own (the page
+// header holds Add server) — no empty table, no ghost row. When the agents' own config files
 // already hold MCP servers Coffer does not serve, a card lists them per agent,
 // with the file each sits in (from the daemon's import plan), and offers
 // Review and import.
 import { useTranslation } from "react-i18next";
-import { Download, Plus, Server } from "lucide-react";
+import { Download, Server } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,10 @@ import { useMcpImportPlan } from "@/lib/hooks/useMcpAddFlow";
 import { toEntryIn } from "../add/importPlanItems";
 
 interface Props {
-  onAdd: () => void;
   onImport: () => void;
 }
 
-export function McpFirstRun({ onAdd, onImport }: Props) {
+export function McpFirstRun({ onImport }: Props) {
   const { t } = useTranslation();
   const { groups, count } = useAgentDirectMcpEntries();
   const found = groups.filter((g) => g.entries.length > 0);
@@ -41,9 +40,6 @@ export function McpFirstRun({ onAdd, onImport }: Props) {
         </span>
         <h2 className="text-md font-semibold">{t("mcp.page.welcome.title")}</h2>
         <p className="max-w-sm text-sm text-text-muted">{t("mcp.page.welcome.body")}</p>
-        <Button variant="outline" className="mt-1" onClick={onAdd}>
-          <Plus aria-hidden /> {t("resources.addServer")}
-        </Button>
       </section>
       {count > 0 ? (
         <section

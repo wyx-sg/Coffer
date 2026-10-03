@@ -40,7 +40,7 @@ export function ClisList({ items, loading, error, onRetry, selected, onOpen }: P
         ariaLabel={t("clis.search")}
         shortcut="/"
       />
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {error ? (
           <ListLoadError kind="clis" error={error} onRetry={() => onRetry?.()} />
         ) : loading ? (
@@ -49,13 +49,13 @@ export function ClisList({ items, loading, error, onRetry, selected, onOpen }: P
           <ListNoMatch kind="clis" query={filter} onClear={() => setFilter("")} />
         ) : (
           groups.map(({ key, rows }) => (
-            <section key={key} aria-label={t(`clis.list.${key}`)}>
+            <section key={key} className="mb-3" aria-label={t(`clis.list.${key}`)}>
               <h2
                 aria-hidden
-                className="mb-1 flex items-center justify-between px-2 text-2xs font-semibold uppercase tracking-wider text-text-subtle"
+                className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted"
               >
                 {t(`clis.list.${key}`)}
-                <span className="font-normal">{rows.length}</span>
+                <span className="ml-auto font-book">{rows.length}</span>
               </h2>
               <ul>
                 {rows.map((cli) => (

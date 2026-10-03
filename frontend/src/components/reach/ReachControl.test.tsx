@@ -207,7 +207,7 @@ describe("every change is written at once", () => {
     expect(h.onRestricted).toHaveBeenCalledWith(only([CODEX]), null);
   });
 
-  test("each tick writes the whole list at once, naming the agent just ticked", () => {
+  acceptance("web-ui", "each reach change is saved at once", () => {
     seed();
     const h = mount("restricted", { initialScope: only([]) });
     openPanel();
@@ -246,7 +246,7 @@ describe("every change is written at once", () => {
 describe("a failed write shows on the agent's row", () => {
   const failure = (retry = vi.fn()) => ({ uid: CODEX, message: "permission denied", retry });
 
-  test("Failed + reason + Retry / Untick", () => {
+  acceptance("web-ui", "a failed reach write stays on the agent's row", () => {
     seed();
     const retry = vi.fn();
     const h = mount("restricted", { initialScope: only([CLAUDE, CODEX]), failure: failure(retry) });

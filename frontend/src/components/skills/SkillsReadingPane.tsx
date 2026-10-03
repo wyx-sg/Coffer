@@ -7,7 +7,6 @@
 // first run while the library holds nothing of the user's own, or Nothing
 // selected.
 import { lazy, Suspense } from "react";
-import { useTranslation } from "react-i18next";
 import { Sparkle } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
@@ -45,7 +44,6 @@ interface Props {
 }
 
 export function SkillsReadingPane(props: Props) {
-  const { t } = useTranslation();
   const { list, skills, match, nameParam } = props;
 
   if (props.showCopies) return <SkillCopiesPanel onClose={props.onCloseCopies} />;
@@ -79,11 +77,5 @@ export function SkillsReadingPane(props: Props) {
   if (skills.every((s) => s.builtin)) {
     return <SkillFirstRun hasBuiltin={skills.length > 0} onAdd={props.onAdd} />;
   }
-  return (
-    <NothingSelected
-      icon={Sparkle}
-      addLabel={t("skills.add")}
-      onAdd={() => props.onAdd("folder")}
-    />
-  );
+  return <NothingSelected icon={Sparkle} />;
 }

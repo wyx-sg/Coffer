@@ -190,7 +190,9 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
   health report the failure, the server is marked unhealthy until reachable, and there MUST be no silent
   retry storm.
 - Registering a server whose secret is missing MUST fail with a message naming the missing secret and
-  pointing the user at the secret setup path, persisting no partial state.
+  pointing the user at the secret setup path, persisting no partial state. A secret whose new value is
+  waiting for approval is not missing: the server is registered citing it, and its value reaches the server
+  only once the change is approved.
 - Registering a server with a name that already exists within the kind MUST be rejected with a clear error;
   a partial write is impossible.
 - The `coffer mcp` group MUST offer the lifecycle verbs `list`, `show`, `add`, `edit`, `rm`, `enable`,
@@ -496,6 +498,28 @@ MUST carry the length on every tool row. Flagging MUST NOT disable, rename or hi
 - **THEN** the long tool is flagged on both surfaces with its length and a note that some clients drop names above 60 characters, and the short one is not flagged
 - **AND** both tools stay enabled and are still listed to clients under their usual names
 
+### Requirement: Choose how each tool is exposed
+A person MUST be able to set, per tool of a server, how it is exposed to agents: `auto` (the default) leaves the decision to the tool-listing budget, so the most-used tools stay in `tools/list` and the rest are reached through `coffer__search_tools`; `listed` pins the tool into the list; `search` leaves it to `coffer__search_tools` only. The setting is the person's, kept per (server, tool) in the server's preference document in the vault, and survives a restart and switching the tool off and on; `auto` clears it. It changes only how a tool is listed, never whether it can be called. `PATCH /api/v1/resources/mcp_server/{uid}/tools/{tool}/exposure` sets one tool and `PATCH .../tools/exposure` sets several in one call (`{tools, mode}`); an unknown tool or a set containing one is refused with 404 and nothing changes, and a mode other than the three with 422. The server's tiering read reports each tool's setting, whether it is effectively listed or behind search, and why (`pinned`, `search_only`, `within_budget`, `top_by_use`, `low_use`). `coffer mcp cap expose <server> auto|listed|search tool:<name>...` does the same from the command line and `cap list` shows each tool's setting and what agents get. Each change is audited as `tool_exposure_changed`.
+
+The server page's Tools tab MUST list every tool, not only a first page: fifty rows are shown with "Showing 50 of N" and **Show N more** reveals the rest, and its search runs over all of them. Each tool row carries its exposure as a choice that reads, for example, "Auto · Listed" or "Auto · Behind search". The Resources and Prompts tabs MUST be listed in full the same way, with a search over every item.
+
+#### Scenario: a server's Tools tab lists every tool
+- **GIVEN** a server with 78 tools
+- **WHEN** the user opens its Tools tab and chooses Show 28 more
+- **THEN** 50 rows are shown first with "Showing 50 of 78", then all 78 with "Showing 78 of 78" and no Show more button
+- **AND** searching for one tool's name finds it among all 78
+
+#### Scenario: a server's resources and prompts are listed in full
+- **GIVEN** a server with 120 prompts
+- **WHEN** the user opens its Prompts tab and chooses Show more until none is left
+- **THEN** all 120 are listed with "Showing 120 of 120", and searching for the last one's name finds it
+
+#### Scenario: a tool's exposure is chosen by the person
+- **GIVEN** a budget of two and a server with tools `a`, `b` and `c`, where `b` is the most used
+- **WHEN** the person sets `c` to `listed`
+- **THEN** the tiering read reports `c` as mode `listed`, effectively listed because it is pinned, `b` as `auto` and listed, and `a` as `auto` and behind search for low use
+- **AND** the Tools tab shows each tool's choice, such as "Auto · Listed" or "Auto · Behind search"
+
 ### Requirement: Spawn a server with a secret only once its binding is approved
 Before it spawns a stdio server or connects to an HTTP server with secret
 refs, the gateway MUST ask the secret boundary whether each ref may go to that
@@ -735,11 +759,6 @@ A group's health MUST be `off` while disabled, `failing` when its last call
 in 24 hours failed, `attention` while its secret is missing or waits for
 approval, `healthy` after a successful last call, and `idle` with no call in
 24 hours.
-A failing group, and a test of a request that could not connect or timed out
-(for a saved or an unsaved group), MUST carry a hand-off prompt that hands the
-network problem to an agent — the group, the method and URL with credentials
-and secret-looking query values redacted, the error and the machine; no header
-value — and no other result does.
 
 #### Scenario: the command line creates a group and adds a tool
 - **GIVEN** the daemon is running and a stored secret `deploy-token` whose binding is approved
@@ -756,7 +775,20 @@ value — and no other result does.
 - **GIVEN** one group whose last call failed, one whose last call succeeded and one disabled
 - **WHEN** the groups are listed
 - **THEN** the failing group comes first with health `failing`, then the healthy one, and the disabled one last with health `off`
-- **AND** only the failing group carries a hand-off prompt naming the group
+
+### Requirement: Hand a failing custom tool group to an agent
+A group whose last call failed, and a test of a request that could not connect
+or timed out (for a saved or an unsaved group), MUST carry a hand-off prompt
+that hands the network problem to an agent — the group, the method and URL with
+credentials and secret-looking query values redacted, the error and the machine;
+no header value — and no other result does. The prompt is written by the daemon,
+so a surface passes it on as served and never assembles one.
+
+#### Scenario: a failing group carries a hand-off prompt and a healthy one does not
+- **GIVEN** one group whose last call failed, one whose last call succeeded and one disabled
+- **WHEN** the groups are listed
+- **THEN** only the failing group carries a hand-off prompt, and it names the group
+- **AND** a disabled group carries none
 
 ### Requirement: Test an unsaved server config before adding it
 The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed`, `auth_rejected` (an HTTP server answered 401 or 403) or `stored_secret_not_released`. A failure that depends on this machine — `spawn_failed`, `exited`, `timeout` or `connect_failed` — MUST also carry a hand-off prompt (the missing launcher to install, else the cause to find) built from the config's names with no secret value; `url_refused`, `auth_rejected`, `stored_secret_not_released` and `initialize_failed` carry none.

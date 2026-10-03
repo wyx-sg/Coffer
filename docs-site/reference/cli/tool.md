@@ -348,6 +348,7 @@ coffer tool op scope [OPTIONS] GROUP TOOL
 | `GROUP` <span class="cli-chip">argument</span> | text | required | Group name |
 | `TOOL` <span class="cli-chip">argument</span> | text | required | Tool name |
 | `--agents` <span class="cli-chip">option</span> | text |  | Narrow to these agents (a,b) |
+| `--all` <span class="cli-chip">option</span> | flag |  | Reach every agent, later ones too |
 | `--group` <span class="cli-chip">option</span> | flag |  | Clear the override |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 

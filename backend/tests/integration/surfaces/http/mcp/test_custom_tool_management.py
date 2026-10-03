@@ -214,6 +214,10 @@ def test_a_test_runs_a_draft_tool_once_without_saving_it(daemon: BoundaryDaemon,
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="the group list puts a failing group first")
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="a failing group carries a hand-off prompt and a healthy one does not",
+)
 def test_the_group_list_puts_a_failing_group_first(daemon: BoundaryDaemon, api: FakeHttpApi):
     create_group(daemon, "a-good", api.base_url, [tool("ok", "GET", "/fine")], secret=False)
     create_group(daemon, "b-bad", api.base_url, [tool("broken", "GET", "/missing")], secret=False)

@@ -131,6 +131,14 @@ describe("ClisPage", () => {
     expect(screen.getByRole("heading", { name: "Needed by" })).toBeInTheDocument();
   });
 
+  test("group titles are plain text like the MCP and Skills lists, not upper-case", async () => {
+    renderPage();
+    const title = (await screen.findByRole("region", { name: "Needs attention" })).querySelector(
+      "h2",
+    );
+    expect(title?.className).not.toMatch(/uppercase/);
+  });
+
   test("the filter narrows the list", async () => {
     renderPage();
     await screen.findByRole("region", { name: "Needs attention" });
@@ -250,23 +258,30 @@ describe("ClisPage", () => {
     expect(await within(banner).findByRole("button", { name: "Ask an agent" })).toBeInTheDocument();
   });
 
-  test("a CLI added by hand has Edit and a ⋯ menu with Remove; a required one has neither", async () => {
-    api.list.mockResolvedValue(listOf([DEMO_ADDED, UV_READY]));
-    renderPage("/clis/demo");
-    await screen.findByRole("heading", { level: 2, name: "demo" });
-    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByText(/No skill or MCP server requires it/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "More actions for demo" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
-    expect(await screen.findByText("Remove demo?")).toBeInTheDocument();
-    expect(screen.getByText(/The tool stays installed on this machine/)).toBeInTheDocument();
+  acceptance(
+    "web-ui",
+    "a CLI added by hand has Edit and Remove, a required one has neither",
+    async () => {
+      api.list.mockResolvedValue(listOf([DEMO_ADDED, UV_READY]));
+      renderPage("/clis/demo");
+      await screen.findByRole("heading", { level: 2, name: "demo" });
+      expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+      expect(screen.getByText(/No skill or MCP server requires it/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for demo" }));
+      // Remove is the only item: no separator above it.
+      expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+      expect(within(screen.getByRole("menu")).queryByRole("separator")).toBeNull();
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
+      expect(await screen.findByText("Remove demo?")).toBeInTheDocument();
+      expect(screen.getByText(/The tool stays installed on this machine/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    fireEvent.click(rowOf("uv"));
-    await screen.findByRole("heading", { level: 2, name: "uv" });
-    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "More actions for uv" })).toBeNull();
-  });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      fireEvent.click(rowOf("uv"));
+      await screen.findByRole("heading", { level: 2, name: "uv" });
+      expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "More actions for uv" })).toBeNull();
+    },
+  );
 
   test("a command nothing knows says so", async () => {
     const { ApiError } = await import("@/lib/api/errors");
@@ -278,7 +293,7 @@ describe("ClisPage", () => {
     ).toBeInTheDocument();
   });
 
-  test("no tool and no requires: shows the empty state with Add CLI, the docs link and no header buttons", async () => {
+  acceptance("web-ui", "the empty CLIs page offers Add CLI and the docs", async () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
     renderPage();
     expect(await screen.findByText("No command-line tools yet")).toBeInTheDocument();

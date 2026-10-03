@@ -42,6 +42,10 @@ export interface SplitViewProps {
   listClassName?: string;
   /** Classes for the detail pane. */
   detailClassName?: string;
+  /** Narrower bounds than the page-level defaults, for a split inside a card
+   *  (a tree beside a file): the list's minimum and the detail's minimum, px. */
+  listMinWidth?: number;
+  detailMinWidth?: number;
 }
 
 export function SplitView({
@@ -54,6 +58,8 @@ export function SplitView({
   className,
   listClassName,
   detailClassName,
+  listMinWidth = LIST_MIN_WIDTH,
+  detailMinWidth,
 }: SplitViewProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -82,8 +88,8 @@ export function SplitView({
   const { width, setWidth, reset, bounds } = useResizableWidth({
     storageKey,
     defaultWidth: defaultListWidth,
-    min: LIST_MIN_WIDTH,
-    max: containerWidth === null ? undefined : listMaxWidth(containerWidth),
+    min: listMinWidth,
+    max: containerWidth === null ? undefined : listMaxWidth(containerWidth, detailMinWidth),
   });
 
   return (

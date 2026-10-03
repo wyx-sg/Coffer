@@ -102,15 +102,9 @@ export function ResourcesPage() {
   } else if (nameParam) {
     pane = <DetailNotFound kind="mcp" id={nameParam} backTo="/mcp-servers" icon={Server} />;
   } else if (servers.length === 0) {
-    pane = <McpFirstRun onAdd={() => setAdd("paste")} onImport={() => setAdd("importAgents")} />;
+    pane = <McpFirstRun onImport={() => setAdd("importAgents")} />;
   } else {
-    pane = (
-      <NothingSelected
-        icon={Server}
-        addLabel={t("resources.addServer")}
-        onAdd={() => setAdd("paste")}
-      />
-    );
+    pane = <NothingSelected icon={Server} />;
   }
 
   return (

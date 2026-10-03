@@ -165,6 +165,21 @@ test("a failing custom-tool group links to the group's page and says why", async
   );
 });
 
+test("a failing MCP server without a reason says failing, not off, in the body", async () => {
+  h.skills = [
+    makeSkill({
+      requires_tools: [
+        { name: "smk-http", uid: "t-3", kind: "mcp_server", status: "failing", why: null },
+      ],
+    }),
+  ];
+  renderSkillsPage("/skills/hello");
+  const banner = await screen.findByTestId("skill-banner-tool");
+  expect(banner).toHaveTextContent("smk-http is failing");
+  expect(banner).toHaveTextContent("while the smk-http MCP server is failing");
+  expect(banner).not.toHaveTextContent("is off");
+});
+
 test("the commands banner carries one hand-off for every command that needs the person", async () => {
   renderSkillsPage("/skills/hello");
   const banner = await screen.findByTestId("skill-banner-requires");

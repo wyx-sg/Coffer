@@ -424,7 +424,7 @@ describe("AddMcpServerDialog — form", () => {
     });
   });
 
-  test("a secret held for approval (202) is said before the dialog lets go", async () => {
+  acceptance("web-ui", "a secret held for approval is said before the dialog lets go", async () => {
     postOverride = (path) =>
       path === "/secrets" ? { data: { approval: { id: "ap-1" } }, error: undefined } : undefined;
     renderDialog();
@@ -432,7 +432,9 @@ describe("AddMcpServerDialog — form", () => {
     await continueWhenRead();
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     expect(await screen.findByText("GITHUB_TOKEN waits for approval")).toBeInTheDocument();
-    expect(screen.getByText(/github is added\. One of its secrets needs an approval/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/github is added\. One of its secrets needs an approval/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open approvals" })).toBeInTheDocument();
     // Done is the only way on.
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
@@ -568,7 +570,7 @@ describe("AddMcpServerDialog — footers and failures", () => {
     expect(keys[keys.length - 1].value).toBe("GITLAB_PERSONAL_ACCESS_TOKEN");
   });
 
-  test("a batch that only partly went in stays on the review; Add retries only the refused one", async () => {
+  acceptance("web-ui", "a batch that only partly went in stays on the review", async () => {
     postOverride = (path, init) =>
       path === "/resources" && init?.body?.name === "docs-search"
         ? {

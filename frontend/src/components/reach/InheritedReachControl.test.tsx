@@ -6,6 +6,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { InheritedReachControl, type InheritedMode } from "./InheritedReachControl";
 import type { Scope } from "@/lib/hooks/useScope";
 
@@ -50,7 +51,7 @@ test("a chosen override shows badges only", () => {
   expect(trigger().querySelectorAll("[data-agent-mark]")).toHaveLength(1);
 });
 
-test("offers Same as the group / All agents / Chosen agents — no Off", () => {
+acceptance("web-ui", "an item's reach offers the group's reach first", () => {
   mount("inherited");
   fireEvent.click(trigger());
   expect(screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([

@@ -98,7 +98,13 @@ export function SkillDependencyBanners({ skill, items }: Props) {
             >
               {tool.status === "failing" && tool.why
                 ? tool.why
-                : t(`skills.banner.toolBody.${tool.kind}`, { tool: tool.name, name: skill.name })}
+                : t(
+                    `skills.banner.toolBody.${tool.status === "failing" ? "failing" : "off"}.${tool.kind}`,
+                    {
+                      tool: tool.name,
+                      name: skill.name,
+                    },
+                  )}
             </SkillBannerFrame>
           ));
         }

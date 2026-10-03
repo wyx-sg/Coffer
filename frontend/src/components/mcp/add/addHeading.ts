@@ -31,17 +31,24 @@ export function headingOf(
   if (step.kind === "review") {
     if (created.size > 0 && failures.length > 0) {
       const list = new Intl.ListFormat(lang, { type: "conjunction" });
-      const tail = t("mcp.add.renameTail", {
-        count: failures.length,
-        names: list.format(failures.map((f) => f.name)),
-      });
+      // "Rename" only helps a name conflict; any other refusal is on its card.
+      const tail = t(
+        failures.every((f) => f.nameTaken) ? "mcp.add.renameTail" : "mcp.add.failedTail",
+        {
+          count: failures.length,
+          names: list.format(failures.map((f) => f.name)),
+        },
+      );
       return {
         title: t("mcp.add.reviewTitle"),
-        sub: t("mcp.add.partialSub", { count: created.size, added: list.format([...created.keys()]), tail }),
+        sub: t("mcp.add.partialSub", {
+          count: created.size,
+          added: list.format([...created.keys()]),
+          tail,
+        }),
       };
     }
     return { title: t("mcp.add.reviewTitle"), sub: t("mcp.add.reviewSub") };
   }
   return { title: t("mcp.add.dialogTitle"), sub: t("mcp.add.subtitle") };
 }
-

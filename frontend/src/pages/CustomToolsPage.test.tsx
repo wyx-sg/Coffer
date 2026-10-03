@@ -77,9 +77,9 @@ describe("CustomToolsPage", () => {
       within(screen.getByRole("region", { name: "Off" })).getByText("status-page"),
     ).toBeInTheDocument();
 
-    // The page header's Add and the right pane's Nothing selected Add.
+    // Only the page header holds Add; the Nothing selected pane has none.
     const adds = screen.getAllByRole("button", { name: "Add custom tool" });
-    expect(adds).toHaveLength(2);
+    expect(adds).toHaveLength(1);
     fireEvent.click(adds[0]);
 
     const dialog = await screen.findByRole("dialog");
@@ -196,23 +196,29 @@ describe("CustomToolsPage", () => {
     fireEvent.click(within(tools).getAllByRole("button", { name: /Available to: / })[1]);
     fireEvent.click(await screen.findByRole("radio", { name: /Same as the group/ }));
     await waitFor(() =>
-      expect(api.setToolReach).toHaveBeenCalledWith("billing", "create_invoice", { mode: "inherit" }),
+      expect(api.setToolReach).toHaveBeenCalledWith("billing", "create_invoice", {
+        mode: "inherit",
+      }),
     );
   });
 
-  acceptance("web-ui", "a tool's drawer has no switch or reach, and Delete tool is outlined", async () => {
-    renderAt("/custom-tools/billing");
-    const tools = await screen.findByRole("region", { name: /Tools/ });
-    fireEvent.click(within(tools).getByText("get_invoice"));
-    const drawer = await screen.findByRole("dialog");
-    // The tool's own On switch is in the table, not in the drawer footer.
-    expect(within(drawer).queryByLabelText("Tool on")).not.toBeInTheDocument();
-    expect(within(drawer).queryByText(/Only for this tool/)).not.toBeInTheDocument();
-    // The group's header shows as what the group already adds.
-    expect(within(drawer).getByText("from the group")).toBeInTheDocument();
-    expect(within(drawer).getByRole("button", { name: "Delete tool" })).toBeInTheDocument();
-    expect(within(drawer).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-  });
+  acceptance(
+    "web-ui",
+    "a tool's drawer has no switch or reach, and Delete tool is outlined",
+    async () => {
+      renderAt("/custom-tools/billing");
+      const tools = await screen.findByRole("region", { name: /Tools/ });
+      fireEvent.click(within(tools).getByText("get_invoice"));
+      const drawer = await screen.findByRole("dialog");
+      // The tool's own On switch is in the table, not in the drawer footer.
+      expect(within(drawer).queryByLabelText("Tool on")).not.toBeInTheDocument();
+      expect(within(drawer).queryByText(/Only for this tool/)).not.toBeInTheDocument();
+      // The group's header shows as what the group already adds.
+      expect(within(drawer).getByText("from the group")).toBeInTheDocument();
+      expect(within(drawer).getByRole("button", { name: "Delete tool" })).toBeInTheDocument();
+      expect(within(drawer).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    },
+  );
 
   acceptance("web-ui", "a hand-made request joins an existing group", async () => {
     api.addTool.mockResolvedValue(billing);

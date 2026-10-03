@@ -13,7 +13,7 @@
 //   - NothingSelected: the right pane while no row is open, with the page's
 //     Add action as an outline button.
 // Copy is per kind (`listStates.kinds.<kind>`); no counts appear in any of it.
-import { Plus, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -132,23 +132,16 @@ export function ListNoMatch({ kind, query, onClear }: NoMatchProps) {
 
 interface NothingSelectedProps {
   icon: LucideIcon;
-  /** The page's Add action, as an outline button. */
-  addLabel: string;
-  onAdd: () => void;
 }
 
-export function NothingSelected({ icon, addLabel, onAdd }: NothingSelectedProps) {
+/** The right pane while no row is open; the page header already holds Add. */
+export function NothingSelected({ icon }: NothingSelectedProps) {
   const { t } = useTranslation();
   return (
     <EmptyState
       icon={icon}
       title={t("listStates.nothingSelected")}
       description={t("listStates.nothingSelectedBody")}
-      action={
-        <Button variant="outline" onClick={onAdd}>
-          <Plus aria-hidden /> {addLabel}
-        </Button>
-      }
     />
   );
 }

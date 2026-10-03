@@ -6,6 +6,7 @@
 // blocked the other, and its primary button becomes "Delete pdf, keep Codex's
 // folder", which sends only the refused skill again with the keep option.
 import { afterEach, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -72,7 +73,7 @@ test("deleting all of them closes the dialog and clears the selection", async ()
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-test("one refused delete stays in the dialog and offers to keep that agent's folder", async () => {
+acceptance("web-ui", "a bulk delete offers to keep the folder that stopped one skill", async () => {
   bulk.mockResolvedValueOnce({ results: [refused, ok(NOTES)] });
   bulk.mockResolvedValueOnce({ results: [ok(PDF)] });
   const { onDone } = mount();

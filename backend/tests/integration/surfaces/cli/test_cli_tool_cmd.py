@@ -1,6 +1,5 @@
-"""``coffer cli add|edit|rm|show`` for tools added by hand
-read from their help (spec skill-manager "Declare a command-line tool without
-a skill", "Show a command-line tool's full interface")."""
+"""``coffer cli add|edit|rm|show`` for tools added by hand (spec skill-manager
+"Declare a command-line tool without a skill")."""
 
 from __future__ import annotations
 
@@ -25,6 +24,9 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     yield from boot_cli_daemon(tmp_path, monkeypatch, probe=probe)
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="the command line adds, edits and removes a tool"
+)
 def test_add_edit_and_rm(daemon: CliDaemon) -> None:
     added = runner.invoke(
         cli,

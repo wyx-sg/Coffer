@@ -22,6 +22,10 @@ import type { SkillFileNode } from "@/lib/api/skills";
 import { useFsActions } from "@/lib/fsActions";
 import { sortSkillNodes } from "@/lib/skills/tree";
 
+// The card's own bounds: the tree may shrink to 160px, the open file keeps 320px.
+const SKILL_TREE_MIN = 160;
+const SKILL_FILE_MIN = 320;
+
 /** The tree query's state, whichever route it came from. */
 export interface SkillFileTreeQuery {
   isPending: boolean;
@@ -115,17 +119,21 @@ export function SkillFileSplit({
 
   return (
     // The card takes the window's height under the page header and tabs, and
-    // both halves scroll inside it; the divider between them is draggable.
+    // both halves scroll inside it; the divider between them is draggable. In a
+    // narrow window the tree shrinks to its minimum, the file keeps its own,
+    // and below that the card scrolls sideways rather than squeezing the file.
     <div
       ref={fill.ref}
       style={fill.style}
-      className="flex min-h-0 overflow-hidden rounded-xl border border-border-subtle"
+      className="flex min-h-0 overflow-x-auto overflow-y-hidden rounded-xl border border-border-subtle"
     >
       <SplitView
         storageKey="skill-files"
         label={t("splitView.resizeList")}
         defaultListWidth={220}
-        className="min-h-0 flex-1"
+        className="min-h-0 min-w-[504px] flex-1"
+        listMinWidth={SKILL_TREE_MIN}
+        detailMinWidth={SKILL_FILE_MIN}
         list={list}
         detail={detail}
       />

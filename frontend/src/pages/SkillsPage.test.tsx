@@ -90,20 +90,24 @@ async function libraryRows() {
   return within(list).queryAllByRole("link");
 }
 
-test("the library has no Reach filter: skills fall into Needs attention, In use and Off", async () => {
-  h.skills = [
-    makeSkill({ uid: "sk-1", name: "everywhere-skill" }),
-    makeSkill({ uid: "sk-2", name: "off-skill", enabled: false }),
-    makeSkill({ uid: "sk-3", name: "scoped-skill", scope: { agents: [CC.uid] } }),
-  ];
-  renderSkillsPage("/skills");
-  expect(await libraryRows()).toHaveLength(3);
-  expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
-  const off = within(screen.getByRole("region", { name: "Off" }));
-  expect(off.getByRole("link", { name: /off-skill/ })).toBeInTheDocument();
-  const inUse = within(screen.getByRole("region", { name: "In use" }));
-  expect(inUse.getAllByRole("link")).toHaveLength(2);
-});
+acceptance(
+  "web-ui",
+  "the library has no reach filter and groups skills by what they need",
+  async () => {
+    h.skills = [
+      makeSkill({ uid: "sk-1", name: "everywhere-skill" }),
+      makeSkill({ uid: "sk-2", name: "off-skill", enabled: false }),
+      makeSkill({ uid: "sk-3", name: "scoped-skill", scope: { agents: [CC.uid] } }),
+    ];
+    renderSkillsPage("/skills");
+    expect(await libraryRows()).toHaveLength(3);
+    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
+    const off = within(screen.getByRole("region", { name: "Off" }));
+    expect(off.getByRole("link", { name: /off-skill/ })).toBeInTheDocument();
+    const inUse = within(screen.getByRole("region", { name: "In use" }));
+    expect(inUse.getAllByRole("link")).toHaveLength(2);
+  },
+);
 
 acceptance("skill-manager", "desktop and CLI cover every operation", async () => {
   renderSkillsPage("/skills");

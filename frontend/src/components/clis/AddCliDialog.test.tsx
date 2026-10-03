@@ -2,6 +2,7 @@
 //
 // Real QueryClientProvider; only the api module is mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -42,7 +43,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("AddCliDialog", () => {
-  test("shows what Coffer found for the typed command before anything is saved", async () => {
+  acceptance("web-ui", "Add CLI shows what Coffer found before anything is saved", async () => {
     renderDialog();
     type("Command", "jq");
     const found = await screen.findByTestId("cli-found");

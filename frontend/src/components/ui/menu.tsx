@@ -5,7 +5,7 @@
 // between items, Home / End jump, Escape closes and focus returns to the
 // trigger (Radix Popover). Choosing an item closes the menu before running it,
 // so a dialog the item opens takes focus cleanly. Destructive items read in the
-// danger role; a separator groups them apart. The icon-only trigger carries the
+// danger role; a separator groups them apart (never above the first item). The icon-only trigger carries the
 // tooltip "More actions" (it only names the control) while its aria-label stays
 // the specific one callers pass; the tooltip stays shut while the menu is open.
 //
@@ -117,11 +117,11 @@ export function ActionMenu({ label, actions, align = "end", className, trigger }
           onKeyDown={onKeyDown}
           className="flex flex-col"
         >
-          {actions.map((action) => {
+          {actions.map((action, index) => {
             const Icon = action.icon;
             return (
               <React.Fragment key={action.key}>
-                {action.separated ? (
+                {action.separated && index > 0 ? (
                   <div
                     role="separator"
                     className={cn("h-px bg-border-subtle", described ? "mx-1.5 my-1" : "my-1")}

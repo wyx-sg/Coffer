@@ -34,6 +34,7 @@ def _stored(tmp_path: pathlib.Path) -> dict[str, object]:
     return json.loads((vault_root(tmp_path) / _STATE).read_text(encoding="utf-8"))
 
 
+@pytest.mark.acceptance(spec="skill-manager", scenario="a command-line tool is added with no skill")
 def test_a_tool_is_added_with_no_skill(daemon: CliDaemon, tmp_path: pathlib.Path) -> None:
     assert daemon.client.get("/clis").json()["items"] == []
     r = daemon.client.post(
@@ -144,6 +145,9 @@ def test_changes_are_audited(daemon: CliDaemon) -> None:
         assert expected in kinds
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a hand-added tool and a skill are one entry"
+)
 def test_a_hand_added_tool_and_a_skill_are_one_entry(daemon: CliDaemon) -> None:
     uid = daemon.add_skill(
         "data", '  - command: jq\n    min_version: "1.5"\n    title: From skill\n'

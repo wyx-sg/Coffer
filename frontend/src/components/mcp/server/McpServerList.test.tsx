@@ -1,5 +1,6 @@
 // src/components/mcp/server/McpServerList.test.tsx — the MCP servers list column: the search, hover checkboxes, the selection bar at the top, groups in order, and the built-in group obeying the search.
 import { useState } from "react";
+import { acceptance } from "@/test/acceptance";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -99,7 +100,7 @@ describe("McpServerList", () => {
     expect(checkboxSlot(other).className).not.toContain("hidden");
   });
 
-  test("ticking a row puts the selection bar at the top: N of M selected, Reach, Delete, ×", () => {
+  acceptance("web-ui", "ticking a server puts the selection bar at the top", () => {
     renderList();
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: github/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: linear/ }));

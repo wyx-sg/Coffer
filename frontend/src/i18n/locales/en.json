@@ -387,6 +387,8 @@
       "partialSub_other": "{{added}} are added. {{tail}}",
       "renameTail_one": "Rename {{names}} to add it too.",
       "renameTail_other": "Rename {{names}} to add them too.",
+      "failedTail_one": "{{names}} could not be added; the reason is on its card.",
+      "failedTail_other": "{{names}} could not be added; the reasons are on their cards.",
       "approval": {
         "sub_one": "{{names}} is added. One of its secrets needs an approval before it can start.",
         "sub_other": "{{names}} are added. Their secrets need an approval before they can start.",
@@ -1597,7 +1599,7 @@
     "noMatchFilters": "No {{kind}} matches these filters",
     "clearFilter": "Clear filter",
     "nothingSelected": "Nothing selected",
-    "nothingSelectedBody": "Choose one from the list, or add the one you were looking for.",
+    "nothingSelectedBody": "Choose one from the list.",
     "notFound": {
       "lastSeen": "Last seen",
       "lastSeenValue": "{{when}} · {{actor}}",
@@ -2994,8 +2996,14 @@
         "failing": "{{tool}} is failing, so {{name}} can’t rely on it"
       },
       "toolBody": {
-        "mcp_server": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} MCP server is off. Turning it on takes effect for every agent at once.",
-        "custom_tools": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} tool group is off. Turning it on takes effect for every agent at once."
+        "off": {
+          "mcp_server": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} MCP server is off. Turning it on takes effect for every agent at once.",
+          "custom_tools": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} tool group is off. Turning it on takes effect for every agent at once."
+        },
+        "failing": {
+          "mcp_server": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} MCP server is failing. Fixing it takes effect for every agent at once.",
+          "custom_tools": "{{name}} is still delivered, but the steps that call it fail while the {{tool}} tool group is failing. Fixing it takes effect for every agent at once."
+        }
       },
       "openTool": "Open {{tool}}",
       "unreachablePrompt": "Coffer can’t reach the Git repository {{url}} that the skill {{name}} was imported from. Last error: {{error}}\n\nCheck whether this machine’s network, VPN or git credentials can reach that repository (for example with `git ls-remote {{url}}`), fix what blocks it, and tell me what you changed. Don’t change the skill itself."

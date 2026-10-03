@@ -1,7 +1,7 @@
 // src/components/clis/CliActions.tsx — Edit and ⋯ › Remove for a tool that was added by hand, in its detail header (board CliHeader).
 //
 // A tool only a skill or MCP server requires has neither: it is not Coffer's to
-// change. Remove sits last in the ⋯ menu after a separator, in danger text, and
+// change. Remove is the only item in the ⋯ menu, in danger text, and
 // asks in a 420 confirm: removing a hand-added tool that a skill also requires
 // only drops the declaration, and the dialog says so; the entry stays for as
 // long as the skill requires it. The dialog closes only once the removal
@@ -43,7 +43,6 @@ export function CliActions({ cli, onRemoved }: Props) {
             label: t("clis.remove.action"),
             onSelect: () => setRemoving(true),
             destructive: true,
-            separated: true,
           },
         ]}
       />
