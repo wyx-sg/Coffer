@@ -4,12 +4,15 @@
 // 5.1.13): where you are — the collection, its folders and the open file in
 // the mono face, or "Recent changes › Curation pass" — then the view's tabs,
 // if it has any, and its actions pushed right. One component so a document, an
-// item, a collection and a pass all say where they are the same way.
-import type { ReactNode } from "react";
+// item, a collection and a pass all say where they are the same way. The
+// leading segments give way first (ellipsis) when the path is long, and the
+// tooltip names the whole path only then.
+import { useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export interface Crumb {
@@ -29,37 +32,62 @@ interface Props {
 
 export function KnowledgePaneBar({ crumbs, tabs, actions }: Props) {
   const { t } = useTranslation();
+  const navRef = useRef<HTMLElement>(null);
+  const [tipOpen, setTipOpen] = useState(false);
+  // The full path is only worth a tooltip when some segment is cut off.
+  const clipped = () =>
+    Array.from(navRef.current?.querySelectorAll("a, span[data-crumb]") ?? []).some(
+      (el) => el.scrollWidth > el.clientWidth,
+    );
   return (
     <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border-subtle px-6">
-      <nav
-        aria-label={t("knowledge.document.where")}
-        className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap"
-      >
-        {crumbs.map((c, i) => {
-          const last = i === crumbs.length - 1;
-          const cls = cn(
-            "truncate",
-            c.mono ? "font-mono text-xs" : "text-sm",
-            last ? "text-text" : "text-text-muted hover:text-text",
-          );
-          return (
-            <span key={`${i}-${c.label}`} className="flex min-w-0 items-center gap-1">
-              {i > 0 ? (
-                <ChevronRight className="size-3 shrink-0 text-text-subtle" aria-hidden />
-              ) : null}
-              {c.to && !last ? (
-                <Link to={c.to} className={cls}>
-                  {c.label}
-                </Link>
-              ) : (
-                <span className={cls} aria-current={last ? "location" : undefined}>
-                  {c.label}
-                </span>
-              )}
-            </span>
-          );
-        })}
-      </nav>
+      <TooltipProvider>
+        <Tooltip open={tipOpen} onOpenChange={(next) => setTipOpen(next && clipped())}>
+          <TooltipTrigger asChild>
+            <nav
+              ref={navRef}
+              aria-label={t("knowledge.document.where")}
+              className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap"
+            >
+              {crumbs.map((c, i) => {
+                const last = i === crumbs.length - 1;
+                const cls = cn(
+                  "block min-w-0 truncate",
+                  last && "shrink-0",
+                  c.mono ? "font-mono text-xs" : "text-sm",
+                  last ? "text-text" : "text-text-muted hover:text-text",
+                );
+                return (
+                  <span
+                    key={`${i}-${c.label}`}
+                    className={cn("flex items-center gap-1", last ? "shrink-0" : "min-w-0")}
+                  >
+                    {i > 0 ? (
+                      <ChevronRight className="size-3 shrink-0 text-text-subtle" aria-hidden />
+                    ) : null}
+                    {c.to && !last ? (
+                      <Link to={c.to} className={cls}>
+                        {c.label}
+                      </Link>
+                    ) : (
+                      <span
+                        data-crumb=""
+                        className={cls}
+                        aria-current={last ? "location" : undefined}
+                      >
+                        {c.label}
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+            </nav>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[420px] break-all font-mono">
+            {crumbs.map((c) => c.label).join("/")}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {tabs}
       {actions ? (
         <span className="ml-auto flex shrink-0 items-center gap-1.5">{actions}</span>

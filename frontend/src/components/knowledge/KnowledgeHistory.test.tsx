@@ -24,7 +24,6 @@ vi.mock("@/lib/api/knowledge", () => ({
   deleteFile: vi.fn(),
   curateCollection: vi.fn(),
   uploadFile: vi.fn(),
-  submitMaterial: vi.fn(),
   listChanges: vi.fn(),
   getChange: vi.fn(),
   undoPass: vi.fn(),
@@ -69,12 +68,14 @@ describe("a document's History tab", () => {
     api.restoreVersion.mockResolvedValue(GATEWAY);
     renderKnowledge(historyAddress);
 
-    expect(await screen.findByText("2 versions")).toBeInTheDocument();
-    expect(screen.getByText("newest first")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Curation.*Current/ })).toBeInTheDocument();
+    expect(await screen.findAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("2 versions")).toBeNull();
+    expect(screen.queryByText("newest first")).toBeNull();
+    expect(await screen.findByText("Current")).toBeInTheDocument();
     const older = screen.getByRole("button", { name: /^You/ });
-    expect(older).toHaveTextContent("Added as written");
+    expect(older).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(older);
+    expect(older).toHaveAttribute("aria-expanded", "true");
 
     await waitFor(() => expect(api.getVersionDiff).toHaveBeenCalledWith(GATEWAY.path, "c0ffee01"));
     expect(await screen.findByText("The orchestration layer.")).toBeInTheDocument();
@@ -113,7 +114,9 @@ describe("a document's History tab", () => {
       versions: [{ change: PASS, removed: false }],
     });
     renderKnowledge(historyAddress);
-    expect(await screen.findByRole("link", { name: "See the whole pass" })).toHaveAttribute(
+    // The row opens first; the pass link sits in its detail.
+    fireEvent.click(await screen.findByRole("button", { name: /^Curation/ }));
+    expect(await screen.findByRole("link", { name: "See the pass" })).toHaveAttribute(
       "href",
       `/knowledge/changes/${PASS.version}`,
     );
@@ -123,7 +126,11 @@ describe("a document's History tab", () => {
   acceptance("web-ui", "a history that fails to load leaves the document readable", async () => {
     api.getHistory.mockRejectedValue(new ApiError("KNOWLEDGE_HISTORY_UNAVAILABLE", "no git"));
     renderKnowledge(historyAddress);
-    expect(await screen.findByText("Couldn't read this document's history")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t read this document’s history")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Activity" })).toHaveAttribute(
+      "href",
+      "/activity",
+    );
     const before = api.getHistory.mock.calls.length;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(api.getHistory.mock.calls.length).toBe(before + 1));
@@ -171,14 +178,14 @@ describe("Recent changes", () => {
         waiting: [],
         next_cursor: null,
       }));
-      const filter = screen.getByRole("combobox", { name: "Collection" });
-      fireEvent.keyDown(filter, { key: "ArrowDown" });
+      fireEvent.click(screen.getByRole("button", { name: /^Collection/ }));
       fireEvent.click(await screen.findByRole("option", { name: OTHER.name }));
       await waitFor(() =>
         expect(api.listChanges).toHaveBeenLastCalledWith(
           expect.objectContaining({ collection: OTHER.name }),
         ),
       );
+      expect(screen.getByTestId("where")).toHaveTextContent(`collection=${OTHER.name}`);
       await waitFor(() => expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull());
       expect(screen.getByRole("link", { name: "on-call.md" })).toBeInTheDocument();
     },
@@ -187,7 +194,9 @@ describe("Recent changes", () => {
   test("a waiting item opens in its collection's inbox", async () => {
     renderKnowledge("/knowledge");
     const waiting = await screen.findByRole("region", { name: "Waiting to be curated" });
-    fireEvent.click(within(waiting).getByRole("button", { name: "Open Login retry" }));
+    const row = within(waiting).getByRole("link", { name: /Login retry/ });
+    expect(row).toHaveAttribute("href", expect.stringContaining(`/knowledge/${UID}/inbox?file=`));
+    fireEvent.click(row);
     expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}/inbox?file=`);
   });
 
@@ -207,7 +216,9 @@ describe("Recent changes", () => {
   test("the writer filter leaves only the person's own changes under You", async () => {
     renderKnowledge("/knowledge");
     expect(await screen.findByRole("link", { name: "See the pass" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "You" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Author/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "You" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("author=user");
     expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull();
     expect(screen.getByRole("link", { name: "on-call.md" })).toBeInTheDocument();
   });
@@ -262,13 +273,18 @@ describe("a curation pass", () => {
     // The dialog steps aside; the pass's page says what happened and names the
     // document changed since.
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(await screen.findByText("Couldn't undo this pass")).toBeInTheDocument();
-    expect(screen.getByText(/was edited after this pass, so nothing was undone/)).toHaveTextContent(
-      `${GATEWAY.path} was edited after this pass, so nothing was undone`,
-    );
-    expect(screen.getByText("Not undone")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t undo this pass")).toBeInTheDocument();
+    expect(
+      screen.getByText(`${GATEWAY.path} changed after it, so nothing was undone.`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not undone")).toBeNull();
     expect(screen.getByText("changed after this pass")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Undo this pass" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Undo this pass" })).toBeInTheDocument();
+    expect(api.undoPass).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Open its History" }));
+    expect(screen.getByTestId("where")).toHaveTextContent(
+      `/knowledge/${UID}/history?file=${encodeURIComponent(GATEWAY.path)}`,
+    );
   });
 
   test("a pass already undone says so instead of offering undo", async () => {

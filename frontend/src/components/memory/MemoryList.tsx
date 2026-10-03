@@ -5,7 +5,8 @@
 // one highlighted. Under them, a collapsed "Retired (n)" group, read-only:
 // each retired memory with the reason it left. There is no Restore and no
 // per-memory action anywhere — a memory is derived by distillation, and the
-// list says so by offering none.
+// list says so by offering none. The Retired group is pinned under the list
+// (board 5.2.06): the memories scroll above it.
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -27,8 +28,11 @@ interface Props {
 export function MemoryList({ memories, retired, selected, onSelect, sources = [] }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col">
-      <ul aria-label={t("memory.memories.listLabel")} className="flex flex-col gap-0.5">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ul
+        aria-label={t("memory.memories.listLabel")}
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+      >
         {memories.map((m) => {
           const active = m.slug === selected;
           return (
@@ -66,7 +70,10 @@ export function RetiredGroup({ retired }: { retired: RetiredNoteOut[] }) {
   const [open, setOpen] = useState(false);
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
-    <div className="mt-2.5 border-t border-border-subtle pt-2" data-testid="memory-retired">
+    <div
+      className="mt-2.5 shrink-0 border-t border-border-subtle pt-2"
+      data-testid="memory-retired"
+    >
       <button
         type="button"
         aria-expanded={open}
@@ -79,7 +86,7 @@ export function RetiredGroup({ retired }: { retired: RetiredNoteOut[] }) {
         <span className="ml-auto font-book">{t("memory.memories.readOnly")}</span>
       </button>
       {open ? (
-        <ul className="mt-1 flex flex-col gap-0.5">
+        <ul className="mt-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto">
           {retired.map((r) => (
             <li key={r.slug} className="flex flex-col gap-0.5 px-2.5 py-1.5">
               <span className="truncate text-sm text-text-muted">{r.title}</span>

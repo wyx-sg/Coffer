@@ -77,7 +77,7 @@ describe("MemoryPartitionsTable", () => {
     expect(coffer.queryByTestId("partition-unresolvable-badge")).toBeNull();
   });
 
-  test("Delete asks first, names what goes, and deletes through the resource route", async () => {
+  acceptance("memory", "deleting a partition still asks", async () => {
     removeMock.mockResolvedValue(undefined);
     renderTable(<MemoryPartitionsTable rows={[COFFER, GONE]} />);
     fireEvent.click(screen.getByRole("button", { name: /delete: old-prototype/i }));

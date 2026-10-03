@@ -1,7 +1,8 @@
 // frontend/src/components/upkeep/AutomaticPopover.tsx
 //
-// The "Automatic · hourly" pill in the Knowledge and Memory page headers and
-// the popover it opens (designs 5.1.24 and 5.2.11). Automatic upkeep lives on
+// The "Automatic · hourly" ghost button (with a status dot) in the Knowledge
+// and Memory page headers and the popover it opens, anchored under it and
+// right-aligned (boards 5.1.17 and 5.2.04). Automatic upkeep lives on
 // the page it upkeeps, not in Settings: this is the frame both pages share —
 // a switch with its one-line explanation, an interval, any page-specific rows,
 // and a footer with when the pass last ran and runs next, plus an optional
@@ -11,6 +12,7 @@ import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { formatRelativeTime } from "@/components/agents/list/relativeTime";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -24,15 +26,7 @@ import type { UpkeepSetting } from "@/lib/api/internalEngine";
 import { cn } from "@/lib/utils";
 
 /** The intervals offered, in seconds. */
-const INTERVAL_CHOICES = [
-  15 * 60,
-  30 * 60,
-  60 * 60,
-  3 * 60 * 60,
-  6 * 60 * 60,
-  12 * 60 * 60,
-  86400,
-];
+const INTERVAL_CHOICES = [15 * 60, 30 * 60, 60 * 60, 3 * 60 * 60, 6 * 60 * 60, 12 * 60 * 60, 86400];
 
 /** The interval select's value for "this pass's own default". */
 const DEFAULT_VALUE = "default";
@@ -115,11 +109,7 @@ export function AutomaticPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-testid={testId}
-          className="inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-surface px-2 text-xs font-medium text-text-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <Button type="button" variant="ghost" data-testid={testId}>
           <span
             aria-hidden
             className={cn(
@@ -128,10 +118,11 @@ export function AutomaticPopover({
             )}
           />
           {t("upkeep.pill.label", { state: pill?.state ?? pillState(t, setting) })}
-          <ChevronDown aria-hidden className="size-3" />
-        </button>
+          <ChevronDown aria-hidden />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
+        align="end"
         aria-label={title}
         className="flex w-[330px] flex-col gap-3.5 px-4 py-3.5 text-sm text-text"
       >

@@ -580,6 +580,6 @@ def test_rest_and_cli_cover_every_knowledge_operation(knowledge_cli_daemon):
     for method, path in routes:
         tail = path.removeprefix("/api/v1/knowledge").lower()
         assert not any(word in tail for word in _FORBIDDEN_ROUTE_WORDS), path
-        # No route creates a document at a path: Add a document submits
-        # material like every other entrance.
+        # No route creates a document at a path: new knowledge is material
+        # submitted like every other entrance.
         assert not (method == "POST" and tail in {"/file", "/document", "/documents"}), path

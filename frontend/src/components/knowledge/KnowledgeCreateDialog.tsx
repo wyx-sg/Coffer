@@ -1,5 +1,5 @@
 // frontend/src/components/knowledge/KnowledgeCreateDialog.tsx
-// New collection (board 5.1.15): a name (its folder under the knowledge
+// New collection (board 5.1.13): a name (its folder under the knowledge
 // root) and what belongs in it — both required. A collection has no title: it
 // is shown by its folder name, and what belongs in it is the opening paragraph
 // of the folder's README, which the coffer-guide skill carries to every agent.
@@ -90,11 +90,11 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("knowledge.create.descriptionHint")}
             />
-            <p className="text-xs text-text-subtle">{t("knowledge.create.everyAgent")}</p>
+            <p className="text-xs text-text-muted">{t("knowledge.create.everyAgent")}</p>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
           <Button

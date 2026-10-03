@@ -185,7 +185,7 @@ async def _save(world: _World, relpath: str, body: str) -> None:
 )
 async def test_a_documents_history_names_the_user_curation_and_the_user(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    # The user's Add a document, with no model to merge it: a document at once.
+    # Material the user submits, with no model to merge it: a document at once.
     added = await world.knowledge.submit(
         collection="shopee",
         title="Session ownership",

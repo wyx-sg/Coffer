@@ -93,9 +93,8 @@ Every entrance submits **material** into the collection's inbox. None of them wr
 | `coffer knowledge write`, `POST /api/v1/knowledge/material` | CLI and REST |
 | `coffer knowledge upload`, `POST /api/v1/knowledge/upload`, the Knowledge page | Upload, converted to Markdown first |
 | `/kb <collection>` after an attachment | A paired [channel](/architecture/chat) owner |
-| **Add a document** on the Knowledge page | The web UI, through `POST /api/v1/knowledge/material` with the actor `user` |
 
-There is no route that creates a document at a path. A person adding a document goes through the inbox like an agent does, so the same curation decides where it belongs.
+There is no route that creates a document at a path, and the web UI has no form for typing one in: a person writes through the editor (`PUT /file`, a save of an existing document's body) or uploads, so the inbox and the same curation decide where new knowledge belongs.
 
 ```mermaid
 flowchart TD

@@ -11,8 +11,9 @@
 // offer a choice with nothing behind it (spec web-ui "Show reach as a labelled
 // button on every list and detail page").
 //
-// A partition whose repository is no longer on disk says so instead of hiding,
-// and only that row offers Delete: any other partition would come back on the
+// Status is a grey dot plus its words ("Distilled 2 h ago"); a partition whose
+// repository is no longer on disk says so in warning colour instead of hiding,
+// and only that row offers Delete…: any other partition would come back on the
 // next Update memory (spec memory "Report unresolvable partitions"). The
 // confirmation is hoisted to table level so closing it cannot click through
 // to the row.
@@ -20,6 +21,7 @@ import { useState } from "react";
 import { AgentSources, distilState, sampleLine } from "@/components/memory/partitionFacts";
 import { useUpkeepRunsOf } from "@/lib/hooks/useUpkeep";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
@@ -27,7 +29,8 @@ import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
 import { DeletePartitionDialog } from "@/components/memory/DeletePartitionDialog";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { ResourceLabel } from "@/components/resource/ResourceLabel";
-import { RowDeleteButton } from "@/components/table/RowDeleteButton";
+import { StatusWord } from "@/components/status/StatusWord";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { displayName } from "@/lib/resourceTitle";
@@ -62,10 +65,10 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
         r.repository_path ? (
           <TruncatedPath
             text={abbreviateHomePath(r.repository_path)}
-            className="text-sm text-text-muted"
+            className="font-mono text-2xs text-text-muted"
           />
         ) : (
-          <span className="text-sm text-text-muted">{t("memory.cols.global")}</span>
+          <span className="text-xs text-text-muted">{t("memory.cols.global")}</span>
         ),
     },
     {
@@ -93,21 +96,30 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
     {
       key: "distil",
       header: t("memory.cols.distil"),
-      className: "w-[170px] whitespace-nowrap text-right",
+      className: "w-[170px] whitespace-nowrap",
+      // Healthy states are grey; only a missing repository is coloured.
       cell: (r) =>
         r.unresolvable ? (
-          <span className="inline-flex items-center gap-2">
-            <UnresolvableBadge />
-            <RowDeleteButton
-              ariaLabel={`${t("common.delete")}: ${displayName(r)}`}
-              onDelete={() => setDeleting(r)}
-            />
-          </span>
+          <UnresolvableBadge />
         ) : (
-          <span className="text-xs text-text-muted">
-            {distilState(t, i18n.language, r, running(r.uid))}
-          </span>
+          <StatusWord tone="off">{distilState(t, i18n.language, r, running(r.uid))}</StatusWord>
         ),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "w-[110px] whitespace-nowrap text-right",
+      // Only a partition whose repository is gone can be deleted.
+      cell: (r) =>
+        r.unresolvable ? (
+          <TableActionButton
+            icon={Trash2}
+            label={`${t("common.delete")}…`}
+            destructive
+            aria-label={`${t("common.delete")}: ${displayName(r)}`}
+            onClick={() => setDeleting(r)}
+          />
+        ) : null,
     },
   ];
 

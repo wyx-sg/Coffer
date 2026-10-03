@@ -136,9 +136,13 @@ menus, popovers), `rounded-2xl` 12 (dialogs, the palette), `rounded-full`
 - Status is always a **dot plus its word**; a healthy word is muted, a
   problem's word takes its status colour.
 - Empty / loading / error states are first-class: `EmptyState` for every
-  list / not-found / zero-result screen (tone `error` for a failed list, with
-  retry); loading keeps the surface's shape with `Skeleton`; a `DataTable`
-  given `isLoading` renders skeleton rows under its mounted header.
+  list / not-found / zero-result screen; loading keeps the surface's shape
+  with `Skeleton`; a `DataTable` given `isLoading` renders skeleton rows under
+  its mounted header. A region that fails to load says so in one bordered
+  **Load error** row inside that region (`LoadErrorRow`: title, one red
+  reason, Retry as a small secondary button, a diagnose link such as Open
+  Activity) — the header and filters around it stay. A state that is not a
+  failure, such as "History needs git", is the same row in the neutral tone.
 - A non-fatal caution is the `warning` `Alert` (banner) — not a destructive
   alert and not a toast. Banners carry one action.
 - Tooltips name things; they never hold an action or the only copy of

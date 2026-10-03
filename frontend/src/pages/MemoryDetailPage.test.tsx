@@ -144,10 +144,15 @@ describe("MemoryDetailPage", () => {
     const pane = screen.getByTestId("memory-pane");
     expect(within(pane).getByText("Node 20")).toBeInTheDocument();
     expect(pane).not.toHaveTextContent(/origins:|native_path|---/);
-    // The header: repository path and the memory count; open / reveal on the file.
-    expect(screen.getByText(/^~\/work\/coffer · 2 memories · distilled /)).toBeInTheDocument();
-    expect(within(pane).getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
-    expect(within(pane).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    // The header: the name alone, then repository path, memory count, age.
+    const title = screen.getByRole("heading", { level: 1, name: "coffer" });
+    const header = title.closest("header") as HTMLElement;
+    expect(header).toHaveTextContent(/~\/work\/coffer · 2 memories · distilled /);
+    // No back link, no Experimental tag, no Automatic control, no file action on a memory.
+    expect(screen.queryByText(/‹ Memory/)).toBeNull();
+    expect(screen.queryByText("Experimental")).toBeNull();
+    expect(screen.queryByRole("button", { name: /automatic/i })).toBeNull();
+    expect(within(pane).queryByRole("button", { name: /open in editor|reveal/i })).toBeNull();
     assertNoAgentOwnMemory();
   });
 
@@ -176,7 +181,6 @@ describe("MemoryDetailPage", () => {
     renderAt(`/memory/${COFFER.uid}`);
     const pane = await screen.findByTestId("memory-pane");
     const list = screen.getByRole("list", { name: "Memories" });
-    // The header's Edit is the partition's title, not a memory's.
     for (const region of [pane, list, screen.getByTestId("memory-retired")]) {
       expect(
         within(region).queryByRole("button", { name: /^(edit|delete|restore|hide|pin)\b/i }),
@@ -190,19 +194,42 @@ describe("MemoryDetailPage", () => {
     vi.mocked(api.listNotes).mockResolvedValue({ notes: [] });
     renderAt(`/memory/${COFFER.uid}`);
     expect(await screen.findByText("No memories for coffer yet")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(2);
+    // Only the header carries Update memory: the empty state has none, and no
+    // list column is drawn beside it (board 5.2.08).
+    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
+    expect(screen.queryByRole("list", { name: "Memories" })).toBeNull();
   });
 
   test("without Coffer's model, a quiet notice links to Settings › General", async () => {
     stub({ model: null });
     renderAt(`/memory/${COFFER.uid}`);
     const notice = await screen.findByTestId("memory-no-model");
-    expect(notice).toHaveTextContent(/each agent's entry becomes its own memory/);
-    fireEvent.click(within(notice).getByRole("button", { name: /Settings › General/ }));
+    expect(notice).toHaveTextContent(/each agent’s entry stays its own memory/);
+    expect(notice).toHaveTextContent(/until it is set in Settings › General\./);
+    fireEvent.click(within(notice).getByRole("button", { name: "Open Settings" }));
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent("/settings/general"),
     );
   });
+
+  acceptance(
+    "memory",
+    "a partition's page names the partition and offers no way back",
+    async () => {
+      stub({ model: null });
+      renderAt(`/memory/${COFFER.uid}`);
+      expect(await screen.findByRole("heading", { name: "coffer" })).toBeInTheDocument();
+      expect(screen.queryByText("Experimental")).toBeNull();
+      expect(screen.queryByRole("link", { name: /back/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /^back/i })).toBeNull();
+      expect(screen.queryByTestId("memory-automatic")).toBeNull();
+      expect(screen.getByText(/memories/)).toBeInTheDocument();
+      // Without Coffer's engine a banner names it and offers Open Settings.
+      const notice = await screen.findByTestId("memory-no-model");
+      expect(notice).toHaveTextContent(/each agent’s entry stays its own memory/);
+      expect(within(notice).getByRole("button", { name: "Open Settings" })).toBeInTheDocument();
+    },
+  );
 
   test("with Coffer's model set, there is no such notice", async () => {
     renderAt(`/memory/${COFFER.uid}`);
@@ -230,7 +257,7 @@ describe("MemoryDetailPage", () => {
     expect(
       screen.getByText("What a session in ~/work/coffer starts with · read-only"),
     ).toBeInTheDocument();
-    expect(screen.getByText(`${DELIVERED.agents[1].text.length} characters`)).toBeInTheDocument();
+    expect(screen.getByText(/ characters · nothing trimmed$/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: /codex/i }));
     expect(screen.getByTestId("memory-delivered-text").textContent).toBe(DELIVERED.agents[0].text);
@@ -335,11 +362,10 @@ acceptance("memory", "browse a partition's memories with a read-only preview", a
   fireEvent.click(toggle);
   expect(within(group).getByText(RETIRED.retired[0].reason)).toBeInTheDocument();
 
-  // None of the agents' own memory; open and reveal, and no edit or delete.
+  // None of the agents' own memory, and no file action, edit or delete on a memory.
   assertNoAgentOwnMemory();
   const pane = screen.getByTestId("memory-pane");
-  expect(within(pane).getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
-  expect(within(pane).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+  expect(within(pane).queryByRole("button", { name: /open in editor|reveal/i })).toBeNull();
   expect(within(pane).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();
   expect(within(list).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();
 });

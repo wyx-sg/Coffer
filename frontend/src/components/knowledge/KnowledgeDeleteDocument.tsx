@@ -1,57 +1,55 @@
 // frontend/src/components/knowledge/KnowledgeDeleteDocument.tsx
 //
-// Delete document… — any document, whoever wrote it (spec knowledge "Let only
-// a person delete a document"). The confirmation names the exact file on disk
-// before anything runs; a refusal stays in the dialog, and the pane leaves the
-// document only once it is gone. The deletion is itself a version, so the
-// document can come back from its History.
+// Delete document… (board 5.1.02; spec knowledge "Let only a person delete a
+// document"). Any document, whoever wrote it. There is no confirmation: the
+// delete is one change in the vault's history, so it runs at once and the
+// toast carries Undo (layout principle 14 "confirm or undo"); the same change
+// stays restorable from Recent changes. Afterwards the pane goes to the
+// collection's page — the document is gone, so there is nothing left to show.
+// A refusal is an error toast and the pane stays on the document.
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
+import { translateApiError } from "@/lib/api/errors";
+import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDeleteKnowledgeFile } from "@/lib/hooks/useKnowledge";
+import { collectionPath } from "@/lib/knowledge/routes";
+import { undoDelete } from "@/lib/knowledge/deleteUndo";
 
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Knowledge-root-relative path — what the delete is addressed to. */
-  path: string;
-  /** The absolute path on disk — what the confirmation names. */
-  filePath: string;
-  onDeleted: () => void;
-}
-
-export function KnowledgeDeleteDocument({ open, onOpenChange, path, filePath, onDeleted }: Props) {
+/** Returns `remove(path)` for the open collection: delete now, toast with Undo. */
+export function useDeleteDocument(collectionUid: string) {
   const { t } = useTranslation();
-  const removeFile = useDeleteKnowledgeFile();
-  const name = path.split("/").pop() ?? path;
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { mutate: removeFile } = useDeleteKnowledgeFile();
 
-  return (
-    <ConfirmDialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) removeFile.reset();
-      }}
-      title={t("knowledge.deleteDocument.title", { name })}
-      description={t("knowledge.deleteDocument.body")}
-      confirmLabel={t("knowledge.deleteDocument.confirm")}
-      pendingLabel={t("common.deleting")}
-      errorTitle={t("common.couldntDelete", { name: name })}
-      pending={removeFile.isPending}
-      error={removeFile.error}
-      onConfirm={() =>
-        removeFile.mutate(path, {
-          onSuccess: () => {
-            onOpenChange(false);
-            onDeleted();
-          },
-        })
-      }
-    >
-      <p className="break-all rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs">
-        {filePath}
-      </p>
-      <p className="text-sm text-text-muted">{t("knowledge.deleteDocument.afterwards")}</p>
-    </ConfirmDialog>
+  return useCallback(
+    (path: string) => {
+      const name = path.split("/").pop() ?? path;
+      removeFile(path, {
+        onSuccess: () => {
+          toast.success(t("knowledge.deleteDocument.deletedToast", { name }), {
+            undo: () =>
+              void undoDelete({ document: path }).then(
+                () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
+                (error: unknown) =>
+                  toast.error(t("knowledge.deleteDocument.undoFailed", { name }), {
+                    details: translateApiError(t, error),
+                  }),
+              ),
+          });
+          navigate(collectionPath(collectionUid));
+        },
+        onError: (error) =>
+          toast.error(t("common.couldntDelete", { name }), {
+            details: translateApiError(t, error),
+          }),
+      });
+    },
+    [collectionUid, navigate, qc, removeFile, t, toast],
   );
 }
