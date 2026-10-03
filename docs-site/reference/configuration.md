@@ -143,7 +143,7 @@ The registry holds four features, in this order:
 | `knowledge` | Knowledge | `/api/v1/knowledge` |
 | `memory` | Memory | `/api/v1/memory` |
 | `sync` | Vault sync | `/api/v1/sync` |
-| `models` | Model providers, the local model proxy and Usage | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` |
+| `models` | Model providers (with its Usage tab) and the local model proxy | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` |
 
 Everything else is always on, including conversations and channels. Any other key is not a feature: `coffer config set feature.<key>` reports an unknown setting, and `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
 

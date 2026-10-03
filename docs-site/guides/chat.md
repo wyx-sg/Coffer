@@ -31,7 +31,7 @@ If no managed agent is available, the page shows **No managed agent available** 
 
 1. Open **Conversations** in the sidebar (under **Run**). The page opens on the list of conversations; there is no welcome or suggestions page.
 2. Choose **New conversation** beside the page title. A dialog asks for two things:
-   - **Agent** — only agents that are installed and added (and enabled) on the Agents page are offered. One that is not installed, or installed but not added, does not appear; with none, the draft links to the **Agents** page.
+   - **Agent** — only agents that are installed and registered with Coffer (a newly found agent is registered when you choose **Connect** on the Agents page) and turned on are offered. One that is not installed, or that was never connected, does not appear; with none, the draft links to the **Agents** page.
    - **Working directory** — the folder the agent works in (see [Working directory](#working-directory)).
 3. Choose **Start**. The draft opens at `/conversations/new`, with the agent, its model and effort and the folder in its header.
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
@@ -234,7 +234,7 @@ Events are named `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_d
 
 ## Troubleshooting
 
-**The agent is listed as unavailable.** Either its CLI is not on your `PATH` (your login shell's `PATH` merged with the daemon's own), or no enabled agent of that type is added on the Agents page. Install the CLI, or add or enable the agent. Chat runs only agents Coffer manages.
+**The agent is listed as unavailable.** Either its CLI is not on your `PATH` (your login shell's `PATH` merged with the daemon's own), or no agent of that type is registered and turned on. Install the CLI, then choose **Connect** on the Agents page, or turn the agent on. Chat runs only agents Coffer manages.
 
 **Every turn fails with `stream_ended`.** The agent process is exiting mid-turn. Check that the agent works in a terminal, then look at **Activity → Daemon** for the underlying error.
 

@@ -16,7 +16,7 @@ description: Coffer 的全部任务型指南集中在一页，按你要做的事
 - [MCP 服务器](/zh/guides/mcp-servers) 一次注册上游服务器，所有智能体共用。
 - [自定义工具](/zh/guides/custom-tools) 把 HTTP API 变成工具。
 - [模型提供商](/zh/guides/providers) 存一个提供商，并把智能体切换过去。
-- [用量与额度](/zh/guides/usage) 查看智能体花了多少、还剩多少额度。
+- [用量](/zh/guides/usage) 查看经过你的提供商的请求按模型、智能体或天花了多少。
 - [密钥存储](/zh/guides/secret-store) 密钥如何加密，主密钥放在哪里。
 - [密钥](/zh/guides/secrets) 让密钥保持加密，不进智能体配置。
 

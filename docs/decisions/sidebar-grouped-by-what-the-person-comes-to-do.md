@@ -12,7 +12,7 @@
 [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md),
 [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md),
 spec web-ui "Group the sidebar by what the user comes to do",
-spec web-ui "Keep the sidebar to its fifteen entries",
+spec web-ui "Keep the sidebar to its fourteen entries",
 spec web-ui "Manage custom tools on their own page",
 spec web-ui "Show every CLI a skill requires on the CLIs page",
 spec web-ui "Give each listed resource kind one sidebar entry",
@@ -293,7 +293,7 @@ The sidebar is grouped by what the person comes to do:
 - A labelled Settings row in the sidebar footer, above the daemon status, opens Settings as a
   modal (also on ⌘,); it is in no group.
 
-Fifteen entries with every experimental feature on; spec web-ui "Keep the sidebar to its fifteen
+Fourteen entries with every experimental feature on; spec web-ui "Keep the sidebar to its fourteen
 entries" owns the list and the routes, and `NAV_GROUPS` in `frontend/src/lib/navigation.ts` is the
 one list the sidebar, the command palette and the Settings modal read. An entry whose experimental
 feature is switched off is left out; the four experimental features own Model providers, Usage,
@@ -320,7 +320,7 @@ Rules a future change must respect:
 
 ## Consequences
 
-- The entry set and groups are pinned by spec web-ui "Keep the sidebar to its fifteen entries"
+- The entry set and groups are pinned by spec web-ui "Keep the sidebar to its fourteen entries"
   and "Group the sidebar by what the user comes to do"; changing either is a spec change. The
   groups and entries are implemented in `frontend/src/lib/navigation.ts` (`NAV_GROUPS`) and
   rendered by `frontend/src/components/SidebarNav.tsx`; the Settings modal is

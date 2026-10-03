@@ -215,7 +215,7 @@ coffer scan --agent codex --json
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → Unmanaged skills
+Agents → choose the agent → Skills tab → the agent's own skills
 ```
 
 :::
@@ -239,7 +239,7 @@ Agents → choose the agent → Skills tab → click the row
 
 :::
 
-The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Open folder** (the folder in your file manager), **Adopt** and **Delete**, and the title bar's back arrow returns to the agent's Skills tab. File reads stay inside the folder, as they do for a managed skill.
+The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Adopt** and a **⋯** menu with **Delete…**; the title bar's back arrow returns to the agent's Skills tab. Files are shown in the same tree and viewer as everywhere else, so opening one in your editor or revealing it is on the viewer. File reads stay inside the folder, as they do for a managed skill.
 
 ### Adopt one
 
@@ -261,14 +261,14 @@ Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the
 
 :::
 
-Adopting from the skill's page takes you on to the new managed skill's page.
+Adopt opens a small form with the **name in Coffer** (checked against the library as you type; it defaults to the folder's own) and the **reach** the skill starts with — every agent, only the agents you choose, or off. An error stays inside the form.
 
 - A folder adopted from `<config_dir>/skills/` is replaced in place by the link.
 - A folder adopted from `~/.agents/skills/` is moved out of that directory and the link is placed in `<config_dir>/skills/`. Codex reads both locations, so it keeps seeing the skill.
 
 Adoption is refused, with nothing moved, when the folder has no valid `SKILL.md`, when its name matches a skill already in the library, or when the entry is a symlink pointing somewhere outside Coffer's store (shown as **Foreign link**). If anything fails before the skill is registered, the original folder stays exactly where it was.
 
-After adoption the skill is an ordinary managed skill and follows the same delivery rules as any other: with the default reach it belongs to every agent, and the other agents receive their links at the next reconcile (see [When delivery happens](#when-delivery-happens)).
+After adoption the skill is an ordinary managed skill and follows the same delivery rules as any other: with the default reach it belongs to every agent (over REST the adopt call takes the same `name` and `reach`), and the other agents receive their links at the next reconcile (see [When delivery happens](#when-delivery-happens)).
 
 ### Delete an unmanaged skill
 
@@ -281,7 +281,7 @@ coffer discard skill ~/.codex/skills/old-experiment --force
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → Delete on the row, or Delete on the skill's page
+Agents → choose the agent → Skills tab → ⋯ › Delete… on the row, or ⋯ › Delete… on the skill's page
 ```
 
 :::

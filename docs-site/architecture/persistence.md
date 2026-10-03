@@ -138,7 +138,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | `channel_thread_conversations`, `channel_thread_history` | Which conversation an IM thread maps to, and every conversation a thread has opened. |
 | `channel_outbox` | Replies Coffer owes a chat and has not delivered yet. |
 | `sync_runs` | Every sync round this machine has run. Pruned after 90 days by default. |
-| `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage page reads. |
+| `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage tab of Model providers reads. |
 | `quota_snapshots` | The latest official subscription quota each feed reported. |
 | `attention_ignores` | The "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
 

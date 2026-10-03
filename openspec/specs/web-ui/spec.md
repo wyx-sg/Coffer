@@ -15,7 +15,7 @@ The sidebar is grouped **by what the person comes to do**: Overview on top,
 then five groups — **Agents** (the agents and the model providers they run on),
 **Run** (conversations and channels), **Capabilities** (MCP servers, custom
 tools, skills, CLIs), **Context** (knowledge and memory) and **System**
-(secrets, activity, usage, sync) — with Settings a modal opened from the sidebar
+(secrets, activity, sync) — with Settings a modal opened from the sidebar
 footer. See
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)
 for the decision behind it, and the earlier
@@ -76,18 +76,19 @@ participant in convergence rather than a surface of its own.
 - **THEN** each is a link to a route the app serves
 - **AND** none is marked as coming soon or not yet implemented
 
-### Requirement: Keep the sidebar to its fifteen entries
+### Requirement: Keep the sidebar to its fourteen entries
 The sidebar's entries MUST be exactly these, at these routes: one ungrouped entry
-and five groups — fifteen today, and no sixteenth without a spec change.
+and five groups — fourteen today, and no fifteenth without a spec change.
 Settings is not an entry: it is a modal opened from the sidebar footer (see
-"Open Settings as a modal from the sidebar footer"). Usage's content is specified
-with the change that meters it; this requirement fixes only its place. Custom
+"Open Settings as a modal from the sidebar footer"). Usage is not an entry: it is
+the second tab of the Model providers page, at `/model-providers/usage`
+([provider-switching](../provider-switching/spec.md) "Show usage as a tab of Model providers"). Custom
 tools and CLIs are specified by "Manage custom tools on their own page" and "Show
 every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Model providers and Usage belong to `models`, Knowledge to `knowledge`,
+switched on. Model providers, with its Usage tab, belongs to `models`, Knowledge to `knowledge`,
 Memory to `memory` and Sync to `sync`; every other entry, Conversations and
 Channels included, is owned by no feature and is always there:
 
@@ -95,7 +96,7 @@ Channels included, is owned by no feature and is always there:
   Overview         /                  — the landing page
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
-  Model providers  /model-providers   — the endpoints agents' models are served from
+  Model providers  /model-providers   — the endpoints agents' models are served from, and what requests through them cost (tab Usage)
  RUN
   Conversations    /conversations     — every conversation Coffer runs, from channels and from Coffer itself
   Channels         /channels          — the IM bots agents answer on
@@ -110,7 +111,6 @@ Channels included, is owned by no feature and is always there:
  SYSTEM
   Secrets          /secrets           — every stored secret and what uses it
   Activity         /activity          — what changed, what was called, what broke
-  Usage            /usage             — token use and remaining quota per agent
   Sync             /sync              — converging this vault with a git remote
 ```
 
@@ -121,14 +121,14 @@ Channels included, is owned by no feature and is always there:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
 - **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
-- **AND** with every feature switched on, the sidebar lists all fifteen entries
+- **AND** with every feature switched on, the sidebar lists all fourteen entries
 - **AND** with the four features switched off, it lists only Overview, Agents, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets and Activity
 
 ### Requirement: Call a surface by one name everywhere
@@ -156,7 +156,7 @@ nothing else:
 | System (group) | 系统 |
 | Secrets | 密钥 |
 | Activity | 活动 |
-| Usage | 用量 |
+| Usage (a tab of Model providers) | 用量 |
 | Sync | 同步 |
 | Settings | 设置 |
 
@@ -1417,12 +1417,11 @@ page (agent-registry "Report every supported type's detection state", `install_u
 
 ### Requirement: Hand an agent's missing program to an agent on the agent pages
 Wherever the web UI shows an agent type whose program is not found — its Agents list row and
-the notice under a config-left-behind row, its detail page while it is not added, and the
+its ⋯ menu, its detail page while it is not added, and the
 Overview tab's problem states (config left behind, not found) — it MUST offer the daemon's
 `install_handoff` prompt for that type (agent-registry "Hand installing an agent's program to an
 agent") through **Copy prompt**, and through **Ask an agent** only while another managed agent
-is available to run the conversation: the missing agent itself cannot. A list row, which has
-room for one action, MUST make Copy prompt its action and put Ask an agent in its ⋯ menu. None
+is available to run the conversation: the missing agent itself cannot. A list row has no button for it: Copy prompt, then Ask an agent, head the row's ⋯ menu, above a separator and the rest of the menu, because a button that copies text does not belong in a row. None
 of these surfaces MUST show an install command or tell the person to restart Coffer. The
 Plugins tab of a Claude Code agent whose program is not found, where Uninstall cannot run, MUST
 say so and offer the same prompt. The Connect review MUST offer the hand-off a `SHIM_NOT_FOUND`
@@ -1431,8 +1430,8 @@ action").
 
 #### Scenario: an agent whose program is not found offers its install prompt
 - **GIVEN** Codex not installed and no managed agent available
-- **WHEN** the user chooses Copy prompt on the Codex row, then opens the row's ⋯ menu
-- **THEN** the daemon's prompt is copied as given, no install command is shown anywhere
+- **WHEN** the user opens the Codex row's ⋯ menu and chooses Copy prompt
+- **THEN** the daemon's prompt is copied as given, no install command is shown anywhere, and the row carries no button of its own
 - **AND** the menu offers no Ask an agent
 
 #### Scenario: ask an agent is offered only while another managed agent is available
@@ -1546,7 +1545,7 @@ groups, under headings in this order:
   Skills, then CLIs.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
 - **SYSTEM** — look after Coffer and what every other part shares: Secrets,
-  Activity, Usage, then Sync.
+  Activity, then Sync.
 
 Settings sits in no group: it is machine-level configuration visited rarely, so
 it opens as a modal from the sidebar footer rather than taking an entry (see
@@ -1559,7 +1558,7 @@ A new entry MUST join the group that names what the user comes to it for, and no
 group may grow past five entries; growth that is more of an existing thing — one
 more agent, channel or custom tool — is a row inside that thing's page, not an
 entry. A group whose every entry is left out (see "Keep the sidebar to its
-fifteen entries") MUST leave its heading out too, so no heading stands over
+fourteen entries") MUST leave its heading out too, so no heading stands over
 nothing. The decision and the options it was weighed against are in
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
 
@@ -1567,7 +1566,7 @@ nothing. The decision and the options it was weighed against are in
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the sidebar lists its entries
 - **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Run, Capabilities, Context, System
-- **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
+- **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
 - **GIVEN** a group whose every entry is owned by a registered experimental feature that is switched off
@@ -1584,7 +1583,7 @@ word a user navigates by:
 - **Model providers** is filed under Agents, not Capabilities or Settings: a
   `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
-  agent on that agent's page (spec
+  agent in that agent's Change model dialog (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
   Conversations is where a person reads and continues every conversation, a
@@ -1677,7 +1676,7 @@ never stands down on its own.
 Settings › General MUST carry a **Coffer's model** section that sets what Coffer's
 own machinery runs on (spec [internal-engine](../internal-engine/spec.md) "Show and change Coffer's model in Settings › General").
 It is machine-level configuration of Coffer itself rather than of any agent, so
-it is a Settings section, not a tab of the Model providers page. The section
+it is a Settings section, not a tab of the Model providers page, whose tabs are Providers and Usage. The section
 MUST carry two pickers — **Engine model** and **Speech to text** — each choosing
 a provider first and then a model from that provider's list, and a **Test**
 action for each that tries the chosen pair and shows the result beside it. Each
@@ -1915,9 +1914,9 @@ searches, rather than show an empty panel.
 - **AND** choosing any of them sends no request that changes state
 
 #### Scenario: an empty query shows recent choices above every page
-- **GIVEN** the user chose an MCP server and then the Usage page from the palette
+- **GIVEN** the user chose an MCP server and then the Secrets page from the palette
 - **WHEN** they open the palette again with an empty query
-- **THEN** Recent lists Usage and then the server, and every page is listed below it
+- **THEN** Recent lists Secrets and then the server, and every page is listed below it
 
 #### Scenario: a skill result names the agents that get it
 - **GIVEN** a skill delivered to Claude Code and Codex
@@ -2028,7 +2027,7 @@ the row's tooltip carries the count ("MCP servers · 1 needs you").
 
 What raises a signal and what clears it belongs to the capability that owns the
 kind: the entries of Agents, Model providers, MCP servers, Skills and Channels
-count the non-informational items the cross-kind attention list reports for their kind
+count the non-informational items the cross-kind attention list reports for their kind — so Agents counts an agent that needs repair, one whose config directory is left behind and one whose Coffer hook needs the person, and not one that is merely not connected
 (spec [resource-framework](../resource-framework/spec.md) "Report what needs a
 person across every kind"); Sync keeps its own signal, one situation cleared by
 visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
@@ -2065,7 +2064,7 @@ failed, MUST leave no badge rather than an error in the sidebar.
 - **THEN** that entry carries no badge and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
-Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
+Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen
 entries and belongs to no group. It MUST open as a large modal over the current
 page from three places: a labelled **Settings** row — a gear icon and the word
 Settings, not an icon-only button — at the bottom of the sidebar; the ⌘,
@@ -2096,7 +2095,7 @@ close it and return to the page underneath.
 - **GIVEN** the user on `/mcp-servers`
 - **WHEN** they click the labelled Settings row at the bottom of the sidebar
 - **THEN** the Settings modal opens on General, the URL reads `/settings/general`, and the MCP servers list stays rendered underneath
-- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fifteen navigation entries do not include Settings
+- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fourteen navigation entries do not include Settings
 
 #### Scenario: the collapsed rail keeps Settings as a gear with a tooltip
 - **GIVEN** the sidebar collapsed to its icon rail
@@ -2423,9 +2422,8 @@ the delivery hook's state:
   (spec [memory](../memory/spec.md) "Deliver the index and the notes path at session start"), with a
   switch between agents.
 - The delivery hook's state — installed and current, stale, missing, never fired, and Repair — MUST
-  appear only on the agent detail page, on its Hooks tab and in the Overview's Coffer connection
-  block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages"). The
-  agent's Memory tab shows only the agent's own native memory stores.
+  appear only on the agent detail page — on its Hooks tab, in the Overview's Coffer connection
+  block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages") and, while the `memory` feature is on, in the **Coffer's memory** section that opens the agent's Memory tab, which links back to this page. Below that section the Memory tab lists the agent's own native memory stores.
 
 #### Scenario: the memory overview lists deliveries per agent
 - **GIVEN** Claude Code with 12 delivery fires in the last seven days, and transcripts recording reads of 5 distinct memories, and Codex with no delivery in that time
@@ -2440,7 +2438,8 @@ the delivery hook's state:
 #### Scenario: hook state appears only on the agent page
 - **GIVEN** Claude Code's delivery hook stale
 - **WHEN** the user opens the Memory page and then Claude Code's Memory tab
-- **THEN** neither shows the hook's state or a Repair action, and the Memory tab lists only Claude Code's own native memory stores
+- **THEN** the Memory page shows no hook state or Repair action
+- **AND** the Memory tab's Coffer's memory section shows the hook's state with Repair, above Claude Code's own native memory stores
 
 ### Requirement: Stream new Activity records while the list is at the top
 The visible Activity tab MUST show new records as they are written, newest first, with no Pause /
@@ -2508,10 +2507,10 @@ Secrets and Usage, in that order (Conversations show in Recent activity) —
 each with a status word drawn from that area's attention items (Secrets, which
 has no attention source, words its own list: a secret missing on this machine is
 a warning, one nothing uses is plain subtle text with no dot; Usage shows its
-period, "Last 24 h", and no health), a count from its own list and a one-line
+period, "Last 24 h", and no health, and opens the Usage tab of Model providers), a count from its own list and a one-line
 summary, opening the area's page; an area with no backend has no tile. Agents
 and Channels count "1 of 2" with the unit "connected" — for Agents only the
-items about connecting count, so a hook edited by hand does not make an agent
+items about connecting count, so a hook edited by hand or one the agent has not approved does not make an agent
 "not connected" — and Channels names the reconnecting one ("SeaTalk
 reconnecting since 13:41"), otherwise the names joined with " · ". Knowledge's
 line reads "4 collections · edited today 13:30", Memory's "Last update 14 min

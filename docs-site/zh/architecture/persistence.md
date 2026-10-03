@@ -138,7 +138,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | `channel_thread_conversations`、`channel_thread_history` | IM 线程对应哪个对话，以及一个线程开过的每个对话。 |
 | `channel_outbox` | Coffer 欠某个聊天、还没送达的回复。 |
 | `sync_runs` | 这台机器跑过的每一轮同步。默认 90 天后清理。 |
-| `usage_requests`、`usage_daily` | 模型代理暂存的上游尝试，以及用量页面读取的按天汇总。 |
+| `usage_requests`、`usage_daily` | 模型代理暂存的上游尝试，以及模型提供商的用量 tab 读取的按天汇总。 |
 | `quota_snapshots` | 每个来源报告的最新官方订阅额度。 |
 | `attention_ignores` | 这台机器上有人忽略掉的“需要你处理”项，按项键记录，附带忽略时间。待处理列表会把它们排除在条目和计数之外。 |
 

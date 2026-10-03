@@ -215,7 +215,7 @@ coffer scan --agent codex --json
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → Unmanaged skills
+Agents → choose the agent → Skills tab → the agent's own skills
 ```
 
 :::
@@ -239,7 +239,7 @@ Agents → choose the agent → Skills tab → click the row
 
 :::
 
-详情页有一个 **概览** 标签页（`SKILL.md` 中的描述、文件夹的路径和位置）和一个 **文件** 标签页（文件夹的目录树，以及每个文件的只读预览）。无效的文件夹也能打开，顶部会显示原因。页头有 **打开文件夹**（在文件管理器中打开该文件夹）、**纳入托管** 和 **删除**，标题栏的后退箭头回到智能体的技能标签页。文件读取仅限于该文件夹内，和托管的技能一样。
+详情页有一个 **概览** 标签页（`SKILL.md` 中的描述、文件夹的路径和位置）和一个 **文件** 标签页（文件夹的目录树，以及每个文件的只读预览）。无效的文件夹也能打开，顶部会显示原因。页头有 **纳入托管** 和带 **删除…** 的 **⋯** 菜单；标题栏的后退箭头回到智能体的技能标签页。文件显示在和其他地方相同的文件树与查看器里，所以在编辑器中打开或显示文件在查看器上。文件读取仅限于该文件夹内，和托管的技能一样。
 
 ### 纳入托管一个 {#adopt-one}
 
@@ -261,14 +261,14 @@ Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the
 
 :::
 
-从技能的页面纳入托管后，会跳转到新托管技能的页面。
+纳入托管会打开一个小表单，填**在 Coffer 中的名称**（输入时会对照技能库检查，默认是文件夹自己的名字）和技能一开始的**生效范围**——所有智能体、只有你选的智能体，或关闭。出错会留在表单里。
 
 - 从 `<config_dir>/skills/` 纳入托管的文件夹，会被原地替换成链接。
 - 从 `~/.agents/skills/` 纳入托管的文件夹，会被移出该目录，链接放在 `<config_dir>/skills/` 中。Codex 两个位置都读，所以它仍能看到这个技能。
 
 当文件夹没有有效的 `SKILL.md`、名称与技能库中已有的技能相同、或条目是一个指向 Coffer 存储之外的符号链接（显示为 **外部链接**）时，纳入托管会被拒绝，什么都不会移动。如果在技能注册之前有任何一步失败，原来的文件夹会原封不动地留在原处。
 
-纳入托管之后，这个技能就是一个普通的托管技能，遵循和其他技能一样的投递规则：在默认生效范围下它属于每个智能体，其他智能体会在下一次调和时拿到链接（见[何时投递](#when-delivery-happens)）。
+纳入托管之后，这个技能就是一个普通的托管技能，遵循和其他技能一样的投递规则：在默认生效范围下它属于每个智能体（通过 REST，纳入托管的调用带同样的 `name` 和 `reach`），其他智能体会在下一次调和时拿到链接（见[何时投递](#when-delivery-happens)）。
 
 ### 删除未托管的技能 {#delete-an-unmanaged-skill}
 
@@ -281,7 +281,7 @@ coffer discard skill ~/.codex/skills/old-experiment --force
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → Delete on the row, or Delete on the skill's page
+Agents → choose the agent → Skills tab → ⋯ › Delete… on the row, or ⋯ › Delete… on the skill's page
 ```
 
 :::

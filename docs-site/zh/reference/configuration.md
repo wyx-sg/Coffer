@@ -143,7 +143,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `knowledge` | 知识 | `/api/v1/knowledge` |
 | `memory` | 记忆 | `/api/v1/memory` |
 | `sync` | 保险库同步 | `/api/v1/sync` |
-| `models` | 模型提供商、本地模型代理和用量 | `/api/v1/providers`、`/api/v1/models`、`/api/v1/proxy`、`/api/v1/usage` |
+| `models` | 模型提供商（含它的用量 tab）和本地模型代理 | `/api/v1/providers`、`/api/v1/models`、`/api/v1/proxy`、`/api/v1/usage` |
 
 其余一切始终开启，包括对话和消息渠道。其他任何键都不是功能：`coffer config set feature.<key>` 会报告未知设置，`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
 

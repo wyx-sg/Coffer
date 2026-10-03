@@ -5,7 +5,7 @@ description: How the web UI's frame is organised — the sidebar grouped by inte
 
 # App shell
 
-The app shell is the frame every page of the web UI sits in: the sidebar, the command palette, the Settings window, the title bar and the split views. None of it is a feature of its own, but every feature is reached through it, so its rules decide whether the product feels like one thing or like fifteen pages stitched together. This page explains those rules and the reasons behind them. For how to use the shell, see the [Web UI guide](/guides/web-ui).
+The app shell is the frame every page of the web UI sits in: the sidebar, the command palette, the Settings window, the title bar and the split views. None of it is a feature of its own, but every feature is reached through it, so its rules decide whether the product feels like one thing or like fourteen pages stitched together. This page explains those rules and the reasons behind them. For how to use the shell, see the [Web UI guide](/guides/web-ui).
 
 ## Principles
 
@@ -17,7 +17,7 @@ The app shell is the frame every page of the web UI sits in: the sidebar, the co
 
 ## The sidebar is grouped by what you come to do
 
-The sidebar has fifteen entries: **Overview** on top under no heading, then five groups.
+The sidebar has fourteen entries: **Overview** on top under no heading, then five groups.
 
 | Group | Entries | The question it answers |
 | --- | --- | --- |
@@ -25,11 +25,11 @@ The sidebar has fifteen entries: **Overview** on top under no heading, then five
 | Run | Conversations, Channels | How do I put an agent to work — directly or from IM? |
 | Capabilities | MCP servers, Custom tools, Skills, CLIs | What can my agents do? |
 | Context | Knowledge, Memory | What do my agents know? |
-| System | Secrets, Activity, Usage, Sync | How do I look after Coffer and what every part shares? |
+| System | Secrets, Activity, Sync | How do I look after Coffer and what every part shares? |
 
 The earlier sidebar grouped by role — agents as consumers, a large Resources group of what they consume, and System. It was accurate, but it was the architecture's view: a person looking for "where do I add a tool" had to know that tools, skills, knowledge and channels are all resources. Grouping by intent puts the answer under the question. It also keeps every group short: none has more than four entries, so each heading is scannable at a glance, and the rule that no group passes five tells the next change where a new entry belongs or when the grouping must be revisited.
 
-Two placements follow from intent rather than from type. **Model providers** sits with Agents because a provider is each agent's model configuration, chosen on the agent's page. **Conversations and Channels** stay two entries in one group: Conversations is every conversation Coffer runs, whatever started it, and Channels is only setup and connection status.
+Two placements follow from intent rather than from type. **Model providers** sits with Agents because a provider is each agent's model configuration, chosen from the agent's own Change model form. What requests through providers cost is its second tab, **Usage**, not a sidebar entry of its own. **Conversations and Channels** stay two entries in one group: Conversations is every conversation Coffer runs, whatever started it, and Channels is only setup and connection status.
 
 **Overview** belongs to no group because it summarises all of them, and it is the landing page at `/`. **Settings** is not an entry at all (see [below](#settings-is-a-modal-with-an-address)).
 
@@ -87,7 +87,7 @@ A daemon that restarts, or a laptop waking from sleep, drops the connection for 
 
 An entry whose kind needs you carries a count badge — always the same red, capped at **9+** — and on the collapsed rail a dot of the same colour, with the count in the icon's tooltip. The sidebar speaks only through these badges, and only for things that need you: failures, drift, a held vault, a required CLI that is missing; items you ignored on Overview are not counted. An informational count — how many servers there are, how many documents wait in a knowledge collection's inbox — never becomes a badge, because a sidebar full of numbers stops saying where to look.
 
-The shell owns only the drawing. Whether a kind needs attention, and what clears it, is decided by the capability that owns the kind: Agents, MCP servers, Skills and Channels count what the daemon's cross-kind attention list (the list Overview's **Needs you** shows) reports for them; Sync keeps its own signal, cleared by visiting Sync; CLIs count the required commands that need you. The shell keeps one map from sidebar entry to signal, and a kind that wants a badge adds its signal to that map; the sidebar then marks it with the same badge and no other change. A signal that has not loaded, or whose read failed, simply shows no badge — the sidebar is never the place an error surfaces.
+The shell owns only the drawing. Whether a kind needs attention, and what clears it, is decided by the capability that owns the kind: Agents, MCP servers, Skills and Channels count what the daemon's cross-kind attention list (the list Overview's **Needs you** shows) reports for them — for Agents that is an agent that needs repair, one whose config directory is left behind and one whose memory hook the agent has not approved or has never run, and not one that is merely not connected; Sync keeps its own signal, cleared by visiting Sync; CLIs count the required commands that need you. The shell keeps one map from sidebar entry to signal, and a kind that wants a badge adds its signal to that map; the sidebar then marks it with the same badge and no other change. A signal that has not loaded, or whose read failed, simply shows no badge — the sidebar is never the place an error surfaces.
 
 ## Split views are resizable, per browser
 

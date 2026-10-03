@@ -346,7 +346,7 @@ A note's `origins` frontmatter names every agent file it was built from, and `.r
 
 ### An agent's own memory
 
-To see the memory an agent keeps for itself, open **Agents → choose the agent → Memory tab**. The **Agent's own (not via Coffer)** table lists each of the agent's native memory stores by project, path and number of items. Choose one to browse its files read-only. The agent owns and rewrites these files; open one in your editor if you want to change it. Changes you make there reach Coffer's notes on the next aggregation and distil.
+To see the memory an agent keeps for itself, open **Agents → choose the agent → More → Memory**. The tab opens with **Coffer's memory** for that agent — its memory hook, when it last fired and what it delivers — and below it lists each of the agent's own native memory stores by project, path and number of items. Choose one to browse its files read-only. The agent owns and rewrites these files; open one in your editor if you want to change it. Changes you make there reach Coffer's notes on the next aggregation and distil.
 
 ## Every partition reaches every agent
 
