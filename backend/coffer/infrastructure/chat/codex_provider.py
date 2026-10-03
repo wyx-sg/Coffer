@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
+from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter, QuotaObserver
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.channel_turn import channel_turn_env
@@ -160,6 +161,9 @@ class CodexAppServerProvider:
         # inside it leaves to this turn the index and notes it already carries
         # (spec memory "Deliver to channel turns through the system prompt").
         overrides.update(channel_turn_env(conv.channel_uid or ""))
+        # The turn's token, for ``coffer__ask`` (the ``coffer`` entry in Codex's
+        # config passes ``COFFER_TURN_TOKEN`` through to the shim).
+        overrides.update(questions.turn_env(conversation_id))
         env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,

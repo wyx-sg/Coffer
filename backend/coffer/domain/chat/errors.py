@@ -105,3 +105,29 @@ class AttachmentExpired(CofferError):  # noqa: N818
             "attach it again"
         )
         self.filename = filename
+
+
+class QuestionClosed(CofferError):  # noqa: N818
+    """An answer to a question that is no longer waiting — already answered
+    (the first answer wins), cancelled, or gone with its turn (spec chat "Pause a
+    turn on a question for the owner")."""
+
+    code = "QUESTION_CLOSED"
+
+    def __init__(self, question_id: str) -> None:
+        super().__init__(
+            f"question {question_id!r} is not waiting for an answer any more "
+            "(it was answered, or its turn ended)"
+        )
+        self.question_id = question_id
+
+
+class QuestionAnswerInvalid(CofferError):  # noqa: N818
+    """An answer that does not fit its question: an unknown option, several
+    options on a single-choice question, or nothing at all."""
+
+    code = "QUESTION_ANSWER_INVALID"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"invalid answer: {reason}")
+        self.reason = reason

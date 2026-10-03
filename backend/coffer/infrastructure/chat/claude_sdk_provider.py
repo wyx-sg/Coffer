@@ -13,7 +13,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
+from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter, QuotaObserver
+from coffer.application.chat.question_agents import asker_for
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.channel_turn import channel_turn_env
 from coffer.domain.chat.agent_config import AgentConfig
@@ -177,6 +179,10 @@ class ClaudeSdkProvider:
         # inside it leaves to this turn the index and notes it already carries
         # (spec memory "Deliver to channel turns through the system prompt").
         home_env.update(channel_turn_env(conv.channel_uid or ""))
+        # The turn's token: the shim in the agent's MCP entry forwards it so
+        # ``coffer__ask`` reaches this turn (spec mcp-gateway "Let an agent ask the
+        # owner a question during a Coffer turn").
+        home_env.update(questions.turn_env(conversation_id))
 
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,
@@ -185,6 +191,7 @@ class ClaudeSdkProvider:
             extra={"model": config.model, "effort": config.effort},
             session_factory=self._session_factory,
             on_session=_save_session,
+            ask_owner=asker_for(conversation_id),
             system_context=system_context,
             # Claude cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there

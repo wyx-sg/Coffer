@@ -15,7 +15,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, RootModel
 
-from coffer.domain.chat.events import AgentEvent
+from coffer.domain.chat.events import AgentEvent, QuestionAsked, QuestionClosed
+from coffer.surfaces.http.chat.schemas import QuestionOut, question_out
 
 
 class TurnStartEventOut(BaseModel):
@@ -79,6 +80,23 @@ class QueueChangedEventOut(BaseModel):
     pending: list[str] = Field(description="The ordered texts still waiting to run as turns.")
 
 
+class QuestionAskedEventOut(BaseModel):
+    """The data of a `question_asked` event: the agent asked the owner a question
+    and the turn is waiting. Sent again with the same `question_id` as the owner
+    answers one question of several; the card is replaced by `question_id`."""
+
+    type: Literal["question_asked"]
+    question: QuestionOut
+
+
+class QuestionClosedEventOut(BaseModel):
+    """The data of a `question_closed` event: the question was answered in full,
+    or cancelled (the turn stopped or ended)."""
+
+    type: Literal["question_closed"]
+    question: QuestionOut
+
+
 class TurnEventMessage(
     RootModel[
         TurnStartEventOut
@@ -88,6 +106,8 @@ class TurnEventMessage(
         | TurnDoneEventOut
         | TurnErrorEventOut
         | QueueChangedEventOut
+        | QuestionAskedEventOut
+        | QuestionClosedEventOut
     ]
 ):
     """The `data:` of one event on `GET /api/v1/chat/conversations/{id}/events`,
@@ -96,10 +116,16 @@ class TurnEventMessage(
 
 def turn_event_message(event: AgentEvent) -> TurnEventMessage:
     """The wire model of one domain event."""
+    if isinstance(event, (QuestionAsked, QuestionClosed)):
+        return TurnEventMessage.model_validate(
+            {"type": event.type, "question": question_out(event.question)}
+        )
     return TurnEventMessage.model_validate(dataclasses.asdict(event))
 
 
 __all__ = [
+    "QuestionAskedEventOut",
+    "QuestionClosedEventOut",
     "QueueChangedEventOut",
     "TextDeltaEventOut",
     "ToolCallEventOut",

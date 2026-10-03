@@ -47,6 +47,7 @@ const LISTED: Conversation = {
   updated_at: "2026-01-01T00:00:00Z",
   preview: null,
   running: false,
+  needs_you: false,
 };
 
 const userMsg = (id: string, text: string): Message => ({

@@ -197,7 +197,11 @@ REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = (
     # thing it may carry (change file-the-vault-and-sync-it-thinly).
     ("coffer sync remote set", "--worktree", "coffer sync remote set <url> (no working tree)"),
     ("coffer sync remote set", "--with-credentials", "coffer sync remote set … --with-secret"),
-    ("coffer sync remote set", "--without-credentials", "coffer sync remote set … --without-secret"),
+    (
+        "coffer sync remote set",
+        "--without-credentials",
+        "coffer sync remote set … --without-secret",
+    ),
     ("coffer sync remote set", "--with-secrets", "coffer sync remote set … --with-secret"),
     ("coffer sync remote set", "--without-secrets", "coffer sync remote set … --without-secret"),
 )

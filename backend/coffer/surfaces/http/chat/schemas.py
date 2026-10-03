@@ -13,19 +13,66 @@ from pydantic import BaseModel, Field, model_validator
 
 from coffer.domain.channel_type import ChannelType
 from coffer.domain.chat.attachment import MAX_ATTACHMENTS_PER_MESSAGE
+from coffer.domain.chat.question import QuestionBlock, block_to_dict
 
 # ---------------------------------------------------------------------------
 # ContentBlock
 # ---------------------------------------------------------------------------
 
 
+class QuestionOptionOut(BaseModel):
+    label: str
+    description: str | None = None
+
+
+class QuestionSpecOut(BaseModel):
+    """One question of an ask."""
+
+    header: str
+    question: str
+    multi_select: bool
+    options: list[QuestionOptionOut]
+
+
+class QuestionAnswerOut(BaseModel):
+    """The answer to one question: the chosen option labels and/or typed text."""
+
+    header: str
+    selected: list[str]
+    text: str | None = None
+
+
+class QuestionOut(BaseModel):
+    """A question the agent asked the owner (spec chat "Pause a turn on a
+    question for the owner") — the ``question`` block of a reply, also the
+    payload of the ``question_asked`` / ``question_closed`` events.
+
+    ``answers`` holds the answers given so far, in order (a prefix of
+    ``questions`` while ``status`` is ``pending``). ``answered_via`` is ``web`` or
+    the answering channel's uid; ``answered_at`` is an ISO-8601 UTC instant."""
+
+    question_id: str
+    context: str | None = None
+    questions: list[QuestionSpecOut]
+    status: Literal["pending", "answered", "cancelled"]
+    answers: list[QuestionAnswerOut]
+    answered_via: str | None = None
+    answered_by: str | None = None
+    answered_at: str | None = None
+
+
+def question_out(block: QuestionBlock) -> QuestionOut:
+    """The wire model of a domain question block."""
+    return QuestionOut.model_validate(block_to_dict(block))
+
+
 class ContentBlockOut(BaseModel):
     """Wire representation of a ContentBlock (text | tool_use | tool_result |
-    attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
+    attachment | question). ``filename``/``mime`` describe an ``attachment`` reference; the
     local ``path`` is deliberately NOT surfaced (leak/security — spec chat
     "Re-materialise attachments from persisted history")."""
 
-    type: Literal["text", "tool_use", "tool_result", "attachment"]
+    type: Literal["text", "tool_use", "tool_result", "attachment", "question"]
     text: str | None = None
     tool_use_id: str | None = None
     tool_name: str | None = None
@@ -36,6 +83,8 @@ class ContentBlockOut(BaseModel):
     duration_ms: int | None = None
     filename: str | None = None
     mime: str | None = None
+    #: The question of a ``question`` block.
+    question: QuestionOut | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +223,9 @@ class ConversationOut(BaseModel):
     preview: str | None = None
     #: A turn is in flight right now.
     running: bool = False
+    #: A question the agent asked is waiting for the owner's answer (spec chat
+    #: "Show which conversations wait on you").
+    needs_you: bool = False
 
 
 class ConversationListOut(BaseModel):
@@ -260,6 +312,31 @@ class SendMessageAck(BaseModel):
 
     queued: bool
     mirror: Literal["sent", "pending", "kept"] | None = None
+
+
+class QuestionAnswerIn(BaseModel):
+    """The owner's answer to one question: option labels and/or free text."""
+
+    selected: list[str] = Field(default_factory=list, max_length=4)
+    text: str | None = Field(default=None, max_length=4000)
+
+
+class AnswerQuestionIn(BaseModel):
+    """Body for POST .../questions/{question_id}/answer.
+
+    ``answers`` answer the question's still-unanswered questions in order (one
+    for the first, or several at once). ``index``, when given, names the question
+    being answered: if that one was answered meanwhile the request is refused as
+    ``QUESTION_CLOSED`` rather than answering the next."""
+
+    answers: list[QuestionAnswerIn] = Field(min_length=1, max_length=4)
+    index: int | None = Field(default=None, ge=0)
+
+
+class NeedsYouCountOut(BaseModel):
+    """How many conversations wait on an answer."""
+
+    count: int
 
 
 class PendingQueueIn(BaseModel):

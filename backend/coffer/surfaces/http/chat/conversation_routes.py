@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from coffer.application.chat.ports import ChannelMirrorPort
+from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_state import is_running
@@ -26,6 +27,7 @@ from coffer.domain.chat.message import (
     ToolUseBlock,
 )
 from coffer.domain.chat.mirror import ChannelPlaceView, MirrorView
+from coffer.domain.chat.question import QuestionBlock
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.chat.dependencies import (
@@ -45,6 +47,7 @@ from coffer.surfaces.http.chat.schemas import (
     MessageListOut,
     MessageOut,
     UndeliveredReplyOut,
+    question_out,
 )
 from coffer.surfaces.http.dependencies import get_resource_service
 
@@ -149,6 +152,7 @@ def _conv_out(
         channel_binding=binding,
         preview=extras.previews.get(conv.id),
         running=is_running(conv.id),
+        needs_you=needs_you(conv.id),
     )
 
 
@@ -184,6 +188,8 @@ def _block_out(block: ContentBlock) -> ContentBlockOut:
     if isinstance(block, AttachmentBlock):
         # Reference only — filename/mime for the chip; never the local path.
         return ContentBlockOut(type="attachment", filename=block.filename, mime=block.mime)
+    if isinstance(block, QuestionBlock):
+        return ContentBlockOut(type="question", question=question_out(block))
     # Unreachable given the ContentBlock union, but keeps mypy happy.
     raise TypeError(f"unhandled ContentBlock type: {type(block)!r}")  # pragma: no cover
 

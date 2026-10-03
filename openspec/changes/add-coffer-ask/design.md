@@ -40,18 +40,23 @@ timeout is far above that by default. Codex's default `tool_timeout_sec` is 60, 
 the `coffer` server entry Coffer writes sets it to 86 400. Every other `coffer__`
 tool returns quickly, so the longer limit costs nothing.
 
-### 3. `AskUserQuestion` is intercepted by a PreToolUse hook, not `can_use_tool`
-The owner asked for `can_use_tool`. In the SDK this repo pins (0.2.152) that
-callback is never consulted under `bypassPermissions`: the SDK itself warns
-"can_use_tool will not be invoked … auto-approves every tool call … use a
-PreToolUse hook instead". Coffer keeps bypass (it does not gate tool calls), so
-the adapter registers a `PreToolUse` hook matching `AskUserQuestion` with a 24 h
-timeout. The hook raises the question and, once answered, returns
-`permissionDecision: "allow"` with `updatedInput` carrying the answers in the
-tool's `answers` field — the same result a `can_use_tool` callback would return.
-A cancelled question returns `deny` with "The owner did not answer." The first
-implementation task verifies this against the bundled CLI; if `answers` in
-`updatedInput` is not honoured, the hook denies with the answers in the message.
+### 3. `AskUserQuestion` is intercepted by `can_use_tool`
+The adapter keeps `permission_mode="bypassPermissions"` (Coffer does not gate tool
+calls) and registers a `can_use_tool` callback. **Verified** against the bundled
+CLI (SDK 0.2.152, no live call): its permission check returns `{behavior:"ask"}`
+for any tool whose `requiresUserInteraction()` is true — `AskUserQuestion`'s is
+`return!0` — *before* the bypass auto-approve
+(`if(!M9t(e,o?.hookUpdatedInput)&&e.requiresUserInteraction?.())return …
+{behavior:"ask",…,decisionReason:{type:"other",reason:"requiresUserInteraction"}}`),
+and the allow path applies the callback's input
+(`if(v.updatedInput||e.requiresUserInteraction?.()){ … hookUpdatedInput:v.updatedInput}`).
+So under bypass `can_use_tool` is consulted for `AskUserQuestion`, and only for
+tools like it; the SDK's `CanUseToolShadowedWarning` is the generic advisory and
+is filtered. The callback raises the question and, once answered, returns
+`PermissionResultAllow(updated_input={**input, "answers": {<question text>:
+<answer>}})` (several chosen labels joined with ", "); a cancelled question
+returns `PermissionResultDeny("The owner stopped the task.")`. For every other
+tool it allows at once. A PreToolUse hook is not used for this tool.
 
 ### 4. One question model
 `coffer__ask` input mirrors `AskUserQuestion`:
@@ -61,7 +66,11 @@ renders in place and survives reload: `{question_id, context, questions, status:
 pending|answered|cancelled, answers: [{header, selected: [labels], text?}],
 answered_via: web|<channel uid>, answered_by, answered_at}`. The `tool_use` of
 `coffer__ask` / `AskUserQuestion` is not rendered as a tool card. Turn events
-`question_asked` and `question_closed` carry the block.
+`question_asked` and `question_closed` carry the block; `question_asked` is sent again, with the
+same `question_id`, each time one question of a several-question ask is answered and the rest
+still wait. A pending question lives exactly as long as its turn, so it is held in memory (no
+migration); only the block in the reply is persisted, and a turn's idle watchdog is suspended
+while one waits.
 
 ### 5. Answers: first one wins
 `POST /chat/conversations/{id}/questions/{qid}/answer {answers}` and the channel
@@ -91,7 +100,7 @@ sidebar badge (refetched on `question_*` events). The reply header reads
 ## Risks / Trade-offs
 
 - [Codex env passing] → covered by `env_vars`; integration test with a fake shim env.
-- [Hook result shape changes in a CLI update] → the verification task pins it with a recorded fixture test; the deny fallback still delivers the answer.
+- [The CLI stops consulting `can_use_tool` for `AskUserQuestion` after an update] → the adapter test pins the callback's result shape; the CLI's own dialog would then show, unanswerable in Coffer, until the task is stopped.
 - [An agent asks outside a Coffer turn] → the tool is not listed there; a direct call answers "only inside a Coffer conversation".
 - [Stop while waiting] → the question is cancelled, cards are rewritten "Stopped", the tool returns "The owner stopped the task."
 

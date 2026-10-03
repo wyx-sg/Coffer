@@ -19,6 +19,7 @@ from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
 from coffer.application.chat.attachments import ChatAttachmentService
 from coffer.application.chat.ports import QuotaObserver
+from coffer.application.chat.question_agents import QuestionService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -27,6 +28,7 @@ from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import connection_for_agent
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
+from coffer.application.turn_ask import set_turn_ask
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.chat.channel_note import ChannelNote
@@ -307,6 +309,9 @@ def wire_chat(
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
     set_chat_service(chat_svc)
+    # ``coffer__ask``: the gateway offers it to a session whose X-Coffer-Turn token
+    # names a live turn, and serves it through this port.
+    set_turn_ask(QuestionService())
     # The web composer's uploads live in ``~/.coffer/content/chat-media`` (spec chat
     # "Upload a file for a web message"); the retention sweep over the same
     # directory is bound in ``build_retention_service``.

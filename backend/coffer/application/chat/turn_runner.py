@@ -33,6 +33,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
 
+from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_persistence import (
@@ -49,6 +50,10 @@ from coffer.domain.chat.events import (
     STREAM_ENDED_MESSAGE,
     TURN_TIMEOUT,
     AgentEvent,
+    QuestionAsked,
+    QuestionClosed,
+    ToolCall,
+    ToolResult,
     TurnDone,
     TurnError,
 )
@@ -97,19 +102,50 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
     return []
 
 
-async def _next_event(events: AsyncIterator[AgentEvent], idle_timeout: float | None) -> AgentEvent:
+def _is_ask_tool(name: str) -> bool:
+    """Claude Code's own dialog tool, or ``coffer__ask`` under whatever
+    server prefix the agent gives it: both are rendered as the question block,
+    not as a tool card."""
+    return name == "AskUserQuestion" or name.endswith("coffer__ask")
+
+
+class _IdleWatch:
+    """The idle watchdog's deadline, which a pending question for the owner
+    suspends: silence while the turn waits on a person is not a wedge (the
+    question has its own 24-hour expiry)."""
+
+    def __init__(self, idle_timeout: float | None) -> None:
+        self.idle_timeout = idle_timeout
+        self.paused = False
+        self.timeout: asyncio.Timeout | None = None
+
+    def waiting(self, waiting_on_owner: bool) -> None:
+        """The turn started, or stopped, waiting on the owner."""
+        self.paused = waiting_on_owner
+        if self.timeout is not None and self.idle_timeout is not None:
+            when = (
+                None if waiting_on_owner else asyncio.get_running_loop().time() + self.idle_timeout
+            )
+            self.timeout.reschedule(when)
+
+
+async def _next_event(events: AsyncIterator[AgentEvent], watch: _IdleWatch) -> AgentEvent:
     """The adapter's next event, or ``TimeoutError`` after ``idle_timeout``
-    seconds of silence.
+    seconds of silence (none while the turn waits on the owner).
 
     The timeout cancels the wait *inside* the adapter's generator, so the
     adapter's own ``CancelledError`` handling runs — the same path a user
     interrupt takes — before the ``TimeoutError`` surfaces here. An external
     cancellation (interrupt, delete) still arrives as ``CancelledError``.
     """
-    if idle_timeout is None:
+    if watch.idle_timeout is None:
         return await events.__anext__()
-    async with asyncio.timeout(idle_timeout):
-        return await events.__anext__()
+    async with asyncio.timeout(None if watch.paused else watch.idle_timeout) as timeout:
+        watch.timeout = timeout
+        try:
+            return await events.__anext__()
+        finally:
+            watch.timeout = None
 
 
 async def run_turn_task(
@@ -120,6 +156,7 @@ async def run_turn_task(
     chat: ChatService,
     idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
     flush_interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
+    turn: questions.TurnContext | None = None,
 ) -> None:
     """Async task body: drive the adapter, publish events, persist the result.
 
@@ -141,7 +178,25 @@ async def run_turn_task(
     placeholder_id: str | None = None
     append_task: asyncio.Task[Message] | None = None
 
+    ask_tool_ids: set[str] = set()
+    watch = _IdleWatch(idle_timeout)
+    if turn is not None:
+        turn.on_waiting = watch.waiting
+
+    async def on_question(event: AgentEvent) -> None:
+        # A question the agent raised (or that closed): part of the reply, on the
+        # bus and in the channel renderer's queue, and on disk at once — the
+        # turn now waits, with nothing else to trigger a flush.
+        emit(event)
+        if isinstance(event, (QuestionAsked, QuestionClosed)):
+            content.add_question(event)
+            await flusher.flush_now(placeholder_id)
+
     async def finalize(done: TurnDone | None, error: TurnError | None) -> None:
+        if turn is not None:
+            # The turn is over: whatever it still waits on can no longer be
+            # answered, and the reply must say so.
+            await questions.close_turn(turn)
         # An adapter may expose the model it ran on (spec chat "Record the model an
         # adapter reports"). It learns that while the turn streams, so it is read
         # now, at finalize time, never before the turn starts. Best-effort.
@@ -175,11 +230,14 @@ async def run_turn_task(
             )
         )
         placeholder_id = (await asyncio.shield(append_task)).id
+        if turn is not None:
+            turn.reply_message_id = placeholder_id
+            turn.on_event = on_question
 
         events = (await adapter.run_turn(history=history, attachments=turn_attachments)).__aiter__()
         while True:
             try:
-                event = await _next_event(events, idle_timeout)
+                event = await _next_event(events, watch)
             except StopAsyncIteration:
                 break
             except TimeoutError:
@@ -198,6 +256,11 @@ async def run_turn_task(
                 )
                 emit(error_event)
                 break
+            if isinstance(event, ToolCall) and _is_ask_tool(event.tool_name):
+                ask_tool_ids.add(event.tool_use_id)
+                continue
+            if isinstance(event, ToolResult) and event.tool_use_id in ask_tool_ids:
+                continue
             event = content.stamp(event)
             emit(event)
             content.add(event)
@@ -273,6 +336,8 @@ async def run_turn_task(
         # leaves a persisted trace.
         await finalize(final_done, error_event)
     finally:
+        if turn is not None:
+            questions.release_turn(turn)
         flusher.stop()
         # Ownership-checked release — only our own entry, so a racing start that
         # registered a fresh turn is not lost.

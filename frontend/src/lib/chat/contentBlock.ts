@@ -19,6 +19,7 @@ export function contentBlock(
     filename: null,
     mime: null,
     duration_ms: null,
+    question: null,
     ...fields,
   };
 }

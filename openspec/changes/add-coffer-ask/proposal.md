@@ -60,7 +60,7 @@ answer goes straight back to the agent.
 ## Impact
 
 - Backend: gateway built-in tools, the shim (forwards the turn token), the Claude
-  Code adapter (PreToolUse hook), the Codex config Coffer writes
+  Code adapter (`can_use_tool` callback), the Codex config Coffer writes
   (`tool_timeout_sec`, `env_vars`), chat persistence (migration), turn events,
   channel turn rendering and inbound routing, `needs_you.py` deleted.
 - REST: `GET` pending questions with the conversation, `POST …/questions/{id}/answer`;

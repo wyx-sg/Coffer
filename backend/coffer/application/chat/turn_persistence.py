@@ -17,6 +17,8 @@ from coffer.application.chat.service import ChatService
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.events import (
     AgentEvent,
+    QuestionAsked,
+    QuestionClosed,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -31,6 +33,7 @@ from coffer.domain.chat.message import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from coffer.domain.chat.question import QuestionBlock
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +98,17 @@ class TurnContent:
                 )
             )
 
+    def add_question(self, event: QuestionAsked | QuestionClosed) -> None:
+        """Fold a question event: a new question closes the running text and
+        appends its block; a later event of the same question replaces it."""
+        block = event.question
+        for i, existing in enumerate(self._blocks):
+            if isinstance(existing, QuestionBlock) and existing.question_id == block.question_id:
+                self._blocks[i] = block
+                return
+        self._close_text()
+        self._blocks.append(block)
+
     def blocks(self) -> list[ContentBlock]:
         """The content so far, in emission order (the running text included)."""
         text = "".join(self._text)
@@ -154,6 +168,14 @@ class PartialFlusher:
                 self._trailing = spawn(
                     self._flush_later(wait, message_id), name=f"chat-partial-flush:{message_id}"
                 )
+            return
+        self._cancel_trailing()
+        await self._write(message_id)
+
+    async def flush_now(self, message_id: str | None) -> None:
+        """Write the reply so far at once (a question block must be on disk
+        while the turn waits on it)."""
+        if message_id is None:
             return
         self._cancel_trailing()
         await self._write(message_id)

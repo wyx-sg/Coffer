@@ -95,6 +95,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/needs-you-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Needs You Count
+         * @description How many conversations have a question waiting on the owner.
+         */
+        get: operations["needs_you_count_api_v1_chat_conversations_needs_you_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{id}": {
         parameters: {
             query?: never;
@@ -332,6 +352,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{id}/questions/{question_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Question
+         * @description Answer the question's next unanswered question(s) from the Conversations page.
+         *
+         *     404 ``CONVERSATION_NOT_FOUND`` for an unknown conversation; 409
+         *     ``QUESTION_CLOSED`` when the question was already answered (the first answer
+         *     wins), cancelled, or its turn ended; 422 ``QUESTION_ANSWER_INVALID`` for an
+         *     option the question does not offer, several options on a single-choice
+         *     question, or an empty answer. Returns the question as it now stands.
+         */
+        post: operations["answer_question_api_v1_chat_conversations__id__questions__question_id__answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{id}/unarchive": {
         parameters: {
             query?: never;
@@ -401,6 +447,21 @@ export interface components {
             available: boolean;
             /** Display Name */
             display_name: string;
+        };
+        /**
+         * AnswerQuestionIn
+         * @description Body for POST .../questions/{question_id}/answer.
+         *
+         *     ``answers`` answer the question's still-unanswered questions in order (one
+         *     for the first, or several at once). ``index``, when given, names the question
+         *     being answered: if that one was answered meanwhile the request is refused as
+         *     ``QUESTION_CLOSED`` rather than answering the next.
+         */
+        AnswerQuestionIn: {
+            /** Answers */
+            answers: components["schemas"]["QuestionAnswerIn"][];
+            /** Index */
+            index?: number | null;
         };
         /** Body_upload_attachment_api_v1_chat_attachments_post */
         Body_upload_attachment_api_v1_chat_attachments_post: {
@@ -486,7 +547,7 @@ export interface components {
         /**
          * ContentBlockOut
          * @description Wire representation of a ContentBlock (text | tool_use | tool_result |
-         *     attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
+         *     attachment | question). ``filename``/``mime`` describe an ``attachment`` reference; the
          *     local ``path`` is deliberately NOT surfaced (leak/security — spec chat
          *     "Re-materialise attachments from persisted history").
          */
@@ -503,6 +564,7 @@ export interface components {
             output: {
                 [key: string]: unknown;
             } | null;
+            question: components["schemas"]["QuestionOut"] | null;
             /** Text */
             text: string | null;
             /** Tool Input */
@@ -517,7 +579,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "text" | "tool_use" | "tool_result" | "attachment";
+            type: "text" | "tool_use" | "tool_result" | "attachment" | "question";
         };
         /**
          * ConversationBatchIn
@@ -595,6 +657,11 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
+            /**
+             * Needs You
+             * @default false
+             */
+            needs_you: boolean;
             /** Preview */
             preview: string | null;
             /**
@@ -685,6 +752,14 @@ export interface components {
             status: "complete" | "streaming" | "stopped" | "failed";
         };
         /**
+         * NeedsYouCountOut
+         * @description How many conversations wait on an answer.
+         */
+        NeedsYouCountOut: {
+            /** Count */
+            count: number;
+        };
+        /**
          * PendingQueueIn
          * @description Body for PUT /conversations/{id}/pending — replaces the ordered queue.
          */
@@ -701,6 +776,107 @@ export interface components {
         PendingQueueOut: {
             /** Pending */
             pending: string[];
+        };
+        /**
+         * QuestionAnswerIn
+         * @description The owner's answer to one question: option labels and/or free text.
+         */
+        QuestionAnswerIn: {
+            /** Selected */
+            selected?: string[];
+            /** Text */
+            text?: string | null;
+        };
+        /**
+         * QuestionAnswerOut
+         * @description The answer to one question: the chosen option labels and/or typed text.
+         */
+        QuestionAnswerOut: {
+            /** Header */
+            header: string;
+            /** Selected */
+            selected: string[];
+            /** Text */
+            text: string | null;
+        };
+        /**
+         * QuestionAskedEventOut
+         * @description The data of a `question_asked` event: the agent asked the owner a question
+         *     and the turn is waiting. Sent again with the same `question_id` as the owner
+         *     answers one question of several; the card is replaced by `question_id`.
+         */
+        QuestionAskedEventOut: {
+            question: components["schemas"]["QuestionOut"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "question_asked";
+        };
+        /**
+         * QuestionClosedEventOut
+         * @description The data of a `question_closed` event: the question was answered in full,
+         *     or cancelled (the turn stopped or ended).
+         */
+        QuestionClosedEventOut: {
+            question: components["schemas"]["QuestionOut"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "question_closed";
+        };
+        /** QuestionOptionOut */
+        QuestionOptionOut: {
+            /** Description */
+            description: string | null;
+            /** Label */
+            label: string;
+        };
+        /**
+         * QuestionOut
+         * @description A question the agent asked the owner (spec chat "Pause a turn on a
+         *     question for the owner") — the ``question`` block of a reply, also the
+         *     payload of the ``question_asked`` / ``question_closed`` events.
+         *
+         *     ``answers`` holds the answers given so far, in order (a prefix of
+         *     ``questions`` while ``status`` is ``pending``). ``answered_via`` is ``web`` or
+         *     the answering channel's uid; ``answered_at`` is an ISO-8601 UTC instant.
+         */
+        QuestionOut: {
+            /** Answered At */
+            answered_at: string | null;
+            /** Answered By */
+            answered_by: string | null;
+            /** Answered Via */
+            answered_via: string | null;
+            /** Answers */
+            answers: components["schemas"]["QuestionAnswerOut"][];
+            /** Context */
+            context: string | null;
+            /** Question Id */
+            question_id: string;
+            /** Questions */
+            questions: components["schemas"]["QuestionSpecOut"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "answered" | "cancelled";
+        };
+        /**
+         * QuestionSpecOut
+         * @description One question of an ask.
+         */
+        QuestionSpecOut: {
+            /** Header */
+            header: string;
+            /** Multi Select */
+            multi_select: boolean;
+            /** Options */
+            options: components["schemas"]["QuestionOptionOut"][];
+            /** Question */
+            question: string;
         };
         /**
          * QueueChangedEventOut
@@ -854,7 +1030,7 @@ export interface components {
          * @description The `data:` of one event on `GET /api/v1/chat/conversations/{id}/events`,
          *     chosen by its SSE `event:` name (which equals the model's `type`).
          */
-        TurnEventMessage: components["schemas"]["TurnStartEventOut"] | components["schemas"]["TextDeltaEventOut"] | components["schemas"]["ToolCallEventOut"] | components["schemas"]["ToolResultEventOut"] | components["schemas"]["TurnDoneEventOut"] | components["schemas"]["TurnErrorEventOut"] | components["schemas"]["QueueChangedEventOut"];
+        TurnEventMessage: components["schemas"]["TurnStartEventOut"] | components["schemas"]["TextDeltaEventOut"] | components["schemas"]["ToolCallEventOut"] | components["schemas"]["ToolResultEventOut"] | components["schemas"]["TurnDoneEventOut"] | components["schemas"]["TurnErrorEventOut"] | components["schemas"]["QueueChangedEventOut"] | components["schemas"]["QuestionAskedEventOut"] | components["schemas"]["QuestionClosedEventOut"];
         /**
          * TurnStartEventOut
          * @description The data of a `turn_start` event: the agent loop began a turn.
@@ -1092,6 +1268,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationBatchOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    needs_you_count_api_v1_chat_conversations_needs_you_count_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NeedsYouCountOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1385,7 +1601,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A Server-Sent Events stream of the seven turn events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`) that stays open across turns until the client disconnects. */
+            /** @description A Server-Sent Events stream of the nine turn events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`, `question_asked`, `question_closed`) that stays open across turns until the client disconnects. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1609,6 +1825,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PendingQueueOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    answer_question_api_v1_chat_conversations__id__questions__question_id__answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                id: string;
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQuestionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

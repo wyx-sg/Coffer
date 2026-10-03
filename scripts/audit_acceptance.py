@@ -112,7 +112,7 @@ TS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
 # `^\s*//` (not `///`) keeps doc comments out: after `//` a doc comment has a
 # third `/`, which matches neither `\s` nor `acceptance`.
 RUST_ACCEPTANCE_RE = re.compile(
-    r'^\s*//\s*acceptance\s*\(\s*'
+    r"^\s*//\s*acceptance\s*\(\s*"
     r'spec\s*=\s*"(?P<spec>[^"]+)"\s*,\s*'
     r'scenario\s*=\s*"(?P<scenario>[^"]+)"\s*,?\s*\)\s*$'
 )
@@ -226,9 +226,7 @@ def collect_pending_scenarios() -> dict[tuple[str, str], str]:
             for line in _unfenced_lines(spec_md.read_text(encoding="utf-8")):
                 if m := DELTA_SECTION_RE.match(line):
                     section = m.group(1)
-                elif section in ("ADDED", "MODIFIED") and (
-                    m := OPENSPEC_SCENARIO_RE.match(line)
-                ):
+                elif section in ("ADDED", "MODIFIED") and (m := OPENSPEC_SCENARIO_RE.match(line)):
                     out.setdefault((spec_id, m.group(1).strip()), change.name)
     return out
 
@@ -251,11 +249,7 @@ def _extract_acceptance_call(node: ast.Call) -> tuple[str, str] | None:
             scenario = kw.value.value
     if spec is None and node.args and isinstance(node.args[0], ast.Constant):
         spec = node.args[0].value
-    if (
-        scenario is None
-        and len(node.args) >= 2
-        and isinstance(node.args[1], ast.Constant)
-    ):
+    if scenario is None and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
         scenario = node.args[1].value
     if isinstance(spec, str) and isinstance(scenario, str):
         return (spec, scenario)
@@ -288,15 +282,9 @@ def _module_pytestmark_skips(tree: ast.Module) -> bool:
     for stmt in tree.body:
         if not isinstance(stmt, ast.Assign):
             continue
-        if not any(
-            isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets
-        ):
+        if not any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in stmt.targets):
             continue
-        values = (
-            stmt.value.elts
-            if isinstance(stmt.value, ast.List | ast.Tuple)
-            else [stmt.value]
-        )
+        values = stmt.value.elts if isinstance(stmt.value, ast.List | ast.Tuple) else [stmt.value]
         if any(_is_unconditional_skip(v) for v in values):
             return True
     return False
@@ -454,9 +442,7 @@ def collect_ts_markers(roots: list[Path]) -> set[tuple[str, str]]:
                 stripped = _strip_ts_comments(text)
                 for m in TS_ACCEPTANCE_RE.finditer(stripped):
                     spec = (
-                        m.group("spec_dq")
-                        if m.group("spec_dq") is not None
-                        else m.group("spec_sq")
+                        m.group("spec_dq") if m.group("spec_dq") is not None else m.group("spec_sq")
                     )
                     scenario = (
                         m.group("scenario_dq")
@@ -487,9 +473,7 @@ def main() -> int:
     # (no `#### Scenario:` under `## Requirements`, or every one deleted).
     # Without this guard the audit silently passes as "0 missing coverage",
     # giving false confidence.
-    empty_specs = sorted(
-        spec_id for spec_id, scenarios in specs.items() if not scenarios
-    )
+    empty_specs = sorted(spec_id for spec_id, scenarios in specs.items() if not scenarios)
     if empty_specs:
         print(
             "audit_acceptance: FAIL — spec.md(s) with no acceptance scenarios:",

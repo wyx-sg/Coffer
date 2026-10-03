@@ -25,6 +25,7 @@ from typing import Any
 
 import httpx
 
+from coffer.application.turn_ask import TURN_HEADER, TURN_TOKEN_ENV
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.shim.bootstrap import (
     _ensure_daemon,
@@ -61,6 +62,11 @@ class _Bridge(SseDrain):
     def __init__(self, info: DaemonInfo, *, agent_uid: str | None = None) -> None:
         self._base = f"http://127.0.0.1:{info.port}"
         self._headers = {"X-Coffer-Token": info.token}
+        # The Coffer-run turn this agent process belongs to (spec mcp-gateway "Let an
+        # agent ask the owner a question during a Coffer turn"): forwarded on every
+        # request so the gateway offers ``coffer__ask`` to this session only.
+        if turn_token := os.environ.get(TURN_TOKEN_ENV):
+            self._headers[TURN_HEADER] = turn_token
         self._session_id: str | None = None
         self._reinit_lock = asyncio.Lock()
         # The initialize envelope is cached at handshake time so it can be

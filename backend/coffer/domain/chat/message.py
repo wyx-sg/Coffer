@@ -1,6 +1,6 @@
 """Message domain entity and ContentBlock value-object union.
 
-A ``ContentBlock`` is one of ``text | tool_use | tool_result | attachment``.
+A ``ContentBlock`` is one of ``text | tool_use | tool_result | attachment | question``.
 The persistence layer stores ``content`` as a JSON array of block dicts.
 The helpers ``block_to_dict`` / ``block_from_dict`` are the single point of
 that serialisation logic so the infrastructure layer does not need to know
@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
+
+from coffer.domain.chat import question as _question
+from coffer.domain.chat.question import QuestionBlock
 
 # ---------------------------------------------------------------------------
 # Role
@@ -77,7 +80,7 @@ class AttachmentBlock:
     type: Literal["attachment"] = "attachment"
 
 
-ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | AttachmentBlock
+ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | AttachmentBlock | QuestionBlock
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +115,8 @@ def block_to_dict(block: ContentBlock) -> dict[str, Any]:
             "mime": block.mime,
             "filename": block.filename,
         }
+    if isinstance(block, QuestionBlock):
+        return _question.block_to_dict(block)
     # This branch is unreachable given the union, but makes mypy happy.
     raise TypeError(f"unhandled ContentBlock type: {type(block)!r}")  # pragma: no cover
 
@@ -146,6 +151,8 @@ def block_from_dict(data: dict[str, Any]) -> ContentBlock:
                 mime=data["mime"],
                 filename=data["filename"],
             )
+        if block_type == "question":
+            return _question.block_from_dict(data)
     except KeyError as exc:
         raise ValueError(
             f"ContentBlock type {block_type!r} is missing required field {exc}"
