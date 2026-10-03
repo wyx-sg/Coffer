@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import type MarkdownIt from 'markdown-it'
 import { withMermaid } from 'vitepress-plugin-mermaid'
@@ -28,10 +28,18 @@ function prefix(lang: Lang): string {
 // under the index's sidebar entry straight from the directory, so a group the
 // generator adds or removes needs no sidebar edit.
 const CLI_INDEX = '/reference/cli'
-const cliGroups: string[] = readdirSync(new URL('../reference/cli/', import.meta.url))
+const cliFiles: string[] = readdirSync(new URL('../reference/cli/', import.meta.url))
   .filter((file) => file.endsWith('.md'))
   .map((file) => file.slice(0, -'.md'.length))
-  .sort()
+// In the order `coffer --help` lists them, which the generated index's table
+// follows; a page the table does not link goes last.
+const cliOrder = [
+  ...readFileSync(new URL('../reference/cli.md', import.meta.url), 'utf8').matchAll(
+    /\]\(\/reference\/cli\/([\w-]+)\)/g,
+  ),
+].map((m) => m[1])
+const rank = (name: string) => (cliOrder.includes(name) ? cliOrder.indexOf(name) : cliOrder.length)
+const cliGroups = [...cliFiles].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
 
 function sidebarItem(lang: Lang, item: SourceItem): DefaultTheme.SidebarItem {
   const link = `${prefix(lang)}${item.link}`
@@ -185,6 +193,33 @@ const mark = (stroke: string, accent: string) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M20 8.5V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="${stroke}" stroke-width="1.75"/><circle cx="12" cy="12" r="1.9" fill="none" stroke="${accent}" stroke-width="1.75"/></svg>`,
   )
 
+// Code colours from the canvas: plain text, a shell command bold, options and
+// keys in the link colour, strings green, comments subtle.
+function codeTheme(name: string, c: { bg: string; fg: string; flag: string; string: string; subtle: string }) {
+  return {
+    name,
+    type: name.endsWith('dark') ? 'dark' : 'light',
+    colors: { 'editor.background': c.bg, 'editor.foreground': c.fg },
+    tokenColors: [
+      { settings: { foreground: c.fg } },
+      { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: c.subtle } },
+      { scope: ['string', 'punctuation.definition.string'], settings: { foreground: c.string } },
+      {
+        scope: ['constant.other.option', 'variable.parameter', 'support.type.property-name', 'entity.name.tag', 'keyword.other.definition'],
+        settings: { foreground: c.flag },
+      },
+      // a shell command reads as one bold line: its name and bare arguments
+      {
+        scope: ['entity.name.command', 'entity.name.function.call', 'support.function.builtin', 'string.unquoted.argument'],
+        settings: { foreground: c.fg, fontStyle: 'bold' },
+      },
+      { scope: ['string.unquoted.argument constant.other.option'], settings: { foreground: c.flag, fontStyle: 'bold' } },
+    ],
+  }
+}
+const codeLight = codeTheme('coffer-light', { bg: '#F6F7F9', fg: '#16181D', flag: '#3342C4', string: '#177A4F', subtle: '#6B717D' })
+const codeDark = codeTheme('coffer-dark', { bg: '#16171B', fg: '#E4E5EA', flag: '#A3ABFF', string: '#4CB782', subtle: '#868A97' })
+
 const editPattern = `${repo}/edit/main/docs-site/:path`
 
 export default withMermaid(
@@ -195,7 +230,7 @@ export default withMermaid(
     lastUpdated: true,
     head: [['meta', { name: 'theme-color', content: '#4353d8' }]],
     markdown: {
-      theme: { light: 'github-light', dark: 'github-dark' },
+      theme: { light: codeLight as any, dark: codeDark as any },
       config: (md) => {
         md.use(stepsPlugin)
         md.use(tableWrap)
@@ -212,10 +247,11 @@ export default withMermaid(
           nav: nav('en'),
           sidebar: sidebar('en'),
           editLink: { pattern: editPattern, text: 'Edit this page on GitHub' },
+          lastUpdated: { text: 'Last updated', formatOptions: { dateStyle: 'long' } },
           docFooter: { prev: 'Previous', next: 'Next' },
           footer: {
             message: 'Released under the MIT License.',
-            copyright: 'Coffer contributors',
+            copyright: 'Copyright © Coffer contributors',
           },
         },
       },
@@ -229,7 +265,7 @@ export default withMermaid(
           nav: nav('zh'),
           sidebar: sidebar('zh'),
           editLink: { pattern: editPattern, text: '在 GitHub 上编辑此页' },
-          lastUpdated: { text: '最后更新于' },
+          lastUpdated: { text: '最后更新于', formatOptions: { dateStyle: 'long' } },
           outline: { level: [2, 3], label: '本页内容' },
           docFooter: { prev: '上一页', next: '下一页' },
           darkModeSwitchLabel: '外观',
@@ -246,7 +282,7 @@ export default withMermaid(
           },
           footer: {
             message: '基于 MIT 许可证发布。',
-            copyright: 'Coffer 贡献者',
+            copyright: '版权所有 © Coffer 贡献者',
           },
         },
       },
@@ -256,6 +292,12 @@ export default withMermaid(
       search: {
         provider: 'local',
         options: {
+          // each hit shows the start of its section under the title, clamped
+          // to two lines in styles/widgets.css
+          detailedView: true,
+          translations: {
+            modal: { footer: { selectText: 'to open', navigateText: 'to navigate', closeText: 'to close' } },
+          },
           // MiniSearch splits on spaces and punctuation, which leaves a Chinese
           // sentence as one token. Split CJK runs into words as well, for the
           // index and the query alike. VitePress serialises this function into

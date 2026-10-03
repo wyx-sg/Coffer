@@ -246,11 +246,13 @@ flowchart LR
 
 ## 下一步 {#next-steps}
 
-<LinkList variant="cards" :items="[
-{ title: '添加 Codex', desc: '运行 coffer agent add codex 和 coffer agent connect codex，Codex 就能拿到同样的服务器和技能。', link: '/zh/guides/agents' },
-{ title: '整理工具', desc: '关掉你不想让智能体看到的工具，或把某个服务器限定给特定智能体。', link: '/zh/guides/mcp-servers' },
-{ title: '保存密钥', desc: '用密钥引用注册一个需要 API 密钥的服务器。', link: '/zh/guides/secret-store' },
-{ title: '共享知识', desc: '创建一个知识集，把 Markdown 文件放进去。', link: '/zh/guides/knowledge' },
-{ title: '切换提供商', desc: '一步把两个智能体都指向同一个模型网关。', link: '/zh/guides/providers' },
-{ title: '理解模型', desc: '核心概念解释了这些文档里用到的术语。', link: '/zh/start/concepts' }
-]" />
+<LinkList variant="cards">
+
+- **添加 Codex。** 运行 `coffer agent add codex` 和 `coffer agent connect codex`。Codex 无需额外配置就能拿到同样的服务器和技能。见[智能体](/zh/guides/agents)。
+- **整理工具。** 关掉你不想让智能体看到的工具，或把某个服务器限定给特定智能体。见 [MCP 服务器](/zh/guides/mcp-servers)。
+- **保存密钥。** 用密钥引用注册一个需要 API 密钥 的服务器。见[密钥存储](/zh/guides/secret-store)。
+- **共享知识。** 用 `coffer knowledge add handbook` 创建一个知识集，把 Markdown 文件放进去。见[知识](/zh/guides/knowledge)。
+- **切换提供商。** 一步把两个智能体都指向同一个模型网关。见[模型提供商](/zh/guides/providers)。
+- **理解模型。** [核心概念](/zh/start/concepts)解释了这些文档里用到的术语。
+
+</LinkList>

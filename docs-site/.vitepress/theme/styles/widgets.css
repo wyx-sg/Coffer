@@ -115,6 +115,16 @@
 .coffer-drawer-foot {
   display: none;
 }
+/* phones: the search button is the plain icon, no keycaps */
+@media (max-width: 767px) {
+  .VPNavBarSearch .DocSearch-Button-Keys {
+    display: none !important;
+  }
+  .VPNavBarSearch .DocSearch-Button {
+    background: transparent !important;
+    border: 0 !important;
+  }
+}
 @media (max-width: 959px) {
   .VPSidebar {
     left: auto !important;
@@ -139,11 +149,12 @@
     padding: 0 8px;
     margin: 0;
   }
-  .VPSidebarItem .link {
+  .VPSidebar .VPSidebarItem .link {
     min-height: 44px;
+    margin-top: 0;
   }
-  .VPSidebarItem.level-1 .text,
-  .VPSidebarItem.level-2 .text {
+  .VPSidebar .VPSidebarItem.level-1 .text,
+  .VPSidebar .VPSidebarItem.level-2 .text {
     font-size: 15px;
     line-height: 44px;
   }
@@ -162,8 +173,32 @@
     background-position: right 12px center;
     background-size: 16px;
   }
+  /* the left of the bar under the top bar shows the breadcrumb (set by
+     DocCrumbs); tapping it opens the drawer like the menu button */
   .VPLocalNav .menu {
+    padding: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .VPLocalNav .menu > * {
     display: none;
+  }
+  .VPLocalNav .menu::before {
+    content: var(--coffer-crumb, "");
+    font-size: 14px;
+    color: var(--vp-c-text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* …so the article itself drops its own copy */
+  .coffer-crumbs {
+    display: none !important;
+  }
+  .VPLocalNav .container,
+  .VPLocalNav .wrapper {
+    display: flex;
+    justify-content: space-between;
   }
   .VPLocalNav {
     padding-left: 16px;
@@ -260,4 +295,144 @@
     grid-template-columns: 1fr;
     width: 100%;
   }
+}
+
+/* search, after comparing with the canvas: just the input and an esc key in
+   the bar, titles in plain text with gray #, a two-line excerpt of prose, and
+   a sunken footer */
+.VPLocalSearchBox .toggle-layout-button,
+.VPLocalSearchBox .clear-button {
+  display: none !important;
+}
+@media (min-width: 768px) {
+  .VPLocalSearchBox .search-bar::after {
+    content: "esc";
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 5px;
+    border: 1px solid var(--vp-c-border);
+    border-radius: 4px;
+    background: var(--vp-c-bg-elv);
+    font-size: 11px;
+    color: var(--vp-c-text-3);
+  }
+}
+.VPLocalSearchBox .result .titles,
+.VPLocalSearchBox .result.selected .titles {
+  color: var(--vp-c-text-2) !important;
+}
+.VPLocalSearchBox .result .title-icon,
+.VPLocalSearchBox .result.selected .title-icon {
+  color: var(--vp-c-text-3) !important;
+}
+.VPLocalSearchBox .result .title:not(:first-of-type) {
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+/* two lines of the section's prose, scrolled by VitePress to the match */
+.VPLocalSearchBox .excerpt-wrapper {
+  max-height: 40px !important;
+  overflow: hidden !important;
+}
+.VPLocalSearchBox .excerpt {
+  max-height: 40px !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+}
+.VPLocalSearchBox .excerpt :is(pre, table, div[class*="language-"], .vp-table, h1, h2, h3, h4, img) {
+  display: none !important;
+}
+.VPLocalSearchBox .excerpt :is(p, ul, ol, li) {
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none;
+}
+.VPLocalSearchBox .search-input::-webkit-search-cancel-button {
+  display: none;
+}
+.VPLocalSearchBox .excerpt * {
+  font-size: 13px !important;
+  line-height: 20px !important;
+}
+.VPLocalSearchBox .search-keyboard-shortcuts {
+  background: var(--vp-c-bg-soft);
+}
+.VPLocalSearchBox .excerpt code {
+  padding: 0 4px !important;
+}
+.VPLocalSearchBox .result > a {
+  padding: 12px 40px 12px 14px;
+}
+
+/* language menu: both languages as rows, the current one selected with a
+   check, English first in either locale */
+.VPNavBarTranslations .VPMenu {
+  width: 208px !important;
+  min-width: 208px !important;
+  padding: 6px !important;
+  border-radius: 12px;
+}
+.VPNavBarTranslations .VPMenu .items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.VPNavBarTranslations .VPMenu .items .title {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  height: 36px;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 8px;
+  background: var(--coffer-selected) !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+.VPNavBarTranslations .VPMenu .items .title::after {
+  content: "";
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+:lang(zh-CN) .VPNavBarTranslations .VPMenu .items .title {
+  order: 2;
+}
+.VPNavBarTranslations .VPMenu .VPMenuLink .link {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 36px;
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+}
+.VPNavBarTranslations .button[aria-expanded="true"],
+.VPNavBarTranslations .VPFlyout:hover .button {
+  background: var(--vp-c-bg-soft);
+  border-radius: 8px;
+}
+
+/* the 404 page stands alone, without the site footer */
+.Layout:has(.coffer-404) .VPFooter {
+  display: none;
+}
+.VPNavBarTranslations .VPMenu,
+.VPNavBarTranslations .VPMenu .items,
+.VPNavBarTranslations .VPMenu .items > * {
+  box-sizing: border-box;
+  width: auto;
+  max-width: 100%;
+}
+.VPNavBarTranslations .VPMenu {
+  width: 208px !important;
 }

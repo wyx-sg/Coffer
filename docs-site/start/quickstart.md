@@ -246,11 +246,13 @@ flowchart LR
 
 ## Next steps
 
-<LinkList variant="cards" :items="[
-{ title: 'Add Codex', desc: 'Run coffer agent add codex and coffer agent connect codex. Codex gets the same servers and skills.', link: '/guides/agents' },
-{ title: 'Curate tools', desc: 'Switch off tools you do not want agents to see, or restrict a server to particular agents.', link: '/guides/mcp-servers' },
-{ title: 'Store a key', desc: 'Register a server that needs an API key, using a secret ref.', link: '/guides/secret-store' },
-{ title: 'Share knowledge', desc: 'Create a collection and drop Markdown files into it.', link: '/guides/knowledge' },
-{ title: 'Switch providers', desc: 'Point both agents at the same model gateway in one step.', link: '/guides/providers' },
-{ title: 'Learn the model', desc: 'Core concepts explains the terms used throughout these docs.', link: '/start/concepts' }
-]" />
+<LinkList variant="cards">
+
+- **Add Codex.** Run `coffer agent add codex` and `coffer agent connect codex`. Codex gets the same servers and skills with no further setup. See [Agents](/guides/agents).
+- **Curate tools.** Switch off tools you do not want agents to see, or restrict a server to particular agents. See [MCP servers](/guides/mcp-servers).
+- **Store a key.** Register a server that needs an API key, using a secret ref. See [Secret store](/guides/secret-store).
+- **Share knowledge.** Create a collection with `coffer knowledge add handbook` and drop Markdown files into it. See [Knowledge](/guides/knowledge).
+- **Switch providers.** Point both agents at the same model gateway in one step. See [Model providers](/guides/providers).
+- **Learn the model.** [Core concepts](/start/concepts) explains the terms used throughout these docs.
+
+</LinkList>

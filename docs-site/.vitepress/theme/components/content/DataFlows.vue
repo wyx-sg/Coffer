@@ -1,39 +1,71 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
-// flows: { tab, intro?, steps: [{ who, text, html? }] }
-const props = defineProps<{
-  flows: { tab: string; intro?: string; steps: { who: string; text: string }[] }[];
-}>();
+// Wraps Markdown written as one `###` heading per flow, each followed by an
+// ordered list whose items open with a bold actor: **Agent.** The agent calls…
+// The text stays in the page (searchable, link-checked, translated with it);
+// this component only turns the headings into a segmented control and shows
+// one flow at a time. Without JavaScript every flow shows, one after another.
+const root = ref<HTMLElement>();
+const tabs = ref<{ id: string; text: string }[]>([]);
 const active = ref(0);
+
+function headings(): HTMLElement[] {
+  return Array.from(root.value?.querySelectorAll<HTMLElement>(":scope > .body > h3") ?? []);
+}
+
+function apply() {
+  let index = -1;
+  for (const el of Array.from(root.value?.querySelector(".body")?.children ?? []) as HTMLElement[]) {
+    if (el.tagName === "H3") index++;
+    // the heading stays in the DOM for the outline and its anchor, but the
+    // segmented control stands in for it on screen
+    el.classList.toggle("flow-off", el.tagName === "H3" || index !== active.value);
+  }
+}
+
+function select(i: number) {
+  active.value = i;
+  apply();
+}
+
+function fromHash() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const i = tabs.value.findIndex((t) => t.id === id);
+  if (i < 0) return;
+  select(i);
+  root.value?.scrollIntoView({ block: "start" });
+}
+
+onMounted(() => {
+  tabs.value = headings().map((h) => {
+    const copy = h.cloneNode(true) as HTMLElement;
+    copy.querySelector(".header-anchor")?.remove();
+    return { id: h.id, text: (copy.textContent ?? "").trim() };
+  });
+  apply();
+  fromHash();
+  window.addEventListener("hashchange", fromHash);
+});
+onBeforeUnmount(() => window.removeEventListener("hashchange", fromHash));
 </script>
 
 <template>
-  <div class="flows">
-    <div class="seg" role="tablist">
+  <div ref="root" class="flows">
+    <div v-if="tabs.length" class="seg" role="tablist">
       <button
-        v-for="(f, i) in props.flows"
-        :key="f.tab"
+        v-for="(t, i) in tabs"
+        :key="t.id"
+        type="button"
         role="tab"
         :aria-selected="active === i"
         :class="{ on: active === i }"
-        @click="active = i"
+        @click="select(i)"
       >
-        {{ f.tab }}
+        {{ t.text }}
       </button>
     </div>
-    <template v-for="(f, i) in props.flows" :key="f.tab">
-      <div v-show="active === i" class="panel">
-        <p v-if="f.intro" class="intro">{{ f.intro }}</p>
-        <ol class="rows">
-          <li v-for="(s, n) in f.steps" :key="n">
-            <span class="num">{{ n + 1 }}</span>
-            <span class="who">{{ s.who }}</span>
-            <span class="what" v-html="s.text" />
-          </li>
-        </ol>
-      </div>
-    </template>
+    <div class="body"><slot /></div>
   </div>
 </template>
 
@@ -67,51 +99,57 @@ const active = ref(0);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--vp-c-divider);
 }
-.intro {
-  margin: 12px 0 0;
-  font-size: 14px;
-  color: var(--vp-c-text-2);
+.body :deep(.flow-off) {
+  display: none;
 }
-.rows {
+.body :deep(ol) {
   list-style: none;
+  counter-reset: flow;
   margin: 12px 0 0;
   padding: 0;
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
   overflow: hidden;
 }
-.rows li {
-  display: grid;
-  grid-template-columns: 28px 150px minmax(0, 1fr);
-  gap: 8px 12px;
+.body :deep(ol > li) {
+  counter-increment: flow;
+  position: relative;
   margin: 0;
-  padding: 12px 16px;
+  padding: 12px 16px 12px 206px;
   font-size: 14px;
   line-height: 22px;
+  color: var(--vp-c-text-2);
   border-top: 1px solid var(--vp-c-divider);
 }
-.rows li:first-child {
+.body :deep(ol > li:first-child) {
   border-top: 0;
 }
-.num {
+.body :deep(ol > li)::before {
+  content: counter(flow);
+  position: absolute;
+  left: 16px;
+  top: 12px;
   color: var(--vp-c-text-3);
 }
-.who {
+.body :deep(ol > li > strong:first-child) {
+  position: absolute;
+  left: 44px;
+  top: 12px;
+  width: 150px;
   font-weight: 600;
   color: var(--vp-c-text-1);
 }
-.what {
-  color: var(--vp-c-text-2);
-}
-.what :deep(code) {
+.body :deep(ol > li code) {
   font-size: 13px;
 }
 @media (max-width: 640px) {
-  .rows li {
-    grid-template-columns: 24px minmax(0, 1fr);
+  .body :deep(ol > li) {
+    padding-left: 44px;
   }
-  .what {
-    grid-column: 2;
+  .body :deep(ol > li > strong:first-child) {
+    position: static;
+    display: block;
+    width: auto;
   }
 }
 </style>

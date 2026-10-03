@@ -3,167 +3,6 @@ title: 架构总览
 description: Coffer 是怎么搭起来的：它有哪些进程、守护进程内部有哪些部分、四条主要数据流、技术栈，以及架构章节其余页面的阅读指引。
 ---
 
-<script setup>
-const flows = [
-  {
-    "tab": "智能体的一次工具调用",
-    "steps": [
-      {
-        "who": "智能体",
-        "text": "智能体调用它 <code>coffer</code> MCP 服务器上的一个工具。"
-      },
-      {
-        "who": "coffer-mcp-shim",
-        "text": "shim 带着守护进程令牌把 JSON-RPC 消息转发到 <code>POST /mcp</code>。"
-      },
-      {
-        "who": "MCP 网关",
-        "text": "网关解析出会话（每个下游客户端会话都有自己的一组上游子进程），把 <code>github__create_issue</code> 这样带命名空间的名字路由到 <code>github</code> 服务器的会话，或者自己回答 <code>coffer__*</code> 内置工具。"
-      },
-      {
-        "who": "生效范围检查",
-        "text": "在列出或调用之前，网关会拿服务器的生效范围去比对 shim 在握手时上报的智能体 uid，所以一个生效范围不包含这个智能体的服务器不会呈现任何工具。"
-      },
-      {
-        "who": "工具预算",
-        "text": "当完整工具列表会超出配置的预算时，网关只列出一个子集，其余的由 <code>coffer__search_tools</code> 找出来。详见 <a href=\"/Coffer/zh/architecture/mcp-gateway\">MCP 网关</a>。"
-      }
-    ]
-  },
-  {
-    "tab": "一个对话轮次",
-    "steps": [
-      {
-        "who": "你",
-        "text": "你在 <strong>对话</strong> 页面发一条消息，或者已配对的所有者从 Telegram 或 SeaTalk 发一条。"
-      },
-      {
-        "who": "轮次编排器",
-        "text": "两个入口调用同一个轮次编排器：对话空闲时它开始一个轮次，否则把消息排在正在运行的轮次后面。"
-      },
-      {
-        "who": "智能体适配器",
-        "text": "编排器向智能体提供者注册表要这个对话的智能体，构建一个适配器（Claude Agent SDK 或 Codex app-server）。"
-      },
-      {
-        "who": "事件总线",
-        "text": "并把每个事件发布到一条按对话划分的总线上，网页和消息渠道渲染器都订阅这条总线。消息一旦到达编排器，下游就不再知道它来自哪个入口。详见 <a href=\"/Coffer/zh/architecture/chat\">对话与轮次</a>。"
-      }
-    ]
-  },
-  {
-    "tab": "一次技能投递",
-    "steps": [
-      {
-        "who": "技能库",
-        "text": "一个技能就是 <code>~/.coffer/vault/skills/<name>/</code> 下的一个主文件夹加一个 <code>skill</code> 资源文件。当且仅当技能已启用、且智能体在它的范围内时，技能才会到达这个智能体。"
-      },
-      {
-        "who": "调和",
-        "text": "两者中任何一项发生变化（启用、停用、扩大或缩小范围），都会对每个智能体做一次调和：Coffer 把主文件夹链接进 <code><config_dir>/skills/</code>（符号链接、junction，或退而求其次的复制），或者收回一个已经不在生效范围内的副本。"
-      },
-      {
-        "who": "偏移检查",
-        "text": "启动时的偏移检查会修复被人手工弄坏的链接。Coffer 自己的说明书 <code>coffer-guide</code> 也由完全相同的代码投递。"
-      },
-      {
-        "who": "导入",
-        "text": "技能可以从文件夹、压缩包或 Git 仓库进入技能库，都会先暂存、确认；来自 Git 的技能固定在它的提交上，直到你接受更新。详见 <a href=\"/Coffer/zh/architecture/skills\">技能</a>。"
-      }
-    ]
-  },
-  {
-    "tab": "一轮同步",
-    "steps": [
-      {
-        "who": "Worker",
-        "text": "当你配置了一个你自己拥有的 git 远端，一个 worker 会按远端的间隔跑一轮同步，默认每小时一次。"
-      },
-      {
-        "who": "合并",
-        "text": "保险库本来就是 git 仓库，所以一轮同步只需要 fetch，让 git 在工作树之外算出合并；如果合并干净、有效且没触发删除熔断，就给保险库拍快照、检出合并结果并 push。"
-      },
-      {
-        "who": "冲突",
-        "text": "任何冲突都会让这一轮停下，两边都不改，直到你逐个文件给出答复。"
-      },
-      {
-        "who": "传输的内容",
-        "text": "生效范围和智能体从不传输（它们在 <code>local/</code> 里）；密钥只以 Fernet 密文传输，而且只在你选择开启时才传；一轮会丢失太多内容的同步会挂起，等你答复。详见 <a href=\"/Coffer/zh/architecture/vault-sync\">保险库同步</a>。"
-      }
-    ]
-  }
-]
-const decisions = [
-  {
-    "title": "每个保险库一个常驻守护进程；其他所有进程都是客户端，找到它或拉起它。",
-    "why": "只有一个 SQLite 写入者和一组上游进程，也不需要「先启动守护进程」这一步。空闲退出会让智能体的下一次调用承担冷启动。",
-    "link": "/zh/architecture/daemon",
-    "linkText": "守护进程与进程"
-  },
-  {
-    "title": "回环地址、每次启动生成的令牌和 `Host` 检查就是全部访问模型。",
-    "why": "Coffer 只在一台机器上服务一个人。绑定 `127.0.0.1` 挡住远程主机；`Host` 检查挡住把自己的 DNS 名重新指向回环地址的网页。",
-    "link": "/zh/architecture/security",
-    "linkText": "安全模型"
-  },
-  {
-    "title": "每个受管对象都是一个带不可变 `uid` 的资源；行为留在各自的类型里。",
-    "why": "身份、生命周期、审计和生效范围对每种类型都一样，只建一次。调用工具和投递技能没有共同点，所以不强行统一。",
-    "link": "/zh/architecture/resource-framework",
-    "linkText": "资源框架"
-  },
-  {
-    "title": "生效范围只属于本机，并在知道提问智能体是谁的地方执行。",
-    "why": "如果权限通过同步合并过来，就等于让另一台机器的同步轮次决定这台机器暴露什么。集中式的闸门则会压在每种类型的读路径上。",
-    "link": "/zh/architecture/resource-framework#reach",
-    "linkText": "资源框架"
-  },
-  {
-    "title": "每个 MCP 客户端会话都有自己惰性启动的上游进程。",
-    "why": "MCP 是按会话的协议。跨客户端共享上游，意味着要在网关里重新实现能力协商和通知路由。",
-    "link": "/zh/architecture/mcp-gateway",
-    "linkText": "MCP 网关"
-  },
-  {
-    "title": "网关按使用量排序列出一部分工具，其余的提供搜索。",
-    "why": "工具超过大约 30 到 50 个后，模型选工具就不那么可靠了。分层只决定列出什么，从不决定能调用什么。",
-    "link": "/zh/architecture/mcp-gateway#budget-driven-tiering",
-    "linkText": "MCP 网关"
-  },
-  {
-    "title": "知识是不带索引的纯 Markdown；它的目录以技能的形式到达智能体。",
-    "why": "智能体整天都在读文件，却很少调用检索工具。没有派生物，就不会有东西和文件不一致。",
-    "link": "/zh/architecture/knowledge",
-    "linkText": "知识"
-  },
-  {
-    "title": "记忆从每个智能体自己的文件只读聚合，从不回写。",
-    "why": "每个智能体自己的记忆回路保持原样，Coffer 派生出的一切都可以删掉重建。",
-    "link": "/zh/architecture/memory",
-    "linkText": "记忆"
-  },
-  {
-    "title": "保险库是一个 git 仓库；同步 pull 和 push 它，应用干净的合并，遇到任何冲突就停。",
-    "why": "只有共同的基线才能区分「从来没有」和「删掉了」，而且 Coffer 自己做的任何事都不需要撤销。你的远端始终是一个你可以查看的普通仓库。",
-    "link": "/zh/architecture/vault-sync",
-    "linkText": "保险库同步"
-  },
-  {
-    "title": "密钥是用一个主密钥加密的 Fernet 密文，主密钥默认存在一个 `0600` 文件里。",
-    "why": "Coffer 的构建没有签名，macOS 会对新构建碰到的每个钥匙串条目重新弹窗。一个文件里放一把密钥就没有弹窗了；钥匙串作为可选项保留。",
-    "link": "/zh/architecture/security#the-secret-store",
-    "linkText": "安全模型"
-  },
-  {
-    "title": "未完成的功能随每个构建发布，在你开启之前一直关闭，而不是放在分支上。",
-    "why": "只有一条开发线，所有者测的正是用户在跑的东西。关闭一个功能只是隐藏它，数据保留。",
-    "link": "/zh/architecture/distribution#experimental-features",
-    "linkText": "分发与发布"
-  }
-]
-</script>
-
 # 架构总览 {#architecture-overview}
 
 这一页是整个架构章节的地图：一张图画出所有活动部件，列出运行中的进程、四条主要数据流如何穿过它们，以及底层用到的技术。它面向想先弄清 Coffer 怎么搭、为什么这么搭，再深入某个子系统的工程师。
@@ -234,13 +73,58 @@ CLI、shim 和桌面壳都通过 `~/.coffer/daemon.json`（pid、端口、令牌
 
 ## 主要数据流 {#main-data-flows}
 
-<DataFlows :flows="flows" />
+<DataFlows>
+
+### 智能体的一次工具调用 {#an-agent-s-tool-call}
+
+1. **智能体** 智能体调用它 `coffer` MCP 服务器上的一个工具。
+2. **coffer-mcp-shim** shim 带着守护进程令牌把 JSON-RPC 消息转发到 `POST /mcp`。
+3. **MCP 网关** 网关解析出会话（每个下游客户端会话都有自己的一组上游子进程），把 `github__create_issue` 这样带命名空间的名字路由到 `github` 服务器的会话，或者自己回答 `coffer__*` 内置工具。
+4. **生效范围检查** 在列出或调用之前，网关会拿服务器的生效范围去比对 shim 在握手时上报的智能体 uid，所以一个生效范围不包含这个智能体的服务器不会呈现任何工具。
+5. **工具预算** 当完整工具列表会超出配置的预算时，网关只列出一个子集，其余的由 `coffer__search_tools` 找出来。详见 [MCP 网关](/zh/architecture/mcp-gateway)。
+
+### 一个对话轮次 {#a-chat-turn}
+
+1. **你** 你在 **对话** 页面发一条消息，或者已配对的所有者从 Telegram 或 SeaTalk 发一条。
+2. **轮次编排器** 两个入口调用同一个轮次编排器：对话空闲时它开始一个轮次，否则把消息排在正在运行的轮次后面。
+3. **适配器与总线** 编排器向智能体提供者注册表要这个对话的智能体，构建一个适配器（Claude Agent SDK 或 Codex app-server），并把每个事件发布到一条按对话划分的总线上，网页和消息渠道渲染器都订阅这条总线。
+4. **任一入口** 消息一旦到达编排器，下游就不再知道它来自哪个入口。详见 [对话与轮次](/zh/architecture/chat)。
+
+### 一次技能投递 {#a-skill-delivery}
+
+1. **技能库** 一个技能就是 `~/.coffer/vault/skills/<name>/` 下的一个主文件夹加一个 `skill` 资源文件。当且仅当技能已启用、且智能体在它的范围内时，技能才会到达这个智能体。
+2. **调和** 两者中任何一项发生变化（启用、停用、扩大或缩小范围），都会对每个智能体做一次调和：Coffer 把主文件夹链接进 `<config_dir>/skills/`（符号链接、junction，或退而求其次的复制），或者收回一个已经不在生效范围内的副本。
+3. **偏移检查** 启动时的偏移检查会修复被人手工弄坏的链接。Coffer 自己的说明书 `coffer-guide` 也由完全相同的代码投递。
+4. **导入** 技能可以从文件夹、压缩包或 Git 仓库进入技能库，都会先暂存、确认；来自 Git 的技能固定在它的提交上，直到你接受更新。详见 [技能](/zh/architecture/skills)。
+
+### 一轮同步 {#a-sync-round}
+
+1. **Worker** 当你配置了一个你自己拥有的 git 远端，一个 worker 会按远端的间隔跑一轮同步，默认每小时一次。
+2. **合并** 保险库本来就是 git 仓库，所以一轮同步只需要 fetch，让 git 在工作树之外算出合并；如果合并干净、有效且没触发删除熔断，就给保险库拍快照、检出合并结果并 push。
+3. **冲突** 任何冲突都会让这一轮停下，两边都不改，直到你逐个文件给出答复。
+4. **传输的内容** 生效范围和智能体从不传输（它们在 `local/` 里）；密钥只以 Fernet 密文传输，而且只在你选择开启时才传；一轮会丢失太多内容的同步会挂起，等你答复。详见 [保险库同步](/zh/architecture/vault-sync)。
+
+</DataFlows>
 
 ## 十一项决策构成的设计 {#the-design-in-eleven-decisions}
 
 Coffer 的大部分形态都来自少数几项决策。下面每一项都在它链接的页面上有完整论证，包括落选的方案。
 
-<DecisionList :items="decisions" />
+<DecisionList>
+
+- **每个保险库一个常驻守护进程；其他所有进程都是客户端，找到它或拉起它。** 只有一个 SQLite 写入者和一组上游进程，也不需要「先启动守护进程」这一步。空闲退出会让智能体的下一次调用承担冷启动。 [守护进程与进程](/zh/architecture/daemon)
+- **回环地址、每次启动生成的令牌和 `Host` 检查就是全部访问模型。** Coffer 只在一台机器上服务一个人。绑定 `127.0.0.1` 挡住远程主机；`Host` 检查挡住把自己的 DNS 名重新指向回环地址的网页。 [安全模型](/zh/architecture/security)
+- **每个受管对象都是一个带不可变 `uid` 的资源；行为留在各自的类型里。** 身份、生命周期、审计和生效范围对每种类型都一样，只建一次。调用工具和投递技能没有共同点，所以不强行统一。 [资源框架](/zh/architecture/resource-framework)
+- **生效范围只属于本机，并在知道提问智能体是谁的地方执行。** 如果权限通过同步合并过来，就等于让另一台机器的同步轮次决定这台机器暴露什么。集中式的闸门则会压在每种类型的读路径上。 [资源框架](/zh/architecture/resource-framework#reach)
+- **每个 MCP 客户端会话都有自己惰性启动的上游进程。** MCP 是按会话的协议。跨客户端共享上游，意味着要在网关里重新实现能力协商和通知路由。 [MCP 网关](/zh/architecture/mcp-gateway)
+- **网关按使用量排序列出一部分工具，其余的提供搜索。** 工具超过大约 30 到 50 个后，模型选工具就不那么可靠了。分层只决定列出什么，从不决定能调用什么。 [MCP 网关](/zh/architecture/mcp-gateway#budget-driven-tiering)
+- **知识是不带索引的纯 Markdown；它的目录以技能的形式到达智能体。** 智能体整天都在读文件，却很少调用检索工具。没有派生物，就不会有东西和文件不一致。 [知识](/zh/architecture/knowledge)
+- **记忆从每个智能体自己的文件只读聚合，从不回写。** 每个智能体自己的记忆回路保持原样，Coffer 派生出的一切都可以删掉重建。 [记忆](/zh/architecture/memory)
+- **保险库是一个 git 仓库；同步 pull 和 push 它，应用干净的合并，遇到任何冲突就停。** 只有共同的基线才能区分「从来没有」和「删掉了」，而且 Coffer 自己做的任何事都不需要撤销。你的远端始终是一个你可以查看的普通仓库。 [保险库同步](/zh/architecture/vault-sync)
+- **密钥是用一个主密钥加密的 Fernet 密文，主密钥默认存在一个 `0600` 文件里。** Coffer 的构建没有签名，macOS 会对新构建碰到的每个钥匙串条目重新弹窗。一个文件里放一把密钥就没有弹窗了；钥匙串作为可选项保留。 [安全模型](/zh/architecture/security#the-secret-store)
+- **未完成的功能随每个构建发布，在你开启之前一直关闭，而不是放在分支上。** 只有一条开发线，所有者测的正是用户在跑的东西。关闭一个功能只是隐藏它，数据保留。 [分发与发布](/zh/architecture/distribution#experimental-features)
+
+</DecisionList>
 
 ### Coffer 刻意不做的事 {#what-coffer-deliberately-is-not}
 

@@ -362,11 +362,12 @@ html[lang="zh-CN"] .vp-doc h1 + p {
   display: table;
   border-collapse: collapse;
 }
-.vp-doc tr {
+.vp-doc tr,
+.vp-doc tr:nth-child(2n) {
   background: transparent;
   border: 0;
 }
-.vp-doc tr + tr td {
+.vp-doc tbody td {
   border-top: 1px solid var(--vp-c-divider);
 }
 .vp-doc th,
@@ -441,4 +442,48 @@ html[lang="zh-CN"] .vp-doc h1 + p {
 .cli-ref .VPDocOutlineItem .outline-link {
   font-family: var(--vp-font-family-mono);
   font-size: 12.5px;
+}
+
+/* program output reads as output: one quiet colour, as on the canvas */
+.vp-doc div.language-text code,
+.vp-doc div.language-text code span {
+  color: var(--vp-c-text-2) !important;
+}
+
+/* CLI reference: the note under the synopsis is small print, outline in 12 mono */
+.cli-ref .vp-doc h1 + p + div[class*="language-"] + p {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--vp-c-text-2);
+  margin-top: 12px;
+}
+.cli-ref .VPDocOutlineItem .outline-link {
+  font-size: 12px;
+}
+
+/* shiki writes per-theme font weights as variables; apply them */
+.vp-doc [class*="language-"] code span {
+  font-weight: var(--shiki-light-font-weight, inherit);
+}
+.dark .vp-doc [class*="language-"] code span {
+  font-weight: var(--shiki-dark-font-weight, inherit);
+}
+
+/* glossary: a letter is a small heading over a hairline, and its entries are
+   separated by hairlines, not a section rule each */
+.glossary .vp-doc h2 {
+  margin-top: 40px;
+  padding: 0 0 12px;
+  border-top: 0;
+  border-bottom: 1px solid var(--vp-c-border);
+}
+.glossary .vp-doc h3 {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--vp-c-divider);
+}
+.glossary .vp-doc h2 + h3 {
+  margin-top: 0;
+  padding-top: 16px;
+  border-top: 0;
 }
