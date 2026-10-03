@@ -63,7 +63,7 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 ## The Skills page
 
-**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, a **Reach** filter (All, Disabled, Every agent, Only selected agents) and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, a **Reach** filter (All, Off, All agents, Chosen agents) and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
 The open skill's header carries its reach button and a **⋯** menu: **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, an update — with the one action that answers it.
 
@@ -297,9 +297,9 @@ Two settings on the skill decide where it is delivered, and nothing else does:
 
 | Reach | Effect |
 | --- | --- |
-| Every agent (no scope) | Delivered to every registered agent, including agents you register later. This is the default. |
-| Only selected agents | Delivered only to the agents you pick. |
-| No agent selected | Delivered to nobody. The skill stays in the library, listed and synced. |
+| All agents (no scope) | Delivered to every registered agent, including agents you register later. This is the default. |
+| Chosen agents | Delivered only to the agents you pick. |
+| No agent (Chosen agents with nothing ticked) | Delivered to nobody. The skill stays in the library, listed and synced. |
 
 A skill is delivered to an agent if and only if the skill is enabled **and** its reach includes that agent. There is no per-agent switch for "this agent gets no skills"; to keep an agent away from a skill, leave it out of that skill's reach.
 
@@ -325,12 +325,12 @@ coffer skill enable release-checklist
 
 ```text [Web UI]
 Skills → the Reach button on the skill's row (or on its detail page)
-       → Disabled | Every agent | Only selected agents
+       → Off | All agents | Chosen agents
 ```
 
 :::
 
-The reach button is labelled with the current answer, for example **Every agent**, **2 agents** or **Disabled**. Choices made under **Only selected agents** are saved once when the panel closes. To change several skills at once, select their rows and use **Reach for the selected**.
+The reach button is labelled with the current answer, for example **All agents**, the badges of the chosen agents or **Off**. Every switch and tick in the panel is saved at once. To change several skills at once, select their rows and use **Reach for the selected**.
 
 ::: info Reach is set per machine
 Reach and the enabled flag apply to the machine you set them on. [Vault sync](/guides/vault-sync) carries the skill itself — its files and metadata — to your other machines, but each machine keeps its own reach.

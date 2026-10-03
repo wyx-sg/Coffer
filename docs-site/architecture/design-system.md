@@ -63,7 +63,7 @@ The base controls — button, input, select, checkbox, switch, tabs, dialog, too
 
 **Status dot and word.** Four states — running, degraded, failing, disabled — each a coloured dot beside its word. In a list row it is quiet; in a detail header it becomes a tinted pill.
 
-**Reach.** "Who can use this resource?" is always one of three answers: off, every agent, or chosen agents. The same control sits in a list row, a detail header and a selection bar, and shows the chosen agents' badges so the answer can be read without opening it. Reach belongs to this machine and is never synced.
+**Reach.** "Who can use this resource?" is always one of three answers: Off, All agents, or Chosen agents. The same control sits in a list row, a detail header and a selection bar, and shows the chosen agents' badges so the answer can be read without opening it. Reach belongs to this machine and is never synced.
 
 **Change preview.** Before Coffer writes into files it does not own — repairing drift, connecting an agent, resolving a sync conflict — it can show the change first, in one preview: grouped by agent and by file, each file with its operation and line counts, a plain-words sentence per agent of what will happen, and the diff as the proof underneath. It has a state for every moment — computing, nothing to change, ready, applying, applied, and failed partway. When some changes fail, it stays open, says what did apply, and retries only the rest.
 
