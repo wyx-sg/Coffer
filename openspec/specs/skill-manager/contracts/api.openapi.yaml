@@ -2036,9 +2036,39 @@ components:
           - agents_dir
           title: Location
           type: string
+        name:
+          anyOf:
+          - minLength: 1
+            type: string
+          - type: 'null'
+          title: Name
+        reach:
+          anyOf:
+          - $ref: '#/components/schemas/AdoptReach'
+          - type: 'null'
       required:
       - location
       title: AdoptBody
+      type: object
+    AdoptReach:
+      description: |-
+        Who gets the adopted skill: every agent, only the listed agents, or
+        nobody (the skill is adopted switched off).
+      properties:
+        agents:
+          items:
+            type: string
+          title: Agents
+          type: array
+        mode:
+          default: everywhere
+          enum:
+          - everywhere
+          - restricted
+          - disabled
+          title: Mode
+          type: string
+      title: AdoptReach
       type: object
     ArchiveImportSourceOut:
       description: A skill unpacked from an uploaded archive; both fields are informational.

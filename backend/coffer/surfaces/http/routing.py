@@ -69,6 +69,7 @@ from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_tes
 from coffer.surfaces.http.memory import routers as memory_routers
 from coffer.surfaces.http.model_routes import router as model_router
 from coffer.surfaces.http.price_list_routes import router as price_list_router
+from coffer.surfaces.http.provider_model_switch_routes import router as model_switch_router
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.proxy_routes import router as proxy_router
 from coffer.surfaces.http.reconcile_routes import attention_router
@@ -157,6 +158,7 @@ def include_all_routers(app: FastAPI) -> None:
         chat_attachment_bytes_router,  # … and a thread thumbnail's bytes
         channel_router,  # spec channels
         price_list_router,  # spec provider-switching (before /providers/{uid})
+        model_switch_router,  # spec provider-switching: review + apply a model change
         provider_router,  # spec provider-switching
         proxy_router,  # spec provider-switching (the local model proxy)
         usage_router,  # spec provider-switching (usage metering)

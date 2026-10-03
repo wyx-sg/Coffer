@@ -56,20 +56,23 @@ class HookRow:
     command: str
     type: str
     timeout: int | None
+    #: Where it sits in the file: ``hooks.<event>[group_index].hooks[hook_index]``.
+    group_index: int = 0
+    hook_index: int = 0
 
 
 def _rows(event: str, groups: Any) -> list[HookRow]:
     rows: list[HookRow] = []
     if not isinstance(groups, list):
         return rows
-    for group in groups:
+    for gi, group in enumerate(groups):
         if not isinstance(group, dict):
             continue
         matcher = group.get("matcher")
         leaves = group.get("hooks")
         if not isinstance(leaves, list):
             continue
-        for leaf in leaves:
+        for li, leaf in enumerate(leaves):
             if not isinstance(leaf, dict):
                 continue
             command = leaf.get("command")
@@ -83,6 +86,8 @@ def _rows(event: str, groups: Any) -> list[HookRow]:
                     command=command,
                     type=str(leaf.get("type") or "command"),
                     timeout=timeout if isinstance(timeout, int) else None,
+                    group_index=gi,
+                    hook_index=li,
                 )
             )
     return rows

@@ -2,7 +2,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import type { AgentType } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import {
   providersApi,
@@ -12,7 +11,6 @@ import {
 } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 import {
-  agentsKey,
   endpointModelsKey,
   localRuntimesKey,
   pendingApprovalsKey,
@@ -127,37 +125,6 @@ export function useDeleteProvider() {
       qc.removeQueries({ queryKey: endpointModelsKey(uid) });
       qc.setQueryData<Provider[]>(providersKey, (old) => old?.filter((p) => p.uid !== uid));
       void qc.invalidateQueries({ queryKey: providersKey });
-    },
-    onError,
-  });
-}
-
-export function useActivateProvider() {
-  const qc = useQueryClient();
-  // Switching writes native config; a failure (e.g. unwritable config dir)
-  // must surface rather than silently leave the agent on its old connection.
-  const onError = useProviderToastError();
-  return useMutation({
-    mutationFn: ({ uid, agentType }: { uid: string; agentType: AgentType }) =>
-      providersApi.activate(uid, agentType),
-    onSuccess: () => {
-      // The agent's record names its connection, so it changes with the switch.
-      qc.invalidateQueries({ queryKey: providersKey });
-      qc.invalidateQueries({ queryKey: agentsKey });
-    },
-    onError,
-  });
-}
-
-/** Switch an agent type back to its own built-in login (clears its connection
- * + removes Coffer's projection). */
-export function useUseBuiltinProvider() {
-  const qc = useQueryClient();
-  const onError = useProviderToastError();
-  return useMutation({
-    mutationFn: (agentType: AgentType) => providersApi.useBuiltin(agentType),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });

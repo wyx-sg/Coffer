@@ -1,10 +1,10 @@
-// src/components/providers/ProviderModelRow.tsx — one model in the Models section: switch, id, what uses it, its price, its type.
+// src/components/providers/ProviderModelRow.tsx — one model in the Models section: switch, id (never wrapped), what uses it, its price, its type.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { TruncatedText } from "@/components/ui/truncated-text";
 import { Switch } from "@/components/ui/switch";
 import type { Modality } from "@/lib/api/providers";
+import { cn } from "@/lib/utils";
 import { ModalitySelect } from "./ModalitySelect";
 
 interface Props {
@@ -34,7 +34,7 @@ export function ProviderModelRow({
   return (
     <div
       data-testid="model-row"
-      className="grid min-h-row grid-cols-[auto_minmax(0,1fr)_auto_128px] items-center gap-3 py-2"
+      className="grid min-h-row grid-cols-[auto_minmax(0,1fr)_auto_120px] items-center gap-3 px-3.5 py-2"
     >
       <Switch
         checked={on}
@@ -43,11 +43,18 @@ export function ProviderModelRow({
         aria-label={t("providers.models.offered", { id })}
       />
       <span className="flex min-w-0 items-center gap-2">
-        <TruncatedText text={id} mono className="text-xs text-text" />
+        <span
+          className={cn(
+            "shrink-0 whitespace-nowrap font-mono text-xs",
+            on ? "text-text" : "text-text-subtle",
+          )}
+        >
+          {id}
+        </span>
         {tags.map((tag) => (
           <span
             key={tag}
-            className="inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted"
+            className="block h-[18px] min-w-0 truncate whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs leading-[18px] font-label text-text-muted"
           >
             {tag}
           </span>

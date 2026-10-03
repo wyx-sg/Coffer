@@ -224,6 +224,100 @@ paths:
       summary: Detect Local
       tags:
       - providers
+  /api/v1/providers/model-switch/apply:
+    post:
+      description: |-
+        Write the switch. 409 ``CONFIG_FILE_STALE`` when a file named in ``seen``
+        changed on disk after the preview was made: nothing is written then.
+      operationId: apply_model_switch_api_v1_providers_model_switch_apply_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelSwitchIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSwitchOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Apply Model Switch
+      tags:
+      - providers
+  /api/v1/providers/model-switch/preview:
+    post:
+      description: |-
+        The files this switch would change, with their diffs; nothing is written.
+        409 when the connection or agent is off or the connection does not reach the agent.
+      operationId: preview_model_switch_api_v1_providers_model_switch_preview_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelSwitchIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSwitchOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Model Switch
+      tags:
+      - providers
   /api/v1/providers/order:
     put:
       description: |-
@@ -600,6 +694,49 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Activate Provider
+      tags:
+      - providers
+  /api/v1/providers/{uid}/delete-preview:
+    get:
+      description: |-
+        The agent config changes deleting this profile would make (404 if absent);
+        nothing is written.
+      operationId: delete_preview_api_v1_providers__uid__delete_preview_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderDeletePreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Delete Preview
       tags:
       - providers
   /api/v1/providers/{uid}/internal-default:
@@ -1343,6 +1480,81 @@ components:
       - previous
       title: DeactivateOut
       type: object
+    DeletePreviewAgentOut:
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        agent_type:
+          $ref: '#/components/schemas/AgentType'
+        agent_uid:
+          title: Agent Uid
+          type: string
+        files:
+          items:
+            $ref: '#/components/schemas/DeletePreviewFileOut'
+          title: Files
+          type: array
+      required:
+      - agent_uid
+      - agent_type
+      - agent_name
+      - files
+      title: DeletePreviewAgentOut
+      type: object
+    DeletePreviewFileOut:
+      description: One agent file that deleting the connection would change.
+      properties:
+        diff:
+          items:
+            $ref: '#/components/schemas/DeletePreviewLine'
+          title: Diff
+          type: array
+        op:
+          enum:
+          - modify
+          - remove
+          title: Op
+          type: string
+        path:
+          title: Path
+          type: string
+      required:
+      - path
+      - op
+      - diff
+      title: DeletePreviewFileOut
+      type: object
+    DeletePreviewLine:
+      properties:
+        kind:
+          enum:
+          - context
+          - add
+          - remove
+          - hunk
+          title: Kind
+          type: string
+        new_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: New No
+        old_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Old No
+        text:
+          title: Text
+          type: string
+      required:
+      - kind
+      - text
+      - old_no
+      - new_no
+      title: DeletePreviewLine
+      type: object
     DetectLocalIn:
       description: Probe one loopback URL, or — with none — each runtime's default port.
       properties:
@@ -1609,6 +1821,146 @@ components:
       - bundled_version
       title: ModelPricesOut
       type: object
+    ModelSwitchFile:
+      description: One file the switch changes (or would change).
+      properties:
+        added:
+          title: Added
+          type: integer
+        diff:
+          items:
+            $ref: '#/components/schemas/ModelSwitchLine'
+          title: Diff
+          type: array
+        fingerprint:
+          title: Fingerprint
+          type: string
+        op:
+          enum:
+          - add
+          - modify
+          - remove
+          title: Op
+          type: string
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+      required:
+      - path
+      - op
+      - added
+      - removed
+      - diff
+      - fingerprint
+      title: ModelSwitchFile
+      type: object
+    ModelSwitchIn:
+      description: |-
+        What the agent page's Change model dialog asks for.
+
+        ``connection_uid`` ``null`` is the agent's own built-in login: no model,
+        effort or tiers are written, and Coffer removes only the keys it wrote.
+        ``seen`` is sent only to apply: each previewed file's path with the
+        fingerprint the preview read, so a file edited since is refused.
+      properties:
+        agent_type:
+          $ref: '#/components/schemas/AgentType'
+        connection_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Uid
+        context_window:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Context Window
+        effort:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effort
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        seen:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Seen
+        tier_models:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Tier Models
+      required:
+      - agent_type
+      title: ModelSwitchIn
+      type: object
+    ModelSwitchLine:
+      properties:
+        kind:
+          enum:
+          - context
+          - add
+          - remove
+          - hunk
+          title: Kind
+          type: string
+        new_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: New No
+        old_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Old No
+        text:
+          title: Text
+          type: string
+      required:
+      - kind
+      - text
+      - old_no
+      - new_no
+      title: ModelSwitchLine
+      type: object
+    ModelSwitchOut:
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        agent_uid:
+          title: Agent Uid
+          type: string
+        connection_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Name
+        files:
+          items:
+            $ref: '#/components/schemas/ModelSwitchFile'
+          title: Files
+          type: array
+      required:
+      - agent_uid
+      - agent_name
+      - connection_name
+      - files
+      title: ModelSwitchOut
+      type: object
     PriceListIn:
       properties:
         refresh:
@@ -1745,6 +2097,18 @@ components:
       - protocol
       - base_url
       title: ProviderCreate
+      type: object
+    ProviderDeletePreviewOut:
+      description: What deleting a connection does to the agents running on it.
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/DeletePreviewAgentOut'
+          title: Agents
+          type: array
+      required:
+      - agents
+      title: ProviderDeletePreviewOut
       type: object
     ProviderListOut:
       description: |-

@@ -1,8 +1,8 @@
 // e2e/web/specs/shell_agents.spec.ts
 //
 // The Agents page and the agent detail page against the real daemon: the two
-// fixed rows, adding an agent through the change preview, and the nine path
-// tabs.
+// fixed rows, connecting an agent through the change preview, and the path tabs
+// (six in the strip, two behind More; the model is a section of Overview).
 //
 // Detection looks for `claude` / `codex` on the daemon's PATH. start_daemon.sh
 // puts `$HOME/bin` of the isolated HOME on it, so a machine without Codex (CI)
@@ -123,7 +123,7 @@ acceptance("agent-registry", "desktop app agents page", async ({ page }) => {
 
 acceptance(
   "agent-registry",
-  "adding an agent previews the change first",
+  "connecting an agent previews the change first",
   async ({ page }) => {
     ensureCodexProgram();
     await removeCodex();
@@ -131,10 +131,10 @@ acceptance(
     try {
       await page.goto("/agents");
       const codex = row(page, "Codex");
-      await expect(codex.getByRole("button", { name: "Add" })).toBeVisible({
+      await expect(codex.getByRole("button", { name: "Connect" })).toBeVisible({
         timeout: 15_000,
       });
-      await codex.getByRole("button", { name: "Add" }).click();
+      await codex.getByRole("button", { name: "Connect" }).click();
 
       // The preview names the file the add writes, and nothing is written yet.
       const dialog = page.getByRole("dialog");
@@ -165,7 +165,7 @@ acceptance(
 
 acceptance(
   "agent-registry",
-  "the agent detail page carries nine tabs",
+  "the agent detail page carries six tabs and a More menu",
   async ({ page }) => {
     ensureCodexProgram();
     await removeCodex();
@@ -179,25 +179,21 @@ acceptance(
       ).toBe(201);
       await page.goto("/agents/codex/mcp-servers");
 
+      // Six tabs in the strip, no counts, no Model tab (the model is a section
+      // of Overview); Plugins and Memory sit behind More.
       const tabs = page.getByRole("tab");
-      await expect(tabs).toHaveCount(9);
-      const labels = (await tabs.allTextContents()).map((l) =>
-        l.replace(/\d+$/, ""),
-      );
-      expect(labels).toEqual([
+      await expect(tabs).toHaveCount(6);
+      expect(await tabs.allTextContents()).toEqual([
         "Overview",
-        "Model",
         "Skills",
         "MCP servers",
-        "Plugins",
         "Hooks",
         "Config files",
-        "Memory",
         "Sessions",
       ]);
 
       const paths: [RegExp, string][] = [
-        [/^Model/, "/model"],
+        [/^Skills/, "/skills"],
         [/^Hooks/, "/hooks"],
         [/^Config files/, "/config"],
         [/^Sessions/, "/sessions"],
@@ -207,6 +203,12 @@ acceptance(
         await page.getByRole("tab", { name }).click();
         await expect(page).toHaveURL(new RegExp(`/agents/codex${suffix}$`));
       }
+
+      // More holds Plugins and Memory; picking one opens it at its own path.
+      await page.getByRole("button", { name: /^More/ }).click();
+      await page.getByRole("menuitem", { name: /^Plugins/ }).click();
+      await expect(page).toHaveURL(/\/agents\/codex\/plugins$/);
+
       // Overview carries no Title or Name field.
       await expect(page.getByText(/^Title$/)).toHaveCount(0);
     } finally {

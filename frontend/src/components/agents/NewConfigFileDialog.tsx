@@ -70,14 +70,17 @@ export function NewConfigFileDialog({ open, onOpenChange, entry, onCreate }: Pro
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-[440px]">
+      <DialogContent className="max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{t("agents.configTab.newFileTitle", { dir })}</DialogTitle>
           <DialogDescription>{t("agents.configTab.newFileBody")}</DialogDescription>
         </DialogHeader>
         <label className="flex flex-col gap-1.5 text-xs font-label text-text">
           <span>
-            {t("agents.configTab.newFileName")} <span aria-hidden>*</span>
+            {t("agents.configTab.newFileName")}{" "}
+            <span aria-hidden className="text-danger">
+              *
+            </span>
           </span>
           <Input
             autoFocus

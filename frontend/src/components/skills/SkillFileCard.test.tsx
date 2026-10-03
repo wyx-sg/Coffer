@@ -92,8 +92,8 @@ describe("the read-only Files card", () => {
         useContent={() => ({ isPending: false, error: null, data: content() })}
       />,
     );
-    const nav = screen.getByRole("navigation", { name: "Files" });
-    const rows = within(nav).getAllByRole("button");
+    const nav = screen.getByRole("tree", { name: "Files" });
+    const rows = within(nav).getAllByRole("treeitem");
     expect(rows.map((r) => r.textContent)).toEqual(["SKILL.md", "scripts", "search.py", "LICENSE"]);
     // Name and the lock's reason over the tree.
     expect(screen.getByText("deep-research", { selector: "span" })).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe("the read-only Files card", () => {
     wrap(<SkillReadOnlyFiles name="deep-research" tree={tree} useContent={useContent} />);
     expect(screen.getByText("deep-research/SKILL.md")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /search\.py/ }));
+    fireEvent.click(screen.getByRole("treeitem", { name: /search\.py/ }));
     expect(screen.getByTestId("where")).toHaveTextContent("?file=scripts%2Fsearch.py");
     expect(useContent).toHaveBeenLastCalledWith("scripts/search.py");
     expect(screen.getByText("deep-research/scripts/search.py")).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe("a managed skill's Files card", () => {
     wrap(<SkillFileTree uid="sk-1" owner="deep-research" />);
     fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "changed" } });
-    const row = screen.getByRole("button", { name: /SKILL\.md/ });
+    const row = screen.getByRole("treeitem", { name: /SKILL\.md/ });
     expect(within(row).getByRole("img", { name: "Unsaved changes" })).toHaveClass("bg-accent");
   });
 });

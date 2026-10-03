@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol as _Protocol
 
 from coffer.application.provider.cli_path import default_coffer_cli_resolver
@@ -44,6 +45,18 @@ from coffer.domain.usage.records import Wire
 #: The content each file a projection wrote or removed held before it
 #: (``None``: the file did not exist) — what an undo puts back.
 Priors = dict[pathlib.Path, str | None]
+
+
+@dataclass(frozen=True)
+class PlannedFile:
+    """One file a projection WOULD change, before anything is written: what it
+    holds now (``None``: absent), what it would hold (``None``: removed), and
+    the fingerprint of the content read — what a later write is checked against."""
+
+    path: pathlib.Path
+    before: str | None
+    after: str | None
+    fingerprint: str
 
 
 class ProjectionConfigStore(_Protocol):
@@ -153,6 +166,59 @@ class ProviderProjector:
             proxy_root=self._proxy_root(),
             wire=wire,
         )
+
+    def plan_project(
+        self, connection: Resource, cfg: ProviderConfig, agent: Resource
+    ) -> list[PlannedFile]:
+        """The files projecting ``connection`` into ``agent`` would change, in
+        the order they would be written; nothing is written."""
+        facet = self.projection_for(AgentConfig.model_validate(agent.config).type)
+        if facet is None:
+            return []
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
+        current = self._config_store.read_text(spec.path)
+        request = self.request_for(connection, cfg, agent)
+        return self._planned(spec.path, current, facet.apply(current or "", request, spec.path))
+
+    def plan_deproject(self, agent: Resource) -> list[PlannedFile]:
+        """The files taking Coffer's projection out of ``agent`` would change."""
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        facet = self.projection_for(agent_cfg.type)
+        if facet is None:
+            return []
+        spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
+        current = self._config_store.read_text(spec.path)
+        if not (current or "").strip():
+            return []
+        plan = facet.remove(current or "", spec.path, binding_of(agent_cfg))
+        return self._planned(spec.path, current, plan)
+
+    def current_fingerprint(self, path: pathlib.Path) -> str:
+        """The fingerprint of what ``path`` holds now."""
+        return self._config_store.fingerprint(self._config_store.read_text(path))
+
+    def _planned(
+        self, path: pathlib.Path, current: str | None, plan: ProjectionPlan
+    ) -> list[PlannedFile]:
+        planned: list[PlannedFile] = []
+
+        def add(where: pathlib.Path, before: str | None, after: str | None) -> None:
+            if after is None and before is None:
+                return
+            if after is not None and after == (before or ""):
+                return
+            planned.append(
+                PlannedFile(where, before, after, self._config_store.fingerprint(before))
+            )
+
+        for side in plan.before:
+            if side.text is not None:
+                add(side.path, self._config_store.read_text(side.path), side.text)
+        add(path, current, plan.text)
+        for side in plan.after:
+            add(side.path, self._config_store.read_text(side.path), side.text)
+        return planned
 
     def restore(self, priors: Priors) -> None:
         """Put every file in ``priors`` back as it was (delete one that did not
@@ -324,6 +390,7 @@ def projection_request(
 
 
 __all__ = [
+    "PlannedFile",
     "Priors",
     "ProjectionConfigStore",
     "ProviderProjector",

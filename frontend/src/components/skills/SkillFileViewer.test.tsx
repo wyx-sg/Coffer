@@ -76,7 +76,7 @@ describe("SkillFileViewer", () => {
     renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="SKILL.md" />);
     expect(screen.getByRole("heading", { name: "Heading" })).toBeInTheDocument();
     // The front matter is a key / value block above the title.
-    const meta = screen.getByTestId("markdown-frontmatter");
+    const meta = screen.getByTestId("front-matter");
     expect(meta).toHaveTextContent("description");
     expect(meta).toHaveTextContent("d");
     expect(screen.getByText("demo/SKILL.md")).toBeInTheDocument();

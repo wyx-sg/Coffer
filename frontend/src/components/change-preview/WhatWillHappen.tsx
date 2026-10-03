@@ -1,5 +1,5 @@
 // src/components/change-preview/WhatWillHappen.tsx
-// The "What will happen" block (a sunken box, label 11/600): one plain sentence per agent, led by its badge and name.
+// The "What will happen" block: one plain sentence per agent, led by its badge and name.
 import { useTranslation } from "react-i18next";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
@@ -14,8 +14,8 @@ export function WhatWillHappen({ summaries }: Props) {
   const { t } = useTranslation();
   if (summaries.length === 0) return null;
   return (
-    <section className="flex flex-col gap-2 rounded-lg bg-surface-sunken p-3">
-      <h3 className="text-2xs font-semibold text-text-subtle">
+    <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface-sunken p-3">
+      <h3 className="text-2xs font-semibold uppercase tracking-[0.04em] text-text-muted">
         {t("changePreview.whatWillHappen")}
       </h3>
       {summaries.map((line, index) => (

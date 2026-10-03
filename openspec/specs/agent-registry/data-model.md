@@ -63,7 +63,7 @@ stored: candidates and the agent read model compute them per request.
 
 ### Hooks (`domain/agent/hooks.py`)
 
-`HookRow {event, matcher, command, type, timeout}` parsed from the
+`HookRow {event, matcher, command, type, timeout, group_index, hook_index}` — the last two are where the hook sits in its file, `hooks.<event>[group_index].hooks[hook_index]` — parsed from the
 `{"hooks": {event: [{matcher, hooks: [{type, command, timeout}]}]}}` shape both
 agents use; `HookSource` is `user` | `plugin`; `HookHealth` is `current` |
 `stale` | `missing`. Read only; nothing stored.

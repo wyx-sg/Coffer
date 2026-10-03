@@ -38,16 +38,8 @@ export type ChangePreviewState =
   | "applied"
   | "failed";
 
-/** Summary-line order on the board: Modify, Add, Remove. */
+/** The order op counts are listed in: Modify, Add, Remove. */
 export const OP_ORDER: readonly ChangeOp[] = ["modify", "add", "remove"];
-
-export type OpCounts = Record<ChangeOp, number>;
-
-export function countByOp(items: readonly ChangeItem[]): OpCounts {
-  const counts: OpCounts = { add: 0, modify: 0, remove: 0 };
-  for (const item of items) counts[item.op] += 1;
-  return counts;
-}
 
 export interface AgentGroup {
   key: string;

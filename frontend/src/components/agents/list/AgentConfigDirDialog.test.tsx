@@ -82,4 +82,52 @@ describe("AgentConfigDirDialog", () => {
     });
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
+
+  acceptance(
+    "agent-registry",
+    "moving a connected agent's config directory goes through Review changes",
+    async () => {
+      const row = typeRow({ type: "codex", uid: "agt_c" });
+      const d = use(
+        fakeDaemon({
+          types: [row],
+          folders: { "/Users/me/codex-2": [] },
+          connections: {
+            agt_c: {
+              state: "connected",
+              parts: [
+                { key: "mcp", installed: true, detail: "/bin/coffer" },
+                { key: "memory_hook", installed: true, detail: "coffer memory hook" },
+              ],
+            },
+          },
+        }),
+      );
+      const onOpenChange = vi.fn();
+      renderWithDaemon(<AgentConfigDirDialog row={row} open onOpenChange={onOpenChange} />);
+      fireEvent.change(screen.getByLabelText("Config directory"), {
+        target: { value: "/Users/me/codex-2" },
+      });
+      // The primary is Review changes, not Use this directory.
+      const review = await screen.findByRole("button", { name: "Review changes" });
+      expect(screen.queryByRole("button", { name: "Use this directory" })).toBeNull();
+      await waitFor(() => expect(review).toBeEnabled());
+      fireEvent.click(review);
+      const dialog = await screen.findByRole("dialog");
+      // Both files come out of the old directory and go into the new one.
+      expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
+      expect(within(dialog).getAllByText("~/codex-2/config.toml").length).toBeGreaterThan(0);
+      expect(d.calls.filter((c) => c.method !== "GET")).toEqual([]);
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
+      await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
+      expect(d.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`)).toEqual(
+        [
+          "DELETE /agents/agt_c/coffer-connection",
+          "PATCH /agents/agt_c",
+          "POST /agents/agt_c/coffer-connection",
+        ],
+      );
+    },
+  );
 });

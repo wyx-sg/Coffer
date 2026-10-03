@@ -179,7 +179,7 @@ acceptance(
     const dialog = await screen.findByRole("dialog");
     // The 1060 review: what will happen, the files the restore undoes, the primary naming the write.
     expect(dialog).toHaveTextContent(/Restore the version of/);
-    expect(dialog).toHaveTextContent("1 change in Coffer");
+    expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 1");
     expect(within(dialog).getByText("What will happen")).toBeInTheDocument();
     expect(dialog).toHaveTextContent(/as a new version on top of today’s/);
     expect(vaultApi.restore).not.toHaveBeenCalled();

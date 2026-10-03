@@ -255,8 +255,8 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
   // in the read-only tree and reader.
   expect(screen.getByText("3 files")).toBeInTheDocument();
   expect(screen.getByText(/Found \d+ Sep/)).toBeInTheDocument();
-  const tree = await screen.findByRole("navigation", { name: "Files" });
-  expect(within(tree).getByRole("button", { name: /rules\.md/ })).toBeInTheDocument();
+  const tree = await screen.findByRole("tree", { name: "Files" });
+  expect(within(tree).getByRole("treeitem", { name: /rules\.md/ })).toBeInTheDocument();
   await waitFor(() => expect(api.orphanFileContent).toHaveBeenCalledWith("lint-rules", "SKILL.md"));
 
   fireEvent.click(screen.getByRole("button", { name: "Delete folder…" }));

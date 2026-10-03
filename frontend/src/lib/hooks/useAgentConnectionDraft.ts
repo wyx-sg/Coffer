@@ -1,38 +1,28 @@
-// frontend/src/lib/hooks/useAgentConnectionDraft.ts — the draft → test → confirm
-// state machine behind the agent's Model tab (spec provider-switching "Offer
-// every connection operation on REST, CLI and web").
+// frontend/src/lib/hooks/useAgentConnectionDraft.ts — the draft behind the agent's Change model dialog
+// (spec provider-switching "Offer every connection operation on REST, CLI and web").
 //
-// Picking a provider, model, effort or tier is a DRAFT: nothing is PATCHed or
-// activated until Confirm. A custom connection must pass a test for the CURRENT
-// draft first (any change resets the result); the built-in login needs none.
-// Confirm PATCHes the agent's binding, then switches the agent onto the
-// connection (`activate` with its type) — the only step that writes native
-// config — with `effort` and, for Claude Code,
-// `tier_models` (an explicit null clears them). The built-in login writes no
-// binding: nothing reads it there, so the tab shows the agent's own default
-// model and its effort read-only.
+// Picking a provider, model, effort or tier is a DRAFT: nothing is written
+// until the user has reviewed the change (`useModelSwitch`). The hook holds the
+// draft, derives what the form offers, and builds the request the review and
+// the apply both send.
 //
 // Model options: a connection with a CURATED set (`models` non-empty) IS the
 // catalogue and is never introspected; an empty set means "no restriction" and
 // the endpoint is introspected. Both are narrowed to modality `text` (spec
 // provider-switching "Offer only text models to chat pickers"), and the staged
-// model is seeded first so it never vanishes from the list. Effort levels come from what the connection records for the chosen model,
-// else from the agent's own catalogue entry for that id.
+// model is seeded first so it never vanishes from the list. Effort levels come
+// from what the connection records for the chosen model, else from the agent's
+// own catalogue entry for that id. The built-in login writes nothing: no
+// model, effort or tiers, so the dialog shows only the provider.
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 
-import { useToast } from "@/components/ui/toast";
-import type { AgentOut, AgentPatch } from "@/lib/api/agents";
-import { ApiError, translateApiError } from "@/lib/api/errors";
+import type { AgentOut } from "@/lib/api/agents";
+import type { ModelSwitchIn } from "@/lib/api/modelSwitch";
 import { modelIds, WIRE_BY_AGENT } from "@/lib/api/providers";
-import { agentsKey, providersKey } from "@/lib/api/queryKeys";
 import { activeProviderFor } from "@/lib/providers/usedBy";
-import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
-import { usePatchAgent } from "@/lib/hooks/useAgents";
-import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
-import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
+import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
+import { useProviders } from "@/lib/hooks/useProviders";
 import {
   BUILTIN,
   isLocal,
@@ -45,20 +35,16 @@ import {
 
 export { BUILTIN, type Tier } from "@/lib/agents/connectionDraft";
 
+/** Below this many tokens an agent compacts often (the runtimes' own guidance). */
+export const SMALL_WINDOW = 64_000;
+
 export function useAgentConnectionDraft(agent: AgentOut) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const qc = useQueryClient();
   const wire = WIRE_BY_AGENT[agent.type];
   const providers = useProviders();
   const catalogue = useAgentModels(agent.type);
-  const activate = useActivateProvider();
-  const useBuiltin = useUseBuiltinProvider();
-  const patchAgent = usePatchAgent();
   const list = useListProviderModels();
-  const test = useTestConnection();
-
   const hasTiers = wire === "anthropic";
+
   // Offerable = routed to this agent type AND switched on (`compatible_agents`
   // is the configured reach and deliberately ignores `enabled`).
   const compatible = useMemo(
@@ -76,30 +62,26 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const appliedConn = active?.uid ?? BUILTIN;
   const appliedModel = active === null ? "" : (agent.model ?? "");
   const appliedEffort = agent.effort ?? null;
-  const appliedTiersJson = tiersKey(hasTiers ? (agent.tier_models ?? {}) : {});
-  const appliedTiers = useMemo<TierModels>(
-    () => Object.fromEntries(JSON.parse(appliedTiersJson) as [Tier, string][]),
-    [appliedTiersJson],
-  );
+  const appliedTiers: TierModels = hasTiers ? ((agent.tier_models ?? {}) as TierModels) : {};
+  const appliedTiersJson = tiersKey(appliedTiers);
 
   const [draftConn, setDraftConn] = useState(appliedConn);
   const [draftModel, setDraftModel] = useState(appliedModel);
   const [draftEffort, setDraftEffort] = useState<string | null>(appliedEffort);
   const [draftTiers, setDraftTiers] = useState<TierModels>(appliedTiers);
+  const [draftWindow, setDraftWindow] = useState("");
   const [fetched, setFetched] = useState<string[]>([]);
 
-  const resetDraft = () => {
+  // The draft starts from what is applied, which is known once providers load.
+  const loaded = !providers.isPending;
+  useEffect(() => {
+    if (!loaded) return;
     setDraftConn(appliedConn);
     setDraftModel(appliedModel);
     setDraftEffort(appliedEffort);
     setDraftTiers(appliedTiers);
-    setFetched([]);
-    test.reset();
-  };
-  // Re-sync when the APPLIED state changes (load, confirm, an external switch);
-  // a same-value refetch leaves an in-progress draft alone.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(resetDraft, [appliedConn, appliedModel, appliedEffort, appliedTiers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the applied state arrives
+  }, [loaded]);
 
   const draftConnObj = compatible.find((p) => p.uid === draftConn) ?? null;
   const draftIsBuiltin = draftConn === BUILTIN;
@@ -116,12 +98,9 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   }, [draftModel, fetched, draftConnObj, restricted]);
 
   const entries = catalogue.data ?? [];
-  // The agent's own default is knowable only while the catalogue IS its own —
-  // i.e. while the built-in login is what is applied.
-  const builtinDefault = appliedConn === BUILTIN ? (entries[0] ?? null) : null;
   const curatedEntry = (draftConnObj?.models ?? []).find((m) => m.id === draftModel);
   const effortLevels = draftIsBuiltin
-    ? (builtinDefault?.efforts ?? [])
+    ? []
     : (curatedEntry?.effort_levels ?? entries.find((m) => m.id === draftModel)?.efforts ?? []);
 
   const showTiers = hasTiers && !draftIsBuiltin;
@@ -130,6 +109,10 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     () => suggestTiers(models, draftModel, local),
     [models, draftModel, local],
   );
+  // A local model whose runtime reports no window: the person says what it is.
+  const showWindow = local && !draftIsBuiltin && !!draftModel && !curatedEntry?.context_window;
+  const windowTokens = Number.parseInt(draftWindow, 10);
+  const window = showWindow && windowTokens > 0 ? windowTokens : null;
 
   const introspect = () => {
     if (!draftConnObj || restricted) return;
@@ -143,23 +126,21 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     );
   };
 
-  // Staging a model resets its effort and tier prefill, and any earlier test.
+  // Staging a model resets its effort and tier prefill.
   const stageModel = (m: string, pool: string[], onLocal: boolean) => {
     setDraftModel(m);
     setDraftEffort(null);
+    setDraftWindow("");
     setDraftTiers(hasTiers ? suggestTiers(pool, m, onLocal) : {});
-    test.reset();
   };
 
   const pickConnection = (uid: string) => {
     setDraftConn(uid);
     setFetched([]);
-    activate.reset();
     if (uid === BUILTIN) return stageModel("", [], false);
     const conn = compatible.find((p) => p.uid === uid);
     if (!conn) return;
     const connLocal = isLocal(conn);
-    // Stage (never apply) a default model so there is something to test.
     if ((conn.models ?? []).length > 0) {
       const pinned = modelIds(conn.models ?? [], "text");
       return stageModel(pinned[0] ?? "", pinned, connLocal);
@@ -177,65 +158,26 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     );
   };
 
-  const runTest = () => {
-    if (!draftConnObj || !draftModel) return;
-    test.mutate({
-      provider: draftConnObj.protocol,
-      model: draftModel,
-      base_url: draftConnObj.base_url,
-      secret_ref: draftConnObj.secret_ref,
-    });
-  };
-
-  const switched = (target: string) =>
-    toast.success(
-      t("agents.modelTab.switchedToast", { agent: agentTypeLabel(agent.type), target }),
-    );
-
-  const confirm = () => {
-    activate.reset();
-    if (draftIsBuiltin) {
-      useBuiltin.mutate(agent.type, {
-        onSuccess: () => switched(t("agents.modelTab.builtinTarget")),
-      });
-      return;
-    }
-    const body: AgentPatch = { model: draftModel, effort: draftEffort };
-    if (showTiers) body.tier_models = draftTiers;
-    patchAgent.mutate(
-      { uid: agent.uid, body },
-      {
-        onSuccess: () =>
-          activate.mutate(
-            { uid: draftConn, agentType: agent.type },
-            { onSuccess: () => switched(draftModel) },
-          ),
-        // usePatchAgent carries no toast of its own.
-        onError: (e) => toast.error(translateApiError(t, e)),
-      },
-    );
-  };
-
-  // A 409 CONFIG_FILE_STALE keeps the draft; Reload refetches what the preview
-  // was made from.
-  const stale = activate.error instanceof ApiError && activate.error.code === "CONFIG_FILE_STALE";
-  const reload = () => {
-    activate.reset();
-    void qc.invalidateQueries({ queryKey: providersKey });
-    void qc.invalidateQueries({ queryKey: agentsKey });
-  };
-  const error = stale ? null : (activate.error ?? patchAgent.error ?? useBuiltin.error ?? null);
-
   const dirty =
     draftConn !== appliedConn ||
     draftModel !== appliedModel ||
     (!draftIsBuiltin && draftEffort !== appliedEffort) ||
-    (showTiers && tiersKey(draftTiers) !== appliedTiersJson);
-  const canConfirm = dirty && (draftIsBuiltin || (!!draftModel && test.data?.ok === true));
-  const busy = activate.isPending || patchAgent.isPending || useBuiltin.isPending;
+    (showTiers && tiersKey(draftTiers) !== appliedTiersJson) ||
+    window !== null;
+  // A model is needed on a provider; Review is for something to change.
+  const canReview = dirty && (draftIsBuiltin || !!draftModel);
+
+  /** What the review and the apply send. */
+  const request: ModelSwitchIn = {
+    agent_type: agent.type,
+    connection_uid: draftIsBuiltin ? null : draftConn,
+    model: draftIsBuiltin ? null : draftModel,
+    effort: draftIsBuiltin || effortLevels.length === 0 ? null : draftEffort,
+    tier_models: showTiers ? (draftTiers as Record<string, string>) : null,
+    context_window: window,
+  };
 
   return {
-    wire,
     compatible,
     appliedConn,
     draftConn,
@@ -243,7 +185,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     draftIsBuiltin,
     draftModel,
     models,
-    builtinDefault,
     local,
     effortLevels,
     draftEffort,
@@ -251,29 +192,19 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     tiers,
     draftTiers,
     tiersAreSuggested: tiersKey(draftTiers) === tiersKey(suggestion),
-    dirty,
-    canConfirm,
-    busy,
+    showWindow,
+    draftWindow,
+    windowTokens: window,
     loading: providers.isPending,
-    stale,
-    error,
-    testPending: test.isPending,
-    testResult: test.data ?? null,
+    dirty,
+    canReview,
+    request,
     introspect,
     pickConnection,
     pickModel: (m: string) => stageModel(m, models, local),
-    pickEffort: (e: string | null) => setDraftEffort(e),
+    pickEffort: setDraftEffort,
     pickTier: (tier: Tier, m: string) => setDraftTiers((cur) => ({ ...cur, [tier]: m })),
-    resetTiers: () => setDraftTiers(suggestion),
-    runTest,
-    discard: () => {
-      resetDraft();
-      activate.reset();
-      patchAgent.reset();
-      useBuiltin.reset();
-    },
-    confirm,
-    reload,
+    setWindow: setDraftWindow,
   };
 }
 

@@ -1,8 +1,10 @@
 // frontend/src/components/agents/AgentConfigFilesTab.tsx — spec agent-registry.
-// The agent detail page's Config files tab: a resizable split of the curated
-// config-file allowlist (ConfigFileTree — settings and instructions files side
-// by side, grouped by where they live) and the selected file
-// (ConfigEditorPane), or a directory entry's files (ConfigDirectoryPane).
+// The agent detail page's Config files tab (boards 2.1.40–2.1.48): ONE bordered
+// surface — the curated config-file allowlist as a tree on the left (settings
+// and instructions files side by side, grouped by where they live;
+// ConfigFileTree) and the selected file on the right (ConfigEditorPane), or a
+// directory entry's files (ConfigDirectoryPane). It stays a document editor:
+// reading first, an explicit Edit · Revert · Save, an unsaved guard.
 // Secret and machine-state files are not on the allowlist, so never here.
 //
 // An unsaved draft is guarded by the shell, not here: the file picker, the tab
@@ -11,19 +13,23 @@
 // selected file is in the URL (`?file=`).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FolderOpen } from "lucide-react";
 
 import { LoadError } from "@/components/LoadError";
 import { ConfigDirectoryPane } from "@/components/agents/ConfigDirectoryPane";
 import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
 import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
 import { NewConfigFileDialog } from "@/components/agents/NewConfigFileDialog";
-import { FILE_PANE_COLUMN, useFillToBottom } from "@/components/filePane";
-import { SplitView } from "@/components/SplitView";
+import { FileBrowserFrame } from "@/components/files/FileBrowserFrame";
+import { FileTreePanel } from "@/components/files/FileTree";
+import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { baseName } from "@/lib/agents/configFiles";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
+import { useFsActions } from "@/lib/fsActions";
 import { useCreateConfigChild, useDeleteConfigChild } from "@/lib/hooks/useConfigDirFiles";
+import { useToast } from "@/components/ui/toast";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
 
 // Keys with a description under `agents.config.desc.<key>`. Listing them keeps
@@ -38,8 +44,7 @@ const DESCRIBED_KEYS = new Set([
   "hooks",
 ]);
 
-const QUIET =
-  "flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-text-muted";
+const QUIET = "flex min-h-0 flex-1 items-center justify-center text-sm text-text-muted";
 
 interface Props {
   agent: AgentOut;
@@ -49,7 +54,8 @@ export function AgentConfigFilesTab({ agent }: Props) {
   const { t } = useTranslation();
   const agentName = agentTypeLabel(agent.type);
   const s = useConfigEditorState(agent.uid, agentName);
-  const fill = useFillToBottom();
+  const { reveal } = useFsActions();
+  const { toast } = useToast();
   const createChild = useCreateConfigChild(agent.uid);
   const deleteChild = useDeleteConfigChild(agent.uid);
   const [newFileOpen, setNewFileOpen] = useState(false);
@@ -76,6 +82,7 @@ export function AgentConfigFilesTab({ agent }: Props) {
   ) : (
     <ConfigFileTree
       files={s.allFiles}
+      dirty={s.draft.dirty}
       selectedKey={s.selectedKey}
       selectedChild={s.selectedChild}
       collapsed={s.collapsed}
@@ -88,6 +95,7 @@ export function AgentConfigFilesTab({ agent }: Props) {
   const detail =
     s.selectedInfo && s.isDirSelected ? (
       <ConfigDirectoryPane
+        agentUid={agent.uid}
         entry={s.selectedInfo}
         description={description}
         onSelectChild={(relpath) => s.selectChild(s.selectedInfo?.key ?? "", relpath)}
@@ -101,6 +109,7 @@ export function AgentConfigFilesTab({ agent }: Props) {
       />
     ) : s.selectedInfo ? (
       <ConfigEditorPane
+        key={`${s.selectedKey}/${s.selectedChild ?? ""}`}
         name={s.selectedChild ?? baseName(s.selectedInfo.path)}
         filePath={filePath}
         description={description}
@@ -116,15 +125,31 @@ export function AgentConfigFilesTab({ agent }: Props) {
     );
 
   return (
-    <div ref={fill.ref} style={fill.style} className="flex min-h-0">
-      <SplitView
-        storageKey="agent-config"
-        label={t("splitView.resizeList")}
-        className="min-h-0 flex-1"
-        listClassName={FILE_PANE_COLUMN}
-        detailClassName="pl-4"
-        list={list}
-        detail={detail}
+    <>
+      <FileBrowserFrame
+        side={
+          <FileTreePanel
+            title={t("agents.configTab.title", { agent: agentName })}
+            action={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("fileActions.reveal")}
+                title={t("fileActions.reveal")}
+                onClick={() =>
+                  void reveal(agent.config_dir).catch(() =>
+                    toast.error(t("fileActions.revealFailed")),
+                  )
+                }
+              >
+                <FolderOpen aria-hidden />
+              </Button>
+            }
+          >
+            {list}
+          </FileTreePanel>
+        }
+        main={detail}
       />
       {s.selectedInfo && s.isDirSelected ? (
         <NewConfigFileDialog
@@ -157,6 +182,6 @@ export function AgentConfigFilesTab({ agent }: Props) {
             : undefined
         }
       />
-    </div>
+    </>
   );
 }

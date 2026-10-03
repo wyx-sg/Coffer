@@ -20,15 +20,10 @@ import { useTranslation } from "react-i18next";
 import { Pencil } from "lucide-react";
 
 import { SkillFileEditing } from "@/components/skills/SkillFileEditing";
-import {
-  BinaryPane,
-  FileBar,
-  FileBody,
-  TruncatedBar,
-  ViewSwitch,
-  WrapToggle,
-} from "@/components/skills/SkillFilePanes";
-import { isMarkdown, type FileView } from "@/components/skills/skillFileHelpers";
+import { FileBody } from "@/components/files/FileBody";
+import { BinaryPane, TruncatedBar } from "@/components/files/FileStates";
+import { isMarkdownPath } from "@/components/files/middlePath";
+import { ViewerToolbar, type FileView } from "@/components/files/ViewerToolbar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -87,7 +82,7 @@ export function SkillFileViewer({ uid, owner, path, builtin = false, onDirtyChan
   if (content.isPending) {
     return (
       <>
-        <FileBar path={shownPath} />
+        <ViewerToolbar path={shownPath} />
         <div className="space-y-2 p-4" aria-busy="true">
           <Skeleton className="h-5 w-1/2" />
           <Skeleton className="h-40 w-full" />
@@ -98,7 +93,7 @@ export function SkillFileViewer({ uid, owner, path, builtin = false, onDirtyChan
   if (content.error || !data) {
     return (
       <>
-        <FileBar path={shownPath} />
+        <ViewerToolbar path={shownPath} />
         <p className="p-4 text-sm text-danger" role="alert">
           {translateApiError(t, content.error)}
         </p>
@@ -109,7 +104,7 @@ export function SkillFileViewer({ uid, owner, path, builtin = false, onDirtyChan
   if (data.binary) {
     return (
       <>
-        <FileBar path={shownPath} size={data.size} />
+        <ViewerToolbar path={shownPath} size={data.size} />
         <BinaryPane name={path.split("/").pop() ?? path} size={data.size} onReveal={reveal} />
       </>
     );
@@ -127,19 +122,22 @@ export function SkillFileViewer({ uid, owner, path, builtin = false, onDirtyChan
     );
   }
 
-  const markdown = isMarkdown(path) && !data.truncated;
+  const markdown = isMarkdownPath(path) && !data.truncated;
   const readOnly = builtin || data.truncated;
   return (
     <>
-      <FileBar path={shownPath} size={data.size}>
-        {markdown ? null : <WrapToggle on={wrap} onChange={setWrap} />}
-        {markdown ? <ViewSwitch value={view} onChange={setView} /> : null}
+      <ViewerToolbar
+        path={shownPath}
+        size={data.size}
+        view={markdown ? { value: view, onChange: setView } : undefined}
+        wrap={markdown ? undefined : { on: wrap, onChange: setWrap }}
+      >
         {readOnly ? null : (
           <Button variant="outline" size="sm" onClick={draft.startEditing}>
             <Pencil aria-hidden /> {t("common.edit")}
           </Button>
         )}
-      </FileBar>
+      </ViewerToolbar>
       {data.truncated ? (
         <TruncatedBar shown={data.content.length} total={data.size} onOpenInEditor={openInEditor} />
       ) : null}

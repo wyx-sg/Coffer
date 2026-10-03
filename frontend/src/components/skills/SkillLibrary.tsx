@@ -17,6 +17,7 @@ import { RefreshCw } from "lucide-react";
 
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
+import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
@@ -24,6 +25,7 @@ import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
 import type { Cli } from "@/lib/api/clis";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
+import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useClis } from "@/lib/hooks/useClis";
 import { skillProblems } from "@/lib/skills/attention";
@@ -75,16 +77,18 @@ export function SkillLibrary({
   const { data: agents = [] } = useAgents();
   const clis = useClis().data?.items ?? NO_CLIS;
   const [query, setQuery] = useState("");
+  const agentFilter = useAgentFilter();
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
     const out: Record<SkillGroup, SkillOut[]> = { attention: [], inUse: [], off: [], builtin: [] };
     for (const s of skills) {
+      if (agentFilter && !agentFilter.matches(s)) continue;
       if (q && !`${s.name} ${s.description}`.toLowerCase().includes(q)) continue;
       out[skillGroup(s, skillProblems(s, clis, drift).length > 0)].push(s);
     }
     return out;
-  }, [skills, query, clis, drift]);
+  }, [skills, query, clis, drift, agentFilter]);
   const shown = GROUP_ORDER.reduce((n, g) => n + groups[g].length, 0);
 
   // The listed skills the filter shows, never a built-in one: the bar's "of M".
@@ -129,6 +133,11 @@ export function SkillLibrary({
                 {checkingCopies ? t("skills.checkingCopies") : t("skills.checkCopies")}
               </Button>
             </div>
+            {agentFilter ? (
+              <div className="flex items-center gap-2">
+                <AgentFilterPill filter={agentFilter} />
+              </div>
+            ) : null}
           </>
         )}
       </div>

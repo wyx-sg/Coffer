@@ -21,7 +21,18 @@ def test_the_hooks_route_lists_hooks_and_writes_nothing(
 ) -> None:
     claude = tmp_path / ".claude"
     claude.mkdir()
-    settings = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "notify.sh"}]}]}}
+    settings = {
+        "hooks": {
+            "Stop": [
+                {
+                    "hooks": [
+                        {"command": "x.sh"},
+                        {"type": "command", "command": "notify.sh", "timeout": 7},
+                    ]
+                }
+            ]
+        }
+    }
     (claude / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
     app = _app(tmp_path, monkeypatch, 61400)
     with _client(app) as c:
@@ -33,8 +44,12 @@ def test_the_hooks_route_lists_hooks_and_writes_nothing(
         assert r.status_code == 200, r.text
         body = r.json()
         assert [(h["event"], h["command"], h["source"], h["coffer"]) for h in body["items"]] == [
-            ("Stop", "notify.sh", "user", False)
+            ("Stop", "x.sh", "user", False),
+            ("Stop", "notify.sh", "user", False),
         ]
+        # Timeout and the position `hooks.Stop[0].hooks[1]` come with each hook.
+        second = body["items"][1]
+        assert (second["timeout"], second["group_index"], second["hook_index"]) == (7, 0, 1)
         assert body["coffer_hook"]["health"] == "missing"
         # Missing: the events it would be installed on, all four.
         assert body["coffer_hook"]["event"] == (

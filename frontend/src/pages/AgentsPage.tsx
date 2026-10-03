@@ -2,12 +2,11 @@
 //
 // Two fixed rows, Claude Code then Codex, found on their own (on load, when the
 // window regains focus, and every few minutes — useAgentTypes), so there is no
-// Detect and no Add-agent dialog. On first run, with neither added and both
-// addable, the header offers Add both: one preview, one confirmation.
+// Detect and no Add-agent dialog. On first run, with neither connected and both
+// connectable, the header offers Connect both: one preview, one confirmation.
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 import {
   AgentConnectionChangeDialog,
@@ -22,8 +21,6 @@ import { AGENT_TYPES } from "@/lib/agents/routes";
 import { isAddableState } from "@/lib/agents/rowState";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentTypes } from "@/lib/hooks/useAgents";
-
-const LINK = "text-text underline-offset-2 hover:underline";
 
 export function AgentsPage() {
   const { t } = useTranslation();
@@ -51,7 +48,7 @@ export function AgentsPage() {
         actions={
           firstRun ? (
             <Button onClick={() => setChange({ kind: "add", rows: rows.map((r) => r.row) })}>
-              <Plus aria-hidden /> {t("agents.list.addBoth")}
+              {t("agents.list.connectBoth")}
             </Button>
           ) : null
         }
@@ -69,25 +66,7 @@ export function AgentsPage() {
           }
         />
       ) : (
-        <>
-          <AgentsTable rows={rows} isLoading={types.isPending} />
-          <p className="text-xs text-text-muted">
-            {firstRun ? (
-              t("agents.list.firstRunNote")
-            ) : (
-              <>
-                {t("agents.list.footnote")}{" "}
-                <Link to="/mcp-servers" className={LINK}>
-                  {t("agents.list.footnoteMcp")}
-                </Link>
-                {" · "}
-                <Link to="/skills" className={LINK}>
-                  {t("agents.list.footnoteSkills")}
-                </Link>
-              </>
-            )}
-          </p>
-        </>
+        <AgentsTable rows={rows} isLoading={types.isPending} />
       )}
 
       <AgentConnectionChangeDialog request={change} onClose={() => setChange(null)} />

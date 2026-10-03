@@ -71,7 +71,7 @@ describe("SkillUpdateDialog", () => {
   test("previews what will happen, the changed files and their diffs", async () => {
     api.previewUpdate.mockResolvedValue(updatePreview());
     renderDialog();
-    expect(await screen.findByText("2 changes in Coffer")).toBeInTheDocument();
+    expect(await screen.findByTestId("changes-heading")).toHaveTextContent("Changes · 2");
     expect(screen.getByRole("dialog", { name: "Update terraform-plan" })).toHaveTextContent(
       "github.com/acme/agent-skills · terraform-plan/ · a1b2c3d → f9e8d7c",
     );

@@ -17,17 +17,6 @@ type Schemas = components["schemas"];
 // inconclusive (the connection is offered to every agent; the user decides).
 export type Protocol = Schemas["Protocol"];
 
-// The agent types a connection may project into. Decoupled from `protocol`: the
-// user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
-// The set is not a connection FIELD any more — it is derived from the resource's
-// framework per-agent scope (ADR per-agent-resource-scope), so it appears only on
-// the read side (`Provider.compatible_agents`) and is changed through
-// `PUT /resources/{uid}/scope` (see `lib/api/scope.ts`).
-// Not exported: `@/lib/api/agents` is where the rest of the app takes this
-// type from, and two names for one enum is how they drift. It is only
-// spelled here because `compatible_agents` below is typed with it.
-type AgentType = Schemas["AgentType"];
-
 /**
  * What KIND of model a curated entry names (spec provider-switching "Store a
  * modality with each curated model"). One
@@ -87,6 +76,8 @@ export type DetectLocalOut = Schemas["DetectLocalOut"];
  *  from: `user` (You set), `provider` (its own API), `bundled` (the price list
  *  shipped with the release), `local` (costs nothing) — or `null`: unknown. */
 export type ModelPrice = Schemas["ModelPriceOut"];
+/** The agent config changes deleting a provider makes (the review before Delete). */
+export type ProviderDeletePreview = Schemas["ProviderDeletePreviewOut"];
 /** The price list pricing reads now, and whether its daily refresh is on. */
 export type PriceList = Schemas["PriceListOut"];
 /** Its query key (kept here: queryKeys.ts is at its size limit). */
@@ -128,6 +119,10 @@ export const providersApi = {
   // leaves a rename as an ordinary label edit — `resourcesApi.rename`, the same PATCH every other
   // kind uses.
 
+  /** What deleting the provider would change in the agents' own config files. Read-only. */
+  deletePreview: (uid: string) =>
+    unwrap(getApiClient().GET("/providers/{uid}/delete-preview", { params: { path: { uid } } })),
+
   remove: (uid: string) =>
     unwrapVoid(getApiClient().DELETE("/providers/{uid}", { params: { path: { uid } } })),
 
@@ -155,25 +150,6 @@ export const providersApi = {
    *  non-loopback URL is refused as 422. */
   detectLocal: (baseUrl: string | null) =>
     unwrap(getApiClient().POST("/providers/detect-local", { body: { base_url: baseUrl } })),
-
-  /** Switch ONE agent type onto this connection: writes that agent's native
-   * config and its `connection_uid`, nothing else. */
-  activate: (uid: string, agentType: AgentType) =>
-    unwrap(
-      getApiClient().POST("/providers/{uid}/activate", {
-        params: { path: { uid } },
-        body: { agent_type: agentType },
-      }),
-    ),
-
-  /** Switch an agent type back to its own built-in login: remove Coffer's
-   * projection and clear the agent's connection. Idempotent. */
-  useBuiltin: (agentType: AgentType) =>
-    unwrap(
-      getApiClient().POST("/providers/use-builtin/{agent_type}", {
-        params: { path: { agent_type: agentType } },
-      }),
-    ),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */

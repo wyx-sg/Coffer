@@ -9,7 +9,7 @@
 // here writes. The hooks are mocked at the network boundary.
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
@@ -150,7 +150,7 @@ describe("AgentSessionsTab", () => {
     renderTab();
     const list = within(screen.getByTestId("session-list"));
     expect(list.getByText("Fix the login redirect bug")).toBeInTheDocument();
-    expect(list.getAllByText("repo · 5 msgs")).toHaveLength(2);
+    expect(list.getAllByText("repo · 5 messages")).toHaveLength(2);
     // Keyed by file: both rows of the shared session_id are there.
     expect(list.getByText("Sidechain")).toBeInTheDocument();
     expect(screen.getByText(/pick a session/i)).toBeInTheDocument();
@@ -179,12 +179,41 @@ describe("AgentSessionsTab", () => {
     expect(vi.mocked(hooks.useTranscriptSession)).toHaveBeenCalledWith("agt_01cx", PATH_B, 0);
   });
 
-  test("the list has no search or filter controls, only a count above the rows", () => {
+  test("the list leads with a search and a Project pill; no count, sort or refresh", () => {
     stubList();
     renderTab();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Search sessions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^project$/i })).toBeInTheDocument();
+    expect(screen.queryByText("2 sessions")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.getByText("2 sessions")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh$/i })).not.toBeInTheDocument();
+  });
+
+  test("searching asks the listing for matches, starting the pages over", async () => {
+    stubList();
+    renderTab();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search sessions" }), {
+      target: { value: "login" },
+    });
+    await waitFor(() =>
+      expect(listCalls()).toContainEqual(expect.objectContaining({ q: "login" })),
+    );
+  });
+
+  test("the Project pill lists the projects and filters to the one chosen", () => {
+    stubList({
+      rows: [
+        summary({}),
+        summary({ title: "Other", project_path: "/Users/xing/scratch", source_path: PATH_B }),
+      ],
+    });
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: /^project$/i }));
+    const options = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["All projects", "repo", "scratch"]);
+    fireEvent.click(screen.getByRole("option", { name: "scratch" }));
+    expect(screen.getByRole("button", { name: "Project: scratch" })).toBeInTheDocument();
+    expect(listCalls()).toContainEqual(expect.objectContaining({ project: "/Users/xing/scratch" }));
   });
 
   test("Load more reads the next page with the cursor the last one returned", () => {
@@ -200,9 +229,13 @@ describe("AgentSessionsTab", () => {
     stubSession();
     renderTab(`?session=${encodeURIComponent(PATH_A)}`);
     expect(screen.getByRole("heading", { name: "Fix the login redirect bug" })).toBeInTheDocument();
-    expect(document.querySelector("[data-truncated-path]")).toHaveTextContent("~/repo");
+    expect(screen.getByText("~/repo")).toBeInTheDocument();
     expect(screen.getByText("2 messages")).toBeInTheDocument();
-    expect(screen.getByText("Turns 1–2 of 2")).toBeInTheDocument();
+    // "Read-only" lives in the meta line; there is no footer note and no prompts pane.
+    expect(screen.getByText("Read-only")).toBeInTheDocument();
+    expect(screen.queryByText(/coffer never writes transcripts/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/your prompts/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^turns /i)).not.toBeInTheDocument();
     const turns = within(screen.getByTestId("transcript-turns"));
     expect(turns.getByText("Codex")).toBeInTheDocument();
     expect(turns.getByText("You")).toBeInTheDocument();
@@ -210,9 +243,10 @@ describe("AgentSessionsTab", () => {
     expect(turns.getByText("why is the redirect looping")).toBeInTheDocument();
     expect(turns.getByText(/harness context/i).tagName).toBe("SUMMARY");
     expect(turns.getByText(/too long to show in full/i)).toBeInTheDocument();
-    expect(screen.getByText(/read-only — coffer never writes transcripts/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /open in editor/i }));
     expect(openMock).toHaveBeenCalledWith(PATH_A, expect.anything());
+    fireEvent.click(screen.getByRole("button", { name: /reveal in finder/i }));
+    expect(revealMock).toHaveBeenCalledWith(PATH_A);
     expect(screen.queryByRole("button", { name: /^(save|edit|delete)$/i })).toBeNull();
   });
 
@@ -220,6 +254,7 @@ describe("AgentSessionsTab", () => {
     stubList();
     stubSession({ message_count: 500 });
     renderTab(`?session=${encodeURIComponent(PATH_A)}`);
+    expect(screen.getByText("Turns 1–2 of 500")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /earlier turns/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /later turns/i }));
     expect(vi.mocked(hooks.useTranscriptSession).mock.calls.at(-1)).toEqual([
@@ -229,7 +264,7 @@ describe("AgentSessionsTab", () => {
     ]);
   });
 
-  test("a session that fails to load says the file moved, with retry and refresh", () => {
+  test("a session that fails to load says the file moved, with Retry and Refresh list", () => {
     stubList();
     const refetch = stubSession(null, new Error("gone"));
     renderTab(`?session=${encodeURIComponent(PATH_A)}`);
@@ -241,7 +276,7 @@ describe("AgentSessionsTab", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  test("no sessions at all says where the agent keeps them, with a refresh", () => {
+  test("no sessions at all says where the agent keeps them, in a bordered box", () => {
     stubList({ rows: [], total: 0 });
     renderTab();
     expect(screen.getByText("No sessions yet")).toBeInTheDocument();
@@ -250,7 +285,6 @@ describe("AgentSessionsTab", () => {
         /codex keeps its sessions in ~\/\.codex\/sessions\. run codex in a project/i,
       ),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
-    expect(refreshMock).toHaveBeenCalled();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

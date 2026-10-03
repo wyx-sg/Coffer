@@ -15,7 +15,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 
-import { FileBar } from "@/components/skills/SkillFilePanes";
+import { ViewerToolbar } from "@/components/files/ViewerToolbar";
 import { SkillFileConflict } from "@/components/skills/SkillFileConflict";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -66,7 +66,7 @@ export function SkillFileEditing({ uid, owner, path, draft, reload }: Props) {
 
   return (
     <>
-      <FileBar path={`${owner}/${path}`} status={status}>
+      <ViewerToolbar path={`${owner}/${path}`} status={status}>
         <Button variant="ghost" size="sm" onClick={cancel} disabled={draft.saving}>
           {t("common.cancel")}
         </Button>
@@ -78,7 +78,7 @@ export function SkillFileEditing({ uid, owner, path, draft, reload }: Props) {
         >
           {t("common.save")}
         </Button>
-      </FileBar>
+      </ViewerToolbar>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
         {draft.conflict ? (

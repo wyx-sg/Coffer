@@ -10,18 +10,21 @@
 import type { AgentType } from "@/lib/api/agents";
 import { detailTabPath } from "@/lib/detailTabs";
 
-/** The nine detail tabs, in the order the page shows them. The value is the path segment. */
-export const AGENT_TABS = [
+/**
+ * The eight detail tabs, in the order the page shows them: the six in the strip,
+ * then the two behind More. The value is the path segment. There is no Model
+ * tab: the model is a section of Overview.
+ */
+export const AGENT_PRIMARY_TABS = [
   "overview",
-  "model",
   "skills",
   "mcp-servers",
-  "plugins",
   "hooks",
-  "memory",
-  "sessions",
   "config",
+  "sessions",
 ] as const;
+export const AGENT_MORE_TABS = ["plugins", "memory"] as const;
+export const AGENT_TABS = [...AGENT_PRIMARY_TABS, ...AGENT_MORE_TABS] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 export const DEFAULT_AGENT_TAB: AgentTab = "overview";
 

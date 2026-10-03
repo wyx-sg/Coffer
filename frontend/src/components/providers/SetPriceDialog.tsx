@@ -3,7 +3,8 @@
 // Input and output per 1M tokens are required; cache reads and 5-minute cache
 // writes are optional (left out, they are charged at the input rate, so an
 // estimate errs high). What you set wins over the provider's API and the
-// bundled list.
+// bundled list; "Reset to default" (footer, left) drops it and appears only
+// when a price of yours exists.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -38,13 +39,15 @@ interface Props {
   current: ModelPrice | undefined;
   onClose: () => void;
   onSave: (price: CuratedPrice) => void;
+  /** Drop your own price; offered only while one exists. */
+  onReset?: () => void;
 }
 
-export function SetPriceDialog({ model, current, onClose, onSave }: Props) {
+export function SetPriceDialog({ model, current, onClose, onSave, onReset }: Props) {
   const { t } = useTranslation();
   return (
     <Dialog open={model !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[420px]">
+      <DialogContent className="max-w-[480px]">
         {model !== null ? (
           <PriceForm
             key={model}
@@ -52,6 +55,7 @@ export function SetPriceDialog({ model, current, onClose, onSave }: Props) {
             current={current}
             onClose={onClose}
             onSave={onSave}
+            onReset={onReset}
           />
         ) : (
           <DialogTitle className="sr-only">
@@ -63,7 +67,7 @@ export function SetPriceDialog({ model, current, onClose, onSave }: Props) {
   );
 }
 
-function PriceForm({ model, current, onClose, onSave }: Props & { model: string }) {
+function PriceForm({ model, current, onClose, onSave, onReset }: Props & { model: string }) {
   const { t } = useTranslation();
   const [values, setValues] = useState(() => initial(current));
   const parsed = Object.fromEntries(
@@ -96,18 +100,44 @@ function PriceForm({ model, current, onClose, onSave }: Props & { model: string 
               {t(`providers.prices.fields.${f}`)}
               {REQUIRED.has(f) ? <span aria-hidden> *</span> : null}
             </span>
-            <Input
-              inputMode="decimal"
-              value={values[f]}
-              placeholder={REQUIRED.has(f) ? "0.00" : t("providers.prices.optional")}
-              onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
-              className="font-mono"
-            />
+            <span className="relative block">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-xs text-text-muted"
+              >
+                $
+              </span>
+              <Input
+                inputMode="decimal"
+                value={values[f]}
+                placeholder={REQUIRED.has(f) ? "0.00" : t("providers.prices.optional")}
+                onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+                className="pl-6 pr-10 font-mono"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-xs text-text-muted"
+              >
+                / 1M
+              </span>
+            </span>
           </label>
         ))}
       </div>
-      <p className="text-2xs text-text-muted">{t("providers.prices.perMillion")}</p>
+      <p className="text-xs text-text-muted">{t("providers.prices.perMillion")}</p>
       <DialogFooter>
+        {current?.source === "user" && onReset ? (
+          <Button
+            variant="ghost"
+            className="sm:mr-auto"
+            onClick={() => {
+              onReset();
+              onClose();
+            }}
+          >
+            {t("providers.prices.reset")}
+          </Button>
+        ) : null}
         <Button variant="ghost" onClick={onClose}>
           {t("common.cancel")}
         </Button>

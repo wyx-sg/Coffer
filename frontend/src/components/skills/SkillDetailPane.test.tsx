@@ -259,7 +259,7 @@ describe("SkillDetailPane", () => {
   test("the open file is kept in ?file=", async () => {
     renderSkillsPage("/skills/hello?file=run.sh");
     await waitFor(() => expect(skillsApi.fileContent).toHaveBeenCalledWith("sk-11aa", "run.sh"));
-    fireEvent.click(await screen.findByRole("button", { name: "SKILL.md" }));
+    fireEvent.click(await screen.findByRole("treeitem", { name: "SKILL.md" }));
     await waitFor(() => expect(where.url).toBe("/skills/hello"));
   });
 

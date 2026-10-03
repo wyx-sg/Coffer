@@ -1,36 +1,40 @@
 // frontend/src/components/agents/ConfigEditorPane.tsx — spec agent-registry.
-// Right pane of the agent's Config files tab: the file's name with its state
-// (Read-only, Unsaved change, Not created) and what it is for, the
-// open-in-editor / reveal actions with Edit (or Revert and Save), the content,
-// and a footer naming the format, how a save behaves and the absolute path.
+// Right pane of the agent's Config files tab (boards 2.1.40–2.1.45): the viewer
+// toolbar (path; Preview / Source for Markdown; Open in editor, Reveal, Edit —
+// or, while editing, "● Unsaved changes" with Revert and Save), the file, and
+// a status line: its format, whether the draft parses, and what the file is for.
 //
 // Reading is the default: these are the agent's real configuration, so a pane
 // opened to look cannot be changed by a stray keystroke. A JSON draft is
-// checked as it is typed — the line and column where it stops parsing are
-// shown and Save waits until it parses (the daemon refuses malformed JSON
+// checked as it is typed — the line where it stops parsing is marked in the
+// text and Save waits until it parses (the daemon refuses malformed JSON
 // anyway). A save refused because the file changed on disk keeps the draft
-// (ConfigStalePanel); a file the agent has not created yet shows the panel
-// that creates it (ConfigMissingPanel). All state is the parent's draft.
+// ("● Not saved", ConfigStalePanel); a file the agent has not created yet shows
+// the empty state that creates it (ConfigMissingPanel). All state is the
+// parent's draft.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Check, CircleAlert, Pencil } from "lucide-react";
 
 import { ConfigMissingPanel, ConfigStalePanel } from "@/components/agents/ConfigEditorNotices";
-import { FileActions } from "@/components/FileActions";
-import { FILE_PANE_BODY } from "@/components/filePane";
-import { CodeView } from "@/components/preview/CodeView";
+import { FileBody } from "@/components/files/FileBody";
+import { LineEditor } from "@/components/files/LineEditor";
+import { isMarkdownPath } from "@/components/files/middlePath";
+import { DraftStatus, ViewerToolbar, type FileView } from "@/components/files/ViewerToolbar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { checkJson } from "@/lib/agents/configFiles";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import type { ConfigFileInfo } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import type { useFileDraft } from "@/lib/hooks/useFileDraft";
-import { cn } from "@/lib/utils";
 
 export interface ConfigEditorPaneProps {
   /** The file's own name (`settings.json`, or a directory file's relpath). */
   name: string;
-  /** Absolute on-disk path (external-editor actions and the footer). */
+  /** Absolute on-disk path (external-editor actions and the toolbar). */
   filePath?: string;
   /** One-line "what is this file for" copy. */
   description?: string | null;
@@ -53,11 +57,54 @@ const FORMAT_LABEL: Record<ConfigFileInfo["format"], string> = {
   markdown: "Markdown",
 };
 
+function StatusLine({
+  format,
+  check,
+  description,
+}: {
+  format: ConfigFileInfo["format"] | undefined;
+  check: ReturnType<typeof checkJson> | null;
+  description?: string | null;
+}) {
+  const { t } = useTranslation();
+  const dot = (
+    <span aria-hidden className="text-border">
+      ·
+    </span>
+  );
+  return (
+    <p className="flex h-[30px] shrink-0 items-center gap-2.5 border-t border-border-subtle px-3 text-xs text-text-muted">
+      {format ? <span>{FORMAT_LABEL[format]}</span> : null}
+      {check ? (
+        <>
+          {dot}
+          {check.ok ? (
+            <span role="status" className="inline-flex items-center gap-1 text-success">
+              <Check className="size-3" aria-hidden /> {t("agents.configTab.validJson")}
+            </span>
+          ) : (
+            <span role="status" className="inline-flex items-center gap-1 text-danger">
+              <CircleAlert className="size-3" aria-hidden /> {t("agents.configTab.invalidJson")}
+            </span>
+          )}
+        </>
+      ) : null}
+      {description ? (
+        <>
+          {check ? null : dot}
+          <span className={check ? "ml-auto truncate" : "truncate"}>{description}</span>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
 export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { draft } = props;
   const [confirmRevert, setConfirmRevert] = useState(false);
+  const [view, setView] = useState<FileView>("preview");
 
   // `save` fires a mutation the draft owns; success is a save that settles
   // without an error.
@@ -70,68 +117,56 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const json = props.format === "json" && draft.editing ? checkJson(draft.value) : null;
   const invalid = json !== null && !json.ok;
   const showMissing = props.missing && !draft.editing;
-
-  const marker = showMissing
-    ? t("agents.configTab.markerMissing")
-    : draft.editing
-      ? draft.dirty
-        ? t("agents.configTab.markerDirty")
-        : t("agents.configTab.markerEditing")
-      : t("agents.configTab.markerReadOnly");
+  const shownPath = abbreviateHomePath(props.filePath ?? props.name);
+  const markdown = isMarkdownPath(props.name) && !draft.editing && !showMissing;
 
   const create = () => {
     draft.startEditing();
     if (props.format === "json") draft.setDraft("{}\n");
   };
   const revert = () => (draft.dirty ? setConfirmRevert(true) : draft.cancel());
-
-  const formatLine = json
-    ? json.ok
-      ? t("agents.configTab.validJson")
-      : t("agents.configTab.invalidJson", { line: json.line, column: json.column })
-    : props.format
-      ? FORMAT_LABEL[props.format]
-      : null;
-  const note = showMissing
-    ? t("agents.configTab.noteMissing")
-    : draft.editing
-      ? t("agents.configTab.noteEditing")
-      : t("agents.configTab.noteViewing");
+  const save = () => {
+    if (draft.dirty && !draft.saving && !invalid && !draft.conflict) draft.save();
+  };
 
   return (
-    <div className={FILE_PANE_BODY}>
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-baseline gap-2">
-            <span className="break-all font-mono text-sm font-medium text-text">{props.name}</span>
-            <span className="text-2xs text-text-subtle">{marker}</span>
-          </p>
-          {props.description ? (
-            <p className="mt-0.5 text-xs text-text-muted">{props.description}</p>
-          ) : null}
-        </div>
-        <div data-testid="file-editor-actions" className="flex flex-wrap items-center gap-2">
-          {props.filePath ? <FileActions filePath={props.filePath} /> : null}
-          {draft.editing ? (
-            <>
-              <Button variant="ghost" size="sm" onClick={revert} disabled={draft.saving}>
-                {t("agents.configTab.revert")}
-              </Button>
-              <Button
-                size="sm"
-                onClick={draft.save}
-                disabled={!draft.dirty || draft.saving || invalid}
-              >
-                {draft.saving ? t("common.saving") : t("common.save")}
-              </Button>
-            </>
-          ) : showMissing ? null : (
-            <Button variant="outline" size="sm" onClick={draft.startEditing}>
-              {t("common.edit")}
+    <>
+      <ViewerToolbar
+        path={shownPath}
+        absPath={showMissing || draft.editing ? undefined : props.filePath}
+        reveal
+        view={markdown ? { value: view, onChange: setView } : undefined}
+        status={
+          draft.editing && (draft.conflict || draft.dirty) ? (
+            <DraftStatus notSaved={draft.conflict} />
+          ) : null
+        }
+      >
+        {draft.editing ? (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-text"
+              onClick={revert}
+              disabled={draft.saving}
+            >
+              {t("agents.configTab.revert")}
             </Button>
-          )}
-        </div>
-      </div>
+            <Button
+              size="sm"
+              onClick={save}
+              disabled={!draft.dirty || draft.saving || invalid || draft.conflict}
+            >
+              {draft.saving ? t("common.saving") : t("common.save")}
+            </Button>
+          </>
+        ) : showMissing ? null : (
+          <Button variant="outline" size="sm" onClick={draft.startEditing}>
+            <Pencil aria-hidden /> {t("common.edit")}
+          </Button>
+        )}
+      </ViewerToolbar>
 
       {draft.conflict ? (
         <ConfigStalePanel
@@ -142,7 +177,7 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
       ) : draft.error ? (
         <p
           role="alert"
-          className="shrink-0 rounded-md border border-danger bg-danger-soft px-3 py-2 text-xs text-danger"
+          className="m-3 shrink-0 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger"
         >
           {translateApiError(t, draft.error)}
         </p>
@@ -151,34 +186,38 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
       {showMissing ? (
         <ConfigMissingPanel name={props.name} agentName={props.agentName} onCreate={create} />
       ) : draft.editing ? (
-        <textarea
-          aria-label={t("agents.config.editorLabel", { key: props.name })}
-          className="min-h-0 w-full flex-1 resize-none rounded-lg border border-border bg-code p-3 font-mono text-xs leading-[1.6] text-text outline-none transition-colors duration-fast focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-soft"
-          value={draft.value}
-          spellCheck={false}
-          onChange={(e) => draft.setDraft(e.target.value)}
-        />
-      ) : (
-        <CodeView
-          value={props.loading ? "" : props.content}
-          filename={props.filePath ?? props.name}
-          fill
+        <LineEditor
           ariaLabel={t("agents.config.editorLabel", { key: props.name })}
-          className="bg-surface-sunken"
+          value={draft.value}
+          onChange={draft.setDraft}
+          error={
+            json && !json.ok
+              ? {
+                  line: json.line,
+                  message: t("agents.configTab.invalidAt", {
+                    line: json.line,
+                    column: json.column,
+                  }),
+                }
+              : null
+          }
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+              e.preventDefault();
+              save();
+            }
+          }}
         />
+      ) : props.loading ? (
+        <div className="space-y-2 p-4" aria-busy="true">
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      ) : (
+        <FileBody path={props.name} text={props.content} view={view} />
       )}
 
-      <div className="shrink-0 space-y-0.5 text-2xs text-text-subtle">
-        <p className="flex flex-wrap gap-x-3">
-          {formatLine ? (
-            <span className={cn(invalid && "text-danger")} role={invalid ? "status" : undefined}>
-              {formatLine}
-            </span>
-          ) : null}
-          <span>{note}</span>
-        </p>
-        {props.filePath ? <p className="break-all font-mono">{props.filePath}</p> : null}
-      </div>
+      <StatusLine format={props.format} check={json} description={props.description} />
 
       <ConfirmDialog
         open={confirmRevert}
@@ -191,6 +230,6 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
           draft.cancel();
         }}
       />
-    </div>
+    </>
   );
 }

@@ -96,6 +96,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/model-switch/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Model Switch
+         * @description Write the switch. 409 ``CONFIG_FILE_STALE`` when a file named in ``seen``
+         *     changed on disk after the preview was made: nothing is written then.
+         */
+        post: operations["apply_model_switch_api_v1_providers_model_switch_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/model-switch/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Model Switch
+         * @description The files this switch would change, with their diffs; nothing is written.
+         *     409 when the connection or agent is off or the connection does not reach the agent.
+         */
+        post: operations["preview_model_switch_api_v1_providers_model_switch_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers/order": {
         parameters: {
             query?: never;
@@ -210,6 +252,27 @@ export interface paths {
          *     scope does not name the agent).
          */
         post: operations["activate_provider_api_v1_providers__uid__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/{uid}/delete-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Delete Preview
+         * @description The agent config changes deleting this profile would make (404 if absent);
+         *     nothing is written.
+         */
+        get: operations["delete_preview_api_v1_providers__uid__delete_preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -506,6 +569,45 @@ export interface components {
             /** Previous */
             previous: string | null;
         };
+        /** DeletePreviewAgentOut */
+        DeletePreviewAgentOut: {
+            /** Agent Name */
+            agent_name: string;
+            agent_type: components["schemas"]["AgentType"];
+            /** Agent Uid */
+            agent_uid: string;
+            /** Files */
+            files: components["schemas"]["DeletePreviewFileOut"][];
+        };
+        /**
+         * DeletePreviewFileOut
+         * @description One agent file that deleting the connection would change.
+         */
+        DeletePreviewFileOut: {
+            /** Diff */
+            diff: components["schemas"]["DeletePreviewLine"][];
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "modify" | "remove";
+            /** Path */
+            path: string;
+        };
+        /** DeletePreviewLine */
+        DeletePreviewLine: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "context" | "add" | "remove" | "hunk";
+            /** New No */
+            new_no: number | null;
+            /** Old No */
+            old_no: number | null;
+            /** Text */
+            text: string;
+        };
         /**
          * DetectLocalIn
          * @description Probe one loopback URL, or — with none — each runtime's default port.
@@ -649,6 +751,80 @@ export interface components {
             /** Prices */
             prices: components["schemas"]["ModelPriceOut"][];
         };
+        /**
+         * ModelSwitchFile
+         * @description One file the switch changes (or would change).
+         */
+        ModelSwitchFile: {
+            /** Added */
+            added: number;
+            /** Diff */
+            diff: components["schemas"]["ModelSwitchLine"][];
+            /** Fingerprint */
+            fingerprint: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "modify" | "remove";
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+        };
+        /**
+         * ModelSwitchIn
+         * @description What the agent page's Change model dialog asks for.
+         *
+         *     ``connection_uid`` ``null`` is the agent's own built-in login: no model,
+         *     effort or tiers are written, and Coffer removes only the keys it wrote.
+         *     ``seen`` is sent only to apply: each previewed file's path with the
+         *     fingerprint the preview read, so a file edited since is refused.
+         */
+        ModelSwitchIn: {
+            agent_type: components["schemas"]["AgentType"];
+            /** Connection Uid */
+            connection_uid?: string | null;
+            /** Context Window */
+            context_window?: number | null;
+            /** Effort */
+            effort?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Seen */
+            seen?: {
+                [key: string]: string;
+            } | null;
+            /** Tier Models */
+            tier_models?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** ModelSwitchLine */
+        ModelSwitchLine: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "context" | "add" | "remove" | "hunk";
+            /** New No */
+            new_no: number | null;
+            /** Old No */
+            old_no: number | null;
+            /** Text */
+            text: string;
+        };
+        /** ModelSwitchOut */
+        ModelSwitchOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Files */
+            files: components["schemas"]["ModelSwitchFile"][];
+        };
         /** PriceListIn */
         PriceListIn: {
             /** Refresh */
@@ -723,6 +899,14 @@ export interface components {
             secret_ref?: string | null;
             /** Secret Value */
             secret_value?: string | null;
+        };
+        /**
+         * ProviderDeletePreviewOut
+         * @description What deleting a connection does to the agents running on it.
+         */
+        ProviderDeletePreviewOut: {
+            /** Agents */
+            agents: components["schemas"]["DeletePreviewAgentOut"][];
         };
         /**
          * ProviderListOut
@@ -1362,6 +1546,95 @@ export interface operations {
             };
         };
     };
+    apply_model_switch_api_v1_providers_model_switch_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSwitchOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_model_switch_api_v1_providers_model_switch_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSwitchOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     reorder_providers_api_v1_providers_order_put: {
         parameters: {
             query?: never;
@@ -1689,6 +1962,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_preview_api_v1_providers__uid__delete_preview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDeletePreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

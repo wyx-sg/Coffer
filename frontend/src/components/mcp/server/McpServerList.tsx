@@ -11,10 +11,12 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { SearchInput } from "@/components/SearchInput";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
 import type { ResourceOut } from "@/lib/api/resources";
+import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
 import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
@@ -55,6 +57,7 @@ export function McpServerList({
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
   const [query, setQuery] = useState("");
+  const agentFilter = useAgentFilter();
   const { data: builtin } = useBuiltinMcpServer();
 
   const { details, splits } = useMcpServerListReads(servers.map((s) => s.uid));
@@ -66,12 +69,13 @@ export function McpServerList({
     servers.forEach((s, i) => {
       const haystack = `${s.name} ${s.title ?? ""} ${transportOf(s.config).target}`.toLowerCase();
       if (q && !haystack.includes(q)) return;
+      if (agentFilter && !agentFilter.matches(s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);
     });
     return out;
     // detailOf reads `details`, whose answers are what change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servers, query, details]);
+  }, [servers, query, details, agentFilter]);
 
   // Coffer's own server: always on, for every agent; only the search can hide it.
   const showBuiltin =
@@ -100,12 +104,19 @@ export function McpServerList({
             onDone={() => onPickedChange(new Set())}
           />
         ) : (
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={t("mcp.page.filter")}
-            ariaLabel={t("mcp.page.filter")}
-          />
+          <>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={t("mcp.page.filter")}
+              ariaLabel={t("mcp.page.filter")}
+            />
+            {agentFilter ? (
+              <div className="flex items-center gap-2">
+                <AgentFilterPill filter={agentFilter} />
+              </div>
+            ) : null}
+          </>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
@@ -118,7 +129,7 @@ export function McpServerList({
           <ListLoadError kind="mcp" error={error} onRetry={() => onRetry?.()} />
         ) : isLoading ? (
           <ListLoadingRows />
-        ) : shown === 0 && servers.length > 0 && query.trim() !== "" ? (
+        ) : shown === 0 && servers.length > 0 && (query.trim() !== "" || agentFilter) ? (
           <ListNoMatch kind="mcp" query={query} onClear={() => setQuery("")} />
         ) : (
           GROUP_ORDER.map((group) => {

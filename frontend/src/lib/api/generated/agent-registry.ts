@@ -1301,6 +1301,10 @@ export interface components {
             command: string;
             /** Event */
             event: string;
+            /** Group Index */
+            group_index: number;
+            /** Hook Index */
+            hook_index: number;
             /** Matcher */
             matcher: string | null;
             /** Path */

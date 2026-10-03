@@ -57,11 +57,6 @@ export function AgentNotFoundCard({ agent, actions }: Props) {
                 {t(`${K}.moved.action`)}
               </Button>
             </FixWay>
-            <FixWay title={t(`${K}.notUsing.title`, { name })} body={t(`${K}.notUsing.body`)}>
-              <Button variant="danger" size="sm" onClick={actions.onRemove}>
-                {t(`${K}.notUsing.action`)}
-              </Button>
-            </FixWay>
           </ul>
         </Section>
       </div>

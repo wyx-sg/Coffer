@@ -34,10 +34,9 @@ import { nextSort } from "@/lib/tableSort";
 // Re-exported so call sites keep importing these from "@/components/DataTable".
 export type { Column, FilterDef, TableSort };
 
-// Cap the body at 20 rows (row ≈ 3rem) — beyond that the container scrolls
-// vertically under the sticky header (#227), so a long list keeps its
-// Load more and toolbar on screen. Tailwind's max-h scale stops at 24rem, so
-// the value has to be arbitrary; it lives here, named, rather than inline.
+// Cap the body at 20 rows (row ≈ 3rem): beyond that it scrolls under the
+// sticky header (#227), keeping Load more and the toolbar on screen. Tailwind's
+// max-h scale stops at 24rem, so the arbitrary value lives here, named.
 const BODY_MAX_HEIGHT = "max-h-[60rem]";
 
 export function DataTable<T>({
@@ -58,6 +57,7 @@ export function DataTable<T>({
   emptyMessage,
   emptyAction,
   fixed = false,
+  footer = true,
   sort: controlledSort,
   onSortChange,
   isLoading = false,
@@ -81,7 +81,6 @@ export function DataTable<T>({
   };
 
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
-  // N: the `pageSize` prop, else the Settings default (reactive to Settings).
   const globalDefault = useDefaultPageSize();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const expandable = Boolean(getRowDetail);
@@ -206,7 +205,7 @@ export function DataTable<T>({
         </Table>
       </div>
 
-      {infinite ? (
+      {!footer ? null : infinite ? (
         <LoadMoreFooter
           loaded={infinite.loaded}
           total={infinite.total}
