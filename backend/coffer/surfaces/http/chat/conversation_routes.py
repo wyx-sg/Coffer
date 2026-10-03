@@ -7,11 +7,12 @@ which renders the standard ``{error, message}`` envelope.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from coffer.application.chat.ports import ChannelMirrorPort
+from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_state import is_running
@@ -26,15 +27,15 @@ from coffer.domain.chat.message import (
     ToolUseBlock,
 )
 from coffer.domain.chat.mirror import ChannelPlaceView, MirrorView
+from coffer.domain.chat.question import QuestionBlock
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.chat.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.chat.dependencies import (
     get_channel_mirror,
     get_chat_service,
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.schemas import (
-    AgentConfigOut,
-    AgentConfigPatch,
     ChannelBindingOut,
     ChannelMirrorOut,
     ChannelPlaceOut,
@@ -46,6 +47,7 @@ from coffer.surfaces.http.chat.schemas import (
     MessageListOut,
     MessageOut,
     UndeliveredReplyOut,
+    question_out,
 )
 from coffer.surfaces.http.dependencies import get_resource_service
 
@@ -54,6 +56,7 @@ router = APIRouter(
     tags=["chat"],
     dependencies=[Depends(require_token)],
 )
+router.include_router(agent_config_router)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +152,7 @@ def _conv_out(
         channel_binding=binding,
         preview=extras.previews.get(conv.id),
         running=is_running(conv.id),
+        needs_you=needs_you(conv.id),
     )
 
 
@@ -179,10 +183,19 @@ def _block_out(block: ContentBlock) -> ContentBlockOut:
             tool_name=block.tool_name,
             output=block.output,
             error=block.error,
+            duration_ms=block.duration_ms,
         )
     if isinstance(block, AttachmentBlock):
         # Reference only — filename/mime for the chip; never the local path.
-        return ContentBlockOut(type="attachment", filename=block.filename, mime=block.mime)
+        return ContentBlockOut(
+            type="attachment",
+            filename=block.filename,
+            mime=block.mime,
+            attachment_id=block.id,
+            size=block.size,
+        )
+    if isinstance(block, QuestionBlock):
+        return ContentBlockOut(type="question", question=question_out(block))
     # Unreachable given the ContentBlock union, but keeps mypy happy.
     raise TypeError(f"unhandled ContentBlock type: {type(block)!r}")  # pragma: no cover
 
@@ -199,6 +212,7 @@ def _msg_out(msg: Message) -> MessageOut:
         prompt_tokens=msg.prompt_tokens,
         completion_tokens=msg.completion_tokens,
         created_at=msg.created_at,
+        finished_at=msg.finished_at,
     )
 
 
@@ -221,19 +235,23 @@ async def list_conversations(
     q: str | None = Query(
         default=None,
         max_length=200,
-        description="Title contains this text (case-insensitive); a cursor is bound to it.",
+        description=(
+            "Title or any message's text contains this text (case-insensitive); "
+            "a cursor is bound to it."
+        ),
     ),
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationListOut:
     """Conversations newest activity first (id breaks ties), paged by cursor;
-    ``archived=true`` lists the archived ones, ``q`` filters by title."""
+    ``archived=true`` lists the archived ones, ``q`` filters by title or message text."""
     page = await svc.page_conversations(archived=archived, limit=limit, cursor=cursor, q=q)
     extras = await _extras(page.items, svc, resources, mirror)
     return ConversationListOut(
         conversations=[_conv_out(c, extras) for c in page.items],
         next_cursor=page.next_cursor,
+        total=await svc.count_conversations(archived=archived, q=q),
     )
 
 
@@ -297,47 +315,6 @@ async def update_conversation(
     else:
         conv = await svc.get_conversation(id)
     return await _one_out(conv, svc, resources, mirror)
-
-
-@router.get("/conversations/{id}/agent-config", response_model=AgentConfigOut)
-async def get_agent_config(
-    id: str,
-    svc: ChatService = Depends(get_chat_service),  # noqa: B008
-) -> AgentConfigOut:
-    """Read a conversation's agent config (cwd, model, effort). 404 if not found.
-
-    ``session_id`` is provider-internal and deliberately not surfaced.
-    """
-    cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
-    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model, effort=cfg.effort)
-
-
-@router.patch("/conversations/{id}/agent-config", response_model=AgentConfigOut)
-async def set_agent_config(
-    id: str,
-    body: AgentConfigPatch,
-    svc: ChatService = Depends(get_chat_service),  # noqa: B008
-) -> AgentConfigOut:
-    """Set a managed agent's own model and effort for a conversation (ADR
-    coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
-
-    Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
-    ``session_id`` are preserved, and a body that mentions only one of the two
-    leaves the other where it was. An empty/whitespace ``model`` clears the
-    override (the conversation then inherits the active provider profile's
-    projected default); an empty/whitespace ``effort`` clears it (the agent then
-    runs at whatever its own config says).
-    """
-    cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
-    fields: dict[str, str | None] = {}
-    if "model" in body.model_fields_set:
-        fields["model"] = (body.model or "").strip() or None
-    if "effort" in body.model_fields_set:
-        fields["effort"] = (body.effort or "").strip() or None
-    if fields:
-        cfg = replace(cfg, **fields)
-        await svc.set_agent_config(id, cfg)
-    return AgentConfigOut(cwd=cfg.cwd, model=cfg.model, effort=cfg.effort)
 
 
 @router.post("/conversations/{id}/archive", response_model=ConversationOut)

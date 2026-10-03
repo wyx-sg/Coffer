@@ -38,6 +38,7 @@ from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
     list_resources_across,
 )
+from coffer.application.mcp.gateway_ask import dispatch_turn_ask, with_ask_tool
 from coffer.application.mcp.gateway_builtin import (
     agent_actor_label,
     dispatch_builtin_tool,
@@ -75,6 +76,7 @@ from coffer.application.mcp.tool_exposure import exposure_overrides
 from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
+from coffer.application.turn_ask import ASK_TOOL_NAME, TurnAskPort
 from coffer.domain.errors import UpstreamUnavailable
 
 _logger = logging.getLogger(__name__)
@@ -104,6 +106,7 @@ class MCPGatewaySession:
         tiering: TieringConfig | None = None,
         tool_reach: ToolReachRepoPort | None = None,
         auth_monitor: UpstreamAuthMonitor | None = None,
+        turn_ask: TurnAskPort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._auth_monitor = auth_monitor
@@ -115,34 +118,30 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
-        # Per-agent scope: the session's bound agent **uid** (a ``scope`` holds
-        # uids; ADR identity-is-the-uid-inside-the-file), from the shim's
-        # ``--agent-uid`` on ``initialize`` (params._meta["coffer/agent-uid"]).
-        # None when it reported nothing: such a session sees only unscoped servers.
+        # The bound agent **uid** from ``initialize`` (params._meta["coffer/agent-uid"],
+        # ADR identity-is-the-uid-inside-the-file); None sees only unscoped servers.
         self._session_agent_uid: str | None = None
-        # Called once on dispose so the composition root drops this session's
-        # supervisor from its registry (else dead ones accumulate).
+        # Called once on dispose: the root drops this session's supervisor.
         self._on_dispose = on_dispose
         # ``is not None``, not ``or``: a registry with every tool off is falsy.
         self._builtin = builtin_tools if builtin_tools is not None else BuiltinToolRegistry()
         # Tool tiering: how much of the catalogue this session lists (None = read env).
         self._tiering = tiering or load_tiering_config()
-        # Upstream tools left unlisted by tiering, for the instructions text:
-        # estimated from the saved tool lists at ``initialize`` and replaced by
-        # the real count at every ``tools/list``.
+        # Upstream tools left unlisted by tiering: estimated at ``initialize``,
+        # replaced by the real count at every ``tools/list``.
         self.last_hidden_count = 0
-        # The agent's launch cwd from the shim's handshake (params._meta["coffer/cwd"]),
-        # threaded into built-in tool calls; no spec states it any more (its
-        # requirement went with the per-project store), the shim still stamps it.
+        # The agent's launch cwd (params._meta["coffer/cwd"]), threaded into built-in calls.
         self._session_cwd: str | None = None
+        # The turn's ``X-Coffer-Turn`` token (set by the HTTP surface on every
+        # request); ``coffer__ask`` is offered only while it is live.
+        self._turn_ask = turn_ask
+        self.turn_token: str | None = None
         # Servers whose notifications this session already subscribed to.
         self._notification_subscriptions: set[str] = set()
         # The loop holds tasks weakly; strong refs keep an upstream
         # notification from being garbage-collected mid-flight.
         self._notification_tasks: set[asyncio.Task[None]] = set()
-        # Tool tiering: servers whose discovery failed on the last tools/list. The
-        # client caches tools/list and no list_changed can arrive from a server
-        # that never connected, so the tracker retries them itself.
+        # Servers whose discovery failed on the last tools/list; the tracker retries them.
         self._degraded = DegradedTracker(discovery, self._send_downstream)
         # Downstream client capabilities declared during initialize.
         self._client_capabilities: dict[str, Any] = {}
@@ -169,12 +168,10 @@ class MCPGatewaySession:
         params: dict[str, Any],
     ) -> dict[str, Any]:
         """Respond to the client's initialize request with coffer's server capabilities."""
-        # Record the downstream client's capabilities so we can gate server-initiated
-        # requests appropriately (the sampling capability check).
+        # The client's capabilities gate server-initiated requests (sampling).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
-        # The identity scope is evaluated against: the shim's self-reported
-        # agent uid, when it stamped one (params._meta["coffer/agent-uid"]).
+        # The identity scope is evaluated against (params._meta["coffer/agent-uid"]).
         self._session_agent_uid = _extract_agent_uid(params)
         # The instructions field is the only channel into the client's system
         # prompt and is read before the first tools/list, so the unlisted count
@@ -265,8 +262,7 @@ class MCPGatewaySession:
             return task
 
         conn.on_notification(_spawn_notification_task)
-        # Register callbacks so the SDK can handle server-initiated
-        # sampling and roots requests from this upstream.
+        # Let the SDK handle this upstream's sampling and roots requests.
         conn.on_sampling_request(self._sampling_callback)
         conn.on_roots_request(self._list_roots_callback)
         self._notification_subscriptions.add(server_name)
@@ -299,7 +295,7 @@ class MCPGatewaySession:
             degraded=self._degraded,
         )
         self.last_hidden_count = listing.hidden_count
-        return {"tools": listing.tools}
+        return {"tools": with_ask_tool(listing.tools, self._turn_ask, self.turn_token)}
 
     # --- tools/call, resources/read, prompts/get (delegated to gateway_handlers) ---
 
@@ -323,6 +319,10 @@ class MCPGatewaySession:
                 servers=servers,
                 hidden=hidden,
                 **self._log_ctx,
+            )
+        if name == ASK_TOOL_NAME:
+            return await dispatch_turn_ask(
+                params=params, port=self._turn_ask, token=self.turn_token, **self._log_ctx
             )
         if self._builtin.is_builtin(name):
             params = await self._inject_session_context(name, params)

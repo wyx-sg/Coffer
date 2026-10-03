@@ -7,7 +7,7 @@
 // down, by area; how many files are already the same; which differ (left here
 // until a person chooses, never overwritten or pushed); what goes up; and that
 // nothing is deleted. A remote at an older layout is REPLACED by this Mac's
-// vault (spec vault-sync "Replace a remote at an older layout"). A refused
+// vault (spec vault-sync "Refuse a remote at another layout"). A refused
 // join (a newer layout, not a vault) shows the daemon's reason, no Join button;
 // a push token still waiting for approval says so and offers Secrets.
 import { useTranslation } from "react-i18next";

@@ -1,5 +1,5 @@
 """Add, edit and remove the command-line tools a person declares by hand (spec
-skill-manager "Declare a command-line tool without a skill").
+skill-manager "Declare the commands a skill requires").
 
 A tool added here needs no skill and no MCP server: it is one entry in the
 vault's ``cli-tools`` state document, and it is listed, checked and read like

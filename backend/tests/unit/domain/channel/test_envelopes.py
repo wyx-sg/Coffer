@@ -63,6 +63,7 @@ def test_channel_capabilities_carries_strategy_fields():
         "max_message_chars",
         "supports_buttons",
         "supports_card_update",
+        "edits_text",
         "supports_live_text",
         "live_text_persists",
         "supports_media",

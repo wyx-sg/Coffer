@@ -2,8 +2,9 @@
 // Step 3 of Add channel, once the channel exists: a pairing code is issued as
 // the step opens, shown with Copy, its expiry and (Telegram) the one-tap
 // link, and the channel's status is polled until someone pairs — then the
-// step says who, and that nobody else will be answered. "Pair later" leaves
-// the code outstanding; the channel's Overview can issue another any time.
+// step turns into the done state: who, that nobody else is answered, and how
+// to try it. "Pair later" leaves the code outstanding; the channel's Overview
+// can issue another any time.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2 } from "lucide-react";
@@ -12,11 +13,13 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { PairingCode } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { useIssuePairingCode } from "@/lib/hooks/useChannelPairing";
 import { useChannelStatus } from "@/lib/hooks/useChannels";
 import { displayName } from "@/lib/resourceTitle";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelPairingCode } from "./ChannelPairingCode";
+import { botHandleOf, usePairingExpired } from "./pairingCode";
 
 interface Props {
   channel: ResourceOut;
@@ -27,6 +30,7 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
   const { t } = useTranslation();
   const pairing = useIssuePairingCode(channel.uid);
   const { data: status } = useChannelStatus(channel.uid, { poll: true });
+  const { data: agents } = useAgents();
   const issued = useRef(false);
   const platform = channelPlatform(channel.config);
   const peer = status?.people[0] ?? null;
@@ -36,6 +40,7 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
   // never arrive and the step would read "Generating…" for good.
   const [code, setCode] = useState<PairingCode | undefined>(undefined);
   const [issuing, setIssuing] = useState(false);
+  const expired = usePairingExpired(code);
   const { mutateAsync } = pairing;
   const issue = useCallback(() => {
     setIssuing(true);
@@ -52,11 +57,14 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
   }, [issue]);
 
   if (peer) {
+    const agentUid = channel.config.default_agent;
+    const agent = agents?.find((a) => a.uid === agentUid);
+    const bot = botHandleOf(code);
     return (
-      <div className="space-y-4" data-testid="channel-paired">
-        <div className="flex gap-2.5 rounded-xl bg-success-soft p-3.5">
+      <div className="space-y-3.5" data-testid="channel-paired">
+        <div className="flex gap-2.5 rounded-lg bg-success-soft px-3.5 py-3">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <p className="text-sm font-label text-text">
               {t("channels.add.paired.title", { owner: peer.display_name })}
             </p>
@@ -65,6 +73,12 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
             </p>
           </div>
         </div>
+        <p className="text-sm text-text-muted">
+          {t("channels.add.paired.tryIt", {
+            bot: bot ? `@${bot}` : displayName(channel),
+            agent: agent ? displayName(agent) : t("channels.add.paired.yourAgent"),
+          })}
+        </p>
         <DialogFooter>
           <Button onClick={onDone}>{t("common.done")}</Button>
         </DialogFooter>
@@ -73,8 +87,20 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
   }
 
   return (
-    <div className="space-y-4">
-      <ChannelPairingCode platform={platform} code={code} isPending={issuing} onGenerate={issue} />
+    <div className="space-y-3.5">
+      <ChannelPairingCode
+        platform={platform}
+        channelName={displayName(channel)}
+        code={code}
+        expired={expired}
+        isPending={issuing}
+        onGenerate={issue}
+      />
+      {expired ? (
+        <Button size="sm" onClick={issue} disabled={issuing}>
+          {t("channels.pairing.newCodeAfterExpiry")}
+        </Button>
+      ) : null}
       <DialogFooter>
         <Button variant="ghost" onClick={onDone}>
           {t("channels.add.pairLater")}

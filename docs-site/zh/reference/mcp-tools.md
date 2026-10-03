@@ -16,8 +16,9 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 | --- | --- | --- |
 | [`coffer__write`](#coffer-write) | 把一条长期有效的事实记入 Coffer 的知识。 | `knowledge` 功能开启时。 |
 | [`coffer__search_tools`](#coffer-search-tools) | 按意图对上游工具目录排序。 | 始终存在。 |
+| [`coffer__ask`](#coffer-ask) | 向所有者提问并等待回答。 | 仅在 Coffer 运行的对话轮次内。 |
 
-完整列表就这两个。Coffer 的记忆笔记和它自己的记录没有对应工具：
+完整列表就这三个。Coffer 的记忆笔记和它自己的记录没有对应工具：
 它们用智能体自己的文件工具和 `coffer` 命令行来读。见
 [不用工具读取记忆和日志](#memory-and-logs-without-a-tool)。
 
@@ -164,6 +165,52 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
   }
 }
 ```
+
+## coffer\_\_ask {#coffer-ask}
+
+在任务进行中向所有者提问并等待。这一轮对话暂停；问题显示在[对话](/zh/guides/chat)页面
+（对由[渠道](/zh/guides/channels)驱动的对话，还会作为卡片发到聊天里）；所有者在任一处回答、
+停止任务，或过了 24 小时，调用才返回。它的形状与 Claude Code 自己的 `AskUserQuestion` 一致，
+在 Coffer 对话里 Coffer 会把后者变成同样的问题。
+
+它是**按轮次限定**的：Coffer 为每个它运行对话轮次的智能体进程设置一个随机的
+`COFFER_TURN_TOKEN`；shim 把它作为 `X-Coffer-Turn` 头发出，网关只在头里指向一个当前正在运行的轮次的会话中列出
+`coffer__ask`。在终端里启动的智能体永远看不到它，直接调用会得到「coffer__ask 只能在 Coffer 对话内使用」
+（`isError: true`）。因此握手说明和内置服务器页面都不提这个工具。Coffer 写进 Codex `config.toml` 的
+`coffer` 条目会透传该变量（`env_vars`），并允许一次工具调用运行一整天（`tool_timeout_sec = 86400`）。
+
+### 输入 {#input-2}
+
+| 属性 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `context` | string | 否 | 显示在问题上方的 Markdown：摘要、diff、路径。 |
+| `questions` | array | 是 | 一到四个问题。 |
+
+每个问题：
+
+| 属性 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `header` | string | 是 | 简短标签。 |
+| `question` | string | 是 | 问题本身。 |
+| `options` | array | 是 | 两到四个选项，每个 `{label, description?}`。同一问题内标签不重复。 |
+| `multi_select` | boolean | 否 | 允许所有者选多个。默认 `false`。 |
+
+所有者始终可以输入自己的回答，而不选选项。
+
+### 结果 {#result-2}
+
+```json
+{
+  "answered": true,
+  "answers": [
+    { "header": "Apply", "question": "Apply this change to staging?", "selected": ["Yes"], "text": null }
+  ]
+}
+```
+
+`selected` 是选中的标签，`text` 是所有者自己输入的话（二者可以有一个为空，但不会同时为空）。
+没有得到回答时（所有者停止了任务，或过了 24 小时），结果是 `{"answered": false, "message": "…"}`。
+格式不对的提问会以 `isError: true` 失败，并附上要修正的内容。
 
 ## 上游名称 {#upstream-names}
 

@@ -21,8 +21,7 @@
 // neither alone is the answer. Reach in that sense is MACHINE-LOCAL — held in
 // this vault, never converged with a remote —
 // so every machine the user works on sets its own, and this control is where
-// that is set. ReachControl's panel tells the user so; this file is why there
-// is one place to tell them.
+// that is set.
 //
 // Data: GET/PUT /resources/{uid}/scope (useResourceScope /
 // useUpdateResourceScope) plus POST .../enable|disable
@@ -38,16 +37,19 @@
 // first state: disabled beats any scope. Disabling deliberately LEAVES the
 // scope untouched, so re-enabling restores the selection the user had.
 //
-// Mutation pattern: ReachControl stages the user's choice and hands it over
-// exactly once, when its panel closes — nothing is written while the panel is
-// open, whichever choice was made:
-//   - "Disabled" posts .../disable and writes no scope.
-//   - "Every agent" enables if needed and writes `null`.
-//   - "Only selected agents" writes the staged agent list, once, if it differs
-//     from what is stored, and enables if needed. It is always a list:
-//     relaxing back to every agent is the "Every agent" choice above, so the
-//     same state can never arrive here under a second name.
-//   - A panel the user only glanced at writes nothing at all.
+// Mutation pattern: ReachControl saves every change AT ONCE — each mode switch
+// and each tick is one call here, in order, and the promise it gets back drives
+// its Saving… / Saved / Couldn't save line (the hooks run `quiet`, so a failed
+// write is shown inline in the panel, never as a toast):
+//   - "Off" posts .../disable and writes no scope.
+//   - "All agents" enables if needed and writes `null`.
+//   - "Chosen agents" (a switch, or a tick) enables if needed and writes the
+//     whole list, unless it equals what is stored. It is always a list:
+//     relaxing back to all agents is the "All agents" choice above, so the same
+//     state can never arrive here under a second name.
+// What the resource currently holds is tracked in a ref beside the props,
+// because two writes queued back to back must each be judged against the one
+// before it, not against props that have not refetched yet.
 //
 // The control also sits in the status column of every resource LIST, one
 // instance per row. Mounting the per-resource scope query once per row would
@@ -62,6 +64,7 @@
 // `/scope` answer still carries `supports_scope`, but it is deliberately
 // ignored here: the kinds that answer `false` (agent, knowledge, memory) have
 // no reach control on any page, so no mounted instance can receive it.
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ReachControl } from "@/components/reach/ReachControl";
@@ -83,36 +86,41 @@ interface Props {
    *  let the control fetch its own; `undefined` is "not supplied", never a
    *  value. */
   scope?: Scope | null;
+  /** The resource's name, shown small under the panel title. */
+  resourceName?: string;
 }
 
-export function ScopeControl({ kind, uid, enabled, scope: presetScope }: Props) {
+export function ScopeControl({ kind, uid, enabled, scope: presetScope, resourceName }: Props) {
   const { t } = useTranslation();
   const prefetched = presetScope !== undefined;
   const { data: fetchedScope } = useResourceScope(uid, !prefetched);
   const { data: agentsData } = useAgents();
-  const update = useUpdateResourceScope(kind, uid);
-  const enable = useEnableResource();
-  const disable = useDisableResource();
+  const update = useUpdateResourceScope(kind, uid, { quiet: true });
+  const enable = useEnableResource({ quiet: true });
+  const disable = useDisableResource({ quiet: true });
 
-  const busy = update.isPending || enable.isPending || disable.isPending;
   const scope = (prefetched ? presetScope : fetchedScope?.scope) ?? null;
 
   const mode: ReachMode = reachModeOf({ enabled, scope });
 
-  const enableIfNeeded = () => {
-    if (!enabled) enable.mutate({ kind, uid });
+  // What the resource holds right now, including writes not yet refetched.
+  const held = useRef({ enabled, scope });
+  const seen = useRef({ enabled, scope });
+  if (seen.current.enabled !== enabled || !sameScope(seen.current.scope, scope)) {
+    seen.current = { enabled, scope };
+    held.current = { enabled, scope };
+  }
+
+  const enableIfNeeded = async () => {
+    if (held.current.enabled) return;
+    await enable.mutateAsync({ kind, uid });
+    held.current.enabled = true;
   };
 
-  const commitScope = (staged: Scope) => {
-    // Enabling is part of what the choice means on a disabled resource, but it
-    // waits for the close like the scope does: writing while the panel was open
-    // is what moved the row out from under it.
-    enableIfNeeded();
-    if (sameScope(scope, staged)) return;
-    // Always a list. "Every agent" is its own choice writing `null` through
-    // `onEverywhere`, so a relaxed-to-everything selection cannot arrive here
-    // as `{agents: null}` — the same state under a second name.
-    update.mutate(staged);
+  const writeScope = async (next: Scope | null) => {
+    if (sameScope(held.current.scope, next)) return;
+    await update.mutateAsync(next);
+    held.current.scope = next;
   };
 
   // "Inactive here" is judged against the agents registered in THIS vault —
@@ -124,14 +132,18 @@ export function ScopeControl({ kind, uid, enabled, scope: presetScope }: Props) 
   // note is the only thing that says otherwise without opening the panel, and
   // it is what turns the button amber.
   //
-  // But NOT on a disabled resource. There the button already says "Disabled",
+  // But NOT on a disabled resource. There the button already says "Off",
   // which is the whole reason it reaches nobody; colouring it amber over the
   // scope underneath answers a question the label just answered, with a second
   // answer the reader cannot act on — turning the resource back on is the only
   // move, and the scope only starts mattering once they do. Two rows both
-  // reading "Disabled" in two different colours is the symptom.
+  // reading "Off" in two different colours is the symptom.
+  //
+  // An EMPTY list gets no note: its button already reads "No agent" (muted),
+  // and an amber second answer to the same question is noise.
   const note =
     mode !== "disabled" &&
+    (scope?.agents?.length ?? 0) > 0 &&
     isDormantHere(
       scope,
       (agentsData ?? []).map((a) => a.uid),
@@ -142,15 +154,21 @@ export function ScopeControl({ kind, uid, enabled, scope: presetScope }: Props) 
   return (
     <ReachControl
       mode={mode}
-      busy={busy}
       initialScope={scope}
       note={note}
-      onDisabled={() => disable.mutate({ kind, uid })}
-      onEverywhere={() => {
-        enableIfNeeded();
-        if (scope !== null) update.mutate(null);
+      resourceName={resourceName}
+      onDisabled={async () => {
+        await disable.mutateAsync({ kind, uid });
+        held.current.enabled = false;
       }}
-      onRestricted={commitScope}
+      onEverywhere={async () => {
+        await enableIfNeeded();
+        await writeScope(null);
+      }}
+      onRestricted={async (staged) => {
+        await enableIfNeeded();
+        await writeScope(staged);
+      }}
     />
   );
 }

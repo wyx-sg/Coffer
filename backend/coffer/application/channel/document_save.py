@@ -124,11 +124,7 @@ async def apply_save_collection(ctx: CommandContext, collection: str) -> None:
         )
         await ctx.say(f"⚠️ Couldn't save '{pending.filename}': {e}")
         return
-    await ctx.say(
-        f"📄 Saved '{doc.title}' to {collection} → {doc.path}"
-        if doc.path
-        else f"📄 Saved '{doc.title}' to {collection} — merging it into the documents."
-    )
+    await ctx.say(f"📄 Saved \u2018{doc.title}\u2019 to {collection}.")
 
 
 __all__ = ["KNOWLEDGE_OFF", "apply_save_collection", "cmd_kb"]

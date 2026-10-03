@@ -45,17 +45,20 @@ async def test_resume_lists_this_chats_earlier_conversations(env: ChannelEnv) ->
     await env.processor.on_message(inbound("tg", "owner", "/resume"))
 
     lines = adapter.texts()[-1].splitlines()
-    assert lines[0] == "Conversations in this chat (newest first):"
-    assert lines[1] == "1. three — Coffer Assistant — now ✓"
-    assert lines[2] == "2. two — Coffer Assistant — now"
-    assert len(lines) == 4  # header, two conversations, the hint
+    assert lines[0] == "Resume a conversation"
+    assert lines[1] == "Send /resume <n> to reopen one:"
+    assert lines[2] == "1 · three — Coffer Assistant · just now ✓"
+    assert lines[3] == "2 · two — Coffer Assistant · just now"
+    assert len(lines) == 4  # title, hint, two conversations
     assert not any(conversation_id in adapter.texts()[-1] for conversation_id in ids)
 
 
 def _resume_cards(adapter: FakeChannelAdapter) -> list[tuple[str, str, list[ChoiceButton]]]:
     """The `/resume` cards sent — each `/new` along the way answers with a card too."""
     return [
-        c for c, title in zip(adapter.cards, adapter.card_titles, strict=True) if title == "Resume"
+        c
+        for c, title in zip(adapter.cards, adapter.card_titles, strict=True)
+        if title == "Resume a conversation"
     ]
 
 
@@ -67,14 +70,14 @@ async def test_resume_is_a_card_where_the_transport_takes_one(env: ChannelEnv) -
 
     [(_chat, _text, buttons)] = _resume_cards(adapter)
     assert [b.value for b in buttons] == [f"resume:{i}" for i in reversed(ids)]
-    assert buttons[0].label == "1. three ✓"
+    assert buttons[0].label == "✓ 1"
 
     await env.processor.on_callback(
         tap_event("tg", "owner", f"resume:{ids[0]}", platform_message_id="c-1")
     )
 
     assert await env.active_conversation(resource) == ids[0]
-    assert adapter.texts()[-1] == '↩️ Resumed "one".'
+    assert adapter.texts()[-1] == "↩️ Resumed \u201cone\u201d with Coffer Assistant."
     _chat, _mid, _text, buttons, _title = adapter.card_updates[-1]
     assert [b.value for b in buttons if b.selected] == [f"resume:{ids[0]}"]
 
@@ -87,7 +90,7 @@ async def test_resume_n_reopens_that_conversation(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "/resume 3"))
 
     assert await env.active_conversation(resource) == ids[0]
-    assert adapter.texts()[-1] == '↩️ Resumed "one".'
+    assert adapter.texts()[-1] == "↩️ Resumed \u201cone\u201d with Coffer Assistant."
 
     await env.processor.on_message(inbound("tg", "owner", "/resume 9"))
     assert adapter.texts()[-1] == "No conversation #9 — send /resume to see the list."

@@ -64,14 +64,14 @@ flowchart LR
   - 批量请求（顶层是数组）以 `-32600` 拒绝。
 - **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带一个存活会话的 `Mcp-Session-Id`（否则 `404`）。打开着的流会让其会话不被空闲回收器回收。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
 
-SSE 流关闭时会话仍然保持打开，因为 shim 会经常重连。会话有三种结束方式：空闲回收、守护进程关闭或被销毁。回收器每 60 秒醒来一次，丢掉 30 分钟内既没有 POST 也没有上游流量的会话。两个值都可以用 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 和 `COFFER_MCP_SESSION_IDLE_S` 修改。销毁会话之前，回收器会最多等约 5 秒让进行中的 POST 完成，所以正在运行的请求永远不会碰到一个销毁了一半的会话。
+SSE 流关闭时会话仍然保持打开，因为 shim 会经常重连。会话有三种结束方式：空闲回收、守护进程关闭或被销毁。回收器每 60 秒醒来一次，丢掉 30 分钟内既没有 POST 也没有上游流量、且没有请求正在进行的会话（`coffer__ask` 会等所有者好几个小时）。两个值都可以用 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 和 `COFFER_MCP_SESSION_IDLE_S` 修改。销毁会话之前，回收器会最多等约 5 秒让进行中的 POST 完成，所以正在运行的请求永远不会碰到一个销毁了一半的会话。
 
 ### `coffer-mcp-shim` {#coffer-mcp-shim}
 
 智能体说的是 stdio MCP，所以由 `coffer-mcp-shim` 把 stdio 桥接到 `/mcp`：
 
 1. **找到守护进程，或者启动一个。** shim 读取 `~/.coffer/daemon.json` 并探测 `GET /api/v1/daemon/status`。如果 1 秒内没有守护进程应答，它以分离方式拉起一个，最多等 10 秒。如果守护进程还是起不来，shim 以退出码 `3` 退出，并指向 `~/.coffer/logs/daemon.log`。如果守护进程报告的版本与 shim 不同，shim 在 stderr 上打印一行警告然后继续。见 [守护进程与进程](/zh/architecture/daemon)。
-2. **在握手上盖章。** 在 `initialize` 信封里，shim 写入 `params._meta["coffer/cwd"]`（它的启动目录）。如果它是以 `--agent-uid <uid>` 启动的，还会写入 `params._meta["coffer/agent-uid"]`。它会缓存这个信封以便之后重放。
+2. **在握手上盖章。** 在 `initialize` 信封里，shim 写入 `params._meta["coffer/cwd"]`（它的启动目录）。如果它是以 `--agent-uid <uid>` 启动的，还会写入 `params._meta["coffer/agent-uid"]`。它会缓存这个信封以便之后重放。如果它的环境里设置了 `COFFER_TURN_TOKEN`（该智能体进程正在运行 Coffer 发起的对话轮次），它还会把它作为 `X-Coffer-Turn` 头随每个请求发出，重放的握手也不例外。网关只向头里指向一个存活轮次的会话提供 `coffer__ask`；见 [MCP 工具参考](/zh/reference/mcp-tools#coffer-ask)。
 3. **泵送 stdin。** 每一行 stdin 都作为一个独立任务 POST 出去。所以一个慢的 `tools/call` 不会把后面的 `ping` 堵住。单行上限 64 MiB。
 4. **排空 SSE。** shim 一直保持 `GET /mcp` 打开，把每个 `data:` 载荷写到 stdout。如果流断了，它会带退避重连，从 0.5 秒开始，最多增长到 5 秒。
 5. **从守护进程重启中恢复。** 如果一次 POST 在传输层失败，shim 会重新读取 `daemon.json`。如果现在有一个活着的守护进程在不同端口或用不同令牌应答，shim 会重新绑定，重放缓存的 `initialize`（不转发第二次的回复），并重试这次调用一次。来自旧守护进程的 401（在同一端口重启会轮换令牌）也按同样方式处理，守护进程已丢掉会话时的 `404` 也一样：shim 重放缓存的 `initialize`，再重发那次没有运行过的调用。重试从不会让一个工具跑两次：只有在连接被拒绝或超时时，也就是旧守护进程根本没看到这个请求时，才会重发 `tools/call`。如果 POST 是在请求发出之后失败的（读超时、响应途中被重置、协议错误），旧守护进程可能已经跑过这个工具了。shim 仍然会重新绑定，让后续调用能正常工作，但会用一个 `-32603` 错误回答这个请求，说明守护进程在调用中途重启了，这次调用可能跑了也可能没跑。其他所有方法都会重发，因为它们没有副作用。

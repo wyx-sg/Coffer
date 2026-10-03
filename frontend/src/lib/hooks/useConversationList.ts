@@ -96,7 +96,7 @@ export function useConversationList({
       );
       // The first page is also the head's first answer: it is not asked for twice.
       if (!cursor) qc.setQueryData(headKey, out);
-      return { items: out.conversations, next: out.next_cursor };
+      return { items: out.conversations, next: out.next_cursor, total: out.total };
     },
     enabled,
     staleTime: Infinity,

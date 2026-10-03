@@ -27,8 +27,12 @@ from coffer.domain.chat.message import (
     ContentBlock,
     Message,
     Role,
-    block_from_dict,
-    block_to_dict,
+)
+from coffer.infrastructure.chat.persistence_codec import (
+    _TEXT_BLOCK_MARK,
+    _decode_content,
+    _encode_content,
+    _listing_filter,
 )
 from coffer.infrastructure.chat.persistence_models import ConversationModel, MessageModel
 from coffer.infrastructure.persistence.keyset import newest_first_after
@@ -37,22 +41,6 @@ from coffer.infrastructure.persistence.keyset import newest_first_after
 def _tz(dt: datetime) -> datetime:
     """Ensure a datetime is timezone-aware (UTC)."""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-
-
-#: How ``_encode_content`` spells a text block's type — what
-#: ``MessageRepo.latest_with_text`` filters rows on.
-_TEXT_BLOCK_MARK = json.dumps({"type": "text"})[1:-1]
-
-
-def _encode_content(blocks: list[ContentBlock]) -> str:
-    """Serialize content blocks to JSON text for DB storage."""
-    return json.dumps([block_to_dict(b) for b in blocks])
-
-
-def _decode_content(raw: str) -> list[ContentBlock]:
-    """Deserialize JSON text from DB into a list of ContentBlock."""
-    data: list[dict[str, Any]] = json.loads(raw)
-    return [block_from_dict(d) for d in data]
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +94,7 @@ class ConversationRepo:
         archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
-        title_contains: str | None = None,
+        contains: str | None = None,
     ) -> list[Conversation]:
         """Conversations newest activity first with the id breaking ties.
         ``archived=False`` is the active threads,
@@ -118,14 +106,7 @@ class ConversationRepo:
             stmt = select(ConversationModel).order_by(
                 ConversationModel.updated_at.desc(), ConversationModel.id.desc()
             )
-            stmt = stmt.where(
-                ConversationModel.archived_at.isnot(None)
-                if archived
-                else ConversationModel.archived_at.is_(None)
-            )
-            if title_contains:
-                esc = title_contains.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-                stmt = stmt.where(ConversationModel.title.ilike(f"%{esc}%", escape="\\"))
+            stmt = _listing_filter(stmt, archived=archived, contains=contains)
             if after is not None:
                 stmt = stmt.where(
                     newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)
@@ -134,6 +115,15 @@ class ConversationRepo:
                 stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
+
+    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
+        async with self._sm() as session:
+            stmt = _listing_filter(
+                select(func.count()).select_from(ConversationModel),
+                archived=archived,
+                contains=contains,
+            )
+            return int((await session.execute(stmt)).scalar_one())
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         async with self._sm() as session:
@@ -231,6 +221,7 @@ class MessageRepo:
             prompt_tokens=row.prompt_tokens,
             completion_tokens=row.completion_tokens,
             created_at=_tz(row.created_at),
+            finished_at=_tz(row.finished_at) if row.finished_at else None,
         )
 
     async def append(self, message: Message) -> Message:
@@ -246,6 +237,7 @@ class MessageRepo:
                 prompt_tokens=message.prompt_tokens,
                 completion_tokens=message.completion_tokens,
                 created_at=message.created_at,
+                finished_at=message.finished_at,
             )
             session.add(row)
             await session.commit()
@@ -261,6 +253,7 @@ class MessageRepo:
         model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
+        finished_at: datetime | None = None,
     ) -> None:
         """Update an existing (streaming) message with its final content/status.
 
@@ -273,6 +266,7 @@ class MessageRepo:
             "status": status,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            "finished_at": finished_at,
         }
         if model_id is not None:
             values["model_id"] = model_id

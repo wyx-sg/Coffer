@@ -1,5 +1,5 @@
 """Command-line tools added by hand, and the interface read from their help
-(spec skill-manager "Declare a command-line tool without a skill", "Show a
+(spec skill-manager "Declare the commands a skill requires", "Show a
 command-line tool's full interface"), over the real app with the probe and the
 help runner faked at the composition root."""
 

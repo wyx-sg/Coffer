@@ -1,13 +1,14 @@
 // src/components/chat/DraftThread.tsx
-// The draft New conversation opens (`/conversations/new`): a header with the
-// chosen agent, its model and effort and the folder it will work in, an empty
-// thread, and the composer whose first send creates the conversation (see
-// useChatController.sendDraft) — no welcome or suggestions. The agent, folder,
-// model and effort are all chosen here (New conversation asks nothing first). A hand-off opens it
-// with a prompt already in the composer (`restore`), waiting for Send. When no managed
-// agent is available, a state saying how to get one replaces the composer: the
-// daemon's install prompt to copy, or the Agents page (NoManagedAgentHelp).
-import { useTranslation } from "react-i18next";
+// The draft New conversation opens (`/conversations/new`): "New conversation" in
+// the title bar, one line saying which agent will run in which folder, and the
+// composer whose first send creates the conversation (see
+// useChatController.sendDraft) — no welcome or suggestions. The folder picker
+// sits in the composer's toolbar beside the paperclip; the agent, model and
+// effort on its right. A hand-off (Ask an agent) opens it with a prompt already
+// in the composer (`restore`), waiting for Send, and says so under the box. When
+// no managed agent is available, a state with a way to the Agents page replaces
+// the composer (NoManagedAgentHelp).
+import { Trans, useTranslation } from "react-i18next";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import {
@@ -20,9 +21,9 @@ import {
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ChatAttachment } from "@/lib/api/chat";
-import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { Composer } from "./Composer";
+import { DraftTitleBar } from "./ConversationHeader";
 import { DraftWorkspacePicker } from "./DraftWorkspacePicker";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
@@ -48,6 +49,8 @@ interface Props {
   /** Text to type into the composer once (a hand-off's prompt); never sent by itself. */
   restore?: ComposerRestore | null;
   onRestored?: () => void;
+  /** Opened from Ask an agent: say nothing is sent until Send. */
+  fromHandoff?: boolean;
 }
 
 export function DraftThread({
@@ -65,49 +68,40 @@ export function DraftThread({
   creating = false,
   restore,
   onRestored,
+  fromHandoff = false,
 }: Props) {
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
-  const models = useAgentModels(agentKey).data;
-  const modelLabel = modelValue
-    ? models?.find((m) => m.id === modelValue)?.label || modelValue
-    : null;
-  // What the first turn will run with — only the parts that were chosen; an
-  // unset model or effort is the agent's own default, which it never names.
-  const details = [
-    cwd ? abbreviateHomePath(cwd) : t("conversations.draft.workspace"),
-    modelLabel,
-    effortValue ? t("conversations.draft.effort", { effort: effortValue }) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const dir = cwd ? abbreviateHomePath(cwd) : t("conversations.draft.workspace");
 
   if (noManagedAgent) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
-        <NoManagedAgentHelp layout="empty" />
+        <DraftTitleBar />
+        <NoManagedAgentHelp />
       </div>
     );
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-subtle px-5">
-        <h1 className="text-md font-semibold text-text">{t("conversations.new.title")}</h1>
-        <DraftWorkspacePicker cwd={cwd} onChange={(next) => onCwdChange?.(next)} />
-      </div>
-
-      <div className="flex flex-1 flex-col items-center justify-center gap-1.5 p-6 text-center">
-        <p className="text-md font-semibold text-text">
-          {t("conversations.draft.title", { agent: agentName })}
+      <DraftTitleBar />
+      <div className="flex flex-1 items-center justify-center px-8 text-center">
+        <p className="text-sm text-text-muted">
+          <Trans
+            i18nKey="conversations.draft.line"
+            values={{ agent: agentName, dir }}
+            components={{ mono: <span className="font-mono" /> }}
+          />
         </p>
-        <p className="text-xs text-text-muted">{t("conversations.draft.details", { details })}</p>
       </div>
       <Composer
         onSend={onSend}
         disabled={creating}
         restore={restore}
         onRestored={onRestored}
+        note={fromHandoff ? t("conversations.draft.handoffNote") : undefined}
+        workspace={<DraftWorkspacePicker cwd={cwd} onChange={(next) => onCwdChange?.(next)} />}
         controls={
           <>
             <Select value={agentKey} onValueChange={onAgentChange}>

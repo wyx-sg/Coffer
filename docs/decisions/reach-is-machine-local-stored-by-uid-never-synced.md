@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [A Channel Answers Only Its Paired Owner, and Fails Closed in Groups](channel-owner-gate.md), [A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), spec resource-framework "Carry a per-agent reach on every resource", spec vault-sync "Keep reach machine-local", spec vault-sync "Scope names agents only", spec vault-sync "Remove the machine axis without widening reach", spec vault-sync "Say where reach is set that it is machine-local", spec channels "Limit the agents a channel may drive to its scope", spec channels "Bind each channel to the one machine that runs it", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Take the agent identity from the handshake", research note [multi-machine sync](../research/multi-machine-sync.md), PRs #296, #381, #382
+**Related**: [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [A Channel Answers Only Its Paired Owner, and Fails Closed in Groups](channel-owner-gate.md), [A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), spec resource-framework "Carry a per-agent reach on every resource", spec vault-sync "Keep reach machine-local", spec vault-sync "Scope names agents only", spec vault-sync "Remove the machine axis without widening reach", spec channels "Limit the agents a channel may drive to its scope", spec channels "Bind each channel to the one machine that runs it", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Take the agent identity from the handshake", research note [multi-machine sync](../research/multi-machine-sync.md), PRs #296, #381, #382
 
 ## Context
 
@@ -57,10 +57,9 @@ repository, no ignore rule, no forgotten exporter field and no hand-run
 `git add -f` can publish it. Cons: a resource does not arrive with the reach it
 has elsewhere — a newly arrived MCP server is live here for every agent until
 the user narrows it, exactly as if it had been created here; and "restrict this
-on every machine" is N edits, one per machine. The UI must say at the control
-that reach is local, because a user who assumes it syncs would be assuming the
-more dangerous half (spec vault-sync "Say where reach is set that it is
-machine-local").
+on every machine" is N edits, one per machine. The docs must say that reach is
+local, because a user who assumes it syncs would be assuming the more dangerous
+half (the reach panel itself carries no such line).
 
 It wins because it is the only option in which the person setting reach can
 verify it from where they are sitting, in which two machines cannot disagree
@@ -199,8 +198,8 @@ reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output
 
 - Two machines can legitimately disagree about one resource's reach, and
   neither is wrong.
-- Every reach control states that the setting is for this machine only and is
-  not synced, and names an empty agent list as dormant.
+- The docs state that reach is for this machine only and is not synced; an
+  empty agent list reads "No agent" on the control.
 - The machine registry belongs to sync alone; nothing about permissions reads
   it.
 - A newly converged resource is live here at its kind's default reach; a user

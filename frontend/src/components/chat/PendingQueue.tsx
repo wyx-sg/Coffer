@@ -20,7 +20,7 @@ export function PendingQueue({ pending, onEdit, onRemove }: Props) {
   const { t } = useTranslation();
   if (pending.length === 0) return null;
   return (
-    <div className="mx-auto flex max-h-40 w-full max-w-[calc(720px+4rem)] flex-col gap-1 overflow-y-auto px-8 pt-2">
+    <div className="flex max-h-40 w-full flex-col gap-1 overflow-y-auto px-8 pt-2">
       <span className="text-xs text-text-muted">{t("conversations.queue.label")}</span>
       {pending.map((text, idx) => (
         <div

@@ -1,6 +1,5 @@
 // frontend/src/components/skills/SkillDeliveryEdit.test.tsx
-// Editing delivery from a skill's Delivery tab (spec skill-manager "Decide
-// which agents a skill is for"): each agent — delivered or not — has a switch
+// Editing delivery from a skill's Delivery tab (spec skill-manager "Deliver a skill only where it is enabled and in scope"): each agent — delivered or not — has a switch
 // that writes the skill's scope, shows pending, toasts, and keeps the header's
 // reach button in step; a switched-off agent cannot be switched on.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";

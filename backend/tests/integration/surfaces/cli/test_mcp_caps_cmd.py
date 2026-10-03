@@ -147,7 +147,7 @@ def test_cap_list_empty_type_renders_the_table(mcp_daemon: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# coffer mcp cap expose (spec mcp-gateway "Choose how each tool is exposed")
+# coffer mcp cap expose (spec mcp-gateway "Forward tools, resources and prompts")
 # ---------------------------------------------------------------------------
 
 

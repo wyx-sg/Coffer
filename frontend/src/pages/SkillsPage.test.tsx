@@ -96,10 +96,10 @@ test("the library's reach filter keeps only the skills in the chosen reach state
   await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
   expect((await libraryRows())[0]).toHaveTextContent("off-skill");
 
-  await choose("Only selected agents");
+  await choose("Chosen agents");
   await waitFor(async () => expect((await libraryRows())[0]).toHaveTextContent("scoped-skill"));
 
-  await choose("Every agent");
+  await choose("All agents");
   await waitFor(async () => expect((await libraryRows())[0]).toHaveTextContent("everywhere-skill"));
   expect(await libraryRows()).toHaveLength(1);
 });

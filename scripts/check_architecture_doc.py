@@ -129,13 +129,9 @@ def check_doc(doc: Path, on_disk: dict[str, set[str]]) -> list[str]:
     for layer in LAYERS:
         named = tree.get(layer)
         if named is None:
-            problems.append(
-                f"{rel}: layer `{layer}/` is missing from the code-layout tree"
-            )
+            problems.append(f"{rel}: layer `{layer}/` is missing from the code-layout tree")
             continue
-        for pkg in sorted(
-            on_disk[layer] - {n.rstrip("/") for n in named if n.endswith("/")}
-        ):
+        for pkg in sorted(on_disk[layer] - {n.rstrip("/") for n in named if n.endswith("/")}):
             problems.append(
                 f"{rel}: `{layer}/{pkg}/` exists on disk but the code-layout tree does not name it"
             )
@@ -150,9 +146,7 @@ def check_doc(doc: Path, on_disk: dict[str, set[str]]) -> list[str]:
 
 def check_tools(tools: set[str]) -> list[str]:
     rel = ARCH_DIR.relative_to(REPO_ROOT)
-    text = "\n".join(
-        page.read_text(encoding="utf-8") for page in sorted(ARCH_DIR.glob("*.md"))
-    )
+    text = "\n".join(page.read_text(encoding="utf-8") for page in sorted(ARCH_DIR.glob("*.md")))
     return [
         f"{rel}/: builtin tool `{TOOL_PREFIX}{name}` is registered but never named"
         for name in sorted(tools)

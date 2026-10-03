@@ -3,29 +3,20 @@
 // The shared reach control, tested on its own rather than only through
 // ScopeControl — three surfaces mount it (the row, the detail header, the bulk
 // bar), and its contract is the same for all of them: what the one button says,
-// and WHEN the staged choice is handed over.
+// and that every change is handed over AT ONCE (the bulk bar, whose `apply`
+// variant stages and hands over on Apply, aside).
 //
-// The staging rule is the load-bearing one: nothing may be written while the
-// panel is open, and closing it must hand over the choice exactly once. Writing
-// sooner refetched the list under the open popover, moving the row it was
-// anchored to out from under it.
-//
-// The second load-bearing rule is that DISABLED IS A CHOICE, never an
-// inference. It has its own endpoint, its own audit events and its own hook,
-// and it deliberately leaves the scope untouched — so it writes `onDisabled`,
-// and an empty pick-list (dormant) is a different state wearing a different
-// label.
-//
-// The third is the machine-local line: reach does not sync, and this panel is
-// the only place a user is told so. A user who assumed it synced would set
-// reach once and never understand why the other machine ignored it.
+// The load-bearing rules: Off is a choice, never an inference (it writes
+// `onDisabled`, and an empty pick-list is a different state wearing a
+// different label, "No agent"); a failed write is shown in the panel with its
+// reason and a Retry, and the view snaps back.
 //
 // A scope stores agent UIDS and a person reads agent NAMES, so the fixtures
 // below carry both, deliberately unalike: a tick writes the uid, the row is
 // labelled and found by the name, and a fixture where the two coincided could
 // not tell one from the other.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { acceptance } from "@/test/acceptance";
 import i18n from "@/i18n";
@@ -63,6 +54,9 @@ const handlers = () => ({
   onRestricted: vi.fn(),
 });
 
+/** Let a queued write settle. */
+const settle = () => act(async () => {});
+
 /** A scope, as the wire spells it: agent UIDS, never names. */
 const only = (agents: string[] | null): Scope => ({ agents });
 
@@ -71,9 +65,6 @@ const trigger = (testId = "scope-control") =>
   within(screen.getByTestId(testId)).getByRole("button");
 const openPanel = () => fireEvent.click(trigger());
 const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
-/** Dismissing the panel is what commits the staged choice. */
-const closePanel = () =>
-  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 /** One agent's row, found the way the DOM labels it — by the NAME the user
  *  reads, even though ticking it writes the uid. */
 const agentRow = (name: string) => within(screen.getByTestId(`scope-agent-${name}`));
@@ -88,391 +79,369 @@ afterEach(() => vi.clearAllMocks());
 
 describe("the button says what the reach is", () => {
   test("there is ONE button, not a row of segments", () => {
-    // Three segments spent three controls on two states — "everywhere" is
-    // "restricted with everything ticked" — and still made the reader compare
-    // all three to learn which was live.
     seed();
     mount("everywhere");
     expect(within(screen.getByTestId("scope-control")).getAllByRole("button")).toHaveLength(1);
   });
 
-  test("everywhere reads as every agent", () => {
+  test("everywhere reads as All agents", () => {
     seed();
     mount("everywhere");
-    expect(trigger()).toHaveTextContent(/every agent/i);
+    expect(trigger()).toHaveTextContent(/^all agents$/i);
   });
 
-  test("a restricted scope is reported as a count of agents", () => {
+  test("chosen agents show only their badges, no count in words", () => {
     seed();
     mount("restricted", { initialScope: only([CLAUDE, CODEX]) });
-    expect(trigger()).toHaveTextContent(/2 agents/i);
+    // The count survives for assistive tech only.
+    expect(trigger().querySelector(".sr-only")).toHaveTextContent("2 agents");
+    const visibleText = [...trigger().querySelectorAll(":scope > span:not(.sr-only)")].filter(
+      (el) => el.getAttribute("aria-hidden") !== "true",
+    );
+    expect(visibleText).toHaveLength(0);
   });
 
-  test("one agent is counted in the singular", () => {
-    seed();
-    mount("restricted", { initialScope: only([CLAUDE]) });
-    expect(trigger()).toHaveTextContent(/^1 agent/i);
-  });
-
-  test("disabled reads as disabled", () => {
+  test("off reads as Off", () => {
     seed();
     mount("disabled", { initialScope: only([CLAUDE]) });
-    expect(trigger()).toHaveTextContent(/off/i);
+    expect(trigger()).toHaveTextContent(/^off$/i);
   });
 
-  test("an empty pick-list is NOT 'disabled' — it says no agent is selected", () => {
-    // Two different states that a single wrong label would fuse: the user did
-    // not switch this off, its list simply names nobody.
+  test("an empty pick-list is NOT 'off' — it reads No agent", () => {
     seed();
     mount("restricted", { initialScope: only([]) });
-    expect(trigger()).toHaveTextContent(/no agent selected/i);
-    expect(trigger()).not.toHaveTextContent(/off/i);
+    expect(trigger()).toHaveTextContent(/^no agent$/i);
   });
 
-  test("a scope spelling 'every agent' the long way still reads as every agent", () => {
+  test("a scope spelling 'every agent' the long way still reads as All agents", () => {
     seed();
     mount("restricted", { initialScope: only(null) });
-    expect(trigger()).toHaveTextContent(/every agent/i);
+    expect(trigger()).toHaveTextContent(/^all agents$/i);
   });
 
   test("`mode: null` names no state — it names the action instead", () => {
-    // The bulk bar. A mixed selection has no current reach, so a label claiming
-    // one would misreport every row that is in a different state.
     seed();
     mount(null);
     expect(trigger()).toHaveTextContent(/set reach/i);
   });
 
-  test("a write in flight makes the button inert", () => {
+  test("a bulk write in flight makes the button inert", () => {
     seed();
     mount("everywhere", { busy: true });
     expect(trigger()).toBeDisabled();
   });
 });
 
-describe("the panel offers the states as choices", () => {
-  test("all three, with the live one already chosen", () => {
+describe("the panel", () => {
+  test("is headed Available to, with the resource's name small under it", () => {
+    seed();
+    mount("everywhere", { resourceName: "Team bot" });
+    openPanel();
+    expect(screen.getByText("Available to")).toBeInTheDocument();
+    expect(screen.getByText("Team bot")).toBeInTheDocument();
+  });
+
+  test("offers Off, All agents and Chosen agents with the live one chosen", () => {
     seed();
     mount("everywhere");
     openPanel();
-    expect(choice(/^off$/i)).not.toBeChecked();
-    expect(choice(/every agent/i)).toBeChecked();
-    expect(choice(/only selected agents/i)).not.toBeChecked();
+    const radios = screen.getAllByRole("radio");
+    expect(radios.map((r) => r.closest("label")?.textContent)).toEqual([
+      "Off",
+      "All agents",
+      "Chosen agents",
+    ]);
+    expect(choice(/all agents/i)).toBeChecked();
+    expect(screen.getByText("No agent can use it; your ticks are kept")).toBeInTheDocument();
+    expect(screen.getByText("Including agents you add later")).toBeInTheDocument();
+    expect(screen.getByText("Only the ones ticked below")).toBeInTheDocument();
   });
 
   test("a mixed selection opens with nothing chosen", () => {
     seed();
-    mount(null);
+    mount(null, { apply: true });
     openPanel();
-    for (const label of [/^off$/i, /every agent/i, /only selected agents/i]) {
-      expect(choice(label)).not.toBeChecked();
-    }
+    expect(
+      screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked),
+    ).toHaveLength(0);
   });
 
-  test("every choice is inert while a write is in flight", () => {
-    // The trigger is disabled too, so this only bites on a write started from
-    // an already-open panel; the panel must not offer a second one.
+  test("no longer carries the machine-local note", () => {
     seed();
     mount("everywhere");
     openPanel();
-    const before = screen.getAllByRole("radio");
-    expect(before.every((r) => !(r as HTMLInputElement).disabled)).toBe(true);
+    expect(screen.queryByText(/this machine only/i)).not.toBeInTheDocument();
   });
-});
 
-describe("disabled is its own choice, never inferred", () => {
-  test("choosing it reports the intent and nothing else", () => {
+  test("the list is dimmed and inert unless the mode is Chosen agents, ticks kept", () => {
     seed();
-    const h = mount("everywhere");
+    mount("disabled", { initialScope: only([CODEX]) });
     openPanel();
-    fireEvent.click(choice(/^off$/i));
-    expect(h.onDisabled).toHaveBeenCalledOnce();
-    expect(h.onEverywhere).not.toHaveBeenCalled();
-    expect(h.onRestricted).not.toHaveBeenCalled();
+    expect(screen.getByTestId("scope-agent-list")).toHaveClass("opacity-45");
+    expect(agentRow("codex").getByRole("checkbox")).toBeChecked();
+    expect(agentRow("codex").getByRole("checkbox")).toBeDisabled();
+    expect(agentRow("claude").getByRole("checkbox")).toBeDisabled();
   });
 
-  test("emptying the pick-list writes a scope, NOT a disable", () => {
-    // The difference the data model turns on: "I switched this off" keeps the
-    // selection and fires the disable endpoint; "I cleared the list to re-pick"
-    // is a scope reaching nobody. Fusing them would destroy the first.
+  test("the list is live under Chosen agents", () => {
     seed();
-    const h = mount("restricted", { initialScope: only([CLAUDE]) });
+    mount("restricted", { initialScope: only([CODEX]) });
     openPanel();
-    fireEvent.click(agentRow("claude").getByRole("checkbox"));
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([]));
-    expect(h.onDisabled).not.toHaveBeenCalled();
+    expect(screen.getByTestId("scope-agent-list")).not.toHaveClass("opacity-45");
+    expect(agentRow("claude").getByRole("checkbox")).toBeEnabled();
   });
 
-  test("the panel names the empty list as dormant, in its own words", () => {
+  test("Filter agents narrows the rows by name and keeps hidden ticks", () => {
+    seed();
+    mount("restricted", { initialScope: only([CLAUDE]) });
+    openPanel();
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter agents" }), {
+      target: { value: "cod" },
+    });
+    expect(screen.queryByTestId("scope-agent-claude")).not.toBeInTheDocument();
+    expect(screen.getByTestId("scope-agent-codex")).toBeInTheDocument();
+  });
+
+  test("the pick-list is what is registered, never free text", () => {
     seed();
     mount("restricted", { initialScope: only([]) });
     openPanel();
-    expect(screen.getByText(/dormant/i)).toBeInTheDocument();
-    expect(choice(/^off$/i)).not.toBeChecked();
+    expect(within(screen.getByTestId("scope-agent-axis")).getAllByRole("checkbox")).toHaveLength(2);
   });
 
-  test("a disabled resource still shows the agent list it will come back to", () => {
-    // Disabling leaves the scope untouched so re-enabling restores it; showing
-    // the remembered selection is the plainest statement that it survived.
+  test("a seeded uid nothing registered answers to still renders, badged", () => {
     seed();
-    mount("disabled", { initialScope: only([CLAUDE]) });
+    mount("restricted", { initialScope: only([GHOST, CLAUDE]) });
     openPanel();
-    expect(choice(/^off$/i)).toBeChecked();
-    expect(agentRow("claude").getByRole("checkbox")).toBeChecked();
-    expect(screen.queryByText(/dormant/i)).not.toBeInTheDocument();
-  });
-});
-
-describe("the panel says reach is machine-local", () => {
-  test("the panel states that reach is set on this machine only", () => {
-    // The decision it reports — reach does not sync — is invisible everywhere
-    // else in the app, so the panel where reach is chosen is the one place a
-    // user can learn it without reading a doc. Every state is now chosen here,
-    // so no user can set reach without passing this line.
-    seed();
-    mount("everywhere");
-    openPanel();
-    const line = screen.getByTestId("reach-machine-local");
-    expect(line).toHaveTextContent(/this machine only/i);
-    expect(line).toHaveTextContent(/not synced/i);
+    expect(within(screen.getByTestId(`scope-agent-${GHOST}`)).getByRole("checkbox")).toBeChecked();
+    expect(screen.getByText(/not added here/i)).toBeInTheDocument();
   });
 
-  test("the button carries no tooltip for it: the line is visible text in the panel", () => {
-    seed();
-    mount("everywhere");
-    expect(trigger()).not.toHaveAttribute("title");
-  });
-
-  test("a dormancy note is the one thing the button does carry", () => {
-    // The note is about THIS resource and is the more urgent; the standing
-    // fact is one click away inside the panel.
-    seed();
-    mount("restricted", { initialScope: only([CLAUDE]), note: "Inactive here" });
-    expect(trigger()).toHaveAttribute("title", "Inactive here");
-  });
-
-  test("it is a quiet line, not one of the amber warnings", () => {
-    // Amber is reserved for a scope that currently reaches nobody. A standing
-    // fact rendered in the same colour would read as a fault every time.
-    seed();
-    mount("restricted", { initialScope: only([CLAUDE]) });
-    openPanel();
-    expect(screen.getByTestId("reach-machine-local").className).toContain("text-text-muted");
-    expect(screen.getByTestId("reach-machine-local").className).not.toContain("text-warning");
-  });
-});
-
-describe("the panel stages the choice, then commits once on close", () => {
-  test("opening the panel writes nothing", () => {
-    seed();
-    const h = mount("everywhere");
-    openPanel();
-    expect(h.onRestricted).not.toHaveBeenCalled();
-    expect(h.onEverywhere).not.toHaveBeenCalled();
-    expect(h.onDisabled).not.toHaveBeenCalled();
-  });
-
-  test("ticking agents writes nothing until the panel closes, then once", () => {
-    seed();
-    const h = mount("everywhere");
-    openPanel();
-    fireEvent.click(choice(/only selected agents/i));
-    fireEvent.click(agentRow("claude").getByRole("checkbox"));
-    fireEvent.click(agentRow("codex").getByRole("checkbox"));
-    expect(h.onRestricted).not.toHaveBeenCalled();
-
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledOnce();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE, CODEX]));
-  });
-
-  test("a whole-value choice closes the panel and writes on the way out, once", () => {
-    // It commits as the panel goes, not while it is open: a write under an open
-    // popover refetched the list and moved the row it is anchored to.
-    seed();
-    const h = mount("restricted", { initialScope: only([CLAUDE]) });
-    openPanel();
-    fireEvent.click(choice(/every agent/i));
-    expect(h.onEverywhere).toHaveBeenCalledOnce();
-    expect(h.onRestricted).not.toHaveBeenCalled();
-    // The panel is gone, so dismissing afterwards cannot write a second time.
-    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
-    closePanel();
-    expect(h.onEverywhere).toHaveBeenCalledOnce();
-  });
-
-  test("a panel the user only glanced at writes NOTHING", () => {
-    // With "Disabled" inside the panel, an untouched close would POST a disable
-    // on an already-disabled resource — a real audit event for a glance — and
-    // the consumer has no "same value" to dedupe that against.
-    seed();
-    const h = mount("disabled", { initialScope: only([CLAUDE]) });
-    openPanel();
-    closePanel();
-    expect(h.onDisabled).not.toHaveBeenCalled();
-    expect(h.onEverywhere).not.toHaveBeenCalled();
-    expect(h.onRestricted).not.toHaveBeenCalled();
-  });
-
-  test("re-picking the state it is already in still reports, leaving 'unchanged' to the consumer", () => {
-    // The control cannot know whether the seed IS the stored value (the bulk
-    // consumer's seed never is), so a deliberate pick always reports;
-    // ScopeControl is the one that drops a write matching what is stored.
-    seed();
-    const h = mount("restricted", { initialScope: only([CLAUDE]) });
-    openPanel();
-    fireEvent.click(choice(/only selected agents/i));
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE]));
-  });
-
-  test("the agent axis is a pick-list of what is registered, never free text", () => {
-    // A typed uid would match nothing, which makes the resource dormant
-    // silently rather than failing — so it is never typed: the user picks a
-    // name and the list supplies the uid behind it.
-    seed();
-    mount("restricted", { initialScope: only([CLAUDE]) });
-    openPanel();
-    const row = agentRow("codex");
-    expect(row.getByText("codex")).toBeInTheDocument();
-    expect(row.getByRole("checkbox")).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("scope-agent-axis")).queryByRole("textbox"),
-    ).not.toBeInTheDocument();
-  });
-
-  test("ticking an agent under 'every agent' narrows in one click", () => {
-    // The rows stay on screen under the other choices rather than hiding until
-    // "only selected" is picked: ticking a row IS that pick, so narrowing is
-    // one click from where the user already is instead of two in a discovered
-    // order.
-    seed();
-    const h = mount("everywhere");
-    openPanel();
-    expect(choice(/every agent/i)).toBeChecked();
-
-    fireEvent.click(agentRow("codex").getByRole("checkbox"));
-    expect(choice(/only selected agents/i)).toBeChecked();
-    expect(choice(/every agent/i)).not.toBeChecked();
-
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([CODEX]));
-    expect(h.onEverywhere).not.toHaveBeenCalled();
-  });
-
-  test("the pick-list opens on `initialScope`", () => {
-    seed();
-    mount("restricted", { initialScope: only([CLAUDE]) });
-    openPanel();
-    expect(agentRow("claude").getByRole("checkbox")).toBeChecked();
-    expect(agentRow("codex").getByRole("checkbox")).not.toBeChecked();
-  });
-
-  test("no seed is what a bulk write opens on — a fresh intent, nothing ticked", () => {
-    seed();
-    mount(null);
-    openPanel();
-    expect(agentRow("claude").getByRole("checkbox")).not.toBeChecked();
-  });
-
-  test("choosing 'only selected agents' from 'every agent' starts dormant", () => {
-    seed();
-    const h = mount("everywhere");
-    openPanel();
-    fireEvent.click(choice(/only selected agents/i));
-    expect(screen.getByText(/dormant/i)).toBeInTheDocument();
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([]));
-  });
-
-  test("narrowing a stored 'every agent' hands back a list, never `{agents: null}`", () => {
-    // `{agents: null}` IS "every agent", which has its own choice and its own
-    // callback. A consumer must never have to normalise one into the other, so
-    // `onRestricted` only ever carries a list.
-    seed();
-    const h = mount("restricted", { initialScope: only(null) });
-    expect(trigger()).toHaveTextContent(/every agent/i);
-    openPanel();
-    expect(choice(/every agent/i)).toBeChecked();
-    fireEvent.click(choice(/only selected agents/i));
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([]));
-  });
-
-  test("a seeded agent uid nothing registered answers to still renders, badged", () => {
-    // Dropping it would rewrite the user's scope behind their back — the write
-    // below would go out narrower than what is stored — and a uid may
-    // legitimately be scoped in before that agent is registered on this
-    // machine. There is no name to print for it, so it prints as itself: the
-    // row is keyed on the uid, because that IS its label here.
-    seed([{ uid: CLAUDE, name: "claude" }]);
-    const h = mount("restricted", { initialScope: only([GHOST]) });
-    openPanel();
-    const row = agentRow(GHOST);
-    expect(row.getByText(GHOST)).toBeInTheDocument();
-    expect(row.getByText(/not added/i)).toBeInTheDocument();
-    expect(row.getByRole("checkbox")).toBeChecked();
-    fireEvent.click(choice(/only selected agents/i));
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([GHOST]));
-  });
-
-  test("ticking an agent preserves the unresolved uids already seeded", () => {
-    seed([{ uid: CLAUDE, name: "claude" }]);
-    const h = mount("restricted", { initialScope: only([GHOST]) });
-    openPanel();
-    fireEvent.click(agentRow("claude").getByRole("checkbox"));
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([GHOST, CLAUDE]));
-  });
-
-  test("with no agent registered and none seeded, the agent axis says so", () => {
+  test("with no agent registered and none seeded, the list says so", () => {
     seed([]);
-    mount(null);
+    mount("everywhere");
     openPanel();
-    expect(screen.getByText(/no agents added/i)).toBeInTheDocument();
+    expect(screen.getByText(/no agents added yet/i)).toBeInTheDocument();
   });
 
   test("the consumer's `note` is shown in the panel, and colours the button", () => {
-    // One button carrying the whole answer would otherwise read "1 agent" —
-    // perfectly healthy-looking — while reaching nobody on this machine.
     seed();
-    mount("restricted", { initialScope: only([CLAUDE]), note: "Inactive here" });
-    expect(trigger()).toHaveAttribute("title", "Inactive here");
-    expect(trigger().className).toContain("text-warning");
+    mount("restricted", { initialScope: only([GHOST]), note: "Inactive here" });
+    expect(trigger()).toHaveClass("text-warning");
     openPanel();
     expect(screen.getByText("Inactive here")).toBeInTheDocument();
   });
 
-  test("without a note the button is not coloured", () => {
+  test("the footer summarises the reach on the left", () => {
     seed();
     mount("restricted", { initialScope: only([CLAUDE]) });
-    expect(trigger().className).not.toContain("text-warning");
+    openPanel();
+    expect(screen.getByTestId("reach-summary")).toHaveTextContent("1 of 2 agents");
+    fireEvent.click(choice(/all agents/i));
+    expect(screen.getByTestId("reach-summary")).toHaveTextContent("All agents");
+    fireEvent.click(choice(/^off$/i));
+    expect(screen.getByTestId("reach-summary")).toHaveTextContent("Off");
   });
+});
 
-  test("the bulk mount is labelled on the button, so it is distinguishable from a row's", () => {
-    seed();
-    mount(null, { testId: "bulk-reach-control", ariaLabel: "Reach for the selected" });
-    expect(trigger("bulk-reach-control")).toHaveAccessibleName("Reach for the selected");
-  });
-
-  test("Done commits the staged agent list and closes, exactly once", () => {
-    // "Only selected agents" is the one choice that leaves the panel open, so
-    // it carries its own way out; Done is the same commit closing performs.
+describe("every change saves at once", () => {
+  test("opening and closing the panel writes nothing", () => {
     seed();
     const h = mount("everywhere");
     openPanel();
-    expect(screen.queryByRole("button", { name: /^done$/i })).not.toBeInTheDocument();
-    fireEvent.click(choice(/only selected/i));
-    fireEvent.click(agentRow("codex").getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
-    expect(h.onRestricted).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(h.onDisabled).not.toHaveBeenCalled();
+    expect(h.onEverywhere).not.toHaveBeenCalled();
+    expect(h.onRestricted).not.toHaveBeenCalled();
+  });
+
+  test("Off writes onDisabled and nothing else, and the panel stays open", async () => {
+    seed();
+    const h = mount("everywhere");
+    openPanel();
+    fireEvent.click(choice(/^off$/i));
+    await settle();
+    expect(h.onDisabled).toHaveBeenCalledOnce();
+    expect(h.onEverywhere).not.toHaveBeenCalled();
+    expect(h.onRestricted).not.toHaveBeenCalled();
+    expect(screen.getByRole("radiogroup")).toBeInTheDocument();
+    expect(screen.getByTestId("reach-save-state")).toHaveTextContent("✓ Saved");
+  });
+
+  test("All agents writes onEverywhere", async () => {
+    seed();
+    const h = mount("disabled", { initialScope: only([CLAUDE]) });
+    openPanel();
+    fireEvent.click(choice(/all agents/i));
+    await settle();
+    expect(h.onEverywhere).toHaveBeenCalledOnce();
+  });
+
+  test("re-picking the live mode writes nothing", async () => {
+    seed();
+    const h = mount("everywhere");
+    openPanel();
+    fireEvent.click(choice(/all agents/i));
+    await settle();
+    expect(h.onEverywhere).not.toHaveBeenCalled();
+  });
+
+  test("switching to Chosen agents hands back the stored list (Off keeps ticks)", async () => {
+    seed();
+    const h = mount("disabled", { initialScope: only([CODEX]) });
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    await settle();
     expect(h.onRestricted).toHaveBeenCalledWith(only([CODEX]));
+  });
+
+  test("switching to Chosen agents from All agents writes the empty list — never {agents: null}", async () => {
+    seed();
+    const h = mount("everywhere");
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    await settle();
+    expect(h.onRestricted).toHaveBeenCalledWith(only([]));
+    expect(trigger()).toHaveTextContent(/^no agent$/i);
+    expect(screen.getByTestId("reach-summary")).toHaveTextContent("0 of 2 agents");
+  });
+
+  test("a switch to All agents and back brings the earlier ticks back", async () => {
+    seed();
+    const h = mount("restricted", { initialScope: only([CLAUDE]) });
+    openPanel();
+    fireEvent.click(choice(/all agents/i));
+    await settle();
+    fireEvent.click(choice(/chosen agents/i));
+    await settle();
+    expect(h.onRestricted).toHaveBeenLastCalledWith(only([CLAUDE]));
+  });
+
+  test("each tick writes the whole list at once, as uids", async () => {
+    seed();
+    const h = mount("restricted", { initialScope: only([]) });
+    openPanel();
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
+    await settle();
+    expect(h.onRestricted).toHaveBeenCalledTimes(2);
+    expect(h.onRestricted).toHaveBeenNthCalledWith(1, only([CLAUDE]));
+    expect(h.onRestricted).toHaveBeenNthCalledWith(2, only([CLAUDE, CODEX]));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    await settle();
+    expect(h.onRestricted).toHaveBeenLastCalledWith(only([CODEX]));
+  });
+
+  test("ticking preserves the unresolved uids already seeded", async () => {
+    seed();
+    const h = mount("restricted", { initialScope: only([GHOST]) });
+    openPanel();
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    await settle();
+    expect(h.onRestricted).toHaveBeenCalledWith(only([GHOST, CLAUDE]));
+  });
+
+  test("the footer says Saving… while the write is in flight", async () => {
+    seed();
+    let release: () => void = () => {};
+    const h = handlers();
+    h.onDisabled.mockReturnValue(new Promise<void>((r) => (release = r)));
+    render(<ReachControl mode="everywhere" {...h} />);
+    openPanel();
+    fireEvent.click(choice(/^off$/i));
+    expect(screen.getByTestId("reach-save-state")).toHaveTextContent("Saving…");
+    await act(async () => release());
+    expect(screen.getByTestId("reach-save-state")).toHaveTextContent("✓ Saved");
+  });
+
+  test("a failed tick shows Failed, the reason and a Retry on its row; the tick snaps back", async () => {
+    seed();
+    const h = handlers();
+    h.onRestricted.mockRejectedValueOnce(new Error("disk full"));
+    render(<ReachControl mode="restricted" initialScope={only([])} {...h} />);
+    openPanel();
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
+    await settle();
+    const failed = screen.getByTestId("scope-agent-failed");
+    expect(failed).toHaveTextContent("Failed — disk full");
+    expect(agentRow("codex").getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByTestId("reach-save-state")).toHaveTextContent("Couldn't save");
+
+    fireEvent.click(within(failed).getByRole("button", { name: "Retry" }));
+    await settle();
+    expect(h.onRestricted).toHaveBeenCalledTimes(2);
+    expect(h.onRestricted).toHaveBeenLastCalledWith(only([CODEX]));
+    expect(screen.queryByTestId("scope-agent-failed")).not.toBeInTheDocument();
+    expect(screen.getByTestId("reach-save-state")).toHaveTextContent("✓ Saved");
+  });
+
+  test("a failed mode switch is shown under the modes with a Retry", async () => {
+    seed();
+    const h = handlers();
+    h.onDisabled.mockRejectedValueOnce(new Error("nope"));
+    render(<ReachControl mode="everywhere" {...h} />);
+    openPanel();
+    fireEvent.click(choice(/^off$/i));
+    await settle();
+    expect(screen.getByTestId("scope-mode-failed")).toHaveTextContent("Failed — nope");
+    expect(choice(/all agents/i)).toBeChecked();
+    fireEvent.click(
+      within(screen.getByTestId("scope-mode-failed")).getByRole("button", { name: "Retry" }),
+    );
+    await settle();
+    expect(h.onDisabled).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the bulk (apply) variant stages, then writes once on Apply", () => {
+  test("nothing is written until Apply, and the panel closes after", async () => {
+    seed();
+    const h = mount(null, { apply: true });
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    await settle();
+    expect(h.onRestricted).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await settle();
+    expect(h.onRestricted).toHaveBeenCalledOnce();
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE]));
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
-    // Closing again (already closed) must not write a second time.
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledTimes(1);
+  });
+
+  test("Apply is disabled until a mode is chosen", () => {
+    seed();
+    mount(null, { apply: true });
+    openPanel();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  test("a rejected Apply keeps the panel open with the reason and a Retry", async () => {
+    seed();
+    const h = handlers();
+    h.onDisabled.mockRejectedValueOnce(new Error("1 succeeded, 1 failed"));
+    render(<ReachControl mode={null} apply {...h} />);
+    openPanel();
+    fireEvent.click(choice(/^off$/i));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await settle();
+    expect(screen.getByTestId("scope-mode-failed")).toHaveTextContent("1 succeeded, 1 failed");
+    fireEvent.click(
+      within(screen.getByTestId("scope-mode-failed")).getByRole("button", { name: "Retry" }),
+    );
+    await settle();
+    expect(h.onDisabled).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+  });
+
+  test("agents ticked on only some rows are drawn as a dash", () => {
+    seed();
+    mount(null, { apply: true, partial: [CODEX] });
+    openPanel();
+    expect((agentRow("codex").getByRole("checkbox") as HTMLInputElement).indeterminate).toBe(true);
+    expect((agentRow("claude").getByRole("checkbox") as HTMLInputElement).indeterminate).toBe(
+      false,
+    );
   });
 });
 
@@ -489,32 +458,32 @@ describe("reach conventions (web-ui)", () => {
 
   acceptance("web-ui", "the reach button states the reach it holds", () => {
     seed();
-    expect(label("everywhere")).toMatch(/^every agent$/i);
+    expect(label("everywhere")).toMatch(/^all agents$/i);
+    // Chosen agents are drawn as badges; the count is screen-reader text only.
     expect(label("restricted", only([CLAUDE, CODEX]))).toMatch(/^2 agents$/i);
-    expect(label("restricted", only([]))).toMatch(/^no agent selected/i);
+    expect(label("restricted", only([]))).toMatch(/^no agent$/i);
     expect(label("disabled", only([CLAUDE]))).toMatch(/^off$/i);
   });
 
   acceptance("web-ui", "the reach panel offers the reach states as one choice", () => {
-    // GIVEN a resource of a scoped kind, currently reaching every agent.
     seed();
     render(<ReachControl mode="everywhere" {...handlers()} />);
-    // WHEN its reach panel is opened
     openPanel();
-    // THEN it offers the three reach states, with the current one chosen.
     const radios = screen.getAllByRole("radio");
     expect(radios.map((r) => r.closest("label")?.textContent)).toEqual([
-      expect.stringMatching(/^off$/i),
-      expect.stringMatching(/every agent/i),
-      expect.stringMatching(/only selected agents/i),
+      "Off",
+      "All agents",
+      "Chosen agents",
     ]);
     expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
-    expect(choice(/every agent/i)).toBeChecked();
-    // AND choosing Only selected agents shows the agents to pick from.
-    fireEvent.click(choice(/only selected agents/i));
-    expect(choice(/only selected agents/i)).toBeChecked();
+    expect(choice(/all agents/i)).toBeChecked();
+    // AND choosing Chosen agents makes the list of agents ticks live.
     const axis = screen.getByTestId("scope-agent-axis");
+    expect(within(axis).getAllByRole("checkbox")[0]).toBeDisabled();
+    fireEvent.click(choice(/chosen agents/i));
+    expect(choice(/chosen agents/i)).toBeChecked();
     expect(within(axis).getAllByRole("checkbox")).toHaveLength(AGENTS.length);
+    expect(within(axis).getAllByRole("checkbox")[0]).toBeEnabled();
   });
 
   acceptance(
@@ -530,7 +499,7 @@ describe("reach conventions (web-ui)", () => {
       const options = reachFilterOptions(t);
       expect(options.map((o) => o.value)).toEqual(["disabled", "everywhere", "restricted"]);
       expect(options.map((o) => o.label)).toEqual(panelLabels);
-      expect(options.map((o) => o.label)).toEqual(["Off", "Every agent", "Only selected agents"]);
+      expect(options.map((o) => o.label)).toEqual(["Off", "All agents", "Chosen agents"]);
 
       // The control a list mounts is a Reach pill offering those states (none chosen = All).
       render(<ReachFilter value="all" onChange={() => {}} />);
@@ -540,25 +509,33 @@ describe("reach conventions (web-ui)", () => {
     },
   );
 
-  acceptance("web-ui", "a dismissed reach panel writes nothing", () => {
-    seed();
-    const h = mount("everywhere");
+  acceptance(
+    "web-ui",
+    "a reach change saves at once and a failure is shown in the panel",
+    async () => {
+      seed();
+      const h = handlers();
+      h.onRestricted.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("refused"));
+      render(<ReachControl mode="restricted" initialScope={only([])} {...h} />);
 
-    openPanel();
-    closePanel();
-    expect(h.onDisabled).not.toHaveBeenCalled();
-    expect(h.onEverywhere).not.toHaveBeenCalled();
-    expect(h.onRestricted).not.toHaveBeenCalled();
+      openPanel();
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      expect(h.onRestricted).not.toHaveBeenCalled(); // nothing on dismissal
 
-    openPanel();
-    fireEvent.click(choice(/only selected agents/i));
-    fireEvent.click(agentRow("claude").getByRole("checkbox"));
-    fireEvent.click(agentRow("codex").getByRole("checkbox"));
-    expect(h.onRestricted).not.toHaveBeenCalled(); // nothing while it is open
-    closePanel();
-    expect(h.onRestricted).toHaveBeenCalledOnce();
-    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE, CODEX]));
-  });
+      openPanel();
+      fireEvent.click(agentRow("claude").getByRole("checkbox"));
+      fireEvent.click(agentRow("codex").getByRole("checkbox"));
+      await settle();
+      expect(h.onRestricted).toHaveBeenNthCalledWith(1, only([CLAUDE]));
+      expect(h.onRestricted).toHaveBeenNthCalledWith(2, only([CLAUDE, CODEX]));
+      expect(
+        within(screen.getByTestId("scope-agent-failed")).getByText(/refused/),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId("scope-agent-failed")).getByRole("button", { name: "Retry" }),
+      ).toBeInTheDocument();
+    },
+  );
 
   acceptance("web-ui", "a reach narrowed to chosen agents shows their badges", () => {
     seed([
@@ -567,10 +544,9 @@ describe("reach conventions (web-ui)", () => {
     ] as unknown as { uid: string; name: string }[]);
     mount("restricted", { initialScope: only([CLAUDE]) });
 
-    // The label is unchanged — it is still the button's whole name — and the
-    // chosen agent's badge sits beside it as decoration.
+    // The chosen agent's badge is the button's whole visible content; the count
+    // stays as its accessible name.
     expect(trigger()).toHaveAccessibleName("1 agent");
-    expect(trigger()).toHaveTextContent(/^1 agent$/);
     const marks = trigger().querySelectorAll("[data-agent-mark]");
     expect(marks).toHaveLength(1);
     expect(marks[0]).toHaveAttribute("data-agent-mark", "claude-spark");

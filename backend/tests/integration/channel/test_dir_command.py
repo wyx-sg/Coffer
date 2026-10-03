@@ -55,9 +55,7 @@ async def test_dir_switches_to_an_allowed_directory_in_a_fresh_conversation(
     fresh = await env.active_conversation(resource)
     assert fresh not in (None, before)
     assert env.provider.last_agent_config == {"cwd": lib}
-    assert adapter.texts()[-1] == (
-        f"📁 Now in {lib} — started a fresh conversation (the previous one is in /resume)."
-    )
+    assert adapter.texts()[-1] == f"📁 Now in {lib} — started a fresh conversation."
     # …and by a path under an allowed one.
     await env.processor.on_message(inbound("tg", "owner", f"/dir {app}/sub"))
     assert await _sticky_cwd(env, resource) == f"{app}/sub"
@@ -117,7 +115,7 @@ async def test_bare_dir_offers_the_allow_list_and_a_tap_switches(
     assert [(b.label, b.value) for b in buttons] == [
         (app, "dir:0"),
         (lib, "dir:1"),
-        ("Default ✓", "dir:default"),
+        ("✓ Default", "dir:default"),
     ]
 
     await env.processor.on_callback(tap_event("tg", "owner", "dir:1", platform_message_id="c-1"))

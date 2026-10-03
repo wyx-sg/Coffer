@@ -58,7 +58,8 @@ async def route_slash(
         await send(
             binding,
             peer.chat_id,
-            f"Did you mean /{guess}?",
+            f"Unknown command {text.split()[0]}. Did you mean /{guess}? "
+            "Send /help for all commands.",
             chat_kind=msg.chat_kind,
             thread_id=msg.thread_id,
         )

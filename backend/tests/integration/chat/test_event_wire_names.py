@@ -36,6 +36,8 @@ _WIRE_NAMES = {
     "turn_done",
     "turn_error",
     "queue_changed",
+    "question_asked",
+    "question_closed",
 }
 
 
@@ -98,6 +100,8 @@ async def test_every_event_has_a_wire_model_with_exactly_its_fields() -> None:
         "turn_done": wire.TurnDoneEventOut,
         "turn_error": wire.TurnErrorEventOut,
         "queue_changed": wire.QueueChangedEventOut,
+        "question_asked": wire.QuestionAskedEventOut,
+        "question_closed": wire.QuestionClosedEventOut,
     }
     members = typing.get_args(chat_events.AgentEvent)
     assert {cls.__dataclass_fields__["type"].default for cls in members} == set(models)

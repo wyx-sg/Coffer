@@ -8,6 +8,48 @@ info:
 servers:
 - url: http://127.0.0.1:8000
 paths:
+  /api/v1/channels/validate-credentials:
+    post:
+      description: |-
+        Check credentials against the platform without storing anything (spec
+        channels "Check credentials before they are saved"). A refusal is a normal
+        answer (``ok: false`` with a reason), not an error response.
+      operationId: validate_credentials_api_v1_channels_validate_credentials_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateCredentialsIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialCheckOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Validate Credentials
   /api/v1/channels/{uid}/notify:
     post:
       operationId: notify_channel_api_v1_channels__uid__notify_post
@@ -319,8 +361,8 @@ components:
       type: object
     ChannelPersonOut:
       description: |-
-        A person paired to the channel (spec channels "Serve several paired
-        people"): every one is answered with identical rights.
+        A person paired to the channel (spec channels "Gate inbound traffic on
+        sender identity"): every one is answered with identical rights.
       properties:
         active_conversation_id:
           anyOf:
@@ -444,6 +486,50 @@ components:
       - settings
       - commands
       title: ChannelStatusOut
+      type: object
+    CredentialCheckOut:
+      properties:
+        bot_handle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Bot Handle
+        bot_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Bot Name
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+        ok:
+          title: Ok
+          type: boolean
+        reason:
+          anyOf:
+          - enum:
+            - missing
+            - rejected
+            - unreachable
+            - timeout
+            type: string
+          - type: 'null'
+          title: Reason
+        same_bot:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Same Bot
+      required:
+      - ok
+      - bot_handle
+      - bot_name
+      - same_bot
+      - reason
+      - detail
+      title: CredentialCheckOut
       type: object
     ErrorDetail:
       properties:
@@ -783,4 +869,40 @@ components:
       - channel_type
       - bot_token_ref
       title: TelegramChannelConfig
+      type: object
+    ValidateCredentialsIn:
+      description: Credentials to check, as typed. Which fields apply depends on the platform.
+      properties:
+        app_id:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          title: App Id
+        app_secret:
+          anyOf:
+          - maxLength: 512
+            type: string
+          - type: 'null'
+          title: App Secret
+        bot_token:
+          anyOf:
+          - maxLength: 512
+            type: string
+          - type: 'null'
+          title: Bot Token
+        channel_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Channel Uid
+        platform:
+          enum:
+          - telegram
+          - seatalk
+          title: Platform
+          type: string
+      required:
+      - platform
+      title: ValidateCredentialsIn
       type: object

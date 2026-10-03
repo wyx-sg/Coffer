@@ -3,7 +3,7 @@
 // /chat/conversations/batch). The daemon answers per id, so a conversation that
 // is gone or still running never blocks the rest: one summary toast says how
 // many were done and how many skipped (running ones named), the lists refresh
-// once, and the caller learns which ids were done. An archive toast carries Undo.
+// once, and the caller learns which ids were done. An archive or unarchive toast carries Undo.
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -36,7 +36,10 @@ export function useConversationBatch() {
         void qc.invalidateQueries({ queryKey: conversationsKey });
         if (skipped === 0) {
           toast.success(t(`conversations.bulk.done.${action}`, { count: done.length }), {
-            undo: action === "archive" ? () => void run("unarchive", done) : undefined,
+            undo:
+              action === "delete"
+                ? undefined
+                : () => void run(action === "archive" ? "unarchive" : "archive", done),
           });
         } else {
           toast.error(

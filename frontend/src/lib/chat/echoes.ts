@@ -94,6 +94,7 @@ export function echoAsMessage(echo: PendingEcho, conversationId: string): Messag
     model_id: null,
     prompt_tokens: null,
     completion_tokens: null,
+    finished_at: null,
   };
 }
 

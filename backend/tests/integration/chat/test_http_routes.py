@@ -163,6 +163,7 @@ def test_the_conversation_list_pages_by_cursor() -> None:
         rest = client.get(
             "/api/v1/chat/conversations", params={"limit": 2, "cursor": first["next_cursor"]}
         ).json()
+        assert first["total"] == rest["total"] == 3
         assert [c["id"] for c in rest["conversations"]] == [made[0]]
         assert rest["next_cursor"] is None
 
@@ -202,6 +203,9 @@ def test_the_conversation_list_searches_titles_and_pages_the_matches() -> None:
         first = get(q="deploy", limit=2)
         assert [c["title"] for c in first["conversations"]] == ["DEPLOY 100%", "deploy notes"]
         assert first["next_cursor"]
+        assert first["total"] == 3  # the matches, not the page
+        assert get(q="lunch")["total"] == 1
+        assert get(archived=True)["total"] == 0
         rest = get(q="deploy", limit=2, cursor=first["next_cursor"])
         assert [c["title"] for c in rest["conversations"]] == ["Deploy plan"]
         assert rest["next_cursor"] is None
@@ -419,10 +423,10 @@ async def test_agent_config_set_model_preserves_cwd_and_session() -> None:
     """Setting (and clearing) the model must never clobber cwd/session_id —
     otherwise an existing CLI session would be lost on the next turn."""
     from coffer.domain.chat.agent_config import AgentConfig
-    from coffer.surfaces.http.chat.conversation_routes import (
+    from coffer.surfaces.http.chat.agent_config_routes import (
         get_agent_config as get_agent_config_route,
     )
-    from coffer.surfaces.http.chat.conversation_routes import (
+    from coffer.surfaces.http.chat.agent_config_routes import (
         set_agent_config as set_agent_config_route,
     )
     from coffer.surfaces.http.chat.schemas import AgentConfigPatch
@@ -450,7 +454,7 @@ async def test_agent_config_model_and_effort_do_not_clobber_each_other() -> None
     """The two are set from two controls, one field at a time, so a body that
     mentions one must leave the other exactly where it was — otherwise picking a
     model would silently reset how hard Codex thinks."""
-    from coffer.surfaces.http.chat.conversation_routes import (
+    from coffer.surfaces.http.chat.agent_config_routes import (
         set_agent_config as set_agent_config_route,
     )
     from coffer.surfaces.http.chat.schemas import AgentConfigPatch

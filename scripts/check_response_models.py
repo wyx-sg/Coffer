@@ -63,11 +63,7 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
                 assert isinstance(dec, ast.Call)
                 func_attr = dec.func
                 assert isinstance(func_attr, ast.Attribute)
-                owner = (
-                    func_attr.value.id
-                    if isinstance(func_attr.value, ast.Name)
-                    else "<expr>"
-                )
+                owner = func_attr.value.id if isinstance(func_attr.value, ast.Name) else "<expr>"
                 repr_str = f"@{owner}.{func_attr.attr}(...)"
                 violations.append((dec.lineno, node.name, repr_str))
     return violations

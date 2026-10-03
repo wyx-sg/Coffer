@@ -18,6 +18,9 @@
 // - Sync keeps its own signal, cleared by visiting the page rather than by the
 //   situation changing (spec vault-sync "Say a vault needs a human where the
 //   user already is"): one situation, so a count of one.
+// - Conversations count the ones whose agent asked a question and waits for
+//   the answer (GET /chat/conversations/needs-you-count; re-read when a
+//   question is raised or closed, and on a slow timer for the others).
 // - CLIs count the required commands (not a tool added by hand that nothing needs) that are missing, too old or not logged
 //   in, from the CLIs list itself (the rows the attention list reports as
 //   kind `cli`, which is why that kind is not counted twice below).
@@ -25,6 +28,7 @@
 //   Inbox node's count in the tree, never a sidebar badge (design decision 15).
 import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
 import { useClis } from "@/lib/hooks/useClis";
+import { useNeedsYouCount } from "@/lib/hooks/useNeedsYouCount";
 import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
 
 /** @ui-only derived view; never crosses the wire. */
@@ -65,6 +69,9 @@ export function useAttentionSignals(): AttentionSignals {
   const signals: Record<string, AttentionSignal | undefined> = attention.data
     ? countByEntry(attention.data.items ?? [])
     : {};
+  // Conversations count the ones with a question waiting on the owner.
+  const waiting = useNeedsYouCount().data?.count ?? 0;
+  if (waiting > 0) signals["/conversations"] = { count: waiting };
   if (sync) signals["/sync"] = { count: 1 };
   // A tool added by hand that nothing requires is a plain status, not a need.
   const clisNeedingYou = (clis.data?.items ?? []).filter(

@@ -29,6 +29,10 @@ export type NotifyOut = Schemas["NotifyOut"];
 
 export type RestartOut = Schemas["RestartOut"];
 
+export type CredentialCheck = Schemas["CredentialCheckOut"];
+
+export type CredentialCheckRequest = Schemas["ValidateCredentialsIn"];
+
 /** A channel's settings with every default filled in by the daemon — the typed
  *  reading of its configuration (`status.settings`), common fields included. */
 export type ChannelSettings = NonNullable<Schemas["ChannelStatusOut"]["settings"]>;
@@ -85,4 +89,10 @@ export function notifyChannel(uid: string, text: string): Promise<NotifyOut> {
       body: { text },
     }),
   );
+}
+
+/** Check credentials against the platform without storing them. A refusal is an
+ *  ordinary answer (`ok: false` with a `reason`), not a thrown error. */
+export function validateCredentials(body: CredentialCheckRequest): Promise<CredentialCheck> {
+  return unwrap(getApiClient().POST("/channels/validate-credentials", { body }));
 }

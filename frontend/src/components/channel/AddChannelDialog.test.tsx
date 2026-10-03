@@ -30,6 +30,9 @@ import { AddChannelDialog } from "./AddChannelDialog";
 import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
+// The three-step walk waits on the status poll, which ticks every few seconds.
+vi.setConfig({ testTimeout: 10_000 });
+
 vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
@@ -51,6 +54,14 @@ vi.mock("@/lib/api/channels", async (orig) => ({
     pair_url: "https://t.me/example_bot?start=R9WD6HNC",
   })),
   getChannelStatus: vi.fn(async () => ({ people: pairing.people })),
+  validateCredentials: vi.fn(async () => ({
+    ok: true,
+    bot_handle: "alexc_coffer_bot",
+    bot_name: "Alex",
+    same_bot: null,
+    reason: null,
+    detail: null,
+  })),
 }));
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async (orig) => ({
@@ -263,7 +274,10 @@ describe("AddChannelDialog", () => {
     // One translated message under each missing field — never zod's own
     // "String must contain…", and no toast for a validation miss.
     const alerts = await screen.findAllByRole("alert");
-    expect(alerts.map((a) => a.textContent)).toEqual(["Enter the App ID", "Enter the App secret"]);
+    expect(alerts.map((a) => a.textContent)).toEqual([
+      "Enter the App ID.",
+      "Enter the App secret.",
+    ]);
     expect(screen.queryByText(/must contain/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/app secret/i)).toHaveAttribute("aria-invalid", "true");
     expect(api.POST).not.toHaveBeenCalled();
@@ -351,9 +365,9 @@ describe("AddChannelDialog", () => {
     expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/SeaTalk Open Platform app/)).toBeInTheDocument();
     // The one portal step that must follow the connection, as a note.
     expect(screen.getByText(/set event delivery to WebSocket/)).toBeInTheDocument();
+    expect(screen.getByText(/the portal checks that a connection exists/)).toBeInTheDocument();
     expect(screen.queryByText(/~\/\.coffer\/vendor/)).not.toBeInTheDocument();
   });
 
@@ -428,18 +442,52 @@ describe("AddChannelDialog", () => {
   });
 });
 
+describe("step 2 checks as it asks", () => {
+  test("a pasted Telegram token is checked and the bot named", async () => {
+    registeringApi();
+    renderDialog();
+    fillTelegram();
+    fireEvent.change(screen.getByLabelText(/bot token/i), {
+      target: { value: "7412345:AAHsomethinglong" },
+    });
+    expect(await screen.findByText("Found @alexc_coffer_bot", {}, { timeout: 3000 })).toBeVisible();
+    expect(screen.getByText(/The token works\. It will run on this Mac/)).toBeVisible();
+  });
+
+  test("Connect is never disabled: an empty form reports under its fields on click", async () => {
+    const api = registeringApi();
+    renderDialog("telegram");
+    const connect = screen.getByRole("button", { name: /^connect$/i });
+    expect(connect).toBeEnabled();
+    fireEvent.click(connect);
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.map((a) => a.textContent)).toEqual(["Enter a name.", "Enter the bot token."]);
+    expect(api.POST).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        "Any name; channels are told apart by their ID, so you can rename it later.",
+      ),
+    ).toBeVisible();
+  });
+});
+
 describe("the three steps", () => {
-  test("platform → connect → pair, waiting for the owner's message until it lands", async () => {
+  acceptance("channels", "add a channel in three steps", async () => {
     registeringApi();
     renderDialog(null);
 
-    // Step 1: nothing to go on with until a platform is chosen.
+    // Step 1: no filter, no count; rows say what each platform needs. Nothing to
+    // go on with until a platform is chosen.
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+ platforms?/)).not.toBeInTheDocument();
+    expect(screen.getByText("Needs App ID + secret")).toBeInTheDocument();
+    expect(screen.getByText("Needs bot token")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^next$/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /telegram/i }));
     fireEvent.click(screen.getByRole("button", { name: /^next$/i }));
 
     // Step 2.
-    expect(screen.getByRole("heading", { name: "Add Telegram channel" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add a Telegram channel" })).toBeInTheDocument();
     fillTelegram();
     submit();
 
@@ -450,6 +498,11 @@ describe("the three steps", () => {
       "https://t.me/example_bot?start=R9WD6HNC",
     );
     expect(screen.getByText("Waiting for your message…")).toBeInTheDocument();
+    expect(
+      screen.getByText("Send this code to @example_bot from your own Telegram account."),
+    ).toBeInTheDocument();
+    // The only way out before pairing is the ghost "Pair later".
+    expect(screen.getByRole("button", { name: "Pair later" })).toBeInTheDocument();
 
     // The owner sends it; the next status poll reports the pairing.
     pairing.people = [
@@ -462,9 +515,14 @@ describe("the three steps", () => {
       },
     ];
     expect(await screen.findByText("Paired with Alex Chen", {}, { timeout: 7000 })).toBeVisible();
+    expect(screen.getByText(/answers only you\. Everyone else is ignored silently/)).toBeVisible();
+    // The default agent's name, and the bot to write to.
+    expect(
+      screen.getByText("Try it: send “hi” to @example_bot. claude-code replies."),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     expect(navigateMock).toHaveBeenCalledWith(`/channels/${NEW_UID}`);
-  }, 10_000);
+  });
 
   test("Back returns from Connect to the platform cards", () => {
     installApi(mockApiClient());

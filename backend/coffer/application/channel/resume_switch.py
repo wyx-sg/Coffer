@@ -58,13 +58,14 @@ def _title(conversation: Any) -> str:
     return str(conversation.title or "").strip() or "Untitled"
 
 
-def _listing(ctx: CommandContext, found: list[Any], active: str | None) -> str:
-    lines = ["Conversations in this chat (newest first):"]
+def _listing(
+    ctx: CommandContext, found: list[Any], active: str | None, *, buttons: bool = True
+) -> str:
+    lines = ["Send /resume <n> or tap one:" if buttons else "Send /resume <n> to reopen one:"]
     for n, conv in enumerate(found, start=1):
         agent = agent_display(ctx.commands._agents, conv.agent_key)
         tick = " ✓" if str(conv.id) == active else ""
-        lines.append(f"{n}. {_title(conv)} — {agent} — {age(conv.updated_at)}{tick}")
-    lines.append("Send /resume <n> to reopen one.")
+        lines.append(f"{n} · {_title(conv)} — {agent} · {age(conv.updated_at)}{tick}")
     return "\n".join(lines)
 
 
@@ -85,7 +86,8 @@ async def cmd_resume(ctx: CommandContext, text: str) -> None:
         await _rebind(ctx, found[index - 1])
         return
     listing = _listing(ctx, found, active)
-    await ctx.show_or_say(_card(found, active, listing), listing)
+    text = "Resume a conversation\n" + _listing(ctx, found, active, buttons=False)
+    await ctx.show_or_say(_card(found, active, listing), text)
 
 
 def _card(
@@ -115,4 +117,5 @@ async def _rebind(ctx: CommandContext, conversation: Any) -> None:
     await ctx.commands._threads.set_active_conversation(
         ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, str(conversation.id)
     )
-    await ctx.say(f'↩️ Resumed "{_title(conversation)}".')
+    agent = agent_display(ctx.commands._agents, conversation.agent_key)
+    await ctx.say(f"↩️ Resumed \u201c{_title(conversation)}\u201d with {agent}.")

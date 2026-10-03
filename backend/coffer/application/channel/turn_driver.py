@@ -37,10 +37,10 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
-from coffer.application.channel.turn_finish import TurnOutcome
+from coffer.application.channel.turn_finish import TurnOutcome, failure_line
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.application.runtime.supervisor import spawn
-from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.errors import CofferError
 
@@ -64,24 +64,22 @@ _logger = logging.getLogger(__name__)
 QUEUE_MAX = 10
 
 
-def queued_notice(waiting: int) -> str:
-    """What a message that joined the queue behind a running turn is told."""
-    return (
-        f"⏳ Queued ({waiting}) — it runs after the current turn. "
-        f"Past {QUEUE_MAX} waiting, new messages are dropped and I say so."
-    )
+def queued_notice() -> str:
+    """What a message that joined the queue behind a running one is told. The
+    limit is mentioned only when a message is actually dropped over it."""
+    return "⏳ Queued — runs when the current one finishes."
 
 
 #: What a message arriving with the queue already full is told: dropped, and why.
 DROPPED_NOTICE = (
-    f"⚠️ Not queued — {QUEUE_MAX} messages are already waiting behind the current turn, "
-    "so this one was dropped. Send it again once they have run, or /stop."
+    f"⚠️ Not queued — {QUEUE_MAX} messages are already waiting, so this one was dropped. "
+    "Send it again once they have run, or /stop."
 )
 
 #: Sends one reply back through a channel binding, matching
 #: ``ephemeral.safe_send``'s signature (buttons omitted — turn driving never
 #: sends a selection card).
-SafeSend = Callable[..., Awaitable[None]]
+SafeSend = Callable[..., Awaitable[Any]]
 
 #: Looks up (creating if absent) the session keyed by (channel, chat_id,
 #: thread_id) — the same registry ``InboundProcessor`` uses.
@@ -204,7 +202,7 @@ class TurnDriver:
         The turn starts now when the conversation is idle, else waits its turn behind
         the messages already pending — web and channel alike, in arrival order (spec
         chat "Queue messages sent during a turn"). A message that waits is told its
-        place ("Queued (n)"); past ``QUEUE_MAX`` pending the message is dropped and the
+        notice ("Queued"); past ``QUEUE_MAX`` pending the message is dropped and the
         chat told why (see "Answer the conversation commands from any paired chat"): a
         flood must not pile up forever.
         """
@@ -250,10 +248,10 @@ class TurnDriver:
                 on_start=on_start,
             )
         except CofferError as e:
-            await _say(f"⚠️ {e} [{e.code}]")
+            await _say(failure_line(str(e)))
             return
         if queued:
-            await _say(queued_notice(len(self._turns.pending(conversation_id))))
+            await _say(queued_notice())
 
     def render_sink(
         self,
@@ -325,8 +323,8 @@ class TurnDriver:
 
         async def _send_card(
             text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
-        ) -> None:
-            await self._safe_send(
+        ) -> SentMessage | None:
+            sent: SentMessage | None = await self._safe_send(
                 binding,
                 peer.chat_id,
                 text,
@@ -336,6 +334,7 @@ class TurnDriver:
                 chat_kind=item.chat_kind,
                 reply_to_message_id=item.reply_to_message_id,
             )
+            return sent
 
         renderer = TurnRenderer(
             channel=binding.resource.name,
@@ -366,8 +365,7 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
-        # Mark how it ended on the user's message: done (a question for the
-        # owner counts as done — the turn finished), failed or stopped.
+        # Mark how it ended on the user's message: done, failed or stopped.
         marks = adapter.capabilities.reactions
         mark = {"failed": marks.failed, "stopped": marks.stopped}.get(outcome, marks.done)
         await self._react(binding, peer, item, mark)

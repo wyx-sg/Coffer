@@ -45,6 +45,7 @@ __all__ = [
     "cmd_model",
     "current_effort_card",
     "current_model_card",
+    "say_model",
 ]
 
 _logger = logging.getLogger(__name__)
@@ -121,30 +122,42 @@ async def _set(ctx: CommandContext, **values: str | None) -> bool:
 
 
 def _where(ctx: CommandContext) -> str:
-    return GROUP_DEFAULT_SUFFIX if ctx.group_main else " for the next turn"
+    return GROUP_DEFAULT_SUFFIX if ctx.group_main else " — from your next message"
 
 
-async def apply_model(ctx: CommandContext, model: str, *, level: str | None = None) -> None:
-    """Set the model (and ``level``, when given). Shared by the typed form and a card tap."""
+async def apply_model(
+    ctx: CommandContext, model: str, *, level: str | None = None, announce: bool = True
+) -> bool:
+    """Set the model (and ``level``, when given). Shared by the typed form and a
+    card tap, which sets quietly when the effort step follows (``announce``)."""
     values = {"model": model} if level is None else {"model": model, "effort": level}
     if not await _set(ctx, **values):
-        return
+        return False
+    if announce:
+        await say_model(ctx)
+    return True
+
+
+async def say_model(ctx: CommandContext) -> None:
+    """``Model: Claude Sonnet 5.5 · effort Medium — from your next message``."""
     settings = await ctx.settings()
-    shown = await model_display(ctx.commands, settings.agent, model)
-    tail = f", effort {level}" if level else ""
-    await ctx.say(f"🧠 Model set to {shown}{tail}{_where(ctx)}.")
+    model = settings.model
+    level = settings.effort
+    shown = await model_display(ctx.commands, settings.agent, model) if model else "Default model"
+    tail = f" · effort {level.capitalize()}" if level else ""
+    await ctx.say(f"Model: {shown}{tail}{_where(ctx)}")
 
 
 async def apply_effort(ctx: CommandContext, level: str) -> None:
     """Set the reasoning effort only. Pure passthrough: a level the account
     cannot run fails where every unusable choice fails — at the CLI."""
     if await _set(ctx, effort=level):
-        await ctx.say(f"🎚 Effort set to {level}{_where(ctx)}.")
+        await say_model(ctx)
 
 
 async def _clear(ctx: CommandContext) -> None:
     if await _set(ctx, model=None, effort=None):
-        await ctx.say(f"🧠 Model and effort reset to the agent's defaults{_where(ctx)}.")
+        await ctx.say(f"Model and effort: the agent's defaults{_where(ctx)}")
 
 
 async def _show(ctx: CommandContext) -> None:
@@ -154,7 +167,9 @@ async def _show(ctx: CommandContext) -> None:
     if not ctx.group_main:
         # A group's main chat answers in text: a card tapped there lands in
         # the thread its message rooted, not on the group's defaults.
-        card = model_card(current=settings.model, picks=list(labels), labels=labels)
+        card = model_card(
+            current=settings.model, picks=list(labels), labels=labels, effort=settings.effort
+        )
         if await ctx.show(card):
             return
     shown = await model_display(ctx.commands, settings.agent, settings.model)
@@ -168,7 +183,13 @@ async def _show(ctx: CommandContext) -> None:
 async def current_model_card(ctx: CommandContext, *, page: int | None = None) -> SelectionCard:
     settings = await ctx.settings()
     labels = await ctx.commands._model_suggestions.model_labels(settings.agent)
-    return model_card(current=settings.model, picks=list(labels), labels=labels, page=page)
+    return model_card(
+        current=settings.model,
+        picks=list(labels),
+        labels=labels,
+        effort=settings.effort,
+        page=page,
+    )
 
 
 async def current_effort_card(

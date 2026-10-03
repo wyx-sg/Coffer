@@ -37,3 +37,18 @@ describe("AttachmentChip", () => {
     expect(onRemove).toHaveBeenCalledOnce();
   });
 });
+
+describe("AttachmentChip thumbnails", () => {
+  test("an image with a source shows as a thumbnail named by its file", () => {
+    render(<AttachmentChip name="graph.png" mime="image/png" src="/blob/1" />);
+    expect(screen.getByRole("img", { name: "graph.png" })).toHaveAttribute("src", "/blob/1");
+    expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
+  });
+
+  test("an image with no source, or a file that is not an image, stays a chip", () => {
+    const { rerender } = render(<AttachmentChip name="graph.png" mime="image/png" />);
+    expect(screen.getByTestId("attachment-chip")).toBeInTheDocument();
+    rerender(<AttachmentChip name="a.log" mime="text/plain" src="/blob/2" />);
+    expect(screen.getByTestId("attachment-chip")).toBeInTheDocument();
+  });
+});

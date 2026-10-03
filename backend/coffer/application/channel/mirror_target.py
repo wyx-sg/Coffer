@@ -22,11 +22,14 @@ from coffer.domain.resource import Resource
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
 
-__all__ = ["MirrorTarget", "platform_label", "resolve_target"]
+__all__ = ["MirrorTarget", "from_coffer", "platform_label", "resolve_target"]
 
-#: The prefix a reply typed on the web carries into the chat, so the chat can
-#: tell it from one the owner typed there.
-FROM_COFFER = "(from Coffer) "
+
+def from_coffer(user: str, text: str) -> str:
+    """The prefix line a reply typed on the web carries into the chat (``Alex
+    Chen · from Coffer``), so the chat can tell it from one typed there."""
+    return f"{user or 'You'} · from Coffer\n{text}"
+
 
 _PLATFORMS = {"seatalk": "SeaTalk", "telegram": "Telegram"}
 

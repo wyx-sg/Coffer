@@ -63,60 +63,58 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
     ChannelCommand(
         "new",
         "[agent]",
-        "Start a fresh conversation (keeps model, effort and directory)",
-        "开始新对话并保留模型、推理强度和目录",
+        "Start a fresh conversation [agent]",
+        "开始新对话 [agent]",
         in_group_menu=True,
     ),
     ChannelCommand(
-        "stop", "", "Interrupt the running turn", "中断正在运行的回合", in_group_menu=True
+        "stop", "", "Stop what\u2019s running", "停止正在运行的任务", in_group_menu=True
     ),
     ChannelCommand(
         "model",
         "[name] [level]",
-        "Show or set the model and reasoning effort",
-        "查看或设置模型与推理强度",
+        "Pick model, then effort",
+        "先选模型、再选推理强度",
         group_private=True,
         in_group_menu=True,
     ),
     ChannelCommand(
         "dir",
         "[path|name]",
-        "Show or switch the working directory (starts a fresh conversation)",
-        "查看或切换工作目录并开始新对话",
+        "Pick the working directory",
+        "选择工作目录",
         group_private=True,
     ),
     ChannelCommand(
         "status",
         "",
-        "What this chat is running, with quick actions",
-        "当前对话状态与快捷操作",
+        "What is running, threads",
+        "正在运行的内容与线程",
         group_private=True,
         in_group_menu=True,
     ),
     ChannelCommand(
         "resume",
         "[n]",
-        "Reopen an earlier conversation from this chat",
-        "回到本聊天中的某个历史对话",
+        "Go back to a conversation",
+        "回到某个历史对话",
         group_private=True,
         in_group_menu=True,
     ),
     ChannelCommand(
         "thread",
         "[title]",
-        "Open a parallel conversation in its own thread",
-        "在新线程中开启并行对话",
+        "Open a parallel thread",
+        "开启并行线程",
     ),
     ChannelCommand(
         "kb",
         "[collection]",
-        "Save the document you just sent into a knowledge collection",
-        "把刚发送的文档存入知识库集合",
+        "Save a document to Knowledge",
+        "把文档存入知识库",
         needs_knowledge=True,
     ),
-    ChannelCommand(
-        "help", "", "List the commands", "列出所有命令", group_private=True, in_group_menu=True
-    ),
+    ChannelCommand("help", "", "Commands", "命令列表", group_private=True, in_group_menu=True),
 )
 
 #: Typed forms that run a roster command but are never listed: ``/start`` is

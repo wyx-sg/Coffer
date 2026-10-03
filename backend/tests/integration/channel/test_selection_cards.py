@@ -101,7 +101,7 @@ async def test_new_answers_with_a_one_line_card_whose_agent_button_switches(
     _chat, text, buttons = adapter.cards[-1]
     assert adapter.card_titles[-1] == "Agent"
     assert [(b.label, b.value) for b in buttons] == [
-        ("Coffer Assistant ✓", "agent:builtin"),
+        ("✓ Coffer Assistant", "agent:builtin"),
         ("Codex", "agent:codex"),
     ]
     assert await env.active_conversation(resource) == first
@@ -158,9 +158,9 @@ async def test_a_long_catalogue_becomes_a_paged_card(env: ChannelEnv) -> None:
 
     [(_chat, text, buttons)] = adapter.cards
     assert len(buttons) <= MAX_CARD_BUTTONS
-    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:1"]
+    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:0", "page:model:1"]
     assert "Page 1/" in text
-    assert "/model <name>" in text  # a model you can name is still one message away
+    assert "/model <name> <level>" in text  # a model you can name is still one message away
 
 
 # -- a card the platform refuses degrades to text, never to silence -------------
@@ -258,11 +258,11 @@ async def test_owner_group_model_card_tap_replies_in_the_thread(env: ChannelEnv)
             thread_id="th-1",
         )
     )
-    await wait_until(lambda: any("Model set to" in t for t in adapter.texts()))
+    await wait_until(lambda: any("from your next message" in t for t in adapter.texts()))
 
     cfg = await env.chat.get_agent_config(await env.active_conversation(resource, "grp-1", "th-1"))
     assert cfg.model == "claude-opus-4-8"
-    match = next(r for r in adapter.sent_routed if "Model set to" in r[1])
+    match = next(r for r in adapter.sent_routed if "from your next message" in r[1])
     chat_id, _text, thread_id, chat_kind = match
     assert (chat_id, thread_id, chat_kind) == ("grp-1", "th-1", "group")
 
@@ -287,7 +287,7 @@ async def test_non_owner_group_card_tap_is_refused_and_routed(env: ChannelEnv) -
     assert len(adapter.sent_routed) == 1
     chat_id, text, thread_id, chat_kind = adapter.sent_routed[0]
     assert (chat_id, thread_id, chat_kind) == ("grp-1", "th-1", "group")
-    assert "Not authorized" in text
+    assert "owners can use it here" in text
 
 
 async def test_dm_card_tap_still_replies_in_the_dm(env: ChannelEnv) -> None:
@@ -324,9 +324,9 @@ async def test_tapping_a_card_rewrites_it_with_the_new_choice(env: ChannelEnv) -
     chat_id, message_id, text, buttons, title = adapter.card_updates[0]
     assert (chat_id, message_id) == ("owner", "card-1")
     assert title == "Model"
-    assert "Current model: sonnet" in text
+    assert "Current: sonnet" in text
     # Exactly one option is ticked, and it is the one just chosen.
-    ticked = [b.value for b in buttons if b.label.endswith("✓")]
+    ticked = [b.value for b in buttons if b.label.startswith("✓")]
     assert ticked == ["model:sonnet"], f"the tick should follow the switch, got {ticked}"
 
 
@@ -422,7 +422,7 @@ async def test_prev_and_next_walk_the_whole_catalogue(env: ChannelEnv) -> None:
     assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE)]
     assert "Page 1/" in text
     # Back on the first page there is nothing before it to offer.
-    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:1"]
+    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:0", "page:model:1"]
 
 
 async def test_the_last_page_offers_no_next(env: ChannelEnv) -> None:
@@ -436,7 +436,10 @@ async def test_the_last_page_offers_no_next(env: ChannelEnv) -> None:
     await wait_until(lambda: len(adapter.card_updates) == 1)
     _chat, _mid, _text, buttons, _title = adapter.card_updates[0]
     assert _page_values(buttons), "the last page is never empty"
-    assert [b.value for b in buttons if is_page_turn(b.value)] == [f"page:model:{last - 1}"]
+    assert [b.value for b in buttons if is_page_turn(b.value)] == [
+        f"page:model:{last - 1}",
+        f"page:model:{last}",
+    ]
 
 
 async def test_a_page_turn_changes_no_model(env: ChannelEnv) -> None:
@@ -451,7 +454,7 @@ async def test_a_page_turn_changes_no_model(env: ChannelEnv) -> None:
 
     # Nothing was chosen, so nothing was opened or pinned.
     assert await env.active_conversation(resource) is None
-    assert not any("Model set to" in t for t in adapter.texts())
+    assert not any("from your next message" in t for t in adapter.texts())
 
 
 async def test_the_tick_travels_to_the_page_holding_the_current_model(env: ChannelEnv) -> None:
@@ -468,15 +471,15 @@ async def test_the_tick_travels_to_the_page_holding_the_current_model(env: Chann
 
     [(_chat, text, buttons)] = adapter.cards
     assert f"Page {20 // PAGE_SIZE + 1}/" in text
-    assert [b.value for b in buttons if b.label.endswith("✓")] == ["model:model-20"]
+    assert [b.value for b in buttons if b.label.startswith("✓")] == ["model:model-20"]
 
     await env.processor.on_callback(
         tap_event("tg", "owner", "page:model:0", platform_message_id="card-1")
     )
     await wait_until(lambda: len(adapter.card_updates) >= 1)
     _c, _m, off_page_text, off_page_buttons, _t = adapter.card_updates[-1]
-    assert [b for b in off_page_buttons if b.label.endswith("✓")] == []
-    assert "Current model: model-20" in off_page_text
+    assert [b for b in off_page_buttons if b.label.startswith("✓")] == []
+    assert "Current: model-20" in off_page_text
     assert f"page {20 // PAGE_SIZE + 1}" in off_page_text
 
 

@@ -23,6 +23,8 @@ import type { ChannelType } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
+import { useCredentialCheck } from "@/lib/hooks/useCredentialCheck";
+import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { useThisMachineId } from "@/lib/hooks/useMachines";
 import { TITLE_MAX_LENGTH } from "@/lib/resourceTitle";
 import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
@@ -31,6 +33,7 @@ import {
   type ChannelFieldErrors,
   type ChannelSecretDraft,
 } from "./AddChannelSecretFields";
+import { ChannelCredentialNote } from "./ChannelCredentialNote";
 import { FieldError } from "./FieldError";
 import { planChannel } from "@/lib/channels/schema";
 
@@ -52,6 +55,13 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ChannelFieldErrors>({});
   const create = useCreateChannel();
+  // Telegram's token is checked as it is pasted (spec channels "Check
+  // credentials before they are saved"); SeaTalk's is checked by connecting.
+  const token = secrets.botToken.trim();
+  const tokenCheck = useCredentialCheck(
+    platform === "telegram" && token.length >= 10 ? { platform, bot_token: token } : null,
+  );
+  const machineName = useDaemonStatus().data?.machine_name ?? "";
 
   const submit = () => {
     setFormError(null);
@@ -98,6 +108,7 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
           aria-describedby="channel-name-error"
         />
         <FieldError id="channel-name-error" message={fieldErrors.name} />
+        <p className="text-xs text-text-muted">{t("channels.dialog.nameHint")}</p>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="channel-agent">{t("channels.dialog.agent")}</Label>
@@ -115,10 +126,22 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
         errors={fieldErrors}
         onChange={(patch) => setSecrets((s) => ({ ...s, ...patch }))}
       />
+      {platform === "telegram" ? (
+        <ChannelCredentialNote
+          id="channel-bot-token-check"
+          check={tokenCheck}
+          success={(r) => ({
+            title: r.bot_handle
+              ? t("channels.dialog.telegramFound", { handle: r.bot_handle })
+              : t("channels.dialog.telegramFoundPlain"),
+            body: t("channels.dialog.telegramFoundBody", { machine: machineName }),
+          })}
+        />
+      ) : null}
       {platform === "seatalk" ? (
         // A note, not an alert: nothing is wrong yet, and the step it names
         // only works once this connection exists.
-        <div className="flex gap-2.5 rounded-lg bg-accent-soft px-3 py-2.5">
+        <div className="flex gap-2 rounded-lg bg-accent-soft px-3 py-2.5">
           <Info className="mt-0.5 size-[15px] shrink-0 text-accent-text" aria-hidden />
           <div className="space-y-0.5 text-xs">
             <p className="font-label text-text">{t("channels.dialog.seatalkDelivery.title")}</p>

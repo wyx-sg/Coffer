@@ -22,7 +22,7 @@ class AuditEventType(StrEnum):
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
-    # spec mcp-gateway "Choose how each tool is exposed": tools pinned into
+    # spec mcp-gateway "Forward tools, resources and prompts": tools pinned into
     # the listing, left to search, or handed back to the usage ranking.
     TOOL_EXPOSURE_CHANGED = "tool_exposure_changed"
     TOKEN_ROTATED = "token_rotated"
@@ -77,7 +77,7 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
-    # spec skill-manager "Declare a command-line tool without a skill"
+    # spec skill-manager "Declare the commands a skill requires"
     CLI_TOOL_ADDED = "cli_tool_added"
     CLI_TOOL_EDITED = "cli_tool_edited"
     CLI_TOOL_REMOVED = "cli_tool_removed"

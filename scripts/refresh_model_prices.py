@@ -77,7 +77,9 @@ def slim(providers: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build(commit: str, today: str) -> tuple[str, str]:
-    raw = json.loads(_get(f"https://raw.githubusercontent.com/{REPO}/{commit}/prices/new_data/v2/data.json"))
+    raw = json.loads(
+        _get(f"https://raw.githubusercontent.com/{REPO}/{commit}/prices/new_data/v2/data.json")
+    )
     licence = _get(f"https://raw.githubusercontent.com/{REPO}/{commit}/LICENSE").decode("utf-8")
     document = {
         "source": f"https://github.com/{REPO}",

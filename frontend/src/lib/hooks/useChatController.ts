@@ -80,6 +80,8 @@ export function useChatController() {
   // A hand-off's prompt, typed into the draft's composer once it mounts.
   const [draftPrefill, setDraftPrefill] = useState<ComposerRestore | null>(null);
   const clearDraftPrefill = useCallback(() => setDraftPrefill(null), []);
+  // The draft was opened by a hand-off: the box says nothing is sent until Send.
+  const [draftFromHandoff, setDraftFromHandoff] = useState(false);
 
   // Apply a hand-off once, then drop it from the history entry so a reload or
   // Back does not type the prompt again.
@@ -90,12 +92,18 @@ export function useChatController() {
     if (!handoff) return;
     setDraftConfig({ agentKey: handoff.agentKey, cwd: handoff.cwd, model: null, effort: null });
     setDraftPrefill({ text: handoff.prompt, attachments: [] });
+    setDraftFromHandoff(true);
     navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
   }, [handoffState, pathname, locationSearch, navigate]);
 
   // The title search is the server's: typed text waits for a pause, then the
   // list starts again from its first page for it.
-  const [titleSearch, setTitleSearch] = useState("");
+  // Its text lives in the URL (`?q=`), so a search is a link.
+  const titleSearch = filters.q;
+  const setTitleSearch = useCallback(
+    (text: string) => setFilters({ ...filters, q: text }),
+    [filters, setFilters],
+  );
   const q = useDebouncedValue(titleSearch.trim());
   const active = useConversationList({ archived: false, q });
   const archivedList = useConversationList({ archived: true, q, enabled: filters.archived });
@@ -162,6 +170,7 @@ export function useChatController() {
   const openDraft = () => {
     setDraftConfig(null);
     setDraftPrefill(null);
+    setDraftFromHandoff(false);
     navigate(pathFor(DRAFT_ID));
   };
 
@@ -185,6 +194,7 @@ export function useChatController() {
             rememberAgent(effectiveDraft.agentKey);
             setPendingFirst({ convId: created.id, text, attachments });
             setDraftConfig(null);
+            setDraftFromHandoff(false);
             navigate(pathFor(created.id));
             resolve(true);
           },
@@ -230,6 +240,11 @@ export function useChatController() {
     /** More conversations exist past the loaded pages (the filters are applied to what is loaded). */
     hasMore: view.hasMore,
     loadMore: view.loadMore,
+    /** The server's count of the current view (archived and search applied). */
+    total: view.total,
+    /** The list's first page failed to load. */
+    listError: view.error,
+    refetchList: view.refetch,
     isLoadingMore: view.isLoadingMore,
     /** The title search box's text, and the settled text the server was asked for. */
     titleSearch,
@@ -260,6 +275,7 @@ export function useChatController() {
     clearRefusedFirst,
     /** A hand-off's prompt for the draft's composer; nothing sends it. */
     draftPrefill,
+    draftFromHandoff,
     clearDraftPrefill,
     creating: createConv.isPending,
     createError: createConv.isError ? createConv.error : null,

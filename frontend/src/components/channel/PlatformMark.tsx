@@ -19,12 +19,33 @@ export const platformLabel = platformName;
 interface Props {
   /** The platform key (`seatalk`, `telegram`); anything else shows its first letters. */
   platform: string;
-  size?: "sm" | "md";
+  /** `lg` is the bare logo at 28px, as the platform cards show it. */
+  size?: "sm" | "md" | "lg";
   className?: string;
 }
 
 export function PlatformMark({ platform, size = "sm", className }: Props) {
   const initials = INITIALS[platform] ?? platform.slice(0, 2).toUpperCase();
+  if (size === "lg") {
+    return (
+      <span
+        aria-hidden
+        data-platform={platform}
+        className={cn(
+          "inline-flex size-7 shrink-0 items-center justify-center overflow-hidden bg-chip text-2xs font-semibold text-text-muted",
+          platform === "telegram" ? "rounded-full" : "rounded-[4px]",
+          MARKS[platform] && "bg-transparent",
+          className,
+        )}
+      >
+        {MARKS[platform] ? (
+          <img src={MARKS[platform]} alt="" className="block size-full object-contain" />
+        ) : (
+          initials
+        )}
+      </span>
+    );
+  }
   return (
     <span
       aria-hidden
