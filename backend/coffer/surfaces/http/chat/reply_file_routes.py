@@ -1,4 +1,4 @@
-"""GET /api/v1/chat/conversations/{id}/messages/{message_id}/files[/diff] — what
+"""GET /api/v1/chat/conversations/{id}/messages/{message_id}/changes[/diff] — what
 one assistant reply changed in each file (spec chat "Record what each reply
 changed in each file")."""
 
@@ -50,7 +50,7 @@ class ReplyFileDiffOut(BaseModel):
 
 
 @router.get(
-    "/conversations/{id}/messages/{message_id}/files",
+    "/conversations/{id}/messages/{message_id}/changes",
     response_model=ReplyFileListOut,
 )
 async def list_reply_files(
@@ -72,7 +72,7 @@ async def list_reply_files(
 
 
 @router.get(
-    "/conversations/{id}/messages/{message_id}/files/diff",
+    "/conversations/{id}/messages/{message_id}/changes/diff",
     response_model=ReplyFileDiffOut,
 )
 async def get_reply_file_diff(

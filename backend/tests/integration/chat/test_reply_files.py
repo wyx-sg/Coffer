@@ -143,7 +143,7 @@ async def _run_turn(client: httpx.AsyncClient) -> tuple[str, str]:
 async def test_a_replys_files_are_recorded_and_read_over_http(env: _Env) -> None:
     client = _client(env)
     conv, reply = await _run_turn(client)
-    base = f"/api/v1/chat/conversations/{conv}/messages/{reply}/files"
+    base = f"/api/v1/chat/conversations/{conv}/messages/{reply}/changes"
 
     listed = await client.get(base)
     assert listed.status_code == 200
@@ -180,7 +180,7 @@ async def test_a_file_without_a_diff_is_listed_as_having_none(env: _Env) -> None
     client = _client(env)
     conv, reply = await _run_turn(client)
 
-    listed = await client.get(f"/api/v1/chat/conversations/{conv}/messages/{reply}/files")
+    listed = await client.get(f"/api/v1/chat/conversations/{conv}/messages/{reply}/changes")
     big = next(f for f in listed.json()["files"] if f["path"] == "/w/big.bin")
 
     assert big == {"path": "/w/big.bin", "added": 90000, "removed": 0, "has_diff": False}
@@ -201,16 +201,16 @@ async def test_unknown_messages_and_paths_are_404(env: _Env) -> None:
         r = await client.get(url, params=params)
         return r.status_code, r.json()["error"]["code"]
 
-    assert await code(f"{prefix}/{conv}/messages/nope/files") == (404, "MESSAGE_NOT_FOUND")
-    assert await code(f"{prefix}/{conv}/messages/{user}/files") == (404, "MESSAGE_NOT_FOUND")
+    assert await code(f"{prefix}/{conv}/messages/nope/changes") == (404, "MESSAGE_NOT_FOUND")
+    assert await code(f"{prefix}/{conv}/messages/{user}/changes") == (404, "MESSAGE_NOT_FOUND")
     # a reply of ANOTHER conversation is not this one's
-    assert await code(f"{prefix}/{other}/messages/{reply}/files") == (404, "MESSAGE_NOT_FOUND")
-    assert await code(f"{prefix}/nope/messages/{reply}/files") == (404, "CONVERSATION_NOT_FOUND")
-    assert await code(f"{prefix}/{other}/messages/{reply}/files/diff", path="/w/test_ws.py") == (
+    assert await code(f"{prefix}/{other}/messages/{reply}/changes") == (404, "MESSAGE_NOT_FOUND")
+    assert await code(f"{prefix}/nope/messages/{reply}/changes") == (404, "CONVERSATION_NOT_FOUND")
+    assert await code(f"{prefix}/{other}/messages/{reply}/changes/diff", path="/w/test_ws.py") == (
         404,
         "MESSAGE_NOT_FOUND",
     )
-    assert await code(f"{prefix}/{conv}/messages/{reply}/files/diff", path="/w/other.py") == (
+    assert await code(f"{prefix}/{conv}/messages/{reply}/changes/diff", path="/w/other.py") == (
         404,
         "REPLY_FILE_NOT_FOUND",
     )
@@ -221,7 +221,7 @@ async def test_a_reply_with_no_records_lists_none(env: _Env) -> None:
     msg = await env.chat.append_message(conv, role=Role.ASSISTANT, content=[TextBlock(text="hi")])
     client = _client(env)
 
-    r = await client.get(f"/api/v1/chat/conversations/{conv}/messages/{msg.id}/files")
+    r = await client.get(f"/api/v1/chat/conversations/{conv}/messages/{msg.id}/changes")
 
     assert (r.status_code, r.json()) == (200, {"files": []})
 

@@ -133,14 +133,14 @@ export const chatApi = {
   // What an assistant reply changed (spec chat "Record what each reply changed in each file").
   listReplyFiles: (id: string, messageId: string): Promise<ReplyFile[]> =>
     unwrap(
-      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/files", {
+      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/changes", {
         params: { path: { id, message_id: messageId } },
       }),
     ).then((out) => out.files),
 
   getReplyFileDiff: (id: string, messageId: string, path: string): Promise<ReplyFileDiff> =>
     unwrap(
-      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/files/diff", {
+      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/changes/diff", {
         params: { path: { id, message_id: messageId }, query: { path } },
       }),
     ),

@@ -324,7 +324,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/chat/conversations/{id}/messages/{message_id}/files": {
+    "/api/v1/chat/conversations/{id}/messages/{message_id}/changes": {
         parameters: {
             query?: never;
             header?: never;
@@ -338,7 +338,7 @@ export interface paths {
          *     conversation is ``MessageNotFound`` (404); a reply with no records lists
          *     none.
          */
-        get: operations["list_reply_files_api_v1_chat_conversations__id__messages__message_id__files_get"];
+        get: operations["list_reply_files_api_v1_chat_conversations__id__messages__message_id__changes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -347,7 +347,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/chat/conversations/{id}/messages/{message_id}/files/diff": {
+    "/api/v1/chat/conversations/{id}/messages/{message_id}/changes/diff": {
         parameters: {
             query?: never;
             header?: never;
@@ -360,7 +360,7 @@ export interface paths {
          *     for a message that is not an assistant reply of the conversation,
          *     ``ReplyFileNotFound`` (404) for a path the reply did not record.
          */
-        get: operations["get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__files_diff_get"];
+        get: operations["get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__changes_diff_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1914,7 +1914,7 @@ export interface operations {
             };
         };
     };
-    list_reply_files_api_v1_chat_conversations__id__messages__message_id__files_get: {
+    list_reply_files_api_v1_chat_conversations__id__messages__message_id__changes_get: {
         parameters: {
             query?: never;
             header?: {
@@ -1957,7 +1957,7 @@ export interface operations {
             };
         };
     };
-    get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__files_diff_get: {
+    get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__changes_diff_get: {
         parameters: {
             query: {
                 path: string;

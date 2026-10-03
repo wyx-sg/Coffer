@@ -818,14 +818,14 @@ paths:
       summary: Send Message
       tags:
       - chat
-  /api/v1/chat/conversations/{id}/messages/{message_id}/files:
+  /api/v1/chat/conversations/{id}/messages/{message_id}/changes:
     get:
       description: |-
         The files an assistant reply of the conversation changed, with added and
         removed line counts. An id that is not an assistant message of the
         conversation is ``MessageNotFound`` (404); a reply with no records lists
         none.
-      operationId: list_reply_files_api_v1_chat_conversations__id__messages__message_id__files_get
+      operationId: list_reply_files_api_v1_chat_conversations__id__messages__message_id__changes_get
       parameters:
       - in: path
         name: id
@@ -869,13 +869,13 @@ paths:
       summary: List Reply Files
       tags:
       - chat
-  /api/v1/chat/conversations/{id}/messages/{message_id}/files/diff:
+  /api/v1/chat/conversations/{id}/messages/{message_id}/changes/diff:
     get:
       description: |-
         One changed file's unified diff for that reply. ``MessageNotFound`` (404)
         for a message that is not an assistant reply of the conversation,
         ``ReplyFileNotFound`` (404) for a path the reply did not record.
-      operationId: get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__files_diff_get
+      operationId: get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__changes_diff_get
       parameters:
       - in: path
         name: id
