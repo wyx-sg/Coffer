@@ -148,18 +148,19 @@ describe("DaemonOfflineBanner", () => {
     expect(screen.getAllByRole("button").map((b) => b.textContent?.trim())).toEqual([
       "Retry",
       "Copy",
+      "Copy",
     ]);
   });
 
-  acceptance("web-ui", "the offline screen links to the daemon log", () => {
+  acceptance("web-ui", "the offline screen offers the daemon log command in a browser", () => {
     useDaemonStatusMock.mockReturnValue({ isError: true, error: new Error("down") } as never);
     useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
     render(wrap(<DaemonOfflineBanner />));
     expect(screen.getByRole("heading", { level: 1 })).toHaveClass("font-bold");
-    expect(screen.getByRole("link", { name: "Open daemon log" })).toHaveAttribute(
-      "href",
-      "/activity?tab=daemon",
-    );
+    expect(screen.getByText("Read the daemon log from a terminal")).toBeInTheDocument();
+    expect(screen.getByText("coffer log daemon")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open daemon log" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open daemon log" })).toBeNull();
   });
 
   test("the reconnecting bar shows a still ring, not a spinner", () => {
@@ -207,6 +208,30 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
     const restartBtn = screen.getByTestId("daemon-banner-restart");
     fireEvent.click(restartBtn);
     await waitFor(() => expect(restartDaemonMock).toHaveBeenCalledOnce());
+  });
+
+  acceptance("web-ui", "the offline screen opens the daemon log without the daemon", async () => {
+    vi.resetModules();
+    const shellInvokeMock = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("@/lib/tauri", () => ({
+      isTauri: () => true,
+      inDesktopShell: () => true,
+      shellInvoke: shellInvokeMock,
+      restartDaemon: vi.fn(),
+      connectToShellDaemon: vi.fn(),
+    }));
+    vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
+      useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+      useDaemonOutOfDate: () => ({ data: false }),
+    }));
+
+    const { DaemonOfflineState: Reloaded } = await import("./DaemonOfflineBanner");
+    render(wrap(<Reloaded connection={OFFLINE} onRetry={() => {}} />));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open daemon log" }));
+    await waitFor(() => expect(shellInvokeMock).toHaveBeenCalledWith("show_daemon_log"));
+    expect(screen.queryByText("coffer log daemon")).toBeNull();
   });
 
   test("surfaces a restart error message when the Tauri command throws", async () => {

@@ -1517,6 +1517,7 @@
       "openLog": "Open daemon log"
     }
   },
+      "logHint": "Read the daemon log from a terminal",
   "listStates": {
     "loadFailedTitle": "Couldn’t load {{kinds}}",
     "loadFailedBody": "{{reason}}. Nothing was changed.",

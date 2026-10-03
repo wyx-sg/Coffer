@@ -168,7 +168,7 @@ The UI checks the daemon every 30 seconds. When it stops answering, the UI retri
 | State | When | What you see |
 | --- | --- | --- |
 | **Reconnecting to the daemon…** | The first 10 seconds after it stopped answering (**Connecting to the daemon…** if it never answered). | The page stays where it was, dimmed and paused, under a bar that counts the attempts and says nothing is lost, with **Retry now**. |
-| **Coffer's daemon isn't running** | After that. | The page makes way for a screen naming the address the UI talks to, when it checks next and when the daemon last answered, with **Retry**, the `coffer daemon start` command to copy and **Open daemon log**. |
+| **Coffer's daemon isn't running** | After that. | The page makes way for a screen naming the address the UI talks to, when it checks next and when the daemon last answered, with **Retry**, the `coffer daemon start` command to copy and, in the desktop app, **Open daemon log**, which opens the log file in your system viewer; in a browser the screen shows `coffer log daemon` to copy instead (the Activity page needs the daemon). |
 | **Daemon out of date** | The desktop app attached to a daemon left running by an earlier version. Desktop app only. | A bar over the page with **Restart daemon**. |
 
 The recovery the offline screen offers depends on the host. Both hosts show the command to run, `coffer daemon start` (**Or start it from a terminal**), because a page cannot start a daemon; the desktop app also shows **Start daemon**. Either way the screen clears itself when the daemon answers again, with no reload: every list is read again and a **Reconnected** notice appears.

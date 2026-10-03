@@ -1517,6 +1517,7 @@
       "openLog": "打开守护进程日志"
     }
   },
+      "logHint": "在终端里读取守护进程日志",
   "listStates": {
     "loadFailedTitle": "无法加载{{kinds}}",
     "loadFailedBody": "{{reason}}。没有任何改动。",
