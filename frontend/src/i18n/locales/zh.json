@@ -1766,6 +1766,7 @@
     "NOT_A_CUSTOM_TOOL_GROUP": "这个 MCP 服务器不是自定义工具分组",
     "CUSTOM_TOOL_EXISTS": "这个分组中已有同名工具",
     "OPENAPI_UNREADABLE": "无法读取这个 OpenAPI 规范",
+    "OPENAPI_UNREACHABLE": "这台机器连不上规范的地址",
     "NOT_IMPORTED_FROM_OPENAPI": "这个分组不是从 OpenAPI 规范导入的，无法重新导入",
     "OPENAPI_FILE_NEEDED": "这个分组是从文件导入的：请再次选择该文件以重新导入",
     "SKILL_STAGING_NOT_FOUND": "暂存的来源已不存在——已添加、已取消或已过期。请重新开始。",

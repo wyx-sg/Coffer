@@ -1766,6 +1766,7 @@
     "NOT_A_CUSTOM_TOOL_GROUP": "That MCP server isn't a custom-tool group",
     "CUSTOM_TOOL_EXISTS": "A tool with that name already exists in this group",
     "OPENAPI_UNREADABLE": "The OpenAPI spec couldn't be read",
+    "OPENAPI_UNREACHABLE": "Couldn't reach the spec's URL from this machine",
     "NOT_IMPORTED_FROM_OPENAPI": "This group wasn't imported from an OpenAPI spec, so there is nothing to re-import",
     "OPENAPI_FILE_NEEDED": "This group was imported from a file: choose the file again to re-import",
     "SKILL_STAGING_NOT_FOUND": "That staged source is gone — it was added, cancelled or expired. Start again.",
