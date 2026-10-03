@@ -17,7 +17,6 @@ function renderAt(path: string) {
           element={
             <McpServerDetailTabs
               basePath="/mcp-servers/srv"
-              counts={{ tools: 26, resources: 0, prompts: 3 }}
               overview={<p>overview pane</p>}
               tools={<p>tools pane</p>}
               resources={<p>resources pane</p>}
@@ -37,10 +36,9 @@ test("the Invocations tab in the path shows the invocations pane", () => {
   expect(screen.queryByText("overview pane")).not.toBeInTheDocument();
 });
 
-test("each tab carries its count, and none for a kind the server has none of", () => {
+test("tab labels carry no counts", () => {
   renderAt("/mcp-servers/srv");
-  expect(screen.getByRole("tab", { name: "Tools" })).toHaveTextContent("Tools· 26");
-  expect(screen.getByRole("tab", { name: "Resources" })).toHaveTextContent(/^Resources$/);
-  expect(screen.getByRole("tab", { name: "Prompts" })).toHaveTextContent("· 3");
+  expect(screen.getByRole("tab", { name: "Tools" })).toHaveTextContent(/^Tools$/);
+  expect(screen.getByRole("tab", { name: "Prompts" })).toHaveTextContent(/^Prompts$/);
   expect(screen.getByText("overview pane")).toBeInTheDocument();
 });

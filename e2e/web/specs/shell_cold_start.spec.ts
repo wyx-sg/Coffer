@@ -73,7 +73,6 @@ acceptance(
         [
           /^Secrets$/i,
           /^Activity$/i,
-          new RegExp(`^Usage${EXP}$`, "i"),
           new RegExp(`^Sync${EXP}$`, "i"),
         ],
       ],
@@ -86,7 +85,7 @@ acceptance(
       }
     }
     // The upper bound: nothing in the sidebar this list does not name.
-    await expect(nav.getByRole("link")).toHaveCount(15);
+    await expect(nav.getByRole("link")).toHaveCount(14);
 
     // Settings is not an entry: a labelled row sits at the bottom of the
     // sidebar, carrying the daemon status.

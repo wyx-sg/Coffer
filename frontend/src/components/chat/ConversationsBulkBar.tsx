@@ -7,8 +7,8 @@ import { useState } from "react";
 import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { ListSelectionBar } from "@/components/ListSelectionBar";
 import { TableActionButton } from "@/components/table/TableActionButton";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Conversation } from "@/lib/api/chat";
 import { useConversationBatch } from "@/lib/hooks/useConversationBatch";
@@ -48,12 +48,13 @@ export function ConversationsBulkBar({ selected, total, archivedView, onClear }:
   };
 
   return (
-    <div role="region" aria-label={t("conversations.bulk.label")} aria-busy={batch.isPending}>
-      {/* Foundations-Tables "Bulk bar": a 40px raised strip, r10. */}
-      <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl bg-surface-raised py-[7px] pl-3 pr-2 shadow-overlay">
-        <span className="mr-2 text-sm font-label text-text">
-          {t("conversations.bulk.selected", { count: selected.length, total })}
-        </span>
+    <div aria-busy={batch.isPending}>
+      <ListSelectionBar
+        label={t("conversations.bulk.label")}
+        count={selected.length}
+        total={total}
+        onClear={onClear}
+      >
         <TableActionButton
           icon={archivedView ? ArchiveRestore : Archive}
           label={
@@ -69,10 +70,7 @@ export function ConversationsBulkBar({ selected, total, archivedView, onClear }:
           disabled={batch.isPending}
           onClick={() => open(true)}
         />
-        <Button variant="ghost" size="sm" onClick={onClear}>
-          {t("common.clear")}
-        </Button>
-      </div>
+      </ListSelectionBar>
       <ConfirmDialog
         open={confirming}
         onOpenChange={open}

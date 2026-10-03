@@ -363,21 +363,6 @@ class SecretBoundary:
             self._store.set_setting(REQUIRE_APPROVAL_KEY, "false")
         return self.get(approval_id)
 
-    def ask_again(self, approval_id: str, *, actor: str) -> None:
-        """Lift a refusal so the same binding is put to a person again.
-
-        Only a refused ``bind`` can be asked again; the next check of its
-        destination raises a fresh pending approval. Asking widens nothing —
-        the answer still takes a presence grant.
-        """
-        approval = self.get(approval_id)
-        if approval.op != "bind" or approval.status != "rejected":
-            raise ApprovalNotPending(approval_id, approval.status)
-        if not self._store.decide(
-            approval_id, "superseded", by=actor, at=self._stamp(), only_from="rejected"
-        ):
-            raise ApprovalNotPending(approval_id, self.get(approval_id).status)
-
     def reject(self, approval_id: str, *, actor: str) -> SecretApproval:
         """Refuse a pending approval. Anyone may: refusing only narrows."""
         approval = self.get(approval_id)

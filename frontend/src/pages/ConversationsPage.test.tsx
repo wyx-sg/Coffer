@@ -246,7 +246,7 @@ describe("ConversationsPage list", () => {
       expect(screen.getAllByText("Coffer").length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByRole("button", { name: /^Source/ }));
-      fireEvent.click(await screen.findByRole("checkbox", { name: "SeaTalk · Team bot" }));
+      fireEvent.click(await screen.findByRole("option", { name: "SeaTalk · Team bot" }));
       await waitFor(() => expect(screen.queryByText("From the web")).not.toBeInTheDocument());
       expect(screen.getByText("Daily Sentry triage")).toBeInTheDocument();
     },

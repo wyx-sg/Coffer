@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,10 @@ from coffer.infrastructure.vault.json_store import JsonStore
 
 class JsonRemoteStore:
     def __init__(self, path: Callable[[], Path] | None = None) -> None:
-        self._store = JsonStore(path or (lambda: local_root() / "sync" / "remote.json"))
+        where = path or (lambda: local_root() / "sync" / "remote.json")
+        self._store = JsonStore(where)
+        # What "Stop syncing" removed, kept so Undo can put it back.
+        self._removed = JsonStore(lambda: where().with_name("removed-remote.json"))
 
     def get(self) -> SyncRemote | None:
         raw = self._store.read()
@@ -28,6 +32,15 @@ class JsonRemoteStore:
 
     def clear(self) -> None:
         self._store.write({})
+
+    def keep_removed(self, snapshot: dict[str, Any]) -> None:
+        self._removed.write(snapshot)
+
+    def removed(self) -> dict[str, Any] | None:
+        return self._removed.read() or None
+
+    def forget_removed(self) -> None:
+        self._removed.write({})
 
 
 class JsonRoundState:
@@ -108,6 +121,17 @@ class ConflictScratch:
         """The copy's absolute path, once it has been written."""
         target = self._path(path)
         return str(target) if target.is_file() else None
+
+    def modified(self, path: str) -> str | None:
+        """When the copy was last written (ISO time, UTC), once it exists."""
+        target = self._path(path)
+        if not target.is_file():
+            return None
+        return datetime.fromtimestamp(target.stat().st_mtime, tz=UTC).isoformat(timespec="seconds")
+
+    def discard(self, path: str) -> None:
+        """Forget one file's copy; a missing copy is nothing to do."""
+        self._path(path).unlink(missing_ok=True)
 
     def clear(self) -> None:
         shutil.rmtree(self._root(), ignore_errors=True)

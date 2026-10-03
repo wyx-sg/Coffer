@@ -9,29 +9,31 @@
 // per-collection switch and no reach control; and the layer has no retrieval,
 // so there is no search box — ⌘K jumps to a collection by name.
 //
-// New knowledge goes in as an ITEM — Add a document, an upload, an agent's
-// `coffer__write` — which waits in the collection's Inbox until curation files
-// it into the right document. With Coffer's model not set there is nothing to
-// curate with: the page shows no Inbox and no Curate now, only one line
-// pointing to Settings › General.
+// New knowledge goes in as an ITEM — an upload, an agent's `coffer__write` —
+// which waits in the collection's Inbox until curation files it into the right
+// document; people write through Edit. With Coffer's engine not set there is
+// nothing to curate with: the Automatic control reads "Curation needs Coffer's
+// engine" (→ Settings › General) and there is no Inbox and no Curate now.
 //
 // Nothing auto-provisions a collection, so an empty list is the first-run
-// welcome. The page is a workspace (boards 5.1.01–5.1.29): a header with the
-// title, the Automatic control and Upload / Add a document, then the tree and
-// the pane, each scrolling on its own.
+// empty state. The page is a workspace (boards 5.1.01–5.1.29): a header — the
+// title with its Experimental tag, one subtitle line, and on the right the
+// Automatic control and Upload, the page's one primary button (secondary while
+// a document has unsaved edits) — then the tree and the pane, each scrolling
+// on its own.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 
 import { ListLoadError } from "@/components/ListPaneStates";
 import { KnowledgeAutomaticPopover } from "@/components/knowledge/KnowledgeAutomaticPopover";
 import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
-import { KnowledgeNoModelLine } from "@/components/knowledge/KnowledgeNoModelLine";
 import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
+import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,8 @@ import { useDetailTab } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
+import { useEditingDocument } from "@/lib/knowledge/dirtyDocument";
+import { useOpenSettings } from "@/lib/settingsModal";
 import {
   collectionBasePath,
   DEFAULT_KNOWLEDGE_TAB,
@@ -66,6 +70,10 @@ export function KnowledgePage() {
   const collections = useKnowledgeCollections();
   const modelSet = useCofferModelSet();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
+  const openSettings = useOpenSettings();
+  // While a document has unsaved edits, Upload steps back to secondary.
+  // (The editor publishes only its dirty state, so this is the signal we have.)
+  const editing = useEditingDocument() !== null;
 
   const [tab] = useDetailTab(
     KNOWLEDGE_TABS,
@@ -82,21 +90,28 @@ export function KnowledgePage() {
   };
 
   const header = (
-    <div className="shrink-0 border-b border-border px-6 pb-4 pt-[18px]">
+    <div className="shrink-0 px-8 pb-3 pt-4">
       <PageHeader
         title={t("knowledge.title")}
-        badges={list.length > 0 && modelSet ? <KnowledgeAutomaticPopover /> : null}
-        subtitle={
-          list.length > 0 && modelSet === false ? <KnowledgeNoModelLine /> : t("knowledge.subtitle")
-        }
+        badges={<ExperimentalTag />}
+        subtitle={t("knowledge.subtitle")}
         actions={
           list.length > 0 ? (
             <>
-              <Button variant="outline" onClick={() => setDialog("upload")}>
+              {modelSet ? (
+                <KnowledgeAutomaticPopover />
+              ) : modelSet === false ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="px-0"
+                  onClick={() => openSettings("general")}
+                >
+                  {t("knowledge.noModel.engine")}
+                </Button>
+              ) : null}
+              <Button variant={editing ? "outline" : "default"} onClick={() => setDialog("upload")}>
                 <Upload aria-hidden /> {t("knowledge.upload.button")}
-              </Button>
-              <Button onClick={() => setDialog("add")}>
-                <Plus aria-hidden /> {t("knowledge.add.button")}
               </Button>
             </>
           ) : null
@@ -111,23 +126,19 @@ export function KnowledgePage() {
       onOpenChange={close}
       collections={list}
       initial={current?.name ?? null}
-      modelSet={modelSet}
     />
   );
 
   // Full-bleed like Skills: Layout pads every page, and this one is a
   // workspace whose panes each scroll on their own.
-  const shell = "-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10";
+  const shell = "-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden";
 
   if (empty) {
     return (
       <div className={shell}>
         {header}
         <div className="min-h-0 flex-1 overflow-auto">
-          <KnowledgeWelcomePanel
-            onCreate={() => setDialog("create")}
-            onUpload={() => setDialog("create")}
-          />
+          <KnowledgeWelcomePanel onCreate={() => setDialog("create")} />
         </div>
         {dialogs}
       </div>
@@ -176,8 +187,6 @@ export function KnowledgePage() {
               tab={tab}
               file={file}
               modelSet={modelSet}
-              onAdd={() => setDialog("add")}
-              onUpload={() => setDialog("upload")}
             />
           )
         }

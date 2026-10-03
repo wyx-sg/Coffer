@@ -2,7 +2,6 @@
 // DataTable's row-selection concern, kept out of DataTable.tsx so that file
 // stays within its size budget. Provides:
 //   • useTableSelection — the selected-keys state + derived selected rows
-//   • BulkBar          — the action bar shown while ≥1 row is selected
 //   • SelectAllHeadCell / RowSelectCell — the checkbox cells
 // Select-all operates on whatever keys the caller passes (DataTable passes the
 // *filtered* keys), so "search/filter first, then select-all, then bulk-act"
@@ -11,10 +10,8 @@
 // The checkboxes stay out of sight until they are wanted: a row's shows while
 // the pointer is over the row (or focus is in it), the header's while the
 // pointer is over the header, and every one shows once any row is ticked.
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
-import { TableActionButton } from "@/components/table/TableActionButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableCell, TableHead } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -60,28 +57,6 @@ export function useTableSelection<T>(visibleRows: T[], rowKey: (row: T) => strin
   );
 
   return { keys, toggle, setMany, clear, selectedRows };
-}
-
-export function BulkBar({
-  label,
-  clearLabel,
-  onClear,
-  children,
-}: {
-  label: string;
-  clearLabel: string;
-  onClear: () => void;
-  children: ReactNode;
-}) {
-  // Foundations-Tables "Bulk bar": a 40px raised strip on the overlay shadow,
-  // r10 — the count, the actions (safe first, destructive last), then Clear.
-  return (
-    <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl bg-surface-raised py-[7px] pl-3 pr-2 shadow-overlay">
-      <span className="mr-2 text-sm font-label text-text">{label}</span>
-      {children}
-      <TableActionButton icon={X} label={clearLabel} onClick={onClear} />
-    </div>
-  );
 }
 
 /** Hidden (but keeping its space) until hover/focus on the row, or while anything is ticked. */

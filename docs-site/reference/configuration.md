@@ -34,7 +34,6 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 | `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. |
 | `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. |
 | `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. |
-| `COFFER_QUOTA_POLL` | unset | `off` stops the background pull of Codex's subscription quota, which spawns a short-lived `codex app-server`. The test suite sets it. |
 
 ### MCP gateway
 

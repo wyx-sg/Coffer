@@ -66,9 +66,7 @@ export function McpLogDrawer({ resource, agents, summary, tab, onTabChange, onCl
             className="flex min-h-0 flex-1 flex-col"
           >
             <TabsList>
-              <TabsTrigger value="calls">
-                {t("mcp.page.log.callsTab", { count: summary?.calls ?? 0 })}
-              </TabsTrigger>
+              <TabsTrigger value="calls">{t("mcp.page.log.callsTab")}</TabsTrigger>
               <TabsTrigger value="log">{t("mcp.page.log.logTab")}</TabsTrigger>
             </TabsList>
             <TabsContent

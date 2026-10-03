@@ -7,7 +7,7 @@ description: 走 API 密钥 或本地连接的智能体如何到达它的模型�
 
 用自己登录态的智能体直接和厂商通信，Coffer 不插手。被 Coffer 切换到某个**连接**上的智能体——网关的 API 密钥、厂商账号，或本机上的模型运行时——则改为和**本地模型代理**通信。代理是 `127.0.0.1` 上的一个小进程。它把每个请求带上真实的 key 转发到连接的接入地址，并记下这个请求的花费。
 
-相关决策和权衡过的方案见两份决策记录（ADR）：[API 密钥 提供商通过一个逐字节转发的独立本地模型代理访问](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) 和 [用量在代理处计量；订阅制智能体只显示官方剩余额度](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md)。本页讲它的工作原理。
+相关决策和权衡过的方案见两份决策记录（ADR）：[API 密钥 提供商通过一个逐字节转发的独立本地模型代理访问](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) 和 [用量在代理处计量；订阅制智能体不计量](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md)。本页讲它的工作原理。
 
 ## 为什么需要代理 {#why-a-proxy-at-all}
 

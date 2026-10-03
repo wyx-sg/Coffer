@@ -19,6 +19,7 @@ from coffer.application.sync.views import MachineView
 from coffer.domain.audit import AuditEventType
 from coffer.domain.sync.errors import CannotRetireSelf, SyncMachineNameInvalid, SyncMachineNotFound
 from coffer.domain.sync.machine import MachineDescriptor, descriptor_path, machine_id_of
+from coffer.domain.vault.history import REMOVED, Commit
 from coffer.domain.vault.layout import MACHINES
 from coffer.domain.vault.writers import OP_DELETE, OP_UPDATE, WRITER_SYNC, WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import Expect
@@ -153,6 +154,40 @@ class MachinesMixin:
             actor=actor,
             details={"machine_id": machine_id},
         )
+
+    async def restore_machine(self, machine_id: str, *, actor: str) -> MachineView:
+        """Undo a retire: register the machine again, with the descriptor it
+        had the moment before it was retired (read from the vault's history).
+        A machine that is registered already is returned as it is."""
+        if machine_id == self._machine.machine_id():
+            raise CannotRetireSelf(machine_id)
+
+        def restore() -> None:
+            d = self._engine.d
+            if machine_id in self._descriptors():
+                return
+            path = descriptor_path(machine_id)
+            # Newest first: the commit that removed the file, then the last
+            # one that wrote it.
+            written = [c for c in d.git.log(path, start="HEAD") if _wrote(c, path)]
+            data = d.git.read(written[0].version, path) if written else None
+            if data is None:
+                raise SyncMachineNotFound(machine_id)
+            meta = CommitMeta(
+                writer=WRITER_USER,
+                operation=OP_UPDATE,
+                summary=f"Registered machine {machine_id} again",
+                actor=actor,
+            )
+            d.writer.write_file(path, data, meta=meta, expected=Expect.ABSENT)
+
+        await self._locked(restore)
+        return next(v for v in await self.machines() if v.descriptor.machine_id == machine_id)
+
+
+def _wrote(commit: Commit, path: str) -> bool:
+    """Whether ``commit`` left ``path`` in the tree (it added or changed it)."""
+    return any(p.path == path and p.status != REMOVED for p in commit.paths)
 
 
 __all__ = ["MAX_NAME", "MachinesMixin"]

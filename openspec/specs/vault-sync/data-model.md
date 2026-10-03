@@ -8,6 +8,7 @@ piece lives is the design:
 | Where | What | Class |
 | --- | --- | --- |
 | `~/.coffer/local/sync/remote.json` | the one remote this machine syncs with | local — which remote *this machine* uses is a fact about it |
+| `~/.coffer/local/sync/removed-remote.json` | what Stop syncing removed, for Undo: the remote, `joined`, `stop`, `join_choices`, `confirmed` (the push secret is a name) | local |
 | `~/.coffer/local/sync/round.json` | the round waiting for a person: its stop or hold, the join choices, the confirmations | local |
 | `~/.coffer/vault/machines/<machine id>.json` | one descriptor per machine | vault — committed and pushed like any other vault file |
 | `~/.coffer/vault/.git` tags `refs/tags/coffer/pre-apply/<time>` | the snapshot before each apply | vault repository, never pushed |
@@ -93,10 +94,12 @@ when it has nothing to say.
 | `other_path` | the other file of a same-name conflict |
 | `answer` | `mine` \| `theirs` \| `edited`, once answered |
 | `edited` | the blob of the person's hand-merged version; refused while conflict markers are left in it |
+| `handed_at`, `handed_agent`, `handed_conversation` | when the file was handed to an agent, which agent, and the Coffer conversation, if named; the merge itself is read off the editor copy (`handed_off` until it holds a merge with no marker, then `merged_by_agent`) and is never an answer |
 
 An `edited` answer is prepared from an editor copy under
-`derived/sync-conflicts/<path>`; the directory is cleared when the round
-continues.
+`derived/sync-conflicts/<path>` — the person's, or an agent's merge written into
+it; the directory is cleared when the round continues. Going back to two choices
+deletes one copy and clears the file's hand-off and answer.
 
 ## Machine descriptor — `vault/machines/<machine_id>.json`
 

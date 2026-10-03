@@ -53,10 +53,9 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
     pins = {
         "COFFER_LOG_DIR",
         "COFFER_ALLOWED_HOSTS",
-        # The root conftest keeps the app from spawning the model proxy and a
-        # background ``codex app-server`` in every test that boots it.
+        # The root conftest keeps the app from spawning the model proxy in
+        # every test that boots it.
         "COFFER_MODEL_PROXY",
-        "COFFER_QUOTA_POLL",
         # ... and from fetching the model price list over the network.
         "COFFER_PRICE_REFRESH",
         # ... and every experimental feature is switched on (the features are

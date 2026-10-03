@@ -97,8 +97,7 @@ class SecretBindingRejected(SecretBindingPending):
     A kind of ``SecretBindingPending`` for every caller that only needs "the
     secret is withheld", but with its own code: nothing waits in the desktop
     app, so retrying or waiting changes nothing. The refusal holds until the
-    destination changes or the person asks again (``POST
-    /api/v1/secrets/approvals/{id}/ask-again``).
+    destination changes.
     """
 
     code = "SECRET_BINDING_REJECTED"
@@ -108,8 +107,7 @@ class SecretBindingRejected(SecretBindingPending):
         CofferError.__init__(
             self,
             f"refused in the Coffer app: {joined}. Nothing was sent, and nothing waits; "
-            "it stays refused until the destination changes or you ask again from the "
-            "Secrets page",
+            "it stays refused until the destination changes",
         )
         self.approval_ids = approval_ids
 

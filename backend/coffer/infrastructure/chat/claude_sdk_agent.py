@@ -24,11 +24,9 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
     PermissionResult,
-    RateLimitEvent,
     ToolPermissionContext,
 )
 
-from coffer.application.chat.ports import QuotaObserver
 from coffer.application.chat.question_agents import AskOwner
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
@@ -50,7 +48,6 @@ from coffer.infrastructure.chat.document_extract import (
     prompt_with_document_text,
 )
 from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
-from coffer.infrastructure.chat.quota_observe import forward_quota
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -145,7 +142,6 @@ class ClaudeSdkAgentAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
-        observe_quota: QuotaObserver | None = None,
         prompt_memory: PromptMemory | None = None,
         ask_owner: AskOwner | None = None,
     ) -> None:
@@ -158,10 +154,6 @@ class ClaudeSdkAgentAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
-        # Claude Code's own subscription windows, reported on the stream as a
-        # ``rate_limit_event``; forwarded as-is (``.raw`` keeps the @internal
-        # ``unifiedWindows``), never affecting the turn.
-        self._observe_quota = observe_quota
         # A channel turn's retrieval: the notes its prompt names.
         self._prompt_memory = prompt_memory
         # Raises a Coffer question for Claude Code's own ``AskUserQuestion`` (spec
@@ -330,9 +322,6 @@ class ClaudeSdkAgentAdapter:
             # terminal event ends the drain.
             try:
                 async for msg in session.receive_messages():
-                    if isinstance(msg, RateLimitEvent):
-                        raw = msg.rate_limit_info.raw
-                        await forward_quota(self._observe_quota, "claude_code", raw)
                     events = map_sdk_message(msg, state)
                     self.model_id = state.model or self.model_id
                     for event in events:

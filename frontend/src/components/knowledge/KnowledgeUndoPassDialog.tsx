@@ -1,14 +1,14 @@
 // frontend/src/components/knowledge/KnowledgeUndoPassDialog.tsx
 //
-// Undo this pass — asked first, then the whole pass at once (boards 5.1.11,
-// 5.1.22; spec knowledge "Keep every document's history and undo a pass as a
-// whole"): every document it changed goes back to how it was before, each as
-// a new version by you, and the inbox items it curated are not queued again.
-// All or nothing: when a document it wrote has changed since, the daemon
-// refuses the whole undo and writes nothing. The dialog then closes and the
-// pass's page says so, naming that document and offering the refusal's
-// prompt for undoing the pass by hand (KnowledgeUndoRefusal; KnowledgeChangeView
-// reads the refusal off the same mutation).
+// Undo this pass — asked first, then the whole pass at once (board 5.1.19; spec
+// knowledge "Keep every document's history and undo a pass as a whole"): every
+// document it changed goes back to how it was before, each as a new version by
+// you, and the inbox items it curated are not queued again. All or nothing:
+// when a document it wrote has changed since, the daemon refuses the whole
+// undo and writes nothing. The dialog then closes and the pass's page says so,
+// naming that document and opening its History (KnowledgeUndoRefusal;
+// KnowledgeChangeView reads the refusal off the same mutation). It is the 420
+// ConfirmDialog; its one sentence is the all-or-nothing rule.
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -77,7 +77,7 @@ export function KnowledgeUndoPassDialog({ open, onOpenChange, change, undo }: Pr
           </li>
         ))}
       </ul>
-      <p className="text-xs text-text-subtle">{t("knowledge.pass.undoNote")}</p>
+      <p className="text-sm text-text-muted">{t("knowledge.pass.undoNote")}</p>
     </ConfirmDialog>
   );
 }

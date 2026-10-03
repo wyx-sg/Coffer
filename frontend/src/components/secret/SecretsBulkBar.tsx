@@ -1,40 +1,30 @@
 // src/components/secret/SecretsBulkBar.tsx — the selection bar, in the place of the filters while secrets are ticked.
 //
-// Select-all covers every secret the filters show (not only the rendered batch). Delete is offered
-// only when every ticked secret can go: one in use, or waiting for approval, turns it off and says
-// how many stand in the way.
+// "N of M selected", Delete… (outline danger) and Clear. Delete stays offered when some of the
+// ticked secrets are in use or waiting: the confirmation skips and names them.
 import { useTranslation } from "react-i18next";
 
 import { ListSelectionBar } from "@/components/ListSelectionBar";
 import { SecretsBulkDelete } from "./SecretsBulkDelete";
-import { isDeletable, type SecretItem } from "./secretListView";
+import type { SecretItem } from "./secretListView";
 
 interface Props {
   selected: SecretItem[];
-  /** Every secret the filters show is ticked. */
-  allChecked: boolean;
-  onToggleAll: (on: boolean) => void;
+  /** How many secrets the filters show. */
+  total: number;
   onClear: () => void;
 }
 
-export function SecretsBulkBar({ selected, allChecked, onToggleAll, onClear }: Props) {
+export function SecretsBulkBar({ selected, total, onClear }: Props) {
   const { t } = useTranslation();
-  const blocked = selected.filter((i) => !isDeletable(i)).length;
   return (
     <ListSelectionBar
       label={t("secrets.bulk.label")}
-      selectAllLabel={t("secrets.bulk.selectAll")}
       count={selected.length}
-      allChecked={allChecked}
-      onToggleAll={onToggleAll}
+      total={total}
       onClear={onClear}
     >
-      <SecretsBulkDelete
-        items={selected}
-        label={t("common.bulk.delete")}
-        disabledReason={blocked > 0 ? t("secrets.bulk.blocked", { count: blocked }) : undefined}
-        onDone={onClear}
-      />
+      <SecretsBulkDelete items={selected} onDone={onClear} />
     </ListSelectionBar>
   );
 }

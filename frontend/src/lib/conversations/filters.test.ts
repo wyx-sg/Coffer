@@ -10,7 +10,6 @@ import {
   isFiltered,
   parseFilters,
   sourceToken,
-  toggled,
 } from "./filters";
 
 function conv(id: string, agent: string, binding?: Partial<Conversation["channel_binding"]>) {
@@ -96,10 +95,5 @@ describe("conversation filters", () => {
     const narrowed = { ...base, source: ["ch1"], agent: ["codex"], q: "x" };
     expect(isFiltered(narrowed)).toBe(true);
     expect(clearFilters(narrowed)).toEqual(base);
-  });
-
-  it("toggles a value in and out of a list", () => {
-    expect(toggled(["a"], "b")).toEqual(["a", "b"]);
-    expect(toggled(["a", "b"], "a")).toEqual(["b"]);
   });
 });

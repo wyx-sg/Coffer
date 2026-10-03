@@ -89,8 +89,7 @@ test("the library's reach filter keeps only the skills in the chosen reach state
   expect(await libraryRows()).toHaveLength(3);
 
   const choose = async (name: string) => {
-    const trigger = screen.getByRole("combobox", { name: "Reach" });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
     fireEvent.click(await screen.findByRole("option", { name }));
   };
   await choose("Off");
@@ -111,7 +110,7 @@ acceptance("skill-manager", "desktop and CLI cover every operation", async () =>
   expect(await screen.findByRole("link", { name: /hello/ })).toBeInTheDocument();
   // Search, the Reach filter and Check copies sit over the library.
   expect(screen.getByRole("textbox", { name: "Filter skills" })).toBeInTheDocument();
-  expect(screen.getByRole("combobox", { name: "Reach" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /^Reach/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
 
   // One Add skill action, opening the add dialog.
@@ -260,7 +259,7 @@ describe("SkillsPage library", () => {
     renderSkillsPage("/skills");
     expect(await libraryRows()).toHaveLength(2);
 
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
     fireEvent.click(await screen.findByRole("option", { name: "Off" }));
     await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
     let rows = await libraryRows();
@@ -269,8 +268,9 @@ describe("SkillsPage library", () => {
     // An off skill says so where its reach would be.
     expect(rows[0]).toHaveTextContent("Off");
 
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: "All" }));
+    // Picking the chosen state again clears the filter.
+    fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "Off" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "alp" },
     });

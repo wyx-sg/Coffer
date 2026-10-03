@@ -197,7 +197,7 @@ export function useActivitySource(spec: SourceParams, enabled: boolean): Activit
 }
 
 /** @ui-only A log's count: every matching row, or a floor when the daemon log counted a bounded tail. */
-export interface ActivityCount {
+interface ActivityCount {
   value: number | undefined;
   floor: boolean;
 }
@@ -207,7 +207,7 @@ export interface ActivityCount {
  * (the paged logs answer with `total`; the daemon log counts its recent tail
  * when asked). Re-read once a minute, not on every poll of the list.
  */
-export function useActivityCount(spec: SourceParams, enabled: boolean): ActivityCount {
+function useActivityCount(spec: SourceParams, enabled: boolean): ActivityCount {
   const query = useQuery({
     queryKey: keyFor(spec, "count"),
     queryFn: ({ signal }) => readPage(spec, 1, null, signal, true),

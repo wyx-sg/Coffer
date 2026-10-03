@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
  *  the menu behind the chevron. With no managed agent to ask, only Copy prompt. */
 export function HandoffSplit({ prompt }: { prompt: string }) {
   const { t } = useTranslation();
-  const { copied, copy, canAsk, ask } = useAgentHandoff(prompt);
+  const { copy, canAsk, ask } = useAgentHandoff(prompt);
   const [open, setOpen] = useState(false);
   const copyItem = (
     <button
@@ -31,7 +31,7 @@ export function HandoffSplit({ prompt }: { prompt: string }) {
     return (
       <Button size="sm" variant="outline" onClick={copy}>
         <Copy aria-hidden />
-        {copied ? t("handoff.copied") : t("handoff.copyPrompt")}
+        {t("handoff.copyPrompt")}
       </Button>
     );
   }

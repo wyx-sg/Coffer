@@ -80,3 +80,17 @@ export function useRetireMachine() {
     },
   });
 }
+
+/** Undo Retire: the machine is registered again. A refusal is the caller's toast. */
+export function useRestoreMachine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (machineId: string) => syncApi.restoreMachine(machineId),
+    onSuccess: () => {
+      invalidateSync(qc);
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+      void qc.invalidateQueries({ queryKey: skillsKey });
+      void qc.invalidateQueries({ queryKey: scopeKey });
+    },
+  });
+}

@@ -53,7 +53,7 @@ flowchart LR
 | **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, memory triggers, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
 | **local** | `local/` | Machine-local resources (agents), reach, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
-| **runs** | `runs.db` | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds, usage, quota. | Never | It *is* history | You lose history |
+| **runs** | `runs.db` | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage. | Never | It *is* history | You lose history |
 | **derived** | `derived/` | `derived.db`, the memory tree, the agent transcript cache, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
 
 Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
@@ -138,8 +138,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | `channel_thread_conversations`, `channel_thread_history` | Which conversation an IM thread maps to, and every conversation a thread has opened. |
 | `channel_outbox` | Replies Coffer owes a chat and has not delivered yet. |
 | `sync_runs` | Every sync round this machine has run. Pruned after 90 days by default. |
-| `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage page reads. |
-| `quota_snapshots` | The latest official subscription quota each feed reported. |
+| `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage tab reads. |
 | `attention_ignores` | The "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
 
 ::: details Tables no code reads

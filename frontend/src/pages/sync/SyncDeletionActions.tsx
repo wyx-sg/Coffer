@@ -1,7 +1,7 @@
 // frontend/src/pages/sync/SyncDeletionActions.tsx
 //
-// The two answers to a held round (6.5.09), each naming how many files it
-// touches. Delete asks again (6.5.28: which files, who deleted them, and that
+// The two answers to a held round (6.4.10), each naming how many files it
+// touches. Delete asks again (6.4.11: which files, who deleted them, and that
 // a snapshot is taken first), because it destroys; Restore does not, because
 // it destroys nothing. Either answer continues the round.
 import { useState, type ReactNode } from "react";
@@ -53,11 +53,12 @@ export function SyncDeletionActions({ hold, who, onDone }: Props) {
           action={
             <Button
               type="button"
-              variant="destructive"
+              variant="danger"
               size="sm"
               disabled={busy}
               onClick={() => setConfirming(true)}
             >
+              <Trash2 aria-hidden />
               {t("sync.deletions.delete.button", { count })}
             </Button>
           }

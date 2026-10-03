@@ -5,7 +5,8 @@
 // connected agent receives in this partition's project, composed by the
 // daemon the same way the hook composes it. Read-only, with a switch between
 // agents (Claude Code first) and Copy. No hook state: installed, stale and
-// Repair live on the agent's own page.
+// Repair live on the agent's own page. Layout per board 5.2.09: the agent
+// switch, what a session starts with and Copy on one row, the size line under.
 import { useState } from "react";
 import { Copy, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -21,6 +22,11 @@ import { abbreviateHomePath } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
 import { useMemoryDelivered } from "@/lib/hooks/useMemory";
 import { cn } from "@/lib/utils";
+
+/** 5123 -> "5.1k"; under a thousand as is (board 5.2.09). */
+function compactCount(n: number): string {
+  return n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+}
 
 interface Props {
   uid: string;
@@ -68,12 +74,12 @@ export function PartitionDeliveredTab({ uid, repositoryPath }: Props) {
       .catch(() => undefined);
 
   return (
-    <div ref={fill.ref} style={fill.style} className="flex min-h-0 flex-col gap-3">
+    <div ref={fill.ref} style={fill.style} className="flex min-h-0 flex-col gap-3.5">
       <div className="flex flex-wrap items-center gap-3">
         <div
           role="radiogroup"
           aria-label={t("memory.delivered.agentsLabel")}
-          className="inline-flex rounded-md border border-border-subtle p-0.5"
+          className="inline-flex gap-0.5 rounded-md border border-border-subtle bg-surface-sunken p-[3px]"
         >
           {agents.map((a) => {
             const active = a.agent_uid === current.agent_uid;
@@ -85,10 +91,10 @@ export function PartitionDeliveredTab({ uid, repositoryPath }: Props) {
                 aria-checked={active}
                 onClick={() => setChosen(a.agent_uid)}
                 className={cn(
-                  "inline-flex h-control-sm items-center gap-1.5 rounded-sm px-2.5 text-xs",
+                  "inline-flex h-6 items-center gap-1.5 rounded-sm px-2.5 text-xs font-label",
                   active
-                    ? "bg-surface-selected font-label text-text"
-                    : "text-text-muted hover:bg-surface-hover",
+                    ? "bg-surface-raised text-text shadow-lifted"
+                    : "text-text-muted hover:text-text",
                 )}
               >
                 <AgentBadge type={a.agent_type} name={a.agent_name} size="sm" tooltip={false} />
@@ -102,21 +108,19 @@ export function PartitionDeliveredTab({ uid, repositoryPath }: Props) {
             ? t("memory.delivered.intro", { path: abbreviateHomePath(repositoryPath) })
             : t("memory.delivered.introGlobal")}
         </span>
-        <span className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-text-muted tabular-nums">
-            {t("memory.delivered.characters", { count: current.text.length })}
-          </span>
-          <Button type="button" variant="outline" size="sm" onClick={copy}>
-            <Copy className="mr-1.5 size-3.5" aria-hidden />
-            {t("memory.delivered.copy")}
-          </Button>
-        </span>
+        <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={copy}>
+          <Copy aria-hidden />
+          {t("memory.delivered.copy")}
+        </Button>
       </div>
+      <span className="text-xs text-text-muted tabular-nums">
+        {t("memory.delivered.size", { size: compactCount(current.text.length) })}
+      </span>
       <pre
         data-testid="memory-delivered-text"
         className={cn(
           FILE_PANE_SCROLL,
-          "whitespace-pre-wrap rounded-lg border border-border-subtle bg-surface-sunken p-3 font-mono text-xs text-text",
+          "whitespace-pre-wrap rounded-lg border border-border-subtle bg-surface-sunken px-3.5 py-3 font-mono text-xs leading-[1.6] text-text",
         )}
       >
         {current.text}

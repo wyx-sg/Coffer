@@ -70,7 +70,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
 | `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 在 Coffer 桌面应用中批准，或用 `coffer secret reject <id>` 拒绝。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
-| `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，或在密钥页面再次询问（`POST /api/v1/secrets/approvals/{id}/ask-again`）。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，问题会重新摆到你面前。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `APPROVAL_NOT_FOUND` | 404 | 没有这个 id 的审批。 | 用 `coffer secret approvals --all` 列出。 |
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
 | `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
@@ -236,12 +236,18 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SYNC_REMOTE_FAILED` | 502 | 针对远端的某个 git 操作失败。消息已脱敏。 | 检查网络访问、远端 URL 和令牌的权限。 |
 | `SYNC_NOTHING_STOPPED` | 409 | 你回答了一个冲突、暂停或加入选择，但没有任何同步轮次在等这个回答。 | 无需操作。 |
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | 手动合并的副本中仍有冲突标记；消息会给出所在行。 | 删除它们，保存，然后把文件标记为已解决。 |
-| `SYNC_SECRET_NOT_EDITABLE` | 422 | 停下的一轮中的加密密钥被在编辑器中打开，或被答复为“编辑”。 | 保留本机的版本，或采用另一台的。 |
+| `SYNC_SECRET_NOT_EDITABLE` | 422 | 停下的一轮或加入中的加密密钥被在编辑器中打开、交给智能体，或被答复为“编辑”。 | 保留本机的版本，或采用另一台的。 |
 | `SYNC_ROUND_NOT_FOUND` | 404 | 没有这个 id 的同步轮次。 | 从 `coffer sync history` 中选一个。 |
 | `SYNC_NOTHING_TO_ROLL_BACK` | 409 | 该轮次没有应用任何东西，或者它本身就是一次回滚。 | 无需操作。 |
 | `SYNC_MACHINE_NOT_FOUND` | 404 | 没有这个 id 的机器共享此保险库。 | 用 `coffer sync machine list` 列出机器。 |
 | `SYNC_MACHINE_NAME_INVALID` | 422 | 机器名为空或过长。 | 换一个名字。 |
-| `SYNC_CANNOT_RETIRE_SELF` | 422 | 你试图退役当前所在的机器。 | 从另一台机器退役它，或在这里清除同步远端。 |
+| `SYNC_CANNOT_RETIRE_SELF` | 422 | 你试图退役当前所在的机器。 | 从另一台机器退役它，或在这里停止同步。 |
+| `SYNC_NOTHING_TO_RESTORE` | 409 | 要撤销停止同步或退役机器，但没有保留任何东西，或此后设置了别的远端。 | 无需处理；重新设置远端或重新加入。 |
+| `SYNC_REMOTE_EXISTS` | 409 | 在已有远端时撤销了停止同步。 | 先停止同步，或保持远端不变。 |
+| `SYNC_VAULT_TARGET_INVALID` | 422 | 要移动保险库去的文件夹不是绝对路径、位于当前保险库内部或把它包含在内，或其父目录不可写。 | 选另一个文件夹。 |
+| `SYNC_VAULT_TARGET_IN_CLOUD` | 422 | 要移动保险库去的文件夹本身位于另一个工具同步的文件夹里。 | 选 iCloud Drive、Dropbox 和 Syncthing 之外的文件夹。 |
+| `SYNC_VAULT_TARGET_NOT_EMPTY` | 409 | 要移动保险库去的文件夹里已有文件。 | 选一个空的或不存在的文件夹。 |
+| `SYNC_VAULT_MOVE_FAILED` | 500 | 移动或在新位置检查保险库失败；保险库已放回原处。 | 查看守护进程日志找原因，然后重试。 |
 
 ## 守护进程 {#the-daemon}
 

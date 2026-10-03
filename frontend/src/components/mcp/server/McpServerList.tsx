@@ -19,6 +19,7 @@ import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
 import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
 import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
+import { ListSelectAll } from "@/components/ListSelectAll";
 import { McpBuiltinRow } from "./McpBuiltinRow";
 import { McpServerListRow } from "./McpServerListRow";
 import { McpServersBulkBar } from "./McpServersBulkBar";
@@ -79,18 +80,8 @@ export function McpServerList({
     (query.trim() === "" ||
       `${builtin.name} ${builtin.url}`.toLowerCase().includes(query.trim().toLowerCase()));
 
-  // What select-all covers: the listed servers the filters show (never the built-in one).
+  // The listed servers the filters show (never the built-in one): the bar's "of M".
   const visibleUids = [...groups.values()].flat().map((i) => servers[i].uid);
-  const allVisiblePicked = visibleUids.length > 0 && visibleUids.every((u) => picked.has(u));
-  const toggleAll = (on: boolean) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      for (const u of visibleUids) {
-        if (on) next.add(u);
-        else next.delete(u);
-      }
-      return next;
-    });
   const selected = servers.filter((s) => picked.has(s.uid));
   const toggle = (uid: string, on: boolean) =>
     setPicked((prev) => {
@@ -99,6 +90,7 @@ export function McpServerList({
       else next.delete(uid);
       return next;
     });
+  const setAll = (all: boolean) => setPicked(all ? new Set(visibleUids) : new Set());
   const shown = [...groups.values()].reduce((n, g) => n + g.length, 0) + (showBuiltin ? 1 : 0);
 
   return (
@@ -107,8 +99,7 @@ export function McpServerList({
         {selected.length > 0 ? (
           <McpServersBulkBar
             servers={selected}
-            allChecked={allVisiblePicked}
-            onToggleAll={toggleAll}
+            total={visibleUids.length}
             onDone={() => setPicked(new Set())}
           />
         ) : (
@@ -120,12 +111,17 @@ export function McpServerList({
               ariaLabel={t("mcp.page.filter")}
             />
             <div className="flex items-center gap-2">
-              <ReachFilter value={reach} onChange={setReach} compact />
+              <ReachFilter value={reach} onChange={setReach} />
             </div>
           </>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <ListSelectAll
+          count={visibleUids.filter((u) => picked.has(u)).length}
+          total={visibleUids.length}
+          onChange={setAll}
+        />
         {error ? (
           <ListLoadError kind="mcp" error={error} onRetry={() => onRetry?.()} />
         ) : isLoading ? (

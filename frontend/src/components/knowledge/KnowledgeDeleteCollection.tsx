@@ -1,90 +1,45 @@
 // frontend/src/components/knowledge/KnowledgeDeleteCollection.tsx
 //
-// The collection overview's danger zone (boards 5.1.13, 5.1.19): Delete
-// collection, behind a typed confirmation — it removes the folder, every
-// document and every inbox item from disk. The delete is one change in the
-// vault's history, so Recent changes lists it with Restore (spec knowledge
-// "Restore a deleted collection or document from Recent changes"). A
-// collection is one `knowledge` Resource, so it goes through the kind-agnostic
-// resource delete like every other kind. The dialog closes only once the
-// delete has landed, and a refusal stays in it.
-import { useState } from "react";
+// Delete collection… from a collection page's ⋯ menu (boards 5.1.10, 5.1.14).
+// It runs at once, with no dialog and no typed name: the delete is one change
+// in the vault's history, so the toast carries Undo, which restores it from
+// there (layout principle 14, "confirm or undo"; spec knowledge "Restore a
+// deleted collection or document from Recent changes"). A collection is one
+// `knowledge` Resource, so it goes through the kind-agnostic resource delete
+// like every other kind. Once it has landed the page goes to Recent changes,
+// where the delete also stays restorable.
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Trash2 } from "lucide-react";
 
-import { Section } from "@/components/Section";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import { translateApiError } from "@/lib/api/errors";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
+import { undoDelete } from "@/lib/knowledge/deleteUndo";
 import { KNOWLEDGE_ROOT } from "@/lib/knowledge/routes";
 
-export function KnowledgeDeleteCollection({ collection }: { collection: CollectionOut }) {
+/** The action behind the menu item: delete `collection`, then toast with Undo. */
+export function useDeleteCollection(collection: CollectionOut): () => void {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const del = useDeleteResource();
-  const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState("");
 
-  return (
-    <Section title={t("knowledge.deleteCollection.zone")} gap="snug">
-      <div className="flex min-h-14 items-center gap-6">
-        <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-          <span className="text-sm font-medium">{t("knowledge.deleteCollection.confirm")}</span>
-          <span className="text-xs leading-[1.45] text-text-subtle">
-            {t("knowledge.deleteCollection.hint", { count: collection.document_count })}
-          </span>
-        </div>
-        <Button variant="danger" size="sm" onClick={() => setOpen(true)}>
-          <Trash2 aria-hidden /> {t("knowledge.deleteCollection.button")}
-        </Button>
-      </div>
-      <ConfirmDialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) {
-            setTyped("");
-            del.reset();
-          }
-        }}
-        title={t("knowledge.deleteCollection.title", { name: collection.name })}
-        description={t("knowledge.deleteCollection.body", {
-          documents: collection.document_count,
-          items: collection.pending_count,
-        })}
-        confirmLabel={t("knowledge.deleteCollection.confirm")}
-        pendingLabel={t("common.deleting")}
-        errorTitle={t("common.couldntDelete", { name: collection.name })}
-        confirmDisabled={typed !== collection.name}
-        pending={del.isPending}
-        error={del.error}
-        onConfirm={() =>
-          del.mutate(
-            { kind: "knowledge", uid: collection.uid },
-            {
-              onSuccess: () => {
-                setOpen(false);
-                navigate(KNOWLEDGE_ROOT);
-              },
-            },
-          )
-        }
-      >
-        <label className="block space-y-1.5 text-sm">
-          <span className="text-text-muted">
-            {t("knowledge.deleteCollection.typeToConfirm", { name: collection.name })}
-          </span>
-          <Input
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            aria-label={t("knowledge.deleteCollection.typeToConfirm", { name: collection.name })}
-            autoComplete="off"
-          />
-        </label>
-      </ConfirmDialog>
-    </Section>
-  );
+  return () =>
+    del.mutate(
+      { kind: "knowledge", uid: collection.uid },
+      {
+        onSuccess: () => {
+          navigate(KNOWLEDGE_ROOT);
+          toast.success(t("knowledge.deleteCollection.deleted", { name: collection.name }), {
+            undo: () =>
+              void undoDelete({ collection: collection.name }).catch((error: unknown) =>
+                toast.error(t("knowledge.deleteCollection.undoFailed", { name: collection.name }), {
+                  details: translateApiError(t, error),
+                }),
+              ),
+          });
+        },
+      },
+    );
 }

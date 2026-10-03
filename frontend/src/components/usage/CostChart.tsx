@@ -1,10 +1,10 @@
-// src/components/usage/CostChart.tsx — "Cost per day": one accent bar per local day of the range, today's lighter.
+// src/components/usage/CostChart.tsx — "Cost per day": one data-colour bar per local day of the range, today's lighter.
 //
 // A single series, so no legend box beyond "Today, so far" (today's bar is
 // partial). Bars sit on the baseline with rounded tops and a 2px gap; each one
 // is focusable and names its day and cost in a tooltip. Only a sample of days
-// is labelled on the axis so a 30-day range does not collide. The By day tab
-// below is the table view of the same numbers.
+// is labelled on the axis so a 30-day range does not collide. The By day view
+// below is the table of the same numbers.
 import { useTranslation } from "react-i18next";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,7 +30,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
   const digits = step >= 1 ? 0 : 2;
   const every = Math.ceil(days.length / MAX_AXIS_LABELS);
   const labelled = (i: number) => days.length <= MAX_AXIS_LABELS || i % every === 0;
-  const dayName = (d: (typeof days)[number], style: "short" | "long") =>
+  const dayName = (d: (typeof days)[number], style: "short" | "month") =>
     d.today ? t("usage.chart.todayShort") : formatDay(parseDay(d.day), lang, style);
 
   return (
@@ -39,7 +39,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
         <span className="text-xs font-semibold text-text-muted">{t("usage.chart.title")}</span>
         {days.some((d) => d.today) ? (
           <span className="ml-auto inline-flex items-center gap-1.5 text-2xs text-text-muted">
-            <span aria-hidden className="size-2 rounded-xs bg-accent/55" />
+            <span aria-hidden className="size-2 rounded-xs bg-data/50" />
             {t("usage.chart.today")}
           </span>
         ) : null}
@@ -90,7 +90,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
                         <div
                           className={cn(
                             "w-full max-w-11 rounded-t-xs",
-                            d.today ? "bg-accent/55" : "bg-accent",
+                            d.today ? "bg-data/50" : "bg-data",
                           )}
                           // Theming bridge: the bar's height is the day's cost.
                           style={{ height: `${(d.cost / top) * 100}%` }}
@@ -110,7 +110,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
               key={d.day}
               className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-center text-2xs text-text-muted"
             >
-              {labelled(i) ? dayName(d, days.length <= MAX_AXIS_LABELS ? "short" : "long") : ""}
+              {labelled(i) ? dayName(d, days.length <= MAX_AXIS_LABELS ? "short" : "month") : ""}
             </span>
           ))}
         </div>

@@ -15,7 +15,12 @@ export function makeConflict(path: string, over: Partial<ConflictFile> = {}): Co
     answer: null,
     editor_path: null,
     secret: false,
-    agent_merge: false,
+    agent_mergeable: false,
+    agent_state: null,
+    agent_handed_at: null,
+    agent_name: null,
+    agent_conversation_id: null,
+    agent_merged_at: null,
     ...over,
   };
 }
@@ -30,7 +35,6 @@ export function makeStopped(files: ConflictFile[], over: Partial<StoppedRound> =
     files,
     unanswered: files.filter((f) => f.answer === null).length,
     hold: null,
-    handoff: null,
     ...over,
   };
 }
@@ -78,6 +82,8 @@ export function makeVersions(path: string, over: Partial<FileVersions> = {}): Fi
     take_theirs: TAKE_THEIRS_DIFF,
     binary: false,
     edited: null,
+    merged: null,
+    merged_diff: null,
     ...over,
   };
 }

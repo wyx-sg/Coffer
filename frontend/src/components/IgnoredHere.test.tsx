@@ -35,7 +35,9 @@ describe("IgnoredHere", () => {
     read.mockResolvedValue({ items: [], errors: [], counts_by_kind: {}, ignored: [IGNORED] });
     unignore.mockResolvedValue(undefined);
     renderAt("/mcp-servers/github");
-    expect(await screen.findByText(/It failed its last test\. — ignored on Overview\./)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/It failed its last test — ignored on Overview\./),
+    ).toBeInTheDocument();
     read.mockResolvedValue({ items: [IGNORED], errors: [], counts_by_kind: {}, ignored: [] });
     fireEvent.click(screen.getByRole("button", { name: "Show it again" }));
     await waitFor(() => expect(unignore).toHaveBeenCalledWith(IGNORED.key));

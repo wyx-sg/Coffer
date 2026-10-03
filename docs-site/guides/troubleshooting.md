@@ -178,7 +178,7 @@ See [Secret store](/guides/secret-store).
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `coffer sync status` exits 1 and shows `deletions held` | The deletion breaker held a round. | Read the list (`coffer sync hold`), then `coffer sync hold --confirm` or `--restore`. After a reinstall, restore. |
-| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | `coffer sync conflicts`, answer each file with `coffer sync resolve <path> --mine\|--theirs\|--edited`, then `coffer sync continue`, or **Resolve conflicts** on the **Sync** page. To have your agent merge them, give it `coffer sync conflicts --prompt` (or **Merge with an agent**), then record its work with `coffer sync resolve --merged` (**I merged it**). |
+| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | `coffer sync conflicts`, answer each file with `coffer sync resolve <path> --mine\|--theirs\|--edited`, then `coffer sync continue`, or **Resolve conflicts** on the **Sync** page. To have your agent merge them, press **Ask an agent** (or give it `coffer sync conflicts --prompt`); when its merge shows as **Merged by an agent · check it**, check the diff and press **Mark resolved** (`coffer sync resolve <path> --edited`). |
 | `join required` | This machine has not joined the remote. | `coffer sync join` |
 | `remote too old` | The remote was written by a Coffer from before the vault layout. | Rebuild it: see [Upgrading an existing Coffer](/guides/upgrading#rebuild-your-sync-remote). |
 | Secrets cannot be decrypted | This machine lacks the master key. | `coffer sync key import <file>` |

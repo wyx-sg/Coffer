@@ -414,13 +414,19 @@ with the prompt the daemon returned. It keeps a plain button for work Coffer
 does itself, and shows the hand-off beside the manual controls in conflict,
 merge and repair flows.
 
-- **Use `AgentHandoff`** (`components/handoff/`) for it: Copy prompt, and Ask
-  an agent when a managed agent is available (`size="sm"` in a dense row). Use
+- **Use `AgentHandoff`** (`components/handoff/`) for it (`size="sm"` in a
+  dense row). Use
   a plain button instead when Coffer can do the work itself, deterministically
   (Check again, enable, delete).
 - **The prompt comes from the backend**, as a `handoff: {prompt}` field on the
   response (`HandoffOut`, built by `backend/coffer/domain/handoff.py`). The
   frontend never assembles or edits the text; it only shows or passes it on.
+- **`AgentHandoff` is one split control, Ask an agent ▾**: the main half
+  opens the draft, the ▾ menu holds Copy prompt (toast "Prompt copied"); with
+  no managed agent it is a plain Copy prompt. `help={false}` drops the "?" in a
+  row that already says what the problem is (Knowledge and Memory failures,
+  after their own Retry / Check again). `prompt` may be a request the control
+  makes when picked, for a hand-off the daemon records (Sync conflicts).
 - **Ask an agent** opens the New conversation dialog, then the draft through
   `openHandoffDraft` (`lib/conversations/handoff.ts`): the agent, folder and
   prompt ride in router location state (never the URL), `useChatController`

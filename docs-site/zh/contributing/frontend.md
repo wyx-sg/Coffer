@@ -133,7 +133,7 @@ token 来自 [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/bl
 | `DataTable` | 唯一的列表表格。传入 `isLoading`，让表头在骨架行上方保持挂载；传入 `emptyAction` 作为行动号召。每张表格上生效范围列的表头都是 `resources.cols.reach` |
 | `EmptyState` | 每一个空列表、未找到页面和零结果搜索：图标、标题、描述、操作 |
 | `Skeleton` | 加载状态保持界面的真实形状。永远不要显示空白屏幕或 "Loading…" 卡片 |
-| `ConfirmDialog` | 每一次破坏性确认，永远不要用 `window.confirm`。mutation 运行期间它接收 `pending`，只在 `onSuccess` 中关闭，所以删除失败时对话框会带着错误保持打开，错误标题由 `errorTitle` 给出（「无法删除 sentry」）；`confirmLabel` 始终是静止时的文案，进行中的文案是 `pendingLabel` |
+| `ConfirmDialog` | 每一次不可逆操作的确认，永远不要用 `window.confirm`；可以恢复的删除（知识文档或知识集）不弹它，而是弹一条带**撤销**的提示。mutation 运行期间它接收 `pending`，只在 `onSuccess` 中关闭，所以删除失败时对话框会带着错误保持打开，错误标题由 `errorTitle` 给出（「无法删除 sentry」）；`confirmLabel` 始终是静止时的文案，进行中的文案是 `pendingLabel` |
 | `Alert`（`warning` 变体） | 非致命的提醒，比如一个不寻常但能工作的配置。不是 toast，也不是破坏性警告 |
 | 改动即保存 | 设置、生效范围和模型提供商在控件改动时立即写入，写入失败就在控件下方说明；没有保存按钮。只有文档编辑器（`SKILL.md`、知识文档、智能体原始配置文件）保留明确的保存和未保存守卫（`useUnsavedGuard`，一个挂在外壳上的对话框）。对话框的取消是 ghost 按钮 |
 | tab 放进 URL | 详情页把 tab 放在路径里，`/<kind>/<id>/<tab>` |

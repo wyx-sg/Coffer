@@ -8,16 +8,18 @@
 //
 // What the page leaves out is the requirement too: no file tree, no
 // `MEMORY.md` / `RETIRED.md`, no `.raw/`, no native path and no agent's
-// original text. Open-in-editor and reveal use the memory's own `file_path`.
+// original text, and no file action on a memory (the partition's ⋯ menu
+// reveals the folder). A partition not distilled yet has no list column at all:
+// only the centred empty state, with no Update memory button (the header has
+// it; board 5.2.08).
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 import { Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
-import { FILE_PANE_COLUMN, FILE_PANE_SCROLL, useFillToBottom } from "@/components/filePane";
+import { FILE_PANE_COLUMN, useFillToBottom } from "@/components/filePane";
 import { MemoryList, RetiredGroup } from "@/components/memory/MemoryList";
 import { MemoryPane } from "@/components/memory/MemoryPane";
-import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { NoModelNotice } from "@/components/memory/NoModelNotice";
 import { SplitView } from "@/components/SplitView";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,14 +37,12 @@ interface Props {
   uid: string;
   /** The partition's display name, for the empty state. */
   name: string;
-  /** A distil pass over this partition is running. */
-  running: boolean;
   /** The partition's row: its sources decide "All agents", and entries read
    *  but not distilled yet are what an empty list says it is waiting on. */
   partition?: PartitionOut;
 }
 
-export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
+export function PartitionMemoriesTab({ uid, name, partition }: Props) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const notes = useMemoryNotes(uid);
@@ -58,7 +58,6 @@ export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
     next.set(MEMORY_PARAM, slug);
     setParams(next, { replace: true });
   };
-  const filePath = memories.find((m) => m.slug === selected)?.file_path || null;
 
   const notice = modelSet === false ? <NoModelNotice /> : null;
 
@@ -97,7 +96,6 @@ export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
                 })
               : t("memory.memories.emptyBody")
           }
-          action={<MemoryUpdateButton running={running} />}
         />
         {(retired.data ?? []).length > 0 ? <RetiredGroup retired={retired.data ?? []} /> : null}
       </div>
@@ -115,7 +113,7 @@ export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
           listClassName={FILE_PANE_COLUMN}
           detailClassName="flex min-h-0 flex-col pl-4"
           list={
-            <div className={FILE_PANE_SCROLL}>
+            <div className="flex min-h-0 flex-1 flex-col">
               <MemoryList
                 memories={memories}
                 retired={retired.data ?? []}
@@ -127,7 +125,7 @@ export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
           }
           detail={
             selected ? (
-              <MemoryPane uid={uid} slug={selected} filePath={filePath} />
+              <MemoryPane uid={uid} slug={selected} />
             ) : (
               <p className="text-sm text-text-muted">{t("memory.memories.select")}</p>
             )

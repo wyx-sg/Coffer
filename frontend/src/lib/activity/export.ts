@@ -4,7 +4,7 @@
 // the tab reads through its own route with the same server-side filters (the free text included),
 // applies the same client-side predicate the list applies, and writes
 // exactly those records (spec web-ui "Export the filtered Activity records
-// from the overflow menu"). A cap keeps a runaway log from freezing the tab.
+// from the header"). A cap keeps a runaway log from freezing the tab.
 import {
   fetchAuditPage,
   fetchCallPage,
@@ -59,8 +59,9 @@ export async function collectForExport(
 /** The record as the daemon sent it, tagged with the log it came from. */
 function rawOf(r: ActivityRecord): Record<string, unknown> {
   if (r.source === "change") return { source: "change", ...r.entry };
-  if (r.source === "call") return { source: "mcp_call", ...r.call };
-  return { source: "daemon_log", ...r.log };
+  // The hand-off prompt is for the drawer's button, not part of the record.
+  if (r.source === "call") return { source: "mcp_call", ...r.call, handoff: undefined };
+  return { source: "daemon_log", ...r.log, handoff: undefined };
 }
 
 export function toJson(records: readonly ActivityRecord[]): string {

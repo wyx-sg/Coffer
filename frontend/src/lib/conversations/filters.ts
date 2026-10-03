@@ -82,8 +82,3 @@ export function isFiltered(filters: ConversationFilters): boolean {
 export function clearFilters(filters: ConversationFilters): ConversationFilters {
   return { ...filters, source: [], agent: [], q: "" };
 }
-
-/** `values` with `value` added, or removed when already there. */
-export function toggled(values: readonly string[], value: string): string[] {
-  return values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
-}

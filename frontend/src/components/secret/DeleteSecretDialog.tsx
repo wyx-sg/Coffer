@@ -1,7 +1,7 @@
 // src/components/secret/DeleteSecretDialog.tsx — Delete a secret nothing uses, or say what still uses it.
 //
 // A secret something cites opens straight into the refusal: each citer by
-// kind and name with a link to its page, and Delete disabled. One nothing
+// kind and name with a link to its page, and only Close. One nothing
 // cites is confirmed and deleted. Something may have started citing it since
 // the page loaded: the daemon then refuses with `409 SECRET_IN_USE` naming
 // each citer, and the dialog turns into that same refusal — while the row
@@ -20,13 +20,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { RelativeTime } from "@/components/RelativeTime";
 import { useToast } from "@/components/ui/toast";
 import type { SecretRef } from "@/lib/api/secret";
 import { ApiError } from "@/lib/api/errors";
 import { useDeleteSecret } from "@/lib/hooks/useSecrets";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { citersFromRefusal, citersOf, displayName, referenceOf, type Citer } from "./secretRows";
-import { lastUsedLabel } from "./secretTimes";
 import { useKindLabel } from "./useKindLabel";
 
 interface Props {
@@ -52,7 +52,7 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
             <span className="min-w-0 flex-1 truncate text-sm text-text">{c.name}</span>
             <span className="text-xs text-text-muted">{kindLabel(c.kind)}</span>
             {c.href && pageOpen(c.kind) ? (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="ghost" size="sm">
                 <Link to={c.href} onClick={onClose}>
                   {t("secrets.blocked.open")}
                 </Link>
@@ -65,16 +65,13 @@ function InUse({ row, citers, onClose }: { row: SecretRef; citers: Citer[]; onCl
         <Button variant="ghost" onClick={onClose}>
           {t("common.close")}
         </Button>
-        <Button variant="destructive" disabled>
-          {t("secrets.delete.submit")}
-        </Button>
       </DialogFooter>
     </>
   );
 }
 
 export function DeleteSecretDialog({ row, onOpenChange }: Props) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const remove = useDeleteSecret();
   const [refused, setRefused] = useState<Citer[] | null>(null);
@@ -96,7 +93,7 @@ export function DeleteSecretDialog({ row, onOpenChange }: Props) {
   if (blocked) {
     return (
       <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-[460px]">
+        <DialogContent className="max-w-[420px]">
           <InUse row={row} citers={blocked} onClose={close} />
         </DialogContent>
       </Dialog>
@@ -131,11 +128,9 @@ export function DeleteSecretDialog({ row, onOpenChange }: Props) {
       onConfirm={() => void confirm()}
     >
       <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-        <dt className="text-text-muted">{t("secrets.replace.secret")}</dt>
-        <dd className="truncate font-mono text-text">{name}</dd>
         <dt className="text-text-muted">{t("secrets.cols.lastUsed")}</dt>
         <dd className="text-text">
-          {lastUsedLabel(row.last_used_at, new Date(), t, i18n.language)}
+          {row.last_used_at ? <RelativeTime iso={row.last_used_at} /> : t("secrets.time.never")}
         </dd>
       </dl>
     </ConfirmDialog>

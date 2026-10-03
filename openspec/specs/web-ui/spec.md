@@ -76,18 +76,19 @@ participant in convergence rather than a surface of its own.
 - **THEN** each is a link to a route the app serves
 - **AND** none is marked as coming soon or not yet implemented
 
-### Requirement: Keep the sidebar to its fifteen entries
+### Requirement: Keep the sidebar to its fourteen entries
 The sidebar's entries MUST be exactly these, at these routes: one ungrouped entry
-and five groups — fifteen today, and no sixteenth without a spec change.
+and five groups — fourteen today, and no fifteenth without a spec change.
 Settings is not an entry: it is a modal opened from the sidebar footer (see
-"Open Settings as a modal from the sidebar footer"). Usage's content is specified
-with the change that meters it; this requirement fixes only its place. Custom
+"Open Settings as a modal from the sidebar footer"). Usage is not an entry:
+it is a tab of Model providers (see provider-switching "Show metered usage on a
+Usage tab of Model providers"). Custom
 tools and CLIs are specified by "Manage custom tools on their own page" and "Show
 every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Model providers and Usage belong to `models`, Knowledge to `knowledge`,
+switched on. Model providers, Usage tab included, belongs to `models`, Knowledge to `knowledge`,
 Memory to `memory` and Sync to `sync`; every other entry, Conversations and
 Channels included, is owned by no feature and is always there:
 
@@ -95,7 +96,7 @@ Channels included, is owned by no feature and is always there:
   Overview         /                  — the landing page
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
-  Model providers  /model-providers   — the endpoints agents' models are served from
+  Model providers  /model-providers   — the endpoints agents' models are served from, and what requests through Coffer cost (tabs Providers | Usage)
  RUN
   Conversations    /conversations     — every conversation Coffer runs, from channels and from Coffer itself
   Channels         /channels          — the IM bots agents answer on
@@ -110,7 +111,6 @@ Channels included, is owned by no feature and is always there:
  SYSTEM
   Secrets          /secrets           — every stored secret and what uses it
   Activity         /activity          — what changed, what was called, what broke
-  Usage            /usage             — token use and remaining quota per agent
   Sync             /sync              — converging this vault with a git remote
 ```
 
@@ -121,14 +121,14 @@ Channels included, is owned by no feature and is always there:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
 - **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
-- **AND** with every feature switched on, the sidebar lists all fifteen entries
+- **AND** with every feature switched on, the sidebar lists all fourteen entries
 - **AND** with the four features switched off, it lists only Overview, Agents, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets and Activity
 
 ### Requirement: Call a surface by one name everywhere
@@ -208,7 +208,22 @@ the logo, and an open conversation's title row is a 44px bar at the top of the c
 ### Requirement: Use one shared table for every list surface
 Every list surface that is a table — agents, memory partitions, the rounds
 on Sync's Status tab — MUST use one shared table. It is searchable, filterable
-and paginated where its list needs that; Sync's rounds table, whose quiet rounds
+and paginated where its list needs that, and it behaves the same everywhere:
+
+- the filter row is the search first (`/` focuses it), then the pills, then
+  **Clear filters** while anything is set, and shows no result counts;
+- only number and time columns sort, in three states (one direction, the other,
+  then the page's own order);
+- a long list shows a few rows and "Showing 5 of N · Show all";
+- a time reads relative while recent ("3 h ago") and as a date ("Aug 12") after;
+- rows are selected with the header checkbox, a bar over the table reads "N of M
+  selected" with the actions that apply, it holds no select-all of its own, and
+  **Esc** clears the selection;
+- a row's detail that opens beside the list opens in the one right-hand drawer,
+  640 wide over a dimmed page, closed by **Esc**, a click outside or its ✕, with
+  focus returning to the row.
+
+The rules above have their exceptions: Sync's rounds table, whose quiet rounds
 fold into one row, has no search or filter. A row click MUST open that item's
 detail page, or for a sync round, its drawer. The Model providers, Channels, MCP
 servers, Custom tools, Skills and CLIs pages are lists beside a reading pane
@@ -219,6 +234,11 @@ record list of their own, each row opening its record (see "Filter each
 Activity tab and expand any row"). Sync's Remote tab is not a list surface: it
 is the remote's settings, and the machine registry on its Machines tab is a
 small plain table.
+
+#### Scenario: a selection bar counts the rows and Esc clears it
+- **GIVEN** a list with several rows
+- **WHEN** the user ticks two rows, and then presses Esc
+- **THEN** a bar reads "2 of N selected" with the actions that apply and holds no select-all, and Esc leaves no row selected and no bar
 
 #### Scenario: a row click opens the item's detail page
 - **GIVEN** a list surface showing at least one row
@@ -685,28 +705,33 @@ The three records Coffer keeps — the audit log (what changed in the vault, and
 who changed it), the MCP invocation log (every call the gateway proxied, and
 which agent's session made it) and the daemon log (what Coffer itself did,
 including what broke) — MUST reach a person through one page at `/activity`,
-under System, carrying four tabs, each with its count: **Everything**, the
-default, merging the changes, the calls and the daemon's warnings and errors
-into one newest-first stream, then one tab per record — **Changes**, **MCP
-calls**, **Daemon log** — each a newest-first table with the columns that
-record actually has: an activity line and who made it; a call's agent, server
-and tool, duration and outcome; a log record's level, logger and message. Above
-the rows a line says what the tab holds: on Everything and Changes the first
-day with its errors and warnings in the window ("1 error and 1 warning in the
-last hour"), or else how many records are loaded of how many there are; on MCP
-calls the window with the calls, the failed and the denied calls in it
-("182 calls · 7 failed · 1 denied"), each counted by the invocation route; on
-the Daemon log the file the tail is read from, newest first, and whether the
-list is following it, with **Open log file**. Each tab but the Daemon log pages
-older records on request ("Load older") by the log's cursor; beside the button
-it says how many the next page holds and from before when, and how long MCP
-calls and changes are kept, linking to Settings › Data where that is set.
+under System. The header carries the title, a **Live** mark (a dot and the word,
+**Reconnecting…** while the daemon's change feed is closed), the line "Every
+change, tool call and daemon record, newest first." and a ghost **Export** menu.
+Four tabs follow, without counts: **Everything**, the default, merging the
+changes, the calls and the daemon's warnings and errors into one newest-first
+stream, then one tab per record — **Changes**, **MCP calls**, **Daemon log** —
+each a newest-first table in a bordered box with the columns that record
+actually has: Everything — time, an icon, the event, who (an agent or the actor)
+and how long a call took; Changes — time, an icon, the change, who; MCP calls —
+time, agent, `server.` (muted) and tool, how long it took (right-aligned,
+sortable over the loaded rows) and the status as a dot and its word; Daemon log —
+time with milliseconds, level, logger and message. The day a run of rows falls
+on is a sunken heading row inside the box ("Today · Sep 29"); no summary line
+sits above the table. A tab whose log failed to load shows a warning icon. On the
+Daemon log a line above the box names the file the tail is read from, "newest
+first", "following" while the change feed is open, and **Open in Finder**, which
+reveals the file through the daemon. Each tab pages older records on request:
+the box's last row says "Showing 30 of 1,204 · next 50 from before 13:58" with
+**Load 50 more**, and only once everything kept is shown does it say so, with how
+long MCP calls are kept and a link to Settings › Data.
 
 #### Scenario: activity gives each record its own tab
 - **GIVEN** Coffer has recorded an audit entry, an MCP invocation and a daemon log record
 - **WHEN** the user opens `/activity` and moves through its tabs
-- **THEN** Everything shows all three newest first, and each other tab renders that record's own newest-first table with the columns that record has — an activity line and who made it; a call's agent, server and tool, duration and outcome; a log record's level, logger and message
+- **THEN** Everything shows all three newest first, and each other tab renders that record's own newest-first table with the columns that record has, and no tab carries a count
 - **AND** a change reads as a plain-language line, not a raw event code
+- **AND** Changes has its own Kind filter listing the eleven kinds of change
 
 #### Scenario: the daemon tab reads every writer in the log
 - **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, an upstream's `LEVEL - logger - message` lines, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
@@ -716,68 +741,74 @@ calls and changes are kept, linking to Settings › Data where that is set.
 - **AND** the traceback rides with the record that raised it rather than becoming rows of its own
 - **AND** the severity-floor filter judges each line by its own level rather than treating every non-JSON line as an error
 
-### Requirement: Filter each Activity tab and expand any row
-Every Activity tab MUST filter by free text and time range plus the filters its
-own records afford — Everything: who (an agent, or a person, the command line
-or Coffer itself), server and kind; Changes: who and the kind of resource
-changed; MCP calls: agent, server and status; Daemon log: a severity floor and
-a logger. The time range offers the last 15 minutes, hour, 24 hours and 7 days,
-everything the retention settings keep, and a custom From / To (an empty To is
-now); a tab opens on the last hour, the Daemon log on the last 24 hours, until
-the user picks one. Who and kind choose several values at once, each listed
-with how many loaded records carry it: who lists the agents, then the ones who
-are not an agent — you (the web UI, the desktop app), the command line, Coffer
-itself and sync; kind lists MCP calls, Changes with each kind of change under
-it (a resource kind, or secrets, sync, settings and CLIs for a change that
-names no resource), and daemon records. A record passes when it matches any
-chosen value.
+#### Scenario: the box ends with what is shown and what is kept
+- **GIVEN** the Changes tab with more records than the first page holds
+- **WHEN** the user reads to the end of the first page, and later of everything kept
+- **THEN** the box's last row first says how many are shown of how many, what the next page holds and from before when, with Load 50 more
+- **AND** only after the last page does it say "That's everything kept" with how long MCP calls are kept and a link to Settings › Data
 
-Selecting a row on Everything, Changes or MCP calls MUST open it in a detail
-drawer beside the list, answer first — a failed call's error and how its server
-has been doing (since when it has been failing, and its errors in the last 24
-hours), a change's who and what, then its configuration before and after as a
-diff, a daemon record's message and traceback — then the records written
-within five minutes of it, ending in its raw underlying record, pretty-printed
-in a monospace, scrollable block; the drawer steps to the previous or next
-record without closing, and its footer holds the next step: open the resource,
-read the daemon log about a failed call's server, or copy the record. A call's
-drawer shows its metadata only, since Coffer stores no call's arguments or
-results. A change whose event the page has no sentence for — a kind of record
-added later — reads through the same facts and diff. On the Daemon log a row
-opens in place under its own line instead, with its traceback, **Copy record**
-(its raw record) and, when the record names a server and tool, **Show the MCP
-call**, which opens the MCP calls tab looking for that call.
+### Requirement: Filter each Activity tab and expand any row
+Every Activity tab MUST filter in one row — the search first (240 wide), then
+the time range and the pills, with **Clear filters** at the far right while
+anything is set — and show no counts in it. Everything: search, time range,
+**By** and **Kind**; Changes: search, time range, **By** and **Kind**; MCP calls:
+a segmented **All / OK / Failed** first (Failed is an error, a timeout or a
+denial), then search, time range and **By**; Daemon log: a segmented **All /
+Info / Warnings / Errors** first, then search, time range and **Logger**. There
+is no filter for a server: the search matches a server's name. **By** chooses
+several values, listing the agents and, under "Not an agent", you (the web UI,
+the desktop app), the command line, Coffer itself and sync, last; on MCP calls
+it lists agents only. **Kind** on Everything is three flat values — MCP calls,
+Changes, Daemon records — and on Changes the eleven kinds of change (a resource
+kind, or secrets, sync, settings and CLIs for a change that names no resource),
+flat. A pill lists no counts and searches only above eight values. The time
+range is the shared picker: Last hour, Last 24 h, Last 7 days, Last 30 days and
+a custom range (calendar days, optional HH:MM, an end of "now", at most 90 days
+back); a tab opens on the last hour, the Daemon log on the last 24 hours, until
+the user picks one. A record passes when it matches any chosen value.
+
+Selecting a row on Everything, Changes or MCP calls MUST open it in the shared
+right-hand drawer (640 wide, the page dimmed behind it; Esc, a click outside or
+its ✕ closes it, ↑ ↓ step to the previous or next record, focus returns to the
+row), answer first — a failed call's error and how its server has been doing
+(since when it has been failing, and its errors in the last 24 hours), a
+change's who and what, then its configuration before and after as a diff, a
+daemon record's message and traceback — then the records written within five
+minutes of it, ending in its raw underlying record, pretty-printed in a
+monospace, scrollable block that stays folded until asked for. The footer holds
+the next step: **Open** the resource beside **Copy details**. A call's drawer
+shows its metadata only, since Coffer stores no call's arguments or results. A
+change whose event the page has no sentence for reads through the same facts and
+diff. On the Daemon log a row opens in place under its own line instead, with its
+traceback, **Copy record** and, when the record names a server and tool, **Show
+the MCP call**, which opens the MCP calls tab looking for that call.
 
 #### Scenario: activity row expands to its raw record
 - **GIVEN** an Activity tab has at least one row
 - **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or MCP calls
-- **THEN** a detail drawer opens beside the list and renders its raw record — the full underlying JSON, pretty-printed in a monospace, scrollable block
+- **THEN** the shared drawer opens over the page and offers its raw underlying record — the full JSON, pretty-printed in a monospace, scrollable block — once Raw log is unfolded
 
 #### Scenario: a daemon log row opens in place
 - **GIVEN** the Daemon log tab with an error record carrying a traceback and naming `server=github tool=search_issues`
 - **WHEN** the user selects that row, then chooses Show the MCP call
 - **THEN** the row opens under its own line with the traceback and Copy record, and no drawer opens
-- **AND** Show the MCP call opens the MCP calls tab filtered to `github.search_issues`
+- **AND** Show the MCP call opens the MCP calls tab searching `github.search_issues`
 
 #### Scenario: who and kind choose several values
 - **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
-- **WHEN** the user chooses the agent and "You" under Agent, then MCP calls and Changes under Kind
-- **THEN** the list keeps the agent's call and the web UI's change and drops the others, the Kind pill reads "Calls, changes" and its list says "Everything except daemon records"
-- **AND** the tab counts do not change
+- **WHEN** the user chooses the agent and "You" under By, then MCP calls and Changes under Kind
+- **THEN** the list keeps the agent's call and the web UI's change and drops the others, and the Kind pill reads "Kind: MCP calls, Changes"
 
 ### Requirement: Query only the visible Activity tab and isolate failures
 Only the visible tab pages through records — Everything through all three
-logs, each other tab through its own — and the count beside every other tab
-MUST come from a read of one row (the audit and invocation answers carry their
-`total`) or of the daemon log's bounded tail, never from paging a tab that is
-not in front. A tab count follows the time window, the server and the status,
-not the who or kind filters, and a tab with nothing in the window — or whose
-log failed — shows no number. A record whose route fails MUST render its error
-inside its own tab, leaving the other two working — one failing lane must not
-take the other two down with it; on Everything the failing record is named
-above the stream with its error and which records are still shown ("Showing
-changes and daemon records only; they are complete."), the stream shows the
-other two records, and the notice offers Retry. There MUST be no manual
+logs, each other tab through its own — and no tab reads a count: tabs carry
+none. A record whose route fails MUST render its error inside its own tab,
+leaving the other two working — one failing lane must not take the other two
+down with it; on Everything the failing record is named in one warning banner
+above the box with its error and which records below are complete ("Changes and
+daemon records below are complete."), the stream shows the other two records,
+the failed record's tab shows a warning icon, and the banner offers **Retry**
+for the failed log only. The banner cannot be closed. There MUST be no manual
 refresh control and no Pause / Resume control: switching tab or changing a
 filter refetches, and new records arrive on their own (see "Stream new Activity
 records while the list is at the top").
@@ -785,8 +816,13 @@ records while the list is at the top").
 #### Scenario: a failing record shows its error inside its own tab
 - **GIVEN** one of the three routes is unavailable (an older daemon that does not serve it)
 - **WHEN** the user opens `/activity`
-- **THEN** the failing record's tab renders a readable error
+- **THEN** the failing record's tab renders a readable error and carries a warning icon
 - **AND** the other two tabs still render their rows
+
+#### Scenario: a failed log is one banner that retries only that log
+- **GIVEN** Everything with the MCP call log unavailable
+- **WHEN** the banner's Retry is chosen
+- **THEN** only the call log is read again, and the banner has no close control
 
 ### Requirement: Keep the command-line record readers
 Each of the three records the Activity page shows MUST also be readable from the
@@ -1380,7 +1416,11 @@ Every row of Needs you — whatever its severity — MUST carry a ⋯ menu whose
 (its kind, resource and reason), and audit each ignore and each stop: `GET /api/v1/attention` then
 lists it under `ignored`, out of `items` and `counts_by_kind`, so Needs you, the Agents health tile,
 the sidebar's badges and the menu bar's count all leave it out alike. Overview MUST NOT list ignored
-items or count them. The page an ignored item belongs to (the page its name opens on Overview)
+items or count them. A banner on the page an item belongs to MUST carry an **×** that is the same
+Ignore, so ignoring from the page and from Overview are one act with one key; an
+ignored item returns by itself when the situation it describes changes (a
+different set of conflicts, say), because the key names the situation. The page an
+ignored item belongs to (the page its name opens on Overview)
 MUST show one muted line under its header — the item's reason, "ignored on Overview", and a
 **Show it again** button that stops the ignore (`DELETE /api/v1/attention/ignored/{key}`) and
 confirms with "Back on Overview". Ignoring changes nothing about the resource itself. Asking to ignore a key that
@@ -1391,6 +1431,12 @@ names no item in the list is refused with `ATTENTION_NOT_IGNORABLE`.
 - **WHEN** the user chooses Ignore in Codex's menu, then Ignore in the failing server's menu
 - **THEN** each leaves Needs you in turn, and Overview shows no "ignored" line and no list of ignored items
 - **AND** the daemon's attention list carries them only under `ignored`, its counts leave them out, and both changes are audited
+
+#### Scenario: a page banner's × ignores the item on Overview too
+- **GIVEN** a page banner for an item that Overview also lists
+- **WHEN** the user presses the banner's ×
+- **THEN** the banner goes, Overview and the sidebar badge stop listing and counting the item, and the page's header reads "… — ignored on Overview" with Show it again
+- **AND** when the situation changes the item is listed again
 
 #### Scenario: an ignored item can be shown again from its own page
 - **GIVEN** an MCP server that fails and was ignored on Overview
@@ -1482,28 +1528,33 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 
 ### Requirement: Offer the hand-off a knowledge refusal carries beside it
 When the daemon refuses a knowledge operation with a hand-off in the error's details
-(`details.handoff.prompt`), the Knowledge page MUST offer that prompt (Copy prompt, and Ask an
-agent when a managed agent is available) where it shows the refusal, passing the prompt on as
-served and never assembling it: a refused **Undo this pass** offers the prompt for undoing the
-pass by hand in the note that names the document edited since, which still points at the
-per-document History restore; and a History tab or Recent changes that cannot be read because
-git is not installed offers the prompt for installing it beside Retry. The page MUST NOT show an
-install command.
+(`details.handoff.prompt`), the Knowledge page MUST offer that prompt as one **Ask an agent ▾**
+control — Ask an agent opens a draft conversation with the prompt, and its menu holds Copy prompt,
+which is the only action when no managed agent is available — passing the prompt on as served and
+never assembling it. A History tab or Recent changes that cannot be read because git is not
+installed MUST say so in one neutral row — **History needs git** or **Recent changes needs git**,
+*Install git on this Mac to see versions. The document itself is fine.* — with **Check again** and
+the hand-off, and no Retry or Open Activity. A refused **Undo this pass** MUST say in one sentence
+which document was changed since and offer **Open its History**, which opens that document's
+History tab, where the person restores a single version; it carries no hand-off. The page MUST NOT
+show an install command.
 
-#### Scenario: a refused pass undo offers the prompt for undoing it by hand
-- **GIVEN** a curation pass whose undo the daemon refuses because a document it wrote was edited since, with a hand-off in the refusal
+#### Scenario: a refused pass undo points at the document's history
+- **GIVEN** a curation pass whose undo the daemon refuses because a document it wrote was edited since
 - **WHEN** the user undoes the pass from its page
-- **THEN** the note that names the document still points at restoring a single document from its History, and offers Copy prompt, which copies the served prompt
+- **THEN** one sentence names the document edited since and Open its History opens that document's History tab
+- **AND** nothing is written and no prompt is shown
 
 #### Scenario: a history that needs git offers the prompt for installing it
 - **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
 - **WHEN** a document's History tab opens
-- **THEN** it says the history could not be read, with Retry and Copy prompt, which copies the served prompt, and names no install command
+- **THEN** it shows the row *History needs git* with Check again and Ask an agent ▾, whose menu copies the served prompt, and names no install command
+- **AND** it offers no Retry and no Open Activity
 
-#### Scenario: recent changes that need git offer the prompt for installing it
+#### Scenario: recent changes that need git offer the same row
 - **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
 - **WHEN** Recent changes opens
-- **THEN** it offers Retry and Copy prompt, which copies the served prompt
+- **THEN** it shows the row *Recent changes needs git* with Check again and Ask an agent ▾
 
 ### Requirement: Show, copy and rotate the access token on Settings › Security
 Settings › Security MUST be the one place in the web UI that shows the daemon's access token. It
@@ -1551,7 +1602,7 @@ groups, under headings in this order:
   Skills, then CLIs.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
 - **SYSTEM** — look after Coffer and what every other part shares: Secrets,
-  Activity, Usage, then Sync.
+  Activity, then Sync.
 
 Settings sits in no group: it is machine-level configuration visited rarely, so
 it opens as a modal from the sidebar footer rather than taking an entry (see
@@ -1564,7 +1615,7 @@ A new entry MUST join the group that names what the user comes to it for, and no
 group may grow past five entries; growth that is more of an existing thing — one
 more agent, channel or custom tool — is a row inside that thing's page, not an
 entry. A group whose every entry is left out (see "Keep the sidebar to its
-fifteen entries") MUST leave its heading out too, so no heading stands over
+fourteen entries") MUST leave its heading out too, so no heading stands over
 nothing. The decision and the options it was weighed against are in
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
 
@@ -1572,7 +1623,7 @@ nothing. The decision and the options it was weighed against are in
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the sidebar lists its entries
 - **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Run, Capabilities, Context, System
-- **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
+- **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
 - **GIVEN** a group whose every entry is owned by a registered experimental feature that is switched off
@@ -1920,9 +1971,9 @@ searches, rather than show an empty panel.
 - **AND** choosing any of them sends no request that changes state
 
 #### Scenario: an empty query shows recent choices above every page
-- **GIVEN** the user chose an MCP server and then the Usage page from the palette
+- **GIVEN** the user chose an MCP server and then the Secrets page from the palette
 - **WHEN** they open the palette again with an empty query
-- **THEN** Recent lists Usage and then the server, and every page is listed below it
+- **THEN** Recent lists Secrets and then the server, and every page is listed below it
 
 #### Scenario: a skill result names the agents that get it
 - **GIVEN** a skill delivered to Claude Code and Codex
@@ -1974,12 +2025,17 @@ is still entered where the thing that needs it is configured.
 
 The page MUST carry:
 
-- **List** — every secret the store holds or a resource cites, by its reference,
-  with whether this Mac holds it, so a reference cited but missing reads as
-  missing on this Mac (spec [secret](../secret/spec.md) "List every stored and
-  cited secret with what uses it").
+- **List** — one table of every secret the store holds or a resource cites, by
+  its reference (a standalone secret by its name), sorted by name, with whether
+  this Mac holds it, so a reference cited but missing reads as missing on this
+  Mac (spec [secret](../secret/spec.md) "List every stored and cited secret with
+  what uses it"). Search by name, and a status filter of All, In use and Not
+  used, narrow it; its columns are Name, Used by, Last used and Created, the
+  times relative ("3 h ago") and, past a week, a date ("Aug 12"). The page has
+  no owner line, no owner-type filter, no by-owner view and no "Delete unused".
 - **Used by** — for each secret, what cites it, by kind and current name, each
-  opening that thing's page; a secret nothing cites is listed apart as unused.
+  opening that thing's page; a secret nothing cites reads Nothing and is found
+  with the Not used filter.
 - **Add and replace** — store a new secret, or replace the value of one that
   exists, without the value ever being shown back; a change that waits for a
   person's approval says so (spec [secret](../secret/spec.md) "Hold a new
@@ -1991,10 +2047,27 @@ The page MUST carry:
 - **Delete** — refused while the secret is cited: the control MUST say what still
   uses it, naming each citer as the delete refusal does (spec
   [secret](../secret/spec.md) "Refuse to delete a secret still in use"), and
-  the row MUST stay.
+  the row MUST stay. Several rows can be ticked and deleted at once from the
+  table's selection bar ("N of M selected"; Esc clears it); the confirmation
+  names the secrets it deletes and skips those in use or waiting for approval.
+- **Missing values** — a banner counting the secrets this Mac has no value for,
+  with **Add values** (spec [secret](../secret/spec.md) "Show a secret this Mac
+  cannot open as missing on this Mac"); it offers no master-key import.
+- **Approvals** — a banner counting the changes waiting for approval, with
+  **Review**, which opens the one approvals table (spec
+  [secret](../secret/spec.md) "Approve several bindings in one confirmation").
+  A rejection shows a toast; the page keeps no list of refused changes and has
+  no "Ask again".
 - **Find plaintext keys** — the entry point that moves plaintext secret files
   into the store (spec [secret](../secret/spec.md) "Move plaintext secret files
   into the store").
+
+Each banner has an × that ignores it exactly as Ignore does on Overview, where
+the same two situations are listed (spec [secret](../secret/spec.md) "List
+secrets with no value here and waiting approvals on Overview"); the page's
+header then says it is ignored on Overview and offers Show it again, and the
+banner returns when the set changes. The help icon beside the title is gone: how
+to run a command with a secret is in the documentation, not on the page.
 
 This requirement fixes the page's place and its parts. What the store enumerates,
 how each operation behaves, and the steps of finding plaintext keys are the
@@ -2003,7 +2076,7 @@ secret capability's, specified with it.
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
 - **WHEN** the user opens `/secrets`
-- **THEN** both references are listed, the first as present and the second as missing on this Mac
+- **THEN** both references are listed in one table, the first as present and the second as missing on this Mac
 - **AND** each row names its citer by kind and current name, and choosing it opens that resource's page
 
 #### Scenario: a secret in use cannot be deleted from the secrets page
@@ -2070,7 +2143,7 @@ failed, MUST leave no badge rather than an error in the sidebar.
 - **THEN** that entry carries no badge and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
-Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
+Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen
 entries and belongs to no group. It MUST open as a large modal over the current
 page from three places: a labelled **Settings** row — a gear icon and the word
 Settings, not an icon-only button — at the bottom of the sidebar; the ⌘,
@@ -2101,7 +2174,7 @@ close it and return to the page underneath.
 - **GIVEN** the user on `/mcp-servers`
 - **WHEN** they click the labelled Settings row at the bottom of the sidebar
 - **THEN** the Settings modal opens on General, the URL reads `/settings/general`, and the MCP servers list stays rendered underneath
-- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fifteen navigation entries do not include Settings
+- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fourteen navigation entries do not include Settings
 
 #### Scenario: the collapsed rail keeps Settings as a gear with a tooltip
 - **GIVEN** the sidebar collapsed to its icon rail
@@ -2361,38 +2434,51 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 - **THEN** the split opens at its default width, the drag still resizes it, and no error is shown
 
 ### Requirement: Show a knowledge document's history on its History tab
-A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**. History
-lists the document's versions newest first — who wrote each (the user, Coffer's curation naming the
-agent whose item it curated, or sync) and when — and choosing a version shows its diff against the
-one before, with **Restore this version**, which writes a new version rather than rewriting the
-past (spec [knowledge](../knowledge/spec.md) "Keep every document's history and undo a pass as a
-whole"). A history that cannot be read MUST say so in the tab with a retry, leaving the Document tab
-working.
+A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**, neither
+with a count. History is **one list** of the document's versions, newest first — who wrote each (the
+user, Coffer's curation naming the agent whose item it curated, or sync), when, and its added and
+removed line counts — with a **See the pass** link on a curation's row. Choosing a row MUST expand it
+in place to its diff, with a switch between **Changes in this version** (against the one before) and
+**Compare with current**, and **Restore this version** on every version but the current one, which
+writes a new version rather than rewriting the past (spec [knowledge](../knowledge/spec.md) "Keep
+every document's history and undo a pass as a whole"); a long line wraps in the diff rather than
+being cut. A history that cannot be read MUST say so in one **Load error** row inside the tab —
+*Couldn't load the history*, the reason, **Retry** and **Open Activity** — leaving the Document tab
+working; without git the row is *History needs git* (see "Offer the hand-off a knowledge refusal
+carries beside it").
 
 #### Scenario: the history tab lists versions with their writers
 - **GIVEN** a document the user created, that curation then changed from a Codex item
-- **WHEN** the user opens its History tab and chooses the older version
-- **THEN** the tab lists both versions newest first with their writers, shows the older version's diff, and offers Restore this version
+- **WHEN** the user opens its History tab and chooses the older version's row
+- **THEN** the tab lists both versions newest first with their writers, the row expands in place to its diff, and Restore this version is offered on it and not on the current version
 - **AND** restoring it writes it back as a new version
 
 #### Scenario: a history that fails to load leaves the document readable
 - **GIVEN** the history read failing
 - **WHEN** the user opens the History tab
-- **THEN** the tab says it could not load the history and offers a retry, and the Document tab still renders
+- **THEN** the tab shows one Load error row with Retry and Open Activity, and the Document tab still renders
 
 ### Requirement: Follow knowledge changes in Recent changes
 The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
-first, of curation passes and of documents people and agents wrote or deleted, filterable to one
-collection, with the items still waiting and a quiet **Curate now** beside them (spec
-[knowledge](../knowledge/spec.md) "Run curation on a sweep and on demand"). Choosing a pass MUST show
-what it changed — each document it wrote or retired, with a diff — and offer **Undo this pass**, which
-asks first and undoes the whole pass, reporting a refusal that names the document changed since. The
-wording is Curate / Curation (整理) throughout.
+first, of curation passes and of documents people and agents wrote or deleted, with the items still
+waiting and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
+on a sweep and on demand"). It MUST be filtered with **Collection** and **Author** filter pills and a
+**Clear filters** control, the choice kept in the URL. A delete carries **Restore**. Choosing a pass
+MUST show what it changed — each document it wrote or retired, with a diff — and offer **Undo this
+pass**, which asks first and undoes the whole pass, reporting a refusal that names the document
+changed since (see "Offer the hand-off a knowledge refusal carries beside it"). What became of each
+item a manual Curate now could not curate is written on that change's row. An empty Inbox reads as one
+quiet line. The wording is Curate / Curation (整理) throughout.
 
 #### Scenario: recent changes shows a cross-collection timeline with waiting items
 - **GIVEN** a pass in one collection, a person's edit in another, and an item waiting
 - **WHEN** the user opens Recent changes
-- **THEN** both changes are listed, each linking the documents it wrote, the waiting item is shown with Curate now, and filtering to one collection leaves only its entries
+- **THEN** both changes are listed, each linking the documents it wrote, and the waiting item is shown with Curate now
+
+#### Scenario: the filter pills narrow the timeline and live in the URL
+- **GIVEN** changes in two collections by the user and by an agent
+- **WHEN** the user picks one collection in the Collection pill and the agent in the Author pill, then chooses Clear filters
+- **THEN** the timeline lists only that collection's changes by that agent and the URL carries both choices, and Clear filters empties both and the URL
 
 #### Scenario: a pass is inspected and undone as a whole
 - **GIVEN** a pass that changed two documents
@@ -2454,16 +2540,17 @@ neither inserted nor counted.
 - **THEN** the rows on screen do not move and a 3 new control appears
 - **AND** choosing it scrolls to the top and inserts the three entries
 
-### Requirement: Export the filtered Activity records from the overflow menu
-The Activity page's overflow menu MUST offer **Export as JSON** and **Export as CSV**, which save the
-records of the visible tab that match its current filters — free text, time range and the tab's own
-filter — and nothing else. The page header MUST carry no export button of its own.
+### Requirement: Export the filtered Activity records from the header
+The Activity page's header MUST carry a ghost **Export** menu offering **JSON**
+and **CSV**, which save the records of the visible tab that match its current
+filters — free text, time range and the tab's own filter — and nothing else, not
+including a record's hand-off prompt. With no records at all there is no menu.
 
 #### Scenario: export from the menu honours the filters
-- **GIVEN** the MCP calls tab filtered to one server and to failed calls
-- **WHEN** the user chooses Export as CSV from the page's overflow menu
-- **THEN** the file holds exactly the calls that match those filters, one per row, and the header shows no export button
-- **AND** Export as JSON saves the same records as JSON
+- **GIVEN** the MCP calls tab filtered by a search and to failed calls
+- **WHEN** the user chooses CSV from the header's Export menu
+- **THEN** the file holds exactly the calls that match those filters, one per row
+- **AND** JSON saves the same records as JSON
 
 ### Requirement: Show what needs the user and each area's health on Overview
 Overview MUST answer "is everything OK, and what needs me?" at a glance, from
@@ -2501,7 +2588,7 @@ each with a status word drawn from that area's attention items (Secrets, which
 has no attention source, words its own list: a secret missing on this machine is
 a warning, one nothing uses is plain subtle text with no dot; Usage shows its
 period, "Last 24 h", and no health), a count from its own list and a one-line
-summary, opening the area's page; an area with no backend has no tile. Agents
+summary, opening the area's page — Usage, which is a tab of Model providers, opening that tab; an area with no backend has no tile. Agents
 and Channels count "1 of 2" with the unit "connected" — for Agents only the
 items about connecting count, so a hook edited by hand does not make an agent
 "not connected" — and Channels names the reconnecting one ("SeaTalk
@@ -2580,3 +2667,64 @@ for what agents share follows.
 - **GIVEN** Overview open with one item in Needs you
 - **WHEN** the problem is resolved and the daemon announces an `attention` change
 - **THEN** the page rereads the attention list and the row disappears without a reload
+
+### Requirement: Hand a machine-dependent problem to an agent with one split button
+Installing, setting up, logging in and troubleshooting depend on the machine, so a problem whose fix
+is outside Coffer and for which the backend wrote a concrete prompt MUST be handed over with one split
+button, **Ask an agent ▾**, never two buttons: pressing the button opens a draft conversation with
+the prompt typed in and sends nothing until the person presses Send; the menu's one item, **Copy
+prompt**, copies the daemon's prompt as given for an agent outside Coffer and answers with a
+"Prompt copied" toast. With no Coffer-managed agent installed only **Copy prompt** is offered, with
+the one-sentence help beside it. The split button sits after the state's own buttons (Check again,
+Retry, View log), appears once per problem, never on a healthy, success or empty state, and never for
+a missing secret or an approval, which only the person can give. Wherever another requirement names
+Copy prompt and Ask an agent together, they are this button's menu item and button. On a Needs you
+row they are items of the ⋯ menu beside Ignore.
+
+#### Scenario: the split button hands a prompt over or copies it
+- **GIVEN** a problem with a prompt and a managed agent installed
+- **WHEN** the person presses Ask an agent, and separately opens its menu and chooses Copy prompt
+- **THEN** a draft conversation opens with the prompt typed in and nothing sent, and the prompt is copied as given with a "Prompt copied" toast
+- **AND** with no managed agent installed only Copy prompt is offered
+
+### Requirement: Keep Activity's filters in the address
+The Activity page MUST keep its tab and every filter in the address, so a link
+or a reload comes back to the same view: `tab`, `q` (the search), `range`
+(a preset id or a custom range), `by` and `kind` (comma-joined), `status`,
+`level` and `logger`; a value at its default is left out. A link from another
+page — "View in Activity" with a name — opens already searching it. Moving to
+another tab keeps the search, the time range the reader chose and who, and drops
+the filters only the old tab had.
+
+#### Scenario: a link opens already searching
+- **GIVEN** the address `/activity?tab=mcp&q=github`
+- **WHEN** the page opens
+- **THEN** the MCP calls tab shows `github` in its search box and asks the route for calls matching it
+- **AND** Clear filters empties the box and removes `q` from the address
+
+### Requirement: Show the first run with nothing to filter
+When Coffer has recorded nothing at all — no change, no call and no daemon
+warning — the Activity page MUST hide the filter row and Export, keep its tabs,
+and say "Changes you make in Coffer and the tools agents call through it show up
+here." with **Connect an agent** and **Add an MCP server**. An empty time range
+while older records exist is not the first run: it says so and keeps the filters.
+
+#### Scenario: nothing recorded hides the filter row and Export
+- **GIVEN** no audit entry, call or daemon record exists
+- **WHEN** the user opens `/activity`
+- **THEN** the page shows the empty state with its two actions and neither the filter row nor Export
+- **AND** with a record older than the time range the filter row and Export stay
+
+### Requirement: Hand an environment failure on Activity to an agent
+Activity MUST offer the hand-off ([Ask an agent ▾]) only for a failure that depends
+on this machine, with the prompt the backend wrote: the conclusion card of a
+call's drawer for a call whose server never answered, and the first button of an
+opened daemon ERROR about an external service or the environment. A denied call,
+an error the server itself returned and a Coffer-internal error offer no
+hand-off; a daemon error offers **Copy record** alone. The drawer's footer for a
+call is the server's page; it carries no step to read the daemon log.
+
+#### Scenario: an unanswered call and an environment error carry the hand-off
+- **GIVEN** a call refused by its server, a denied call, and a daemon ERROR that is a refused connection beside one that is Coffer's own
+- **WHEN** each is opened
+- **THEN** the refused call's card and the environment error's button row lead with the hand-off, and the others have none

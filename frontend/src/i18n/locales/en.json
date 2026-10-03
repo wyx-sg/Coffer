@@ -87,7 +87,14 @@
     "summaryWithCoffer": "{{changes}} in {{agents}} and Coffer"
   },
   "common": {
+    "experimental": "Experimental",
     "time": {
+      "justNow": "just now",
+      "minAgo_one": "{{count}} min ago",
+      "minAgo_other": "{{count}} min ago",
+      "hAgo_one": "{{count}} h ago",
+      "hAgo_other": "{{count}} h ago",
+      "yesterday": "Yesterday",
       "todayAt": "today at {{time}}",
       "dayAt": "{{day}} at {{time}}"
     },
@@ -103,6 +110,10 @@
     "disabled": "Off",
     "saving": "Saving…",
     "deleting": "Deleting…",
+    "longList": {
+      "showing": "Showing {{shown}} of {{total}}",
+      "showAll": "Show all"
+    },
     "retry": "Retry",
     "clear": "Clear",
     "rawLog": "Raw log",
@@ -110,7 +121,6 @@
     "saved": "Saved",
     "showPassword": "Show",
     "hidePassword": "Hide",
-    "dateTimeFormatHint": "YYYY-MM-DD HH:mm:ss",
     "secretKeepBlank": "Leave blank to keep the current value",
     "discardChanges": {
       "title": "Discard unsaved changes?",
@@ -131,7 +141,10 @@
     "couldntDeleteConversation": "Couldn’t delete the conversation",
     "bulk": {
       "selected": "{{count}} selected",
+      "selectedOf": "{{count}} of {{total}} selected",
+      "bar": "Selected rows",
       "pageSelected": "All on this page selected",
+      "selectAll": "Select all",
       "selectAllMatching": "Select all {{count}}",
       "allSelected": "All {{count}} selected",
       "selectRow": "Select row",
@@ -201,7 +214,6 @@
     "customTools": "Custom tools",
     "clis": "CLIs",
     "secrets": "Secrets",
-    "usage": "Usage",
     "search": "Search or jump to…",
     "resizeSidebar": "Resize the sidebar",
     "attentionCount_one": "{{count}} needs you",
@@ -218,9 +230,7 @@
     "title": "MCP servers",
     "subtitle": "MCP servers Coffer runs and serves to your agents through one endpoint.",
     "addServer": "Add server",
-    "status": {
-      "all": "All"
-    },
+    "status": {},
     "cols": {
       "reach": "Reach"
     },
@@ -453,7 +463,11 @@
       "help": "Auto: Coffer lists the most-used tools to the agent and leaves the rest to search. Always listed: the tool is always in the agent's tool list. Search only: the agent reaches it only through coffer__search_tools. Every tool that is on stays callable either way.",
       "autoNow": "Auto · {{now}}",
       "aria": "Exposure of {{key}}",
-      "mode": { "auto": "Auto", "listed": "Always listed", "search": "Search only" },
+      "mode": {
+        "auto": "Auto",
+        "listed": "Always listed",
+        "search": "Search only"
+      },
       "reason": {
         "pinned": "Pinned by you: always in the agent's tool list.",
         "search_only": "Set by you: the agent finds it through search.",
@@ -527,14 +541,13 @@
         "missing": "Missing",
         "stored": "Stored",
         "lastSuccess": "Last success",
-        "never": "No successful call yet"
+        "never": "Never"
       },
       "agents": "Agents",
       "allOff": "All off",
       "allOn": "All on",
       "behindSearch": "Behind search",
       "bulkLabel": "Selected MCP servers",
-      "selectAll": "Select all shown servers",
       "calledBy": "Called by",
       "calls_one": "call",
       "calls_other": "calls",
@@ -586,9 +599,9 @@
         "all": "All",
         "calls": "Calls",
         "callsFootnote": "Coffer records who called what and how it went — never the arguments or the result.",
-        "callsTab": "Calls · {{count}}",
+        "callsTab": "Calls",
         "errorLines": "Errors",
-        "errors": "Errors · {{count}}",
+        "errors": "Errors",
         "everything": "Everything",
         "logFootnote": "What the server printed on stderr and how Coffer started and stopped it. Newest first.",
         "logTab": "Server log",
@@ -789,13 +802,9 @@
     "agentFallback": "an agent"
   },
   "activity": {
-    "subtitle": "The audit log, MCP calls and the daemon log.",
+    "subtitle": "Every change, tool call and daemon record, newest first.",
     "title": "Activity",
     "live": "Live",
-    "notLive": "Not live",
-    "liveHint": "New records appear as they happen.",
-    "notLiveHint": "Reconnecting to the daemon; new records still arrive every few seconds.",
-    "countFloor": "{{value}}+",
     "tabs": {
       "everything": "Everything",
       "changes": "Changes",
@@ -832,14 +841,10 @@
       "denied": "denied"
     },
     "filters": {
-      "any": "Any",
-      "by": "Agent",
+      "by": "By",
       "notAnAgent": "Not an agent",
-      "server": "Server",
       "kind": "Kind",
-      "status": "Status",
       "logger": "Logger",
-      "clear": "Clear",
       "clearAll": "Clear filters",
       "levelLabel": "Log level",
       "level": {
@@ -848,7 +853,6 @@
         "warning": "Warnings",
         "error": "Errors"
       },
-      "searchLabel": "Filter records",
       "search": {
         "everything": "Filter by name, tool or path",
         "changes": "Filter changes",
@@ -858,8 +862,7 @@
       "kinds": {
         "calls": "MCP calls",
         "changes": "Changes",
-        "daemon": "Daemon records",
-        "notDaemon": "Everything except daemon records"
+        "daemon": "Daemon records"
       },
       "changeKinds": {
         "mcp_server": "MCP servers",
@@ -875,19 +878,15 @@
         "cli": "CLIs"
       },
       "findAgent": "Find an agent",
-      "selected": "{{count}} selected",
-      "noOption": "Nothing matches.",
-      "kindCount": "{{count}} kinds",
-      "kindPill": {
-        "calls": "Calls",
-        "changes": "Changes",
-        "daemon": "Daemon records"
+      "agents": "Agents",
+      "statusLabel": "Call status",
+      "statusOption": {
+        "all": "All",
+        "ok": "OK",
+        "failed": "Failed"
       },
-      "kindInline": {
-        "calls": "calls",
-        "changes": "changes",
-        "daemon": "daemon records"
-      }
+      "findKind": "Find a kind",
+      "findLogger": "Find a logger"
     },
     "table": {
       "time": "Time",
@@ -899,7 +898,8 @@
       "status": "Status",
       "level": "Level",
       "logger": "Logger",
-      "message": "Message"
+      "message": "Message",
+      "change": "Change"
     },
     "day": {
       "today": "Today · {{date}}",
@@ -908,39 +908,28 @@
     },
     "pending_one": "{{count}} new",
     "pending_other": "{{count}} new",
-    "loadOlder": "Load older",
-    "end": "That's everything in this time range.",
+    "loadOlder": "Load {{count}} more",
+    "end": "That's everything kept.",
     "empty": {
       "title": "Nothing has happened yet",
-      "body": "Activity fills in as you change things in Coffer and as agents call tools through it. Connect an agent to see its first calls here.",
+      "body": "Changes you make in Coffer and the tools agents call through it show up here.",
       "connect": "Connect an agent",
       "addServer": "Add an MCP server",
       "noMatch": "No records match these filters",
-      "noMatchBody": "Widen the time range or clear the filters."
+      "noMatchBody": "Widen the time range or clear the filters.",
+      "window": "Nothing in this time range",
+      "windowBody": "Widen the time range to see older records."
     },
     "failed": {
       "title": "{{sources}} couldn't be loaded",
-      "partial": "Showing {{sources}} only; they are complete.",
+      "partial": "{{sources}} below are complete.",
       "retry": "Retry"
     },
-    "menu": {
-      "label": "More",
-      "heading": "Export filtered records…",
-      "json": "Export as JSON",
-      "csv": "Export as CSV",
-      "note": "Every record of this tab that matches its filters.",
-      "done_one": "Exported {{count}} record",
-      "done_other": "Exported {{count}} records",
-      "title": "Export filtered records… (JSON / CSV)"
-    },
     "drawer": {
-      "label": "Details",
-      "previous": "Previous event",
-      "next": "Next event",
-      "close": "Close details",
       "kinds": {
-        "change": "Change",
-        "daemon": "Daemon record"
+        "change": "change",
+        "call": "MCP call",
+        "daemon": "daemon record"
       },
       "who": "Who",
       "what": "What",
@@ -980,7 +969,6 @@
       "around": "Around the same time",
       "open": "Open {{name}}",
       "copyDetails": "Copy details",
-      "copyCallId": "Copy call id",
       "copyRecord": "Copy record",
       "copied": "Copied",
       "copyFailed": "Couldn't copy to the clipboard",
@@ -988,7 +976,6 @@
       "failingSince_other": "{{server}} has been failing since {{since}} — {{count}} errors in the last 24 hours.",
       "errorsToday_one": "{{count}} error from this server in the last 24 hours.",
       "errorsToday_other": "{{count}} errors from this server in the last 24 hours.",
-      "daemonRecords": "Daemon log records",
       "offsetSeconds": "{{sign}}{{n}} s",
       "offsetMinutes": "{{sign}}{{n}} min",
       "whenToday": "{{time}} today",
@@ -1009,53 +996,23 @@
       "channel": "A channel"
     },
     "time": {
-      "label": "Time range: {{range}}",
-      "heading": "Time range",
-      "15m": "Last 15 minutes",
       "1h": "Last hour",
-      "24h": "Last 24 hours",
+      "24h": "Last 24 h",
       "7d": "Last 7 days",
-      "all": "Everything kept",
-      "custom": "Custom range",
-      "from": "From",
-      "to": "To",
-      "now": "Now",
-      "start": "The start",
-      "apply": "Apply range",
-      "customLabel": "{{from}} → {{to}}",
-      "phrase": {
-        "15m": "in the last 15 minutes",
-        "1h": "in the last hour",
-        "24h": "in the last 24 hours",
-        "7d": "in the last 7 days",
-        "all": "",
-        "custom": "in this range"
-      }
+      "30d": "Last 30 days"
     },
     "summary": {
       "sources": {
         "change": "changes",
         "call": "MCP calls",
         "daemon": "daemon records"
-      },
-      "calls_one": "{{n}} call",
-      "calls_other": "{{n}} calls",
-      "failed_one": "{{n}} failed",
-      "failed_other": "{{n}} failed",
-      "denied_one": "{{n}} denied",
-      "denied_other": "{{n}} denied",
-      "errors_one": "{{n}} error",
-      "errors_other": "{{n}} errors",
-      "warnings_one": "{{n}} warning",
-      "warnings_other": "{{n}} warnings",
-      "problems": "{{problems}} {{range}}",
-      "all_one": "{{n}} record",
-      "all_other": "{{n}} records",
-      "loadedOf": "{{loaded}} loaded of {{total}}"
+      }
     },
     "older": {
-      "hint_one": "Next {{count}}, from before {{before}}. MCP calls are kept {{calls}} and changes {{changes}} — change it in",
-      "hint_other": "Next {{count}}, from before {{before}}. MCP calls are kept {{calls}} and changes {{changes}} — change it in",
+      "showing": "Showing {{shown}}",
+      "showingOf": "Showing {{shown}} of {{total}}",
+      "next": "next {{count}} from before {{before}}",
+      "kept": "MCP calls are kept {{calls}} —",
       "settings": "Settings › Data",
       "forever": "forever",
       "days_one": "{{count}} day",
@@ -1064,10 +1021,19 @@
       "years_other": "{{count}} years"
     },
     "daemonLog": {
-      "open": "Open log file",
-      "following": "· newest first · following",
-      "newestFirst": "· newest first",
+      "following": "following",
+      "newestFirst": "newest first",
+      "reveal": "Open in Finder",
       "showCall": "Show the MCP call"
+    },
+    "reconnecting": "Reconnecting…",
+    "tabFailed": "Couldn't be loaded",
+    "export": {
+      "label": "Export",
+      "json": "JSON",
+      "csv": "CSV",
+      "done_one": "Exported {{count}} record",
+      "done_other": "Exported {{count}} records"
     }
   },
   "settings": {
@@ -1332,7 +1298,7 @@
         "passphraseHint": "The passphrase set when the key was exported on the other Mac.",
         "current": "Current key",
         "inFile": "Key in the file",
-        "none": "None",
+        "none": "—",
         "same": "same",
         "different": "different",
         "recorded": "Recorded in Activity",
@@ -1765,7 +1731,13 @@
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "Use a passphrase of at least 8 characters.",
     "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
     "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be restored from Recent changes.",
-    "SYNC_SECRET_NOT_EDITABLE": "An encrypted secret can't be edited by hand. Keep this Mac's version or take the other's."
+    "SYNC_SECRET_NOT_EDITABLE": "An encrypted secret can't be edited by hand. Keep this Mac's version or take the other's.",
+    "SYNC_NOTHING_TO_RESTORE": "There is no stopped remote to put back.",
+    "SYNC_REMOTE_EXISTS": "A remote is already set; stop syncing with it first.",
+    "SYNC_VAULT_MOVE_FAILED": "The vault couldn’t be moved; it was left where it was.",
+    "SYNC_VAULT_TARGET_INVALID": "Choose an empty folder on this Mac for the vault.",
+    "SYNC_VAULT_TARGET_IN_CLOUD": "That folder is inside iCloud Drive, Dropbox or Syncthing. Choose one outside them.",
+    "SYNC_VAULT_TARGET_NOT_EMPTY": "That folder isn’t empty. Choose an empty one."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -2610,7 +2582,6 @@
     "title": "Skills",
     "add": "Add skill",
     "searchPlaceholder": "Filter skills",
-    "selectAll": "Select all shown skills",
     "group": {
       "inUse": "In use",
       "unused": "Unused",
@@ -2945,7 +2916,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "Documents you and Coffer write together, one collection each.",
+    "subtitle": "Documents you and your agents write together. Every agent can read them.",
     "title": "Knowledge",
     "nav": {
       "label": "Collections and documents",
@@ -2955,26 +2926,33 @@
     },
     "tree": {
       "empty": "No documents yet",
-      "emptyFolder": "Nothing here yet"
+      "emptyFolder": "Nothing here yet",
+      "unsaved": "Unsaved changes"
     },
     "stats": {
       "documents": "Documents",
-      "waiting": "Waiting",
-      "curated": "Curated",
-      "never": "not yet"
+      "waiting": "{{count}} waiting",
+      "curated": "Last curated",
+      "never": "Never",
+      "inbox": "Inbox",
+      "nothing": "Nothing",
+      "openInbox": "Open Inbox",
+      "folder": "Folder"
     },
     "noModel": {
       "line": "Set Coffer's model to curate new items into your documents ·",
-      "link": "Settings › General"
+      "link": "Settings › General",
+      "engine": "Curation needs Coffer’s engine"
     },
     "collection": {
-      "emptyTitle": "{{name}} is empty",
-      "emptyBody": "Write the first document, upload one you already have, or drop Markdown files into the folder. Agents already see the collection and can write to its inbox.",
-      "editDescription": "Edit description",
       "descriptionLabel": "What belongs in this collection",
-      "descriptionHint": "The opening paragraph of the folder's README.md; every agent reads it through the coffer-guide skill.",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "revealFolder": "Reveal folder"
+      "emptyLine": "No documents yet. Upload one, or drop Markdown files into the folder.",
+      "more": "More actions for {{name}}",
+      "copyPath": "Copy path",
+      "descriptionSaved": "Description updated",
+      "descriptionUndoFailed": "Couldn’t restore the description",
+      "clickToEdit": "Click to edit"
     },
     "create": {
       "title": "New collection",
@@ -2988,32 +2966,14 @@
       "created": "Created {{name}}"
     },
     "deleteCollection": {
-      "zone": "Danger zone",
-      "hint_one": "Removes the folder and its {{count}} document from disk.",
-      "hint_other": "Removes the folder and all {{count}} documents from disk.",
-      "button": "Delete…",
-      "title": "Delete {{name}}?",
-      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. It stays in the vault's history, so Recent changes can restore it.",
-      "typeToConfirm": "Type {{name}} to confirm",
-      "confirm": "Delete collection"
-    },
-    "add": {
-      "button": "Add a document",
-      "title": "Add a document",
-      "hint": "It goes to {{collection}}'s Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
-      "hintNoModel": "Coffer's model isn't set, so it is written as a document as it is.",
-      "collection": "Collection",
-      "titleField": "Title",
-      "body": "Document",
-      "submit": "Add to Inbox",
-      "submitNoModel": "Add document",
-      "pending": "Added to {{collection}}'s Inbox — it will be curated within the hour.",
-      "written": "Saved as {{path}}."
+      "menu": "Delete collection…",
+      "deleted": "Deleted {{name}}",
+      "undoFailed": "Couldn’t restore {{name}}"
     },
     "upload": {
       "button": "Upload",
       "title": "Upload a document",
-      "body": "Coffer converts it to Markdown; it lands in the collection's Inbox and is curated within the hour. The original file is not kept.",
+      "body": "Coffer converts it to Markdown and adds it to the collection’s Inbox. The original file isn’t kept.",
       "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
@@ -3031,7 +2991,8 @@
       "noTextAnyTitle": "No text found",
       "noTextAnyBody": "Coffer could not read any text in this file. Nothing was added to the Inbox.",
       "unsupportedTitle": "{{kind}} files can't be converted",
-      "failedTitle": "Couldn't upload this file"
+      "failedTitle": "Couldn't upload this file",
+      "bodyNoEngine": "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept."
     },
     "curate": {
       "now": "Curate now",
@@ -3048,94 +3009,91 @@
         "failed": "Curation didn't finish. Nothing was lost — it will try again.",
         "ok_one": "Curated {{count}} item into your documents",
         "ok_other": "Curated {{count}} items into your documents"
-      }
+      },
+      "summary": "Curated {{items}} into {{documents}}",
+      "items_one": "{{count}} item",
+      "items_other": "{{count}} items",
+      "documents_one": "{{count}} document",
+      "documents_other": "{{count}} documents"
     },
     "inbox": {
       "title": "Inbox",
-      "hint": "Waiting to be curated · Curated automatically within the hour",
-      "automatic": "Curated automatically within the hour",
       "waitingCount_one": "{{count}} item waiting",
       "waitingCount_other": "{{count}} items waiting",
       "empty": "Nothing waiting. New items from agents and uploads show up here first.",
       "writtenBy": "written by {{who}} {{when}}",
-      "readOnly": "Items open read-only. Curation folds each one into the documents and removes it from the Inbox.",
-      "heading": "Inbox · {{name}}",
       "writtenWithWrite": "Written by {{who}} with coffer__write · {{when}}",
-      "writtenByYou": "Written by you · {{when}}"
+      "writtenByYou": "Written by you · {{when}}",
+      "note": "Curated into your documents within the hour, then removed from here.",
+      "readOnlyTag": "Read-only",
+      "waitingToCurate": "Waiting to be curated"
     },
     "document": {
       "tab": "Document",
       "where": "Where this document is",
       "more": "More actions for {{path}}",
-      "curatedBanner": "Curated {{agent}}'s item into this document {{when}}.",
-      "seePass": "See what this pass changed",
+      "seePass": "See the pass",
       "views": "Document views",
-      "rail": "About this document",
-      "onThisPage": "On this page",
-      "properties": "Properties",
-      "edited": "Edited",
-      "created": "Created",
-      "curatedFrom": "Curated from",
-      "byWhen": "{{who}} · {{when}}",
       "passes_one": "{{count}} inbox item",
-      "passes_other": "{{count}} inbox items"
+      "passes_other": "{{count}} inbox items",
+      "curated": "Curated {{when}} from {{source}}",
+      "passesFrom_one": "{{count}} {{agent}} inbox item",
+      "passesFrom_other": "{{count}} {{agent}} inbox items",
+      "createdBy": "Created {{date}} by {{who}}",
+      "you": "you",
+      "view": "View",
+      "preview": "Preview",
+      "source": "Source",
+      "created": "Created {{date}}"
     },
     "editor": {
       "label": "Edit {{path}}",
-      "title": "Title",
-      "description": "Description",
-      "frontmatterNote": "Read-only here · curation keeps it current",
       "conflictTitle": "This document changed on disk while you were editing",
-      "conflictBody": "Your text was not saved: the file is newer than the copy you opened. Reload to get the current version, or compare first; copy your text if you want to keep it.",
       "compare": "Compare",
       "reload": "Reload",
       "copyMine": "Copy my text",
       "copyFailed": "Couldn't copy your text",
       "compareTitle": "On disk now, against your text",
       "compareBody": "Lines marked − are only on disk; lines marked + are only in your text.",
-      "frontmatter": "Frontmatter",
       "editStands": "Your edit stands: items curated later go around it, never over it.",
-      "markdown": "Markdown",
       "unsaved": "Unsaved changes",
       "notSaved": "Not saved",
-      "saveKey": "save",
-      "cancelKey": "cancel",
       "copied": "Your text is on the clipboard",
-      "reloaded": "Reloaded the version on disk"
+      "reloaded": "Reloaded the version on disk",
+      "keptByCuration": "Kept by curation",
+      "discard": "Discard",
+      "reloadAsk": "Reload…",
+      "reloadTitle": "Reload the version on disk?",
+      "reloadBody": "Your unsaved text is replaced by what is on disk. Copy it first if you want to keep it.",
+      "reloadConfirm": "Reload",
+      "conflictCuration": "Curation added a point to {{file}} at {{time}}. Your text isn’t saved yet.",
+      "conflictOther": "{{who}} changed {{file}} at {{time}}. Your text isn’t saved yet.",
+      "conflictUnknown": "{{file}} changed on disk. Your text isn’t saved yet."
     },
     "deleteDocument": {
       "menu": "Delete document…",
-      "title": "Delete {{name}}?",
-      "body": "Coffer deletes this file from disk:",
-      "afterwards": "Agents stop finding it from their next read. It stays in the vault's History, so it can be restored as a new version.",
-      "confirm": "Delete document",
       "deletedToast": "Deleted {{name}}",
-      "goneTitle": "No document open",
-      "goneBody": "{{name}} was deleted. Its versions stay in the vault's history — Recent changes lists the delete and can restore it."
+      "undoFailed": "Couldn’t restore {{name}}"
     },
     "history": {
       "tab": "History",
       "current": "Current",
       "none": "No versions recorded yet.",
       "versionLabel": "The chosen version",
-      "wholePass": "See the whole pass",
       "restore": "Restore this version",
       "restored": "Restored as a new version",
-      "failedTitle": "Couldn't read this document's history",
-      "failedFine": "The document itself is fine.",
+      "failedTitle": "Couldn’t read this document’s history",
       "openActivity": "Open Activity",
       "versions": "Versions",
-      "countLabel_one": "{{count}} version",
-      "countLabel_other": "{{count}} versions",
-      "newestFirst": "newest first",
-      "oneOfPass_one": "The only document this curation pass changed.",
-      "oneOfPass_other": "One of {{count}} documents changed in this curation pass.",
-      "restoreHint": "Restoring it saves a new version; later versions stay in the list.",
       "restoredToast": "Restored the {{when}} version as a new version",
       "diffMode": "Which diff",
       "changesInVersion": "Changes in this version",
       "compareCurrent": "Compare with current",
-      "removedVersion": "This version removed the document; there is nothing to compare."
+      "removedVersion": "This version removed the document; there is nothing to compare.",
+      "seePass": "See the pass",
+      "needsGitTitle": "History needs git",
+      "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
+      "checkAgain": "Check again"
     },
     "diff": {
       "none": "No changes to the text."
@@ -3197,18 +3155,10 @@
       }
     },
     "recent": {
-      "waitingCount_one": "{{count}} item waiting",
       "waitingCount_other": "{{count}} items waiting",
       "title": "Recent changes",
       "window": "Last 7 days",
-      "writerFilter": "Who made the change",
-      "writer": {
-        "everyone": "Everyone",
-        "agents": "Agents",
-        "you": "You"
-      },
       "collectionFilter": "Collection",
-      "allCollections": "All collections",
       "waitingTitle": "Waiting to be curated",
       "waitingMeta": "{{collection}} · written by {{who}} {{when}}",
       "nothingWaiting": "Nothing waiting. New items from agents and uploads show up here first.",
@@ -3216,7 +3166,6 @@
       "yesterday": "Yesterday",
       "empty": "No changes in the last 7 days.",
       "failed": "Couldn't read recent changes",
-      "open": "Open",
       "openItem": "Open {{title}}",
       "seePass": "See the pass",
       "more_one": "and {{count}} more",
@@ -3233,8 +3182,19 @@
         "restore": "Put back as a new version; the history before it stays.",
         "sync_one": "{{count}} line changed on another Mac.",
         "sync_other": "{{count}} lines changed on another Mac.",
-        "pass": "From one inbox item"
-      }
+        "pass": "From one inbox item",
+        "too_large": "Too large for one pass, so it was kept as its own document",
+        "gave_up": "Cut off by the step limit three times, so it was kept as its own document"
+      },
+      "authorFilter": "Author",
+      "clearFilters": "Clear filters",
+      "waitingDesc": "Curated into your documents within the hour",
+      "needsGitTitle": "Recent changes needs git",
+      "needsGitBody": "Install git on this Mac to see what changed. Your documents are fine.",
+      "checkAgain": "Check again",
+      "openActivity": "Open Activity",
+      "waitingCount_one": "{{count}} item waiting",
+      "open": "Open"
     },
     "pass": {
       "title": "Curation pass · {{when}}",
@@ -3245,7 +3205,6 @@
         "modified": "Modify",
         "removed": "Remove"
       },
-      "itemsLeft": "The inbox items this pass curated left the Inbox. Their text stays in each document's History.",
       "undoTitle": "Undo this curation pass?",
       "undoBody": "Puts the documents this pass changed back to how they were before {{when}}.",
       "undoEffect": {
@@ -3253,35 +3212,20 @@
         "modified": "back to before the pass",
         "removed": "put back"
       },
-      "undoNote": "All or nothing: if a document changed after this pass, nothing is undone. Each document gets a new version by you. The inbox items are not queued again.",
+      "undoNote": "If any document changed after this pass, nothing is undone. The inbox items aren’t queued again.",
       "undoConfirm": "Undo pass",
       "undoing": "Undoing…",
-      "undoRefused": "{{document}} was edited after this pass, so nothing was undone — every document is as it was. Restore a single document from its History, or have your agent undo the pass by hand and keep the later edits.",
+      "undoRefused": "{{document}} changed after it, so nothing was undone.",
       "undoneToast": "Undid the pass.",
       "heading": "What this curation pass changed",
-      "meta": "one new version per document · from one inbox item",
-      "notUndone": "Not undone",
       "changedSince": "changed after this pass",
-      "undoRefusedTitle": "Couldn't undo this pass",
+      "undoRefusedTitle": "Couldn’t undo this pass",
       "undoneBy": "Undone by {{who}} at {{when}}",
-      "undoneBody": "What this pass wrote was put back as one new version by you. Recent changes lists the undo; the inbox item is not queued again."
-    },
-    "welcome": {
-      "title": "Nothing written down yet",
-      "body": "Knowledge is plain Markdown on this Mac that you and your agents edit together. Agents read it with their own file tools.",
-      "collection": {
-        "title": "Start a collection",
-        "body": "A folder for one subject, like your architecture or your runbooks."
-      },
-      "upload": {
-        "title": "Bring in what you have",
-        "body": "Upload PDF, Word or Markdown; Coffer turns it into documents."
-      },
-      "agents": {
-        "title": "Let agents write",
-        "body": "Agents file what they learn with <code>coffer__write</code>; it lands in the inbox.",
-        "automatic": "Automatic"
-      }
+      "undoneBody": "What this pass wrote was put back as one new version by you. Recent changes lists the undo; the inbox item is not queued again.",
+      "fromItems_one": "from {{count}} inbox item ({{breakdown}})",
+      "fromItems_other": "from {{count}} inbox items ({{breakdown}})",
+      "fromAgent": "{{count}} from {{agent}}",
+      "openHistory": "Open its History"
     },
     "automatic": {
       "title": "Automatic curation",
@@ -3307,14 +3251,32 @@
     "when": {
       "today": "Today {{time}}",
       "yesterday": "Yesterday {{time}}"
+    },
+    "welcome": {
+      "title": "No collections yet",
+      "body": "A collection is a folder of Markdown documents for one subject. Agents read every collection and file what they learn into its Inbox."
+    },
+    "compare": {
+      "title": "Which version to keep?",
+      "note": "The one you don’t keep stays in this document’s History.",
+      "keepMine": "Keep my edit",
+      "keepDisk": "Take the version on disk",
+      "mineMeta": "Unsaved · started {{when}}",
+      "diskMeta": "{{who}} · {{when}}",
+      "diskUnknown": "On disk now",
+      "modify": "Modify",
+      "captionMine": "The diff shows what changes in the file if you keep your edit.",
+      "captionDisk": "The diff shows what changes in the file if you take the version on disk.",
+      "back": "Back to editing",
+      "saveMine": "Save my edit",
+      "useDisk": "Use the disk version"
     }
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents learned, distilled into one memory per subject. Read-only.",
+    "subtitle": "What your agents learned, read from their own memory and distilled into one memory per subject. Read-only.",
     "update": "Update memory",
     "updating": "Updating…",
-    "updateHint": "Reads every agent's latest memory, then distils what is new into Coffer's memories.",
     "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
@@ -3344,10 +3306,9 @@
       "global": "Every project",
       "memories": "Memories",
       "unresolvable": "Repository missing",
-      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide.",
       "sample": "Sample memory",
       "sources": "Sources",
-      "distil": "Distil"
+      "distil": "Distilled"
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -3358,12 +3319,12 @@
     },
     "welcome": {
       "title": "Nothing distilled yet",
-      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository.",
+      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repo.",
       "noAgentsTitle": "No agent memory to read",
       "noAgentsBody": "Memory is read from each connected agent's own memory. No agent is connected to Coffer yet, so there is nothing to distil.",
-      "connect": "Connect an agent",
+      "connect": "Open Agents →",
       "found": "Found on this Mac",
-      "foundMeta": "Coffer also reads on its own on a timer",
+      "foundMeta": "Coffer also reads on its own every hour",
       "foundNone": "No memory yet",
       "foundCount_one": "{{count}} file in {{projects}}",
       "foundCount_other": "{{count}} files in {{projects}}",
@@ -3393,23 +3354,22 @@
       "loadFailed": "Couldn't load the memories.",
       "emptyTitle": "No memories for {{name}} yet",
       "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours.",
-      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repository but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
-      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repository but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
+      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repo but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
+      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repo but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
     },
     "noModel": {
-      "title": "Coffer's model isn't set, so each agent's entry becomes its own memory",
-      "body": "The same lesson from two agents stays as two memories until a model is set.",
-      "link": "Settings › General › Coffer's model"
+      "title": "Coffer’s engine isn’t set, so each agent’s entry stays its own memory",
+      "body": "The same lesson from two agents stays as two memories until it is set in Settings › General.",
+      "link": "Open Settings"
     },
     "delivered": {
       "agentsLabel": "Agent",
       "intro": "What a session in {{path}} starts with · read-only",
       "introGlobal": "What every session starts with · read-only",
       "copy": "Copy",
-      "characters_one": "{{count}} character",
-      "characters_other": "{{count}} characters",
       "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
-      "loadFailed": "Couldn't load what is delivered."
+      "loadFailed": "Couldn't load what is delivered.",
+      "size": "{{size}} characters · nothing trimmed"
     },
     "automatic": {
       "title": "Read memory automatically",
@@ -3422,7 +3382,7 @@
     "waiting_other": "{{count}} entries read from {{agents}}, waiting to distil",
     "distil": {
       "done": "Distilled {{when}}",
-      "never": "Not distilled yet",
+      "never": "Never",
       "running": "Distilling…"
     },
     "status": {
@@ -3438,14 +3398,14 @@
       "kept": "{{agent}}'s memories stay as its last full read left them.",
       "keptSince": "{{agent}}'s memories stay as they were after its last full read on {{date}}.",
       "retry": "Retry",
-      "openActivity": "Open Activity"
+      "prompt": "Coffer couldn't read {{agent}}'s memory at {{path}} ({{reason}}). Find out why it can't be read, most likely a permission problem, and fix the read permission so Coffer can read it again. Don't change anything inside the memory itself.",
+      "noReason": "it isn't readable"
     }
   },
   "conversations": {
     "subtitle": "Every conversation, from Coffer and your channels.",
     "bulk": {
       "label": "Selected conversations",
-      "selected": "{{count}} of {{total}} selected",
       "selectRow": "Select {{title}}",
       "deleteTitle_one": "Delete {{count}} conversation?",
       "deleteTitle_other": "Delete {{count}} conversations?",
@@ -3612,7 +3572,6 @@
       "source": "Source",
       "agent": "Agent",
       "search": "Search titles and messages",
-      "selected": "{{count}} selected",
       "showArchived": "Archived",
       "showActive": "Active"
     },
@@ -3862,12 +3821,16 @@
       "noConversations": "No conversations yet."
     },
     "settings": {
-      "connection": { "title": "Connection" },
+      "connection": {
+        "title": "Connection"
+      },
       "receiving": {
         "title": "Receiving messages",
         "description": "How the bot listens in groups and batches quick messages into one turn."
       },
-      "replying": { "title": "Replies and conversations" },
+      "replying": {
+        "title": "Replies and conversations"
+      },
       "directories": {
         "description": "Where new conversations start, and what /dir may switch to. With none allowed, /dir is off."
       },
@@ -4120,7 +4083,6 @@
     "saveFailed": "Couldn't save"
   },
   "sync": {
-    "subtitle": "Keep this vault in step with a git remote you own.",
     "title": "Sync",
     "loadFailed": "Couldn't load Sync",
     "tabs": {
@@ -4131,12 +4093,12 @@
     "problem": {
       "auth_failed": {
         "title": "The remote refused the secret",
-        "body": "was rejected by {{host}}. The key may have been removed from the repository, or replaced in Secrets. Choose another secret or update this one in Secrets.",
+        "body": "was rejected by {{host}}. The key may have been removed from the repository, or replaced in Secrets. Choose another secret or update this one.",
         "bodyNoSecret": "{{host}} refused to sign in, and this remote has no secret. Choose one for it."
       },
       "waiting_approval": {
         "title": "The push token is waiting for your approval",
-        "body": "has not been approved for {{host}} yet, so nothing was sent. Approve it in the Coffer desktop app (Secrets); the next round then goes through."
+        "body": "hasn’t been approved for {{host}} yet, so nothing was sent. Approve it; the next round then goes through."
       },
       "unreachable": {
         "title": "{{host}} can’t be reached",
@@ -4144,31 +4106,35 @@
         "keepsWorking": "Everything keeps working on this Mac.",
         "keepsWorkingWaiting_one": "Everything keeps working on this Mac; {{count}} change waits to push.",
         "keepsWorkingWaiting_other": "Everything keeps working on this Mac; {{count}} changes wait to push.",
-        "retry": "Coffer tries again at the next round, or now with Retry."
+        "retry": "Coffer tries again at the next round, or now with Sync now."
       },
       "plaintext_found": {
-        "title": "Nothing was pushed: a file holds a plaintext secret",
-        "body": "A secret pushed to the remote stays in its history for good, so this round pushed nothing. Move each value into a secret and point the file at it, then retry. If it is an example and not a secret, push anyway.",
+        "body": "A secret pushed to the remote stays in its history for good. Move each value into a secret and the file will refer to it by name, then sync again. If it is only an example, push anyway.",
         "where": "{{path}}, line {{line}}",
         "key": "the value of {{key}}",
         "token": "a value shaped like a token",
-        "pushAnyway": "Push anyway",
+        "pushAnyway": "Push anyway…",
         "confirmTitle": "Push these files anyway?",
         "confirmBody": "Coffer pushes the files as they are now, and records that you did in the audit log. Do this only if you checked each place is not a real secret: once pushed, the value is in the remote's history.",
-        "confirmLabel": "I checked it, push anyway"
+        "confirmLabel": "I checked it, push anyway",
+        "title_one": "Nothing was pushed: {{count}} file holds a plaintext secret",
+        "title_other": "Nothing was pushed: {{count}} files hold a plaintext secret",
+        "move": "Move into secrets…"
       },
       "push_failed": {
         "title": "The push was rejected",
         "titlePulled": "Pulled and applied, but the push was rejected",
-        "body_one": "This Mac's {{count}} change did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing.",
-        "body_other": "This Mac's {{count}} changes did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing.",
-        "bodyPulled_one": "This Mac took {{pulled}} changes from the remote. Its own {{count}} change did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing.",
-        "bodyPulled_other": "This Mac took {{pulled}} changes from the remote. Its own {{count}} changes did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing."
+        "body_one": "This Mac’s {{count}} change did not go out, so the other Macs are behind. Sync now tries again; if it keeps failing, the branch rule on the remote needs a look.",
+        "body_other": "This Mac’s {{count}} changes did not go out, so the other Macs are behind. Sync now tries again; if it keeps failing, the branch rule on the remote needs a look.",
+        "bodyPulled_one": "This Mac took {{pulled}} changes from the remote. Its own {{count}} change did not go out, so the other Macs are behind. Sync now tries again; if it keeps failing, the branch rule on the remote needs a look.",
+        "bodyPulled_other": "This Mac took {{pulled}} changes from the remote. Its own {{count}} changes did not go out, so the other Macs are behind. Sync now tries again; if it keeps failing, the branch rule on the remote needs a look."
       },
       "cloud_folder": {
         "title": "Your vault is inside {{tool}}",
-        "body": "is also moved around by {{tool}}. Two tools syncing one git folder can corrupt it, so rounds are paused. Move the vault out of {{tool}}; Syncthing and Dropbox folders are the same case.",
-        "someTool": "a cloud-synced folder"
+        "body": "is also moved around by {{tool}}. Two tools syncing one git folder can corrupt it, so rounds are paused.",
+        "someTool": "a cloud-synced folder",
+        "move": "Move the vault…",
+        "moved": "Moved the vault to {{to}}"
       },
       "layout": {
         "title": "The remote uses another vault layout",
@@ -4179,16 +4145,19 @@
         "body": "The round stopped before it finished. Git's message is below."
       },
       "showMessage": "Show git's message",
-      "retry": "Retry",
-      "openRemote": "Open Remote settings",
       "chooseSecret": "Choose secret",
       "openSecrets": "Open in Secrets",
       "reveal": "Reveal in Finder",
       "theRemote": "the remote",
       "git_missing": {
         "title": "Git isn’t installed on this Mac",
-        "body": "Sync runs git to pull and push, and this Mac can’t find it. Rounds start again once it is installed."
-      }
+        "body": "Sync runs git to pull and push, and this Mac can’t find it. Rounds start again once it is installed.",
+        "bodyWaiting_one": "Sync runs git to pull and push, and this Mac can’t find it. Everything keeps working here; {{count}} change waits to push. Rounds start again once it is installed.",
+        "bodyWaiting_other": "Sync runs git to pull and push, and this Mac can’t find it. Everything keeps working here; {{count}} changes wait to push. Rounds start again once it is installed."
+      },
+      "ignore": "Ignore",
+      "review": "Review",
+      "checkAgain": "Check again"
     },
     "round": {
       "status": {
@@ -4224,24 +4193,18 @@
       "rolledBack_other": "Rolled back {{count}} files to {{snapshot}}"
     },
     "rollback": {
-      "action": "Roll back",
       "title": "Roll back to before the {{time}} round?",
       "description": "Restores this Mac to the safety snapshot taken just before the round applied anything.",
       "reverses": "Rolling back reverses these",
-      "morePaths": "…and {{count}} more",
       "kept": "Edited since, kept as they are",
       "confirm": "Roll back",
       "rollingBack": "Rolling back…",
-      "pulled_one": "{{count}} pulled",
-      "pulled_other": "{{count}} pulled",
-      "pushed_one": "{{count}} pushed",
-      "pushed_other": "{{count}} pushed",
       "wasAdded": "added",
       "wasRemoved": "restored",
       "backTo": "back to {{time}}",
       "backToSnapshot": "back to the snapshot",
-      "followTitle": "Other Macs follow",
-      "followBody": "The rollback is a new change on this Mac. The next round pushes it, so the other Macs get it too. Edits you made after {{time}} are kept."
+      "descriptionSnapshot": "Restores this Mac to the safety snapshot taken just before the round applied anything ({{snapshot}}, {{time}}).",
+      "follow": "The rollback is a new change on this Mac. The next round pushes it, so the other Macs get it too. Edits you made after {{time}} are kept."
     },
     "waiting": {
       "writer": {
@@ -4278,14 +4241,18 @@
       "title": "Resolve conflicts",
       "pill": "Pushing blocked",
       "subline": "Round at {{time}} · pulled from {{machine}} · pick a version for every file, then continue the round.",
-      "files": "Files · {{count}}",
+      "files": "Files",
       "filesLabel": "Conflicting files",
       "state": {
         "mine": "Kept this Mac’s",
         "theirs": "Take {{machine}}’s · not applied yet",
         "edited": "Edited in your editor",
         "editing": "Editing in your editor",
-        "open": "Choose a version"
+        "open": "Choose a version",
+        "secret": "Encrypted secret · choose a version",
+        "handedOff": "Handed to an agent",
+        "merged": "Merged by an agent · check it",
+        "agentResolved": "Merged by an agent"
       },
       "changed": "{{area}} · changed here at {{mine}} by you, and on {{machine}} at {{theirs}}",
       "editingMeta": "{{area}} · open in your editor",
@@ -4301,6 +4268,9 @@
       "whatChanges": "What changes on this Mac",
       "nothingChanges": "Nothing changes on this Mac. {{machine}} gets this Mac’s version in the next push.",
       "flipNote": "The diff flips when you change the choice. Nothing is written until you continue the round.",
+      "flipNoteJoin": "The diff flips when you change the choice. Nothing is applied until you apply your choices.",
+      "resolvedByAgent": "Resolved with the agent’s merge · the saved file is what this Mac keeps and pushes.",
+      "handedOff": "Handed to {{agent}} at {{time}}. Its merge shows here when it is done.",
       "binary": "This is a binary file, so there is no line-by-line difference to show.",
       "noDiff": "The two versions are the same.",
       "secret": "An encrypted secret: its contents are not shown. Choose which Mac’s value to keep.",
@@ -4313,13 +4283,26 @@
         "saved": "The file as saved",
         "notSaved": "The marked-up copy has not been written yet."
       },
-      "merge": {
-        "title": "Merge with an agent",
-        "body": "Your agent edits the marked-up copies; Coffer commits the result.",
-        "done": "I merged it"
+      "merged": {
+        "anAgent": "An agent",
+        "title": "{{agent}} merged both versions at {{time}}",
+        "body": "Check what changes on this Mac, then mark it resolved. {{machine}} gets the merge in the next push.",
+        "openConversation": "Open conversation"
       },
       "progress": "{{resolved}} of {{total}} files resolved",
+      "progressJoin": "{{resolved}} of {{total}} files chosen",
       "continueHint": "continue is available when every file has a version",
+      "applyHint": "choose at least one version to apply",
+      "apply": "Apply choices",
+      "join": {
+        "title": "Choose versions",
+        "pill": "Not pushed yet",
+        "subline": "First join · pulled from {{machine}} · these files stay as they are here until you choose a version for each one.",
+        "empty": {
+          "title": "Nothing to choose",
+          "body": "No file is waiting for a version after the join."
+        }
+      },
       "later": "Leave for later",
       "continue": "Continue round",
       "continuing": "Continuing…",
@@ -4332,17 +4315,15 @@
       "title": "Review held deletions",
       "pill": "Round held",
       "subline": {
-        "incoming": "Round at {{time}} · the rest of what was pulled applies once you decide.",
-        "outgoing": "Round at {{time}} · nothing is pushed until you decide."
+        "incoming": "Round at {{time}} · {{files}} in {{folders}}, deleted on {{machine}} · the rest of what was pulled applies once you decide.",
+        "outgoing": "Round at {{time}} · {{files}} in {{folders}}, deleted on {{machine}} · nothing is pushed until you decide."
       },
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
       "folders_one": "{{count}} folder",
       "folders_other": "{{count}} folders",
-      "deletedOn": "deleted on {{machine}}",
       "thisMac": "this Mac",
       "anotherMachine": "another Mac",
-      "more": "…and {{count}} more",
       "delete": {
         "title": {
           "incoming": "Delete here too",
@@ -4418,20 +4399,16 @@
       },
       "more": "More for {{name}}",
       "rename": "Rename",
-      "renameTitle": "Rename {{name}}",
+      "renameTitle": "Rename this Mac",
       "nameLabel": "Name",
       "renameHint": "Only the name in this list changes. Other Macs see it after their next round.",
       "retire": "Retire",
-      "retireTitle": "Retire {{name}}?",
-      "retireSeen": "Last seen {{when}}, on Coffer {{version}}.",
-      "retireSafeTitle": "Nothing is deleted",
-      "retireSafe": "Retiring only removes it from this list. Its rounds stay in history, and nothing on that Mac or in the repository changes. If Coffer on it syncs again, it shows up here as a new machine."
+      "retired": "Retired {{name}}"
     },
     "remote": {
       "url": "Repository URL",
       "branch": "Branch",
       "secret": "Secret",
-      "secretHint": "A secret from Secrets.",
       "secretNone": "None",
       "secretMissing": "No value on this Mac",
       "secretPlaceholder": "Choose a secret",
@@ -4449,7 +4426,7 @@
         "manual": "Only when I press Sync now"
       },
       "includeSecret": "Include encrypted secrets",
-      "includeSecretHint": "Off: API keys and tokens stay on this Mac. On: they are pushed encrypted, and another Mac can read them only after you import this Mac’s master key there. The master key itself never leaves this Mac.",
+      "includeSecretHint": "Off: API keys and tokens stay on this Mac. On: they are pushed encrypted; another Mac reads them only after you import this Mac’s master key.",
       "errors": {
         "url": "Enter a git remote URL (https://… or git@…)"
       },
@@ -4463,25 +4440,29 @@
         "confirm": "Include secrets"
       },
       "vaultPath": "Vault on this Mac",
-      "notCloudFolder": "not inside iCloud Drive, Dropbox or Syncthing",
+      "notCloudFolder": "Not inside iCloud Drive, Dropbox or Syncthing.",
       "cloudFolder": "{{tool}} also syncs this folder. Two tools syncing one git repository corrupt it, so sync is paused until the vault is moved out.",
       "reveal": "Reveal in Finder",
       "stop": {
         "label": "Stop syncing this Mac",
         "hint": "Forgets the remote here. The vault, its history and the repository stay as they are.",
-        "open": "Stop syncing…",
-        "title": "Stop syncing this Mac?",
-        "body": "Coffer forgets the remote on this Mac and stops running rounds. The vault, its history and the repository stay as they are, and your other Macs keep syncing. You can set it up again with the same URL.",
         "confirm": "Stop syncing",
-        "remote": "Remote",
-        "lastRound": "Last round"
+        "done": "Stopped syncing this Mac"
+      },
+      "section": {
+        "title": "Remote",
+        "saves": "Each field saves when you leave it.",
+        "setup": "Where this vault syncs to."
+      },
+      "secretsSection": {
+        "title": "Encrypted secrets",
+        "hint": "Whether API keys and tokens travel with the vault."
       }
     },
     "setup": {
-      "title": "Keep this vault in a git repository you own",
-      "lead": "Each round pulls what other Macs pushed, applies it when it merges cleanly, then pushes this Mac’s changes. A conflict stops the round and waits for you.",
+      "lead": "Keep this vault in step with a git repository you own. Each round pulls, applies what merges cleanly, then pushes.",
       "urlHint": "A git repository you own. SSH or HTTPS. An empty repository is fine.",
-      "secretHint": "A secret from Secrets. Coffer uses it to pull and push; the key is never written into the vault.",
+      "secretHint": "Coffer uses it to pull and push; the key is never written into the vault.",
       "cadenceHint": "Also whenever you press Sync now.",
       "checkRepo": "Check repository",
       "checking": "Checking…",
@@ -4553,7 +4534,6 @@
       "waiting": {
         "title": "The push token is waiting for approval",
         "body": "Coffer holds the push token until you approve sending it to this remote in the desktop app. Nothing was sent. Approve it, then come back: this page checks again on its own.",
-        "openSecrets": "Open Secrets",
         "checkAgain": "Check again"
       },
       "snapshot": "A safety snapshot is taken first",
@@ -4568,19 +4548,9 @@
     },
     "joinChoices": {
       "title": "Differ from this Mac",
-      "body": "Not pushed or replaced until you choose",
-      "apply_one": "Apply {{count}} choice",
-      "apply_other": "Apply {{count}} choices",
-      "edited": "this Mac edited {{mine}} · {{who}} edited {{theirs}}",
-      "otherMac": "the other Mac",
-      "open": "Open {{path}}",
-      "choiceFor": "Version to keep for {{path}}",
-      "keepMine": "Keep this Mac’s",
-      "takeTheirs": "Take {{who}}’s",
-      "more_one": "…and {{count}} more",
-      "more_other": "…and {{count}} more",
-      "showDiff": "Show what changes in {{path}}",
-      "diffCaption": "What changes on this Mac if you take {{who}}'s"
+      "body": "Not pushed or replaced until you choose a version.",
+      "choose": "Choose versions",
+      "chooseVersion": "Choose a version"
     },
     "header": {
       "copyUrl": "Copy repository URL",
@@ -4591,7 +4561,7 @@
       "everyMinutes_other": "every {{count}} minutes",
       "syncNow": "Sync now",
       "syncing": "Syncing…",
-      "tryAgain": "Retry"
+      "keeps": "Keeps this vault in step with"
     },
     "pill": {
       "setup": "Not set up",
@@ -4654,7 +4624,7 @@
       "pausedHint": "No round runs on its own until you resume it under Remote. Sync now still runs one.",
       "stoppedConflicts_one": "This round stopped on {{count}} conflict",
       "stoppedConflicts_other": "This round stopped on {{count}} conflicts",
-      "stoppedConflictsBody": "This Mac and {{peer}} changed the same lines. Nothing was checked out and nothing was pushed. Pushing stays blocked until you choose a version for each file; this Mac keeps working meanwhile.",
+      "stoppedConflictsBody": "This Mac and {{peer}} changed the same lines. Nothing was checked out or pushed; this Mac keeps working meanwhile.",
       "resolveConflicts": "Resolve conflicts",
       "heldIncoming_one": "{{peer}} deleted {{count}} file, more than one round may delete",
       "heldIncoming_other": "{{peer}} deleted {{count}} files, more than one round may delete",
@@ -4664,33 +4634,28 @@
       "reviewDeletions": "Review deletions"
     },
     "areas": {
-      "knowledge": "Knowledge",
-      "documents_one": "{{count}} document",
-      "documents_other": "{{count}} documents",
-      "skills": "Skills",
+      "documents_one": "{{count}} knowledge document",
+      "documents_other": "{{count}} knowledge documents",
       "skillCount_one": "{{count}} skill",
       "skillCount_other": "{{count}} skills",
-      "resources": "MCP servers & tools",
-      "definitions_one": "{{count}} definition",
-      "definitions_other": "{{count}} definitions",
-      "secrets": "Encrypted secrets",
-      "synced": "Synced",
-      "notSynced": "Not synced"
+      "definitions_one": "{{count}} MCP server and tool definition",
+      "definitions_other": "{{count}} MCP server and tool definitions",
+      "synced": "secrets synced",
+      "notSynced": "secrets not synced",
+      "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
     },
     "rounds": {
       "today": "Today",
       "yesterday": "Yesterday",
       "loadFailed": "Couldn't load the rounds",
       "title": "Rounds",
-      "hint": "Each round pulls, applies, then pushes. Rounds with nothing to do are folded.",
       "empty": "No round has run yet.",
       "folded": "{{label}} ×{{count}}",
       "columns": {
         "when": "When",
         "round": "Round",
         "pulled": "Pulled",
-        "pushed": "Pushed",
-        "commits": "Commits"
+        "pushed": "Pushed"
       },
       "label": {
         "nothing_to_do": "Nothing to do",
@@ -4748,6 +4713,16 @@
       "nothingPushed": "Nothing from this Mac to push.",
       "rollBack": "Roll back to before this round",
       "viewActivity": "View in Activity"
+    },
+    "moveVault": {
+      "title": "Move the vault out of {{tool}}",
+      "lead": "Coffer pauses rounds and writes from agents, moves the folder, checks the git repository, then resumes. It takes a few seconds.",
+      "from": "From",
+      "to": "To",
+      "rule": "Not inside iCloud Drive, Dropbox or Syncthing.",
+      "oldFolder": "The old folder is left empty; delete it yourself.",
+      "failed": "Couldn’t move the vault",
+      "confirm": "Move vault"
     }
   },
   "overview": {
@@ -4809,6 +4784,7 @@
       "repairHook": "Repair hook",
       "reconnectChannel": "Reconnect channel",
       "reviewHeld": "Review held changes",
+      "openSecrets": "Open Secrets",
       "turn_on": "Turn on"
     },
     "kinds": {
@@ -4967,7 +4943,8 @@
       },
       "usage": {
         "period": "Last 24 h",
-        "unit": "tokens"
+        "unit": "tokens",
+        "label": "Usage"
       }
     },
     "activity": {
@@ -5503,62 +5480,36 @@
   },
   "secrets": {
     "title": "Secrets",
-    "subtitle": "API keys and tokens, encrypted in the vault on this Mac.",
+    "subtitle": "API keys and tokens your MCP servers and providers use, encrypted in the vault on this Mac.",
     "search": "Find a secret",
     "loadFailed": "Couldn't load secrets",
     "noMatch": "No secret matches this search.",
     "empty": {
       "title": "No secrets yet",
-      "body": "Keep API keys and tokens here instead of in config files. Servers, providers, skills and channels refer to them by name; the value stays encrypted."
+      "body": "Keep API keys and tokens here instead of in config files. Everything that uses them refers to them by name."
     },
-    "groups": {
-      "unused": "Not used by anything"
-    },
-    "sort": "Sort by {{column}}",
     "filters": {
       "status": {
         "label": "Status",
         "all": "All",
         "inUse": "In use",
-        "unused": "Not used",
-        "pending": "Waiting for approval",
-        "refused": "Refused"
-      },
-      "kind": {
-        "label": "Used by type",
-        "all": "All types"
-      },
-      "view": {
-        "label": "View",
-        "list": "List",
-        "byOwner": "By owner"
+        "unused": "Not used"
       }
-    },
-    "owner": {
-      "mcp_server": "MCP server",
-      "channel": "Channel",
-      "provider": "Model provider",
-      "sync": "Sync",
-      "custom_tool": "Custom tools",
-      "other": "Other",
-      "standalone": "Standalone secret",
-      "syncToken": "backup token"
-    },
-    "byOwner": {
-      "more_one": "Show more owners ({{count}} left)",
-      "more_other": "Show more owners ({{count}} left)"
     },
     "bulk": {
       "label": "Selected secrets",
-      "selectAll": "Select all secrets",
-      "blocked": "{{count}} in use or waiting for approval",
-      "deleteUnused": "Delete unused…",
       "deleteTitle_one": "Delete {{count}} secret?",
       "deleteTitle_other": "Delete {{count}} secrets?",
-      "deleteBody": "Deletes {{names}}. Each value is destroyed on this Mac and, if encrypted secrets sync, on your other Macs at their next round. This can't be undone.",
-      "deleteBodyMore": "Deletes {{names}} and {{count}} more. Each value is destroyed on this Mac and, if encrypted secrets sync, on your other Macs at their next round. This can't be undone.",
+      "deleteBody": "Deletes {{names}}. Their values are destroyed on this Mac and, if encrypted secrets sync, on your other Macs. This can’t be undone.",
+      "deleteBodyMore": "Deletes {{names}} and {{count}} more. Their values are destroyed on this Mac and, if encrypted secrets sync, on your other Macs. This can’t be undone.",
       "deleteConfirm_one": "Delete {{count}} secret",
-      "deleteConfirm_other": "Delete {{count}} secrets"
+      "deleteConfirm_other": "Delete {{count}} secrets",
+      "delete": "Delete…",
+      "nothingToDelete": "None of the selected secrets can be deleted",
+      "skippedInUse_one": "{{names}} is in use and will be skipped.",
+      "skippedInUse_other": "{{names}} are in use and will be skipped.",
+      "skippedWaiting_one": "{{names}} is waiting for approval and will be skipped.",
+      "skippedWaiting_other": "{{names}} are waiting for approval and will be skipped."
     },
     "cols": {
       "name": "Name",
@@ -5569,10 +5520,9 @@
     },
     "row": {
       "select": "Select {{name}}",
-      "missing": "Missing on this Mac",
+      "missing": "No value on this Mac",
       "pending": "Waiting for approval",
       "localReadable": "Readable by local processes",
-      "localReadableHint": "Coffer hands this value to a child process's environment, where other processes you run can read it.",
       "addValue": "Add value",
       "addValueFor": "Add a value for {{name}}"
     },
@@ -5590,8 +5540,9 @@
       "nothing": "Nothing",
       "trigger_one": "{{name}} is used by {{count}} thing",
       "trigger_other": "{{name}} is used by {{count}} things",
-      "title": "Used by {{name}}",
-      "note": "Each one reads it as {{reference}}. Replacing the value updates all of them."
+      "title": "Used by",
+      "note": "Each one reads it as {{reference}}. Replacing the value updates all of them.",
+      "find": "Find…"
     },
     "menu": {
       "label": "Actions for {{name}}",
@@ -5623,7 +5574,6 @@
     "replace": {
       "title": "Replace the value of {{name}}",
       "storeTitle": "Add a value for {{name}}",
-      "secret": "Secret",
       "value": "New value",
       "hint": "The old value is destroyed. Everything that uses it gets the new one.",
       "submit": "Replace value",
@@ -5640,9 +5590,8 @@
       "checking": "Waiting for Touch ID…",
       "revealedAt": "Revealed at {{time}}",
       "valueLabel": "Value of {{name}}",
-      "hide": "Hide",
       "copied": "Value copied",
-      "hidesIn": "Hides in {{seconds}} s · recorded as secret_revealed"
+      "hidesIn": "Hides in {{seconds}} s · Recorded in Activity"
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -5680,7 +5629,7 @@
       "ticked": "{{count}} of {{total}} ticked",
       "mentions_one": "{{count}} skill still reads keys from ~/.coffer/secrets/. Update it by hand, or hand it to an agent:",
       "mentions_other": "{{count}} skills still read keys from ~/.coffer/secrets/. Update them by hand, or hand them to an agent:",
-      "hint": "Each ticked value moves into the encrypted store and the file refers to it by name instead. Values are never shown here.",
+      "hint": "Each ticked value moves into the encrypted store and the file refers to it by name instead. A value that matches a secret you already have reuses it.",
       "review_one": "Review {{count}} change",
       "review_other": "Review {{count}} changes",
       "reviewing": "Checking…",
@@ -5690,7 +5639,7 @@
       "previewFiles": "Files",
       "add": "+ Add",
       "modify": "~ Modify",
-      "previewNote": "Nothing is written until you apply. Each file's value is replaced by its coffer://secret/<name> reference; its permissions stay as they are.",
+      "previewNote": "Values are masked here. Each file keeps its place and permissions; only the lines that hold a key change.",
       "back": "Back",
       "apply_one": "Apply {{count}} change",
       "apply_other": "Apply {{count}} changes",
@@ -5699,44 +5648,29 @@
       "applied_other": "Moved {{count}} keys into secrets",
       "resultTitle_one": "Moved {{moved}} of {{count}} key",
       "resultTitle_other": "Moved {{moved}} of {{count}} keys",
-      "skippedSummary_one": "{{count}} was skipped and its file left as it was:",
-      "skippedSummary_other": "{{count}} were skipped and their files left as they were:",
       "skipped": "Skipped",
       "noneBody_one": "Coffer checked {{count}} file and found no API keys or tokens written in plain text.",
       "noneBody_other": "Coffer checked {{count}} files and found no API keys or tokens written in plain text.",
       "checked": "Checked",
-      "checkedWhere": "~/.coffer/secrets/, skills",
-      "unwrittenSummary": "{{path}} {{reason}}. The key is saved as the secret {{name}}, but the file still holds it in plain text.",
+      "checkedWhere": "Agent configs, MCP server definitions, custom tools, skills, ~/.coffer",
       "notChanged": "not changed",
       "inActivity": "Every change is in Activity",
-      "tryAgain": "Retry"
+      "unwrittenTitle": "{{path}} couldn’t be rewritten",
+      "unwrittenTitleMany_one": "{{count}} file couldn’t be rewritten",
+      "unwrittenTitleMany_other": "{{count}} files couldn’t be rewritten",
+      "unwrittenBody": "{{reason}}. The key is saved as the secret {{name}}, but the file still holds it in plain text.",
+      "unwrittenBodyMany": "The keys are saved as secrets, but those files still hold them in plain text.",
+      "moved": "Moved",
+      "savedNotChanged": "Saved · file not changed",
+      "retry": "Retry"
     },
     "pending": {
       "toast": "Saved, waiting for approval · the new value is stored sealed and takes effect once approved in the Coffer desktop app"
     },
     "time": {
-      "never": "Never",
-      "justNow": "Just now",
-      "minutesAgo_one": "{{count}} min ago",
-      "minutesAgo_other": "{{count}} min ago",
-      "hoursAgo_one": "{{count}} hour ago",
-      "hoursAgo_other": "{{count}} hours ago",
-      "today": "{{time}} today",
-      "yesterday": "Yesterday"
-    },
-    "missing": {
-      "title_one": "{{count}} secret has no value on this Mac",
-      "title_other": "{{count}} secrets have no value on this Mac",
-      "body": "They came with the vault, but encrypted secrets aren't synced here. Servers that use them can't start until they have a value.",
-      "importKey": "Import master key…"
+      "never": "Never"
     },
     "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
-    "refused": {
-      "title_one": "{{count}} refused change",
-      "title_other": "{{count}} refused changes",
-      "askAgain": "Ask again",
-      "asked": "Asked again — it now waits for approval."
-    },
     "approvals": {
       "title_one": "{{count}} change waiting for approval",
       "title_other": "{{count}} changes waiting for approval",
@@ -5744,8 +5678,6 @@
       "hintBrowser": "Approve in the Coffer desktop app. You can reject here.",
       "requestedBy": "Requested by",
       "secret": "Secret",
-      "destination": "Sent to",
-      "target": "Target",
       "approve": "Approve",
       "reject": "Reject",
       "op": {
@@ -5756,27 +5688,12 @@
       },
       "review": "Review",
       "change": "Change",
-      "question": {
-        "add_secret": "Approve the new secret {{name}}?",
-        "replace_value": "Approve a new value for {{name}}?",
-        "bind": "Approve sending {{name}} to {{destination}}?",
-        "disable_protection": "Turn off approval for secret changes?"
-      },
-      "body": {
-        "add_secret": "The value is stored sealed. It can be used only after you approve it.",
-        "replace_value": "The new value is stored sealed. Until you approve it, {{users}} keep using the current value.",
-        "replace_value_unused": "The new value is stored sealed. Until you approve it, the current value stays.",
-        "bind": "Nothing is sent until you approve it.",
-        "disable_protection": "Until you approve it, every new secret, new value and new use keeps waiting for approval."
-      },
-      "requestedAt": "{{who}}, {{time}}",
       "via": {
         "ui": "You · in the Coffer UI",
         "cli": "You · on the command line",
         "api": "Through the API"
       },
       "nothingYet": "Nothing yet",
-      "openApp": "Open the Coffer app on this Mac to approve — it asks for Touch ID or your login password.",
       "approveEllipsis": "Approve…",
       "approveInApp": "Approve in the Coffer desktop app",
       "approved": {
@@ -5793,120 +5710,95 @@
       },
       "select": "Select {{name}}",
       "batch": {
-        "selectAll": "Select all ({{count}})",
-        "selected": "{{count}} selected",
-        "approveSelected_one": "Approve selected ({{count}})…",
-        "approveSelected_other": "Approve selected ({{count}})…",
-        "rejectSelected_one": "Reject selected ({{count}})",
-        "rejectSelected_other": "Reject selected ({{count}})",
         "rejectedCount_one": "Rejected {{count}} change",
         "rejectedCount_other": "Rejected {{count}} changes",
-        "reviewTitle_one": "Approve {{count}} change?",
-        "reviewTitle_other": "Approve these {{count}} changes?",
-        "resultTitle": "Approval finished",
-        "reviewHint": "One confirmation approves exactly this list.",
-        "resultHint": "What became of each change.",
-        "help": "Touch ID or your login password is asked once, and the Coffer app names the changes it covers. A change whose target moved after you opened this list is skipped and stays waiting; nothing outside this list is approved.",
-        "back": "Back",
-        "confirm_one": "Approve {{count}} change…",
-        "confirm_other": "Approve all {{count}}…",
-        "done": "Done",
+        "resultTitle": "Approved {{approved}} of {{count}} changes",
+        "resultHint": "A skipped change stays waiting; review it again.",
         "approved": "Approved",
         "skipped": {
-          "changed": "Skipped · it changed after you looked; it is still waiting",
-          "not_pending": "Skipped · it is no longer waiting",
-          "not_found": "Skipped · it no longer exists",
-          "not_batchable": "Skipped · approve this one on its own",
-          "failed": "Skipped · it could not be applied; it is still waiting"
+          "changed": "It changed after you looked; it is still waiting.",
+          "not_pending": "It is no longer waiting.",
+          "not_found": "It no longer exists.",
+          "not_batchable": "Approve this one on its own.",
+          "failed": "It could not be applied; it is still waiting."
+        },
+        "recorded": "Every change is recorded in Activity.",
+        "skippedWord": "Skipped"
+      },
+      "subtitleShell": "Nothing takes effect until you approve it. Approving asks for Touch ID or your login password once.",
+      "subtitleBrowser": "Nothing takes effect until you approve it in the Coffer desktop app. You can reject from here.",
+      "goesTo": "Goes to",
+      "at": "At",
+      "result": "Result",
+      "usedBy": "Used by {{names}}",
+      "sentTo": "Sent to {{where}}",
+      "selectAll": "Select all changes",
+      "selectHint": "Select changes to answer some of them",
+      "selectedOf": "{{count}} of {{total}} selected",
+      "approveN": "Approve {{count}}…",
+      "approveAll": "Approve all {{count}}…",
+      "rejectN": "Reject {{count}}",
+      "rejectAll": "Reject all"
+    },
+    "selectAll": "Select all secrets",
+    "banner": {
+      "ignore": "Ignore",
+      "missing": {
+        "title_one": "{{n}} secret has no value on this Mac",
+        "title_other": "{{n}} secrets have no value on this Mac",
+        "body_one": "{{names}} can’t start until it has a value.",
+        "body_other": "{{names}} can’t start until they have a value.",
+        "noUsers": "Add a value in each row.",
+        "action_one": "Add value",
+        "action_other": "Add values"
+      },
+      "waiting": {
+        "title_one": "{{n}} change waiting for approval",
+        "title_other": "{{n}} changes waiting for approval",
+        "andMore": "{{names}} and {{n}} more",
+        "what": {
+          "replace_value_one": "A new value for {{names}}.",
+          "replace_value_other": "New values for {{names}}.",
+          "add_secret_one": "A new secret {{names}}.",
+          "add_secret_other": "New secrets {{names}}.",
+          "bind_one": "A new use of {{names}}.",
+          "bind_other": "New uses of {{names}}.",
+          "disable_protection_one": "Turning off approval for secret changes.",
+          "disable_protection_other": "Turning off approval for secret changes.",
+          "mixed_one": "Changes to {{names}}.",
+          "mixed_other": "Changes to {{names}}."
         }
       }
+    },
+    "addValues": {
+      "title": "Add values on this Mac",
+      "body": "These came with the vault without a value this Mac can read.",
+      "usedBy": "Used by {{names}}",
+      "placeholder": "Paste the value",
+      "valueFor": "Value for {{name}}",
+      "encrypted": "Each value is encrypted with this Mac’s master key. A value you leave empty stays missing.",
+      "save_one": "Save {{count}} value",
+      "save_other": "Save {{count}} values",
+      "saved_one": "Saved {{count}} value",
+      "saved_other": "Saved {{count}} values"
     }
   },
   "usage": {
-    "subtitle": "Model usage through Coffer's proxy, and subscription quota.",
-    "title": "Usage",
-    "updated": "Updated {{time}}",
-    "refresh": "Refresh",
-    "more": "More actions",
     "exportCsv": "Export CSV",
     "noPrice": "—",
-    "editPrices": "Edit prices in Model providers",
-    "quota": {
-      "title": "Subscription quota",
-      "subtitle": "Reported by each agent for its own login · never estimated",
-      "help1": "Each agent reports its own allowance: Codex through its app-server, Claude Code in the sessions Coffer drives (chat and channels). Coffer shows the vendor's own number as of when it was seen — never an estimate.",
-      "help2": "A window whose reset time has passed shows no number until the agent reports again.",
-      "plan": {
-        "claude_code": "Claude {{plan}} login",
-        "codex": "ChatGPT {{plan}} login",
-        "other": "{{plan}} login",
-        "none": "Subscription login",
-        "apiKey": "API key · {{vendor}}"
-      },
-      "used": "{{percent}}% used",
-      "limitReached": "Limit reached",
-      "noReading": "No current reading",
-      "resetPassed": "Reset since last reading",
-      "resets": "Resets {{when}}",
-      "resetsIn": "Resets {{when}} · in {{in}}",
-      "in": {
-        "dh": "{{days}} d {{hours}} h",
-        "hm": "{{hours}} h {{minutes}} min",
-        "m": "{{minutes}} min"
-      },
-      "asOf": "as of {{time}}",
-      "source": {
-        "codex_app_server": "app-server",
-        "claude_rate_limit_event": "last response",
-        "claude_statusline": "status line"
-      },
-      "empty": {
-        "title": "No quota reading yet",
-        "body": "Appears after your next {{agent}} response."
-      },
-      "statusline": {
-        "lead": "For sessions in your own terminal, have your agent point Claude Code's status line at Coffer's wrapper.",
-        "helpLabel": "About the statusline wrapper",
-        "help": "The wrapper passes Claude Code's rate limits to Coffer, then runs your own statusline command with the same input and prints its output, even when Coffer is not running. Coffer never installs it: the prompt asks your agent to wrap your statusLine command in Claude Code's settings.json and show you the diff first."
-      },
-      "refreshFailed": {
-        "title": "Couldn't reach Codex's app-server",
-        "read_failed": "codex app-server exited before answering.",
-        "codex_unavailable": "Codex is not available on this machine.",
-        "no_subscription": "Codex is not signed in with a ChatGPT plan.",
-        "no_windows": "The app-server answered without any quota window.",
-        "other": "Nothing was read."
-      },
-      "lastTried": "Last tried {{time}}.",
-      "tryAgain": "Retry",
-      "error": "Couldn't load subscription quota.",
-      "apiKey": {
-        "title": "No subscription quota",
-        "body": "{{agent}} uses an API key from {{vendor}} here, so there is no plan limit. Its requests are metered below under API-key providers, by the provider actually used."
-      },
-      "metered": "Metered",
-      "noReadingShort": "No reading",
-      "waiting": "Waiting",
-      "rereadLabel": "Refresh {{agent}} quota",
-      "someRequests": "some requests"
+    "editPrices": "Edit prices",
+    "error": "Couldn't load API-key usage.",
+    "presets": {
+      "today": "Today",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "month": "This month"
     },
-    "providers": {
-      "title": "API-key providers",
-      "subtitle": "Exact counts from requests through Coffer's local proxy",
-      "period": "Period",
-      "range": {
-        "today": "Today",
-        "7d": "7 days",
-        "30d": "30 days",
-        "month": "This month",
-        "custom": "Custom…"
-      },
-      "customRange": "Custom range",
-      "from": "From",
-      "to": "To",
-      "detailNote": "Before {{date}}, only daily totals are kept.",
-      "apply": "Apply",
-      "error": "Couldn't load API-key usage."
+    "range": {
+      "today": "Today",
+      "7d": "7 days",
+      "30d": "30 days",
+      "month": "This month"
     },
     "tiles": {
       "cost": "Cost (estimated)",
@@ -5920,7 +5812,8 @@
       "outputNote": "includes reasoning",
       "cacheRead": "Cache read",
       "cacheWrite": "Cache write",
-      "cacheWriteNote": "Anthropic only"
+      "cacheWriteNote": "Anthropic only",
+      "costHelp": "About the cost estimate"
     },
     "chart": {
       "title": "Cost per day",
@@ -5949,35 +5842,31 @@
         "cost": "Cost",
         "second": {
           "model": "By",
-          "agent": "Via",
           "day": "Top agent"
         }
       },
       "unknownModel": "Unknown model",
       "unknownAgent": "Unknown agent",
-      "noPriceTip": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list. Set one in Model providers.",
+      "noPriceTip": "No price is known for this model. Set one on its provider.",
       "partlyPricedTip_one": "{{n}} request has no price and is not in this cost.",
       "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",
       "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",
       "unknownTip_other": "{{n}} requests ended before reporting their usage; their tokens are not counted.",
-      "total": "Total · {{range}} · cost of priced models",
-      "noPriceTipOn": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list (updated {{date}}). Set one in Model providers.",
+      "total": "Total · {{range}}",
       "today": "{{day}} · today",
-      "earlierDays_one": "{{count}} earlier day ·",
-      "earlierDays_other": "{{count}} earlier days ·",
-      "showAllDays": "Show all {{count}}"
+      "footer": "Cost of priced models only."
     },
     "empty": {
       "firstTitle": "No API-key usage yet",
-      "firstBody": "Tokens and cost appear here once an agent sends requests with an API-key provider through Coffer. Subscription logins don't pass through Coffer, so they only show quota.",
-      "openProviders": "Open Model providers",
+      "firstBody": "Requests an agent sends through an API-key provider show up here, with tokens and cost.",
+      "openProviders": "Open Providers",
       "rangeTitle": "No requests in this range",
       "rangeBody": "Pick a longer range, or check back after an agent sends requests with an API-key provider."
     },
-    "viaApiKey": "via API key",
     "filters": {
       "agent": "Agent",
-      "provider": "Provider"
+      "provider": "Provider",
+      "findProvider": "Find a provider"
     }
   },
   "splitView": {
@@ -6028,7 +5917,7 @@
   },
   "providers": {
     "title": "Model providers",
-    "subtitle": "Model endpoints your agents and Coffer use; order is fallback priority.",
+    "subtitle": "Where your agents’ models come from, and what requests through Coffer cost.",
     "loadFailed": "Couldn't load the model providers",
     "protocols": {
       "anthropic": "Anthropic",
@@ -6222,8 +6111,6 @@
         "keyless": "No key needed. Detection only reads — nothing is pulled or loaded."
       },
       "models": {
-        "search_one": "Search {{count}} model",
-        "search_other": "Search {{count}} models",
         "count_one": "{{n}} selected · nothing selected means all {{count}} are offered",
         "count_other": "{{n}} selected · nothing selected means all {{count}} are offered",
         "empty": "The endpoint listed no models. Add the provider as it is and every model it accepts stays available.",
@@ -6298,6 +6185,10 @@
       },
       "optional": "Optional",
       "perMillion": "USD per 1M tokens. A cache rate left empty is charged at the input rate."
+    },
+    "tabs": {
+      "providers": "Providers",
+      "usage": "Usage"
     }
   },
   "skillSources": {
@@ -6456,9 +6347,10 @@
   },
   "handoff": {
     "copyPrompt": "Copy prompt",
-    "copyPromptHint": "Copy to the clipboard for an agent outside Coffer",
+    "copyPromptHint": "For an agent outside Coffer",
     "askAgentHint": "Handle it in a Coffer conversation; nothing runs until you press Send",
-    "copied": "Copied",
+    "moreOptions": "More options",
+    "promptCopied": "Prompt copied",
     "askAgent": "Ask an agent",
     "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine."
   },
@@ -6480,6 +6372,31 @@
       "daily": "daily",
       "every": "every {{interval}}",
       "off": "off"
+    }
+  },
+  "drawer": {
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "filters": {
+    "clear": "Clear",
+    "clearLabel": "Clear {{label}}",
+    "clearAll": "Clear filters",
+    "only": "Only",
+    "noMatches": "No matches",
+    "timeRange": {
+      "label": "Time range",
+      "custom": "Custom range…",
+      "customHeading": "Custom range",
+      "from": "From",
+      "to": "To",
+      "now": "now",
+      "hint": "Local time · up to {{days}} days back",
+      "hintDate": "Local days · up to {{days}} days back",
+      "invalidTime": "Use HH:MM, like 14:00.",
+      "endBeforeStart": "The end is before the start.",
+      "cancel": "Cancel",
+      "apply": "Apply"
     }
   }
 }

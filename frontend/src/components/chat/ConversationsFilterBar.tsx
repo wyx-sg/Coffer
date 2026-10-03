@@ -5,19 +5,15 @@
 // once anything narrows the list. It shows no result count.
 import { useTranslation } from "react-i18next";
 
-import { ChecklistPill, type CheckItem } from "@/components/activity/ChecklistPill";
-import { AgentBadge } from "@/components/agent/AgentBadge";
-import { CofferMark } from "@/components/brand/CofferMark";
-import { PlatformMark } from "@/components/channel/PlatformMark";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
+import { FilterPill, type FilterOption } from "@/components/filters";
 import { Segmented } from "@/components/ui/segmented";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import {
   clearFilters,
   COFFER_SOURCE,
   isFiltered,
-  toggled,
   type ConversationFilters,
 } from "@/lib/conversations/filters";
 
@@ -48,57 +44,19 @@ export function ConversationsFilterBar({
   const { t } = useTranslation();
   const set = (patch: Partial<ConversationFilters>) => onChange({ ...filters, ...patch });
 
-  const chosen = (values: string[], words: (v: string) => string): string | null =>
-    values.length === 0
-      ? null
-      : values.length === 1
-        ? words(values[0])
-        : t("conversations.filters.selected", { count: values.length });
-
-  const sourceItems: CheckItem[] = [
-    {
-      value: COFFER_SOURCE,
-      text: t("conversations.source.coffer"),
-      checked: filters.source.includes(COFFER_SOURCE),
-      label: (
-        <span className="flex items-center gap-2">
-          <span className="inline-flex h-[18px] w-[22px] shrink-0 items-center justify-center rounded-sm bg-chip">
-            <CofferMark size={12} className="text-text-muted" />
-          </span>
-          {t("conversations.source.coffer")}
-        </span>
-      ),
-    },
-    ...channels.map((ch) => ({
-      value: ch.uid,
-      text: ch.heading,
-      checked: filters.source.includes(ch.uid),
-      label: (
-        <span className="flex items-center gap-2">
-          <PlatformMark platform={ch.platform} />
-          {ch.heading}
-        </span>
-      ),
-    })),
+  const sourceOptions: FilterOption[] = [
+    { value: COFFER_SOURCE, label: t("conversations.source.coffer") },
+    ...channels.map((ch) => ({ value: ch.uid, label: ch.heading })),
   ];
-  // A source named in the link that no channel matches any more is still shown, so it can be unticked.
-  const known = new Set(sourceItems.map((i) => i.value));
+  // A source named in the link that no channel matches any more is still listed, so it can be unticked.
+  const known = new Set(sourceOptions.map((o) => o.value));
   for (const uid of filters.source) {
-    if (!known.has(uid)) {
-      sourceItems.push({ value: uid, text: uid, checked: true, label: uid });
-    }
+    if (!known.has(uid)) sourceOptions.push({ value: uid, label: uid });
   }
-  const agentItems: CheckItem[] = agents.map((a) => ({
+  const agentOptions: FilterOption[] = agents.map((a) => ({
     value: a.agent_key,
-    text: a.display_name,
-    checked: filters.agent.includes(a.agent_key),
-    label: (
-      <AgentBadge type={a.agent_key} name={a.display_name} size="sm" showName tooltip={false} />
-    ),
+    label: a.display_name,
   }));
-
-  const summary = (values: string[]) =>
-    values.length > 0 ? t("conversations.filters.selected", { count: values.length }) : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -119,26 +77,17 @@ export function ConversationsFilterBar({
         shortcut="/"
         className="w-60"
       />
-      <ChecklistPill
-        bareWhenEmpty
+      <FilterPill
         label={t("conversations.filters.source")}
-        valueLabel={chosen(
-          filters.source,
-          (v) => sourceItems.find((i) => i.value === v)?.text ?? v,
-        )}
-        groups={[{ items: sourceItems }]}
-        onToggle={(v) => set({ source: toggled(filters.source, v) })}
-        onClear={() => set({ source: [] })}
-        summary={summary(filters.source)}
+        options={sourceOptions}
+        value={filters.source}
+        onChange={(source) => set({ source })}
       />
-      <ChecklistPill
-        bareWhenEmpty
+      <FilterPill
         label={t("conversations.filters.agent")}
-        valueLabel={chosen(filters.agent, (v) => agentItems.find((i) => i.value === v)?.text ?? v)}
-        groups={[{ items: agentItems }]}
-        onToggle={(v) => set({ agent: toggled(filters.agent, v) })}
-        onClear={() => set({ agent: [] })}
-        summary={summary(filters.agent)}
+        options={agentOptions}
+        value={filters.agent}
+        onChange={(agent) => set({ agent })}
       />
       {isFiltered(filters) && !clearInList ? (
         <Button

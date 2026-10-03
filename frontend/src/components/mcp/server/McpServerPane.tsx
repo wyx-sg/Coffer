@@ -125,11 +125,6 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       />
       <McpServerDetailTabs
         basePath={basePath}
-        counts={{
-          tools: toolCount,
-          resources: caps.data?.resources?.length,
-          prompts: caps.data?.prompts?.length,
-        }}
         overview={
           <McpOverviewTab
             enabled={resource.enabled}

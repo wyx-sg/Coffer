@@ -3,9 +3,10 @@
 lose too much", "Snapshot before checking out and roll a round back from it").
 
 A stop is answered file by file — keep this machine's, take the other's, or
-edit a marked-up copy — and nothing is written into the vault until
-``/continue``. A hold is confirmed or restored, and either answer continues
-the round. Paths are vault-relative and travel in the body or a query.
+edit a marked-up copy (the person's, or an agent's merge they marked resolved)
+— and nothing is written into the vault until ``/continue``. A hold is
+confirmed or restored, and either answer continues the round. Paths are
+vault-relative and travel in the body or a query.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from fastapi import Query
 
 from coffer.application.sync.round_answers import SyncNothingStopped
 from coffer.domain.sync.stops import Answer
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.sync_dependencies import get_sync_service, router
 from coffer.surfaces.http.sync_projections import (
     change_out,
@@ -24,10 +26,12 @@ from coffer.surfaces.http.sync_projections import (
 )
 from coffer.surfaces.http.sync_schemas import RoundOut
 from coffer.surfaces.http.sync_stop_schemas import (
+    AgentHandoffOut,
     EditorCopyOut,
     FileAnswerIn,
     FilePathIn,
     FileVersionsOut,
+    HandoffIn,
     JoinChoicesIn,
     JoinChoicesOut,
     JoinPreviewOut,
@@ -53,20 +57,51 @@ async def join() -> RoundOut:
     return round_out(await get_sync_service().join())
 
 
+async def _join_state() -> JoinChoicesOut:
+    files = await get_sync_service().join_files()
+    return JoinChoicesOut(files=[conflict_out(f) for f in files])
+
+
 @router.get("/join-choices", response_model=JoinChoicesOut)
 async def join_choices() -> JoinChoicesOut:
-    files = await get_sync_service().join_choices()
-    return JoinChoicesOut(files=[conflict_out(c) for c in files])
+    """The files a join left to choose, in the shape a stopped round's files
+    have, so one Resolve view serves both."""
+    return await _join_state()
 
 
 @router.post("/join-choices", response_model=JoinChoicesOut)
 async def choose(body: JoinChoicesIn) -> JoinChoicesOut:
-    """Keep this machine's version (pushed by the next round) or take the
-    remote's, for one or several of a join's differing files."""
-    remaining = await get_sync_service().choose(
+    """Keep this machine's version (pushed by the next round), take the
+    remote's, or take the merge in the file's editor copy (``edited``, refused
+    while a conflict marker is left in it), for one or several of a join's
+    differing files."""
+    await get_sync_service().choose(
         [(c.path, Answer(c.answer)) for c in body.choices], actor=_ACTOR
     )
-    return JoinChoicesOut(files=[conflict_out(c) for c in remaining])
+    return await _join_state()
+
+
+@router.post("/join-choices/editor", response_model=EditorCopyOut)
+async def join_editor(body: FilePathIn) -> EditorCopyOut:
+    """The marked-up copy of a join's differing file, as for a stopped round's."""
+    where = await get_sync_service().open_editor(body.path, join=True)
+    return EditorCopyOut(path=body.path, editor_path=where)
+
+
+@router.post("/join-choices/handoff", response_model=AgentHandoffOut)
+async def join_handoff(body: HandoffIn) -> AgentHandoffOut:
+    """Hand a join's differing files (or every one an agent may merge) to an agent."""
+    got = await get_sync_service().hand_off(
+        body.paths, join=True, agent=body.agent, conversation=body.conversation_id
+    )
+    return AgentHandoffOut(handoff=HandoffOut(prompt=got.prompt), paths=list(got.paths))
+
+
+@router.post("/join-choices/discard", response_model=JoinChoicesOut)
+async def join_discard(body: FilePathIn) -> JoinChoicesOut:
+    """Back to two choices: forget the editor copy and any agent's merge."""
+    await get_sync_service().discard_copy(body.path, join=True)
+    return await _join_state()
 
 
 # --- a stopped round ----------------------------------------------------------------------
@@ -90,11 +125,24 @@ async def answer(body: FileAnswerIn) -> StopStateOut:
     return await _stop_state()
 
 
-@router.post("/stop/merged", response_model=StopStateOut)
-async def merged() -> StopStateOut:
-    """ "I merged it": record the saved copy of every file handed to an agent
-    as its answer. Refused whole while any copy still has a conflict marker."""
-    await get_sync_service().mark_merged()
+@router.post("/stop/handoff", response_model=AgentHandoffOut)
+async def stop_handoff(body: HandoffIn) -> AgentHandoffOut:
+    """Hand the stopped round's conflicting files (every one an agent may
+    merge, or the named ones) to an agent: the prompt, with each file's merged
+    copy written outside the vault. The agent's merge is shown as
+    ``merged_by_agent`` on the file; marking it resolved is the ``edited``
+    answer. Asked again for a merged file, it starts that file over."""
+    got = await get_sync_service().hand_off(
+        body.paths, join=False, agent=body.agent, conversation=body.conversation_id
+    )
+    return AgentHandoffOut(handoff=HandoffOut(prompt=got.prompt), paths=list(got.paths))
+
+
+@router.post("/stop/files/discard", response_model=StopStateOut)
+async def stop_discard(body: FilePathIn) -> StopStateOut:
+    """Back to two choices: forget the editor copy, any agent's merge and an
+    edited answer for the file."""
+    await get_sync_service().discard_copy(body.path)
     return await _stop_state()
 
 
@@ -119,6 +167,8 @@ async def file_versions(path: str = Query(min_length=1)) -> FileVersionsOut:
         take_theirs=found.take_theirs,
         binary=found.binary,
         edited=found.edited,
+        merged=found.merged,
+        merged_diff=found.merged_diff,
     )
 
 

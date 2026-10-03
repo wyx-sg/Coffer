@@ -44,16 +44,6 @@ export const secretsApi = {
   /** Every approval still waiting, newest first. */
   pendingApprovals: () =>
     unwrap(getApiClient().GET("/secrets/approvals", { params: { query: { status: "pending" } } })),
-  /** Every approval a person refused and nothing has superseded, newest first. */
-  refusedApprovals: () =>
-    unwrap(getApiClient().GET("/secrets/approvals", { params: { query: { status: "rejected" } } })),
-  /** Lift a refusal so the same binding is put to a person again; answers what now waits. */
-  askAgain: (id: string) =>
-    unwrap(
-      getApiClient().POST("/secrets/approvals/{approval_id}/ask-again", {
-        params: { path: { approval_id: id } },
-      }),
-    ),
   /** Refuse several at once. Needs no presence: refusing only narrows what is sent. */
   rejectApprovals: (ids: string[]) =>
     unwrap(getApiClient().POST("/secrets/approvals/reject", { body: { ids } })),

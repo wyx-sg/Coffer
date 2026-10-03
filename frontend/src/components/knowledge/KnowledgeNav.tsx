@@ -1,37 +1,36 @@
 // frontend/src/components/knowledge/KnowledgeNav.tsx
 //
-// The Knowledge page's left pane (boards 5.1.01, 5.1.09): Recent changes on
-// top (with how many changes the last seven days hold), then every collection
-// as a node of one tree — its Inbox and its documents under it — and New
-// collection pinned to the bottom (spec knowledge "Present a collection as
+// The Knowledge page's left pane (boards 5.1.01, 5.1.09, Foundations 0.6.04):
+// Recent changes on top, then a 36px "Collections" header strip with a New
+// collection icon button, then every collection as a node of one tree — its
+// Inbox and its documents under it (spec knowledge "Present a collection as
 // one tree in the web UI"). The open collection is expanded; others open and
 // close on their chevron, and that choice is ephemeral UI state (it does not
 // survive a reload).
 //
 // There is no filter input: the layer has no retrieval, and ⌘K already jumps
-// to a collection by name. The Inbox count in the tree is the only signal of
-// items waiting — the sidebar carries no badge for it.
+// to a collection by name. The Inbox count in the tree is the only number and
+// the only signal of items waiting — the sidebar carries no badge.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { History, Plus } from "lucide-react";
+import { FolderPlus, History } from "lucide-react";
 
 import { KnowledgeCollectionNode } from "@/components/knowledge/KnowledgeCollectionNode";
 import {
   NAV_CHEVRON,
   NAV_ICON,
   NAV_LABEL,
-  NAV_PILL,
   NAV_ROW,
   NAV_ROW_ACTIVE,
   NAV_ROW_IDLE,
   navIndent,
 } from "@/components/knowledge/navRow";
 import { ListLoadingRows } from "@/components/ListPaneStates";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { withinDays } from "@/lib/knowledge/changes";
 import { KNOWLEDGE_ROOT, type KnowledgeTab } from "@/lib/knowledge/routes";
-import { useKnowledgeChanges } from "@/lib/hooks/useKnowledgeHistory";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -48,8 +47,6 @@ interface Props {
 
 export function KnowledgeNav(props: Props) {
   const { t } = useTranslation();
-  const changes = useKnowledgeChanges(null);
-  const recent = (changes.data?.changes ?? []).filter((c) => withinDays(c.time, 7)).length;
   const [open, setOpen] = useState<Set<string>>(new Set());
 
   const toggle = (uid: string) =>
@@ -71,17 +68,28 @@ export function KnowledgeNav(props: Props) {
         >
           <span className={NAV_CHEVRON} />
           <History className={NAV_ICON} aria-hidden />
-          <span className={NAV_LABEL}>{t("knowledge.recent.title")}</span>
-          {recent > 0 ? (
-            <span className={cn(NAV_PILL, "bg-chip text-text-muted")}>{recent}</span>
-          ) : null}
+          <span className={cn(NAV_LABEL, props.atRecent && "font-label")}>
+            {t("knowledge.recent.title")}
+          </span>
         </Link>
 
-        <div className="h-2 shrink-0" />
-        <p className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-subtle">
+        <div className="-mx-2 mb-1 mt-2 flex h-9 shrink-0 items-center border-y border-border-subtle pl-[18px] pr-2.5 text-sm font-semibold text-text">
           {t("knowledge.nav.collections")}
-          <span className="ml-auto font-book tabular-nums">{props.collections.length}</span>
-        </p>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label={t("knowledge.create.title")}
+                onClick={props.onCreate}
+              >
+                <FolderPlus aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("knowledge.create.title")}</TooltipContent>
+          </Tooltip>
+        </div>
         {props.isLoading ? (
           <ListLoadingRows />
         ) : (
@@ -103,14 +111,6 @@ export function KnowledgeNav(props: Props) {
           </ul>
         )}
       </div>
-      <button
-        type="button"
-        onClick={props.onCreate}
-        className="flex h-10 shrink-0 items-center gap-2 border-t border-border-subtle px-[18px] text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-      >
-        <Plus className="size-3.5 shrink-0" aria-hidden />
-        <span>{t("knowledge.create.title")}</span>
-      </button>
     </nav>
   );
 }

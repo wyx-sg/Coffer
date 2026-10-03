@@ -98,14 +98,22 @@ describe("MemoryPage", () => {
     expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
   });
 
+  test("the header carries the Experimental tag and Update memory as the one primary button", async () => {
+    stub([GLOBAL, COFFER]);
+    renderPage();
+    await screen.findByRole("table");
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    // The primary kind is the filled accent button; the outline kind is not.
+    expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
+  });
+
   acceptance("web-ui", "the memory overview lists deliveries per agent", async () => {
     stub([COFFER]);
     renderPage();
     const block = await screen.findByTestId("memory-deliveries");
     expect(within(block).getByText("Delivered at session start")).toBeInTheDocument();
-    // The window rides in the help tip, not beside the title.
-    expect(within(block).queryByText("Last 7 days")).not.toBeInTheDocument();
-    expect(within(block).getByRole("button", { name: "More info" })).toBeInTheDocument();
+    // The window sits beside the title as a quiet 12px line (board 5.2.01).
+    expect(within(block).getByText("Last 7 days")).toBeInTheDocument();
 
     const claude = await within(block).findByTestId("memory-delivery-claude_code");
     expect(claude).toHaveTextContent("Claude Code");
@@ -202,7 +210,11 @@ describe("MemoryPage", () => {
     expect(banner).toHaveTextContent(/Couldn't read Codex's memory:/);
     expect(banner).toHaveTextContent("~/.codex/memories");
     expect(within(banner).getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    expect(within(banner).getByRole("button", { name: "Open Activity" })).toBeInTheDocument();
+    // Ask an agent hands the fix to an agent; Open Activity is gone.
+    expect(
+      within(banner).getByRole("button", { name: /copy prompt|ask an agent/i }),
+    ).toBeInTheDocument();
+    expect(within(banner).queryByRole("button", { name: "Open Activity" })).toBeNull();
   });
 
   test("while update memory runs the header counts the partitions it distils", async () => {
@@ -236,12 +248,24 @@ describe("MemoryPage", () => {
     expect(within(section).queryByText("3 partitions · 20 memories")).not.toBeInTheDocument();
     expect(within(section).getByText("Every project")).toBeInTheDocument();
     expect(within(section).getByText(pathText("~/work/coffer"))).toBeInTheDocument();
-    for (const header of ["Partition", "Path", "Sample memory", "Memories", "Sources", "Distil"]) {
+    for (const header of [
+      "Partition",
+      "Path",
+      "Sample memory",
+      "Memories",
+      "Sources",
+      "Distilled",
+    ]) {
       expect(within(section).getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
     expect(within(section).getByText("Use Node 20 for frontend vitest")).toBeInTheDocument();
     expect(within(section).getAllByText("All agents")).toHaveLength(2);
     expect(within(section).getByText("Repository missing")).toBeInTheDocument();
+    // Healthy states are a grey dot; only the missing repository is coloured.
+    const dotOf = (word: RegExp) =>
+      within(section).getAllByText(word)[0].querySelector("[data-tone]")?.getAttribute("data-tone");
+    expect(dotOf(/^Distilled /)).toBe("off");
+    expect(dotOf(/^Repository missing$/)).toBe("warn");
     // Only the partition whose repository is gone can be deleted.
     expect(within(section).getAllByRole("button", { name: /^delete: /i })).toHaveLength(1);
     expect(
@@ -276,7 +300,7 @@ describe("MemoryPage", () => {
       expect(first).toHaveTextContent("All agents");
       expect(first).toHaveTextContent(/Distilled /);
       expect(second).toHaveTextContent("4 entries read from Codex, waiting to distil");
-      expect(second).toHaveTextContent("Not distilled yet");
+      expect(second).toHaveTextContent("Never");
       expect(third).toHaveTextContent("Repository missing");
       expect(within(third).getByRole("button", { name: /^delete: /i })).toBeInTheDocument();
     },
@@ -314,7 +338,7 @@ describe("MemoryPage", () => {
     stub([]);
     renderPage();
     expect(await screen.findByText("No agent memory to read")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /connect an agent/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Agents →" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /update memory/i })).toBeNull();
   });
 

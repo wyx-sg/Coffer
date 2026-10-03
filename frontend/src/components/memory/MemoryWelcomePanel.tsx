@@ -1,13 +1,13 @@
 // frontend/src/components/memory/MemoryWelcomePanel.tsx — the first-run state of /memory.
 //
-// Two shapes (designs 5.2.08 and 5.2.09). With agents connected: "Nothing
+// Two shapes (designs 5.2.10 and 5.2.11). With agents connected: "Nothing
 // distilled yet", the one next step Update memory, and "Found on this Mac" —
 // each connected agent with where its own memory lives and how much of it
 // there is, so the reader sees what Update memory will read. With no agent
 // connected there is nothing to read at all, so the one step is connecting an
 // agent. Nothing here is user-created: Coffer distils what the agents already
 // learned out of their own memory and never writes back to it.
-import { Bot, Brain, Plus } from "lucide-react";
+import { Bot, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
@@ -34,7 +34,7 @@ function FoundRow({ agent }: { agent: AgentRow }) {
       <AgentBadge type={agent.type} name={agent.name} size="sm" tooltip={false} />
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm text-text">{agent.display_name || agent.name}</span>
-        <span className="truncate font-mono text-xs text-text-muted">
+        <span className="truncate font-mono text-2xs text-text-muted">
           {abbreviateHomePath(agent.config_dir)}
         </span>
       </div>
@@ -70,7 +70,6 @@ export function MemoryWelcomePanel() {
         description={t("memory.welcome.noAgentsBody")}
         action={
           <Button type="button" onClick={() => navigate("/agents")}>
-            <Plus aria-hidden />
             {t("memory.welcome.connect")}
           </Button>
         }
@@ -91,7 +90,7 @@ export function MemoryWelcomePanel() {
         gap="snug"
         labelled
         title={t("memory.welcome.found")}
-        help={t("memory.welcome.foundMeta")}
+        aside={<span className="text-xs text-text-muted">{t("memory.welcome.foundMeta")}</span>}
       >
         <ul
           className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised"

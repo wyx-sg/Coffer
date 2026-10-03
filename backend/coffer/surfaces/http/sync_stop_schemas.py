@@ -35,8 +35,21 @@ class ConflictFileOut(BaseModel):
     #: An encrypted secret (``secret/*.enc``): answered with one side or the
     #: other only — no editor copy, no agent merge.
     secret: bool = False
-    #: Whether this file is in the stop's agent hand-off.
-    agent_merge: bool = False
+    #: Whether an agent may be asked to merge it (never a secret, never a
+    #: same-name or changed-and-deleted conflict).
+    agent_mergeable: bool = False
+    #: Once it was handed to an agent: ``handed_off`` (the agent has not
+    #: written a merge yet) or ``merged_by_agent`` (a merge is saved, to be
+    #: checked). Never an answer by itself: the file stays unresolved until it
+    #: is marked resolved (``answer`` ``edited``).
+    agent_state: Literal["handed_off", "merged_by_agent"] | None = None
+    #: When it was handed over, the agent (a label) and the Coffer
+    #: conversation, if the caller named them.
+    agent_handed_at: str | None = None
+    agent_name: str | None = None
+    agent_conversation_id: str | None = None
+    #: When the agent's merge was saved (``merged_by_agent`` only).
+    agent_merged_at: str | None = None
 
 
 class BreachOut(BaseModel):
@@ -74,9 +87,6 @@ class StoppedRoundOut(BaseModel):
     files: list[ConflictFileOut]
     unanswered: int
     hold: HoldOut | None
-    #: The prompt handing the files an agent may merge to the person's agent;
-    #: ``POST /sync/stop/merged`` records them once it is done.
-    handoff: HandoffOut | None = None
 
 
 class StopStateOut(BaseModel):
@@ -110,11 +120,33 @@ class FileVersionsOut(BaseModel):
     binary: bool
     #: The hand-merge copy as it is saved now, once it exists.
     edited: str | None = None
+    #: An agent's merge (the saved copy, no marker left) and the unified diff
+    #: from this machine's version to it; set while ``agent_state`` is
+    #: ``merged_by_agent``.
+    merged: str | None = None
+    merged_diff: str | None = None
+
+
+class HandoffIn(BaseModel):
+    """Which files to hand to an agent (every file an agent may merge when
+    ``paths`` is omitted). ``agent`` and ``conversation_id`` are what the
+    caller opened the prompt in, kept for the file's merged state; send the
+    request again with them once the conversation exists."""
+
+    paths: list[str] | None = Field(default=None, min_length=1)
+    agent: str | None = Field(default=None, max_length=64)
+    conversation_id: str | None = Field(default=None, max_length=128)
+
+
+class AgentHandoffOut(BaseModel):
+    handoff: HandoffOut
+    #: The files the prompt covers.
+    paths: list[str]
 
 
 class JoinChoiceIn(BaseModel):
     path: str = Field(min_length=1)
-    answer: Literal["mine", "theirs"]
+    answer: Literal["mine", "theirs", "edited"]
 
 
 class JoinChoicesIn(BaseModel):
@@ -166,6 +198,7 @@ class RollbackPlanOut(BaseModel):
 
 
 __all__ = [
+    "AgentHandoffOut",
     "AreaCountOut",
     "BreachOut",
     "ConflictFileOut",
@@ -173,6 +206,7 @@ __all__ = [
     "FileAnswerIn",
     "FilePathIn",
     "FileVersionsOut",
+    "HandoffIn",
     "HoldGroupOut",
     "HoldOut",
     "JoinChoiceIn",

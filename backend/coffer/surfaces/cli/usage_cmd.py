@@ -1,29 +1,16 @@
-"""``coffer usage`` — metered API-key usage and official subscription quota.
+"""``coffer usage`` — metered API-key usage.
 
 Every reader goes through the route the Usage page reads (``/usage/summary``,
-``/usage/requests``, ``/usage/export.csv``, ``/usage/quota``), so a terminal
+``/usage/requests``, ``/usage/export.csv``), so a terminal
 sees what the page shows. Costs are estimates from the price version stored
 with each request, and are labelled so.
-
-``coffer usage statusline -- <command…>`` is the OPT-IN Claude Code statusLine
-wrapper (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-
-quota). Claude Code runs it with the statusLine JSON on stdin; it forwards that
-JSON's documented ``rate_limits`` to the daemon — with a one-second timeout,
-never spawning a daemon, every error ignored — and then runs the user's
-original statusLine command with the same stdin, printing its output and
-exiting with its code. The original runs even when the daemon is down; with no
-original command the wrapper prints nothing. Coffer never installs it by
-itself: the user points ``statusLine.command`` at it.
 """
 
 from __future__ import annotations
 
 import json as _json
-import subprocess
-import sys
 from typing import Any
 
-import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -32,13 +19,10 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(
-    help="Model usage through Coffer's proxy, and subscription quota",
+    help="Model usage through Coffer's proxy",
     invoke_without_command=True,
 )
 _console = Console()
-
-#: The statusline forward's whole budget: a statusline must never wait on Coffer.
-STATUSLINE_FORWARD_TIMEOUT = 1.0
 
 
 def _verbose(ctx: typer.Context) -> bool:
@@ -178,110 +162,4 @@ def requests(
         typer.echo(f"more: coffer usage requests --cursor {body['next_cursor']}")
 
 
-@app.command("quota")
-def quota(
-    ctx: typer.Context,
-    refresh: bool = typer.Option(False, "--refresh", help="Read Codex's windows now"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
-    prompt: bool = typer.Option(
-        False, "--prompt", help="Print the prompt that has your agent set up the statusline wrapper"
-    ),
-) -> None:
-    """Show each subscription agent's official remaining quota."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/usage/quota/refresh") if refresh else c.get("/usage/quota")
-        _cli_client.check(r, verbose=verbose)
-    body = r.json()
-    if output_json:
-        typer.echo(_json.dumps(body, indent=2))
-        return
-    if prompt:
-        # The Usage page's Copy prompt, word for word.
-        handoffs = [a["handoff"]["prompt"] for a in body["agents"] if a.get("handoff")]
-        if not handoffs:
-            typer.echo("Claude Code's quota is already reported; nothing to set up")
-            return
-        typer.echo(handoffs[0])
-        return
-    for agent in body["agents"]:
-        if not agent["windows"]:
-            typer.echo(f"{agent['agent_type']}: no official value seen yet")
-            if agent.get("handoff"):
-                typer.echo("  hand off:  coffer usage quota --prompt  (a prompt for your agent)")
-            continue
-        typer.echo(f"{agent['agent_type']}" + (f" ({agent['plan']})" if agent["plan"] else ""))
-        for w in agent["windows"]:
-            if w["used_percent"] is None:
-                typer.echo(f"  {w['label']}: reset since last seen (as of {w['as_of']})")
-                continue
-            resets = f", resets {w['resets_at']}" if w["resets_at"] else ""
-            typer.echo(
-                f"  {w['label']}: {w['used_percent']:.0f}% used{resets} (as of {w['as_of']})"
-            )
-
-
-def forward_statusline(stdin: bytes) -> None:
-    """Send the statusLine JSON's ``rate_limits`` to a RUNNING daemon.
-
-    Never spawns one (``discover`` only reads daemon.json), gives up after
-    :data:`STATUSLINE_FORWARD_TIMEOUT`, and swallows every error.
-    """
-    try:
-        payload = _json.loads(stdin.decode("utf-8") or "{}")
-        rate_limits = payload.get("rate_limits") if isinstance(payload, dict) else None
-        if not isinstance(rate_limits, dict) or not rate_limits:
-            return
-        info = _cli_client.discover()
-        if info is None:
-            return
-        httpx.post(
-            f"http://127.0.0.1:{info.port}/api/v1/usage/quota/statusline",
-            json={"rate_limits": rate_limits},
-            headers={"X-Coffer-Token": info.token},
-            timeout=STATUSLINE_FORWARD_TIMEOUT,
-        )
-    except Exception:
-        return
-
-
-def run_original(command: list[str], stdin: bytes) -> int:
-    """Run the user's original statusLine command with the same stdin.
-
-    One argument is a shell command line (what ``statusLine.command`` holds);
-    several are an argv. Its stdout is printed as ours; its stderr passes through.
-    """
-    if not command:
-        return 0
-    try:
-        if len(command) == 1:
-            done = subprocess.run(
-                command[0], input=stdin, shell=True, stdout=subprocess.PIPE, check=False
-            )
-        else:
-            done = subprocess.run(command, input=stdin, stdout=subprocess.PIPE, check=False)
-    except OSError as exc:
-        print(f"coffer usage statusline: {exc}", file=sys.stderr)
-        return 127
-    typer.echo(done.stdout.decode("utf-8", "replace"), nl=False)
-    return done.returncode
-
-
-@app.command(
-    "statusline",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-)
-def statusline(
-    command: list[str] | None = typer.Argument(  # noqa: B008
-        None, help="The original statusLine command to run after forwarding"
-    ),
-) -> None:
-    """Opt-in Claude Code statusLine wrapper: forward rate limits, then chain."""
-    stdin = sys.stdin.buffer.read() if not sys.stdin.isatty() else b""
-    forward_statusline(stdin)
-    code = run_original(list(command or []), stdin)
-    raise typer.Exit(code)
-
-
-__all__ = ["app", "forward_statusline", "run_original"]
+__all__ = ["app"]

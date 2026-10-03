@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 # --- Audit ---
 
 
@@ -85,6 +87,11 @@ class InvocationOut(BaseModel):
     #: null when the session reported none. Nullable but NOT defaulted, like
     #: ``resource_name``: the projection sets it on every row.
     agent_uid: str | None
+    #: For a call its server never answered (refused, timed out, would not
+    #: start): the chore of finding out why, for the person's agent. Null for
+    #: every other call — a success, a denial, or an upstream that answered
+    #: with its own error.
+    handoff: HandoffOut | None = None
 
 
 class InvocationListOut(BaseModel):

@@ -1,19 +1,23 @@
 // frontend/src/components/knowledge/KnowledgeStatsLine.tsx
 //
-// A collection's one status row (spec knowledge "Present a collection as one
-// tree in the web UI"; board 5.1.13): *Documents N · Waiting M · Curated
-// <time>*, each a small label over its value. Waiting
-// links to the Inbox; while a Curate now run is draining it reads
-// "Curating · n of m" instead of the curated time, straight from the daemon's
-// in-flight list — no dialog, no toast. With Coffer's model not set nothing
-// ever waits, so the line is Documents alone.
+// A collection's properties (board 5.1.10): hairline rows with a 140px label
+// column — Documents · Inbox · Last curated · Folder. Inbox reads "N waiting"
+// with a ghost Open Inbox button, or "Nothing" and no button; while a Curate
+// now run is draining, Last curated reads "Curating · n of m" straight from the
+// daemon's in-flight list. With Coffer's model not set nothing ever waits and
+// nothing is curated, so the rows are Documents and Folder alone. No big
+// numbers: a number is shown only where it is the data.
 //
-// "Curated" is the newest curation pass in the collection's own history, the
-// same timeline Recent changes reads.
-import type { ReactNode } from "react";
+// "Last curated" is the newest curation pass in the collection's own history,
+// the same timeline Recent changes reads. The folder path is shown with the
+// home directory as ~ and a copy button.
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { Check, Copy } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { timeAgo } from "@/lib/timeAgo";
 import { collectionPath } from "@/lib/knowledge/routes";
@@ -26,47 +30,88 @@ interface Props {
   modelSet: boolean | undefined;
 }
 
-function Stat({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, first, children }: { label: string; first?: boolean; children: ReactNode }) {
   return (
-    <span className="flex min-w-[110px] flex-col gap-0.5">
-      <span className="text-xs text-text-muted">{label}</span>
-      <span className="text-lg font-bold tabular-nums text-text">{children}</span>
-    </span>
+    <div
+      className={`grid min-h-10 grid-cols-[140px_minmax(0,1fr)] items-center gap-4 ${first ? "" : "border-t border-border-subtle"}`}
+    >
+      <span className="text-sm font-medium text-text">{label}</span>
+      <span className="flex min-w-0 items-center gap-2 text-sm text-text">{children}</span>
+    </div>
   );
+}
+
+/** `/Users/me/.coffer/…` as `~/.coffer/…`: how the board writes the folder. */
+function homeRelative(path: string): string {
+  return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/)/, "~");
 }
 
 export function KnowledgeStatsLine({ collection, modelSet }: Props) {
   const { t, i18n } = useTranslation();
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const run = useUpkeepRun("knowledge", collection.uid);
   const changes = useKnowledgeChanges(collection.name);
   const lastPass = changes.data?.changes.find(
     (c) => c.writer === "curation" && c.operation === "pass",
   );
+  const [copied, setCopied] = useState(false);
+
+  const copyFolder = () =>
+    void navigator.clipboard.writeText(collection.folder_path).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      },
+      () => toast.error(t("knowledge.editor.copyFailed")),
+    );
 
   return (
-    <p className="flex flex-wrap items-center gap-x-7 gap-y-2" data-testid="knowledge-stats">
-      <Stat label={t("knowledge.stats.documents")}>{collection.document_count}</Stat>
+    <div className="flex flex-col" data-testid="knowledge-stats">
+      <Row label={t("knowledge.stats.documents")} first>
+        {collection.document_count}
+      </Row>
       {modelSet ? (
         <>
-          <Stat label={t("knowledge.stats.waiting")}>
-            <Link
-              to={collectionPath(collection.uid, "inbox")}
-              className="text-accent-text underline-offset-4 hover:underline"
-            >
-              {collection.pending_count}
-            </Link>
-          </Stat>
-          <Stat label={t("knowledge.stats.curated")}>
-            {run ? (
-              <span className="text-sm font-book text-text-muted">{curatingLabel(t, run)}</span>
-            ) : lastPass ? (
-              timeAgo(lastPass.time, i18n.language)
+          <Row label={t("knowledge.stats.inbox")}>
+            {collection.pending_count > 0 ? (
+              <>
+                {t("knowledge.stats.waiting", { count: collection.pending_count })}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(collectionPath(collection.uid, "inbox"))}
+                >
+                  {t("knowledge.stats.openInbox")}
+                </Button>
+              </>
             ) : (
-              t("knowledge.stats.never")
+              t("knowledge.stats.nothing")
             )}
-          </Stat>
+          </Row>
+          <Row label={t("knowledge.stats.curated")}>
+            {run
+              ? curatingLabel(t, run)
+              : lastPass
+                ? timeAgo(lastPass.time, i18n.language)
+                : t("knowledge.stats.never")}
+          </Row>
         </>
       ) : null}
-    </p>
+      <Row label={t("knowledge.stats.folder")}>
+        <span className="truncate font-mono text-xs" title={collection.folder_path}>
+          {homeRelative(collection.folder_path)}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0"
+          aria-label={t("knowledge.collection.copyPath")}
+          onClick={copyFolder}
+        >
+          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+        </Button>
+      </Row>
+    </div>
   );
 }

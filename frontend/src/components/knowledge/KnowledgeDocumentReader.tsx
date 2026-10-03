@@ -1,195 +1,113 @@
 // frontend/src/components/knowledge/KnowledgeDocumentReader.tsx
 //
-// The Document tab while reading (board 5.1.01): the rendered document in a
-// reading column, and a quiet rail beside it — On this page (the document's
-// own headings, each scrolling to itself), Properties (who edited it last and
-// when, when it was created and by whom, how many curation passes it was
-// curated from) and the file actions (open in the person's editor, reveal in
-// their file manager, delete). Every document is the same here, whoever wrote
-// it last (spec knowledge "Let only a person delete a document").
-//
-// When the newest version is a curation pass, a line above the body says so and
-// links to what that pass changed — the answer to "why does this read
-// differently than yesterday?".
-import { useMemo, useRef, type ReactNode } from "react";
+// The Document tab while reading (boards 5.1.01, 0.6.03): the document in one
+// reading column, 720 wide and centred — its title, then ONE quiet line of
+// properties (when it was last curated and from what, a link to that pass,
+// when it was created and by whom; a part with no data is left out), then the
+// body. Preview renders the Markdown; Source shows the raw text in the code
+// viewer. Every document is the same here, whoever wrote it last (spec
+// knowledge "Let only a person delete a document"); its file actions live in
+// the pane bar's ⋯ menu, not beside the text.
+import { Fragment, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { ArrowRight, ExternalLink, FolderOpen, Trash2 } from "lucide-react";
 
-import { Section, SectionStack } from "@/components/Section";
-import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
+import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
-import type { FileOut } from "@/lib/api/knowledge";
-import { timeAgo } from "@/lib/timeAgo";
+import type { ChangeOut, FileOut } from "@/lib/api/knowledge";
 import { agentLabel, writerLabel } from "@/lib/knowledge/changes";
 import { changePath } from "@/lib/knowledge/routes";
-import { outlineOf } from "@/lib/knowledge/text";
+import { withoutTitleHeading } from "@/lib/knowledge/titleHeading";
 import { useDocumentHistory } from "@/lib/hooks/useKnowledgeHistory";
-import { cn } from "@/lib/utils";
+import { timeAgo } from "@/lib/timeAgo";
 
 interface Props {
   file: FileOut;
-  onOpen: () => void;
-  onReveal: () => void;
-  onDelete: () => void;
+  /** Show the raw text instead of the rendered Markdown. */
+  source: boolean;
 }
 
-export function KnowledgeDocumentReader({ file, onOpen, onReveal, onDelete }: Props) {
+export function KnowledgeDocumentReader({ file, source }: Props) {
   const { t, i18n } = useTranslation();
   const history = useDocumentHistory(file.path);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const outline = useMemo(() => outlineOf(file.body), [file.body]);
+  const versions = history.data?.versions;
+  const body = useMemo(() => withoutTitleHeading(file.body, file.title), [file.body, file.title]);
 
-  const versions = history.data?.versions ?? [];
-  const newest = versions[0]?.change;
-  const oldest = versions[versions.length - 1]?.change;
-  const passes = versions.filter((v) => v.change.operation === "pass").length;
-  const curatedLast = newest && newest.writer === "curation" && newest.operation === "pass";
-  const top = outline.length ? Math.min(...outline.map((h) => h.level)) : 1;
+  const passes = (versions ?? []).map((v) => v.change).filter((c) => c.operation === "pass");
+  const oldest: ChangeOut | undefined = versions?.[versions.length - 1]?.change;
+  const lastPass = passes[0];
 
-  const scrollTo = (index: number) => {
-    const nodes = bodyRef.current?.querySelectorAll("h2, h3, h4");
-    const node = nodes?.[index];
-    if (node && "scrollIntoView" in node) node.scrollIntoView({ block: "start" });
-  };
+  // Who submitted what was curated: named only when it was one agent.
+  const agents = new Set(passes.map((c) => c.agent ?? ""));
+  const agent = agents.size === 1 && passes[0].agent ? passes[0].agent : null;
 
-  return (
-    <div className="flex min-h-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-border">
-        <div className="flex min-h-0 flex-1 flex-col gap-[18px] px-10 pb-7 pt-[22px]">
-          {curatedLast ? (
-            <p className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-text-muted">
-              <KnowledgeWriterMark writer="curation" />
-              <span>
-                {t("knowledge.document.curatedBanner", {
-                  agent: agentLabel(t, newest.agent),
-                  when: timeAgo(newest.time, i18n.language),
-                })}
-              </span>
-              <Link
-                to={changePath(newest.version)}
-                className="inline-flex items-center gap-1 font-label text-text hover:underline"
-              >
-                {t("knowledge.document.seePass")}
-                <ArrowRight className="size-3" aria-hidden />
-              </Link>
-            </p>
-          ) : null}
-          <div ref={bodyRef} className="flex min-h-0 max-w-[640px] flex-1 flex-col">
-            <FindableMarkdown fill>{file.body}</FindableMarkdown>
-          </div>
-        </div>
-      </div>
-
-      <aside
-        aria-label={t("knowledge.document.rail")}
-        className="hidden w-[210px] shrink-0 flex-col overflow-auto px-5 py-[22px] lg:flex"
+  const parts: ReactNode[] = [];
+  if (lastPass) {
+    parts.push(
+      t("knowledge.document.curated", {
+        when: timeAgo(lastPass.time, i18n.language),
+        source: agent
+          ? t("knowledge.document.passesFrom", {
+              count: passes.length,
+              agent: agentLabel(t, agent),
+            })
+          : t("knowledge.document.passes", { count: passes.length }),
+      }),
+      <Link
+        key="pass"
+        to={changePath(lastPass.version)}
+        className="text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
       >
-        <SectionStack>
-          {outline.length > 0 ? (
-            <Section title={t("knowledge.document.onThisPage")} gap="tight">
-              <div className="flex flex-col">
-                {outline.map((h, i) => (
-                  <button
-                    key={`${i}-${h.text}`}
-                    type="button"
-                    onClick={() => scrollTo(i)}
-                    style={{ paddingLeft: (h.level - top) * 10 }}
-                    className={cn(
-                      "truncate py-[3px] text-left text-xs hover:text-text",
-                      i === 0 ? "text-text" : "text-text-muted",
-                    )}
-                  >
-                    {h.text}
-                  </button>
-                ))}
-              </div>
-            </Section>
-          ) : null}
+        {t("knowledge.document.seePass")}
+      </Link>,
+    );
+  }
+  // Created: the file's own date, else its oldest version's; by whom only when
+  // a writer wrote it (an edit on disk names no one).
+  const createdAt = [file.created_at, oldest?.time].find((d) => d && !Number.isNaN(Date.parse(d)));
+  if (createdAt) {
+    const date = new Date(createdAt).toLocaleDateString(i18n.language, {
+      month: "short",
+      day: "numeric",
+    });
+    const who =
+      oldest?.writer === "disk"
+        ? null
+        : oldest
+          ? writerLabel(t, oldest)
+          : agentLabel(t, file.actor);
+    parts.push(
+      who
+        ? t("knowledge.document.createdBy", {
+            date,
+            who: who === t("knowledge.writer.user") ? t("knowledge.document.you") : who,
+          })
+        : t("knowledge.document.created", { date }),
+    );
+  }
 
-          <Section title={t("knowledge.document.properties")} gap="tight">
-            <dl className="flex flex-col">
-              <Property label={t("knowledge.document.edited")}>
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {newest ? (
-                    <KnowledgeWriterMark writer={newest.writer} agent={newest.agent} />
-                  ) : null}
-                  <span className="min-w-0">
-                    {t("knowledge.document.byWhen", {
-                      who: newest ? writerLabel(t, newest) : agentLabel(t, file.actor),
-                      when: timeAgo(newest?.time ?? file.updated_at, i18n.language),
-                    })}
-                  </span>
-                </span>
-              </Property>
-              <Property label={t("knowledge.document.created")}>
-                {t("knowledge.document.byWhen", {
-                  who: oldest ? writerLabel(t, oldest) : agentLabel(t, file.actor),
-                  when: new Date(file.created_at).toLocaleDateString(i18n.language, {
-                    month: "short",
-                    day: "numeric",
-                  }),
-                })}
-              </Property>
-              {passes > 0 ? (
-                <Property label={t("knowledge.document.curatedFrom")}>
-                  {t("knowledge.document.passes", { count: passes })}
-                </Property>
-              ) : null}
-            </dl>
-          </Section>
+  if (source) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <CodeView value={file.body} filename={file.path} ariaLabel={file.path} fill />
+      </div>
+    );
+  }
 
-          <section className="flex flex-col items-start gap-2">
-            <RailAction
-              icon={ExternalLink}
-              label={t("fileActions.openInEditor")}
-              onClick={onOpen}
-            />
-            <RailAction icon={FolderOpen} label={t("fileActions.reveal")} onClick={onReveal} />
-            <RailAction
-              icon={Trash2}
-              label={t("knowledge.deleteDocument.menu")}
-              onClick={onDelete}
-              danger
-            />
-          </section>
-        </SectionStack>
-      </aside>
-    </div>
-  );
-}
-
-function Property({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[62px_minmax(0,1fr)] items-baseline gap-4 border-t border-border-subtle py-[7px]">
-      <dt className="text-xs text-text-subtle">{label}</dt>
-      <dd className="min-w-0 break-words text-xs text-text">{children}</dd>
+    <div className="min-h-0 flex-1 overflow-auto px-8 py-7">
+      <div className="mx-auto max-w-[720px]">
+        <h1 className="text-xl font-bold">{file.title}</h1>
+        <p className="mb-5 mt-1.5 text-xs text-text-muted">
+          {parts.map((part, i) => (
+            <Fragment key={i}>
+              {i > 0 ? " · " : null}
+              {part}
+            </Fragment>
+          ))}
+        </p>
+        <FindableMarkdown>{body}</FindableMarkdown>
+      </div>
     </div>
-  );
-}
-
-function RailAction({
-  icon: Icon,
-  label,
-  onClick,
-  danger,
-}: {
-  icon: typeof ExternalLink;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-label hover:underline",
-        danger ? "text-danger" : "text-text-muted hover:text-text",
-      )}
-    >
-      <Icon className="size-3.5" aria-hidden />
-      {label}
-    </button>
   );
 }

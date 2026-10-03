@@ -258,9 +258,9 @@ describe("Conversations filter row", () => {
     renderPage();
     await screen.findByRole("link", { name: "Today one" });
     fireEvent.click(screen.getByRole("button", { name: /^Source/ }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Coffer" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Telegram · Personal" }));
-    expect(screen.getByRole("checkbox", { name: "SeaTalk · Team bot" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("option", { name: "Coffer" }));
+    fireEvent.click(screen.getByRole("option", { name: "Telegram · Personal" }));
+    expect(screen.getByRole("option", { name: "SeaTalk · Team bot" })).toBeInTheDocument();
     await waitFor(() => expect(loc()).toContain("?source=coffer,ch-2"));
     await waitFor(() => expect(screen.queryByRole("link", { name: "Earlier one" })).not.toBeNull());
     expect(screen.getByRole("link", { name: "Yesterday one" })).toBeInTheDocument();
@@ -276,7 +276,7 @@ describe("Conversations filter row", () => {
     renderPage("/conversations?q=x");
     await screen.findByRole("link", { name: "Today one" });
     fireEvent.click(screen.getByRole("button", { name: /^Agent/ }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Codex" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
     await waitFor(() => expect(screen.queryByRole("link", { name: "Today one" })).toBeNull());
     await waitFor(() => expect(loc()).toContain("agent=codex"));
     fireEvent.keyDown(document.body, { key: "Escape" });

@@ -12,8 +12,8 @@ section when it shows a price, so the two never disagree:
    provider the endpoint belongs to;
 5. otherwise unpriced (``None``): shown as "—", never as zero.
 
-Subscription logins never reach this: they are not metered, and show only
-their official quota.
+Subscription logins never reach this: they do not pass through Coffer and are
+not metered.
 """
 
 from __future__ import annotations

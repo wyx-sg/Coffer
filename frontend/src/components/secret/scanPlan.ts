@@ -34,3 +34,17 @@ export function planOf(result: SecretImport): ImportPlan {
 export function changeCount(plan: ImportPlan): number {
   return plan.secrets.length + plan.files.length;
 }
+
+/** The hand-off prompt for a key that is saved but whose file Coffer could not rewrite: where each
+ *  file is and why, never a value. */
+export function permissionPrompt(unwritten: SecretImport["skipped"]): string {
+  const lines = unwritten.map(
+    (s) => `- ${shortPath(s.path)} (saved as the secret ${s.name ?? "?"}): ${s.reason}`,
+  );
+  return [
+    "Coffer saved these plaintext keys as secrets but could not rewrite the files that hold them.",
+    "Check each file's permissions and owner, make it writable by me, and tell me when I can retry in Coffer. Do not print, copy or move any key.",
+    "",
+    ...lines,
+  ].join("\n");
+}

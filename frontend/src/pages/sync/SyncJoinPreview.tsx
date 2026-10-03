@@ -1,4 +1,4 @@
-// frontend/src/pages/sync/SyncJoinPreview.tsx — first join, preview (6.5.18).
+// frontend/src/pages/sync/SyncJoinPreview.tsx — first join, preview (6.4.22).
 //
 // A machine meets the remote for the first time by JOINING it (spec
 // vault-sync "Report a join before applying it"), and a join is explicit: until
@@ -11,13 +11,12 @@
 // join (a newer layout, not a vault) shows the daemon's reason, no Join button;
 // a push token still waiting for approval says so and offers Secrets.
 import { useTranslation } from "react-i18next";
-import { ArrowDown } from "lucide-react";
 
 import { LoadError } from "@/components/LoadError";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { JoinPreview } from "@/lib/api/sync";
+import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { useJoin, useJoinPreview } from "@/lib/hooks/useSyncStop";
 import { isApprovalWait } from "@/lib/syncApproval";
 import { SyncApprovalWait } from "./SyncApprovalWait";
@@ -104,15 +103,12 @@ export function SyncJoinPreview({
   const replace = data?.kind === "replace";
 
   return (
-    <Card className="max-w-[680px]" data-testid="sync-join">
-      <div className="flex items-start gap-3 p-4 pb-2">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-text">
-          <ArrowDown className="size-4" aria-hidden />
-        </span>
+    <div className="flex max-w-[680px] flex-col gap-4" data-testid="sync-join">
+      <div className="flex flex-col gap-2.5">
         <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-semibold text-text">
+          <h2 className="text-md font-semibold text-text">
             {t(`sync.join.kind.${data?.kind ?? "new"}`)}
-          </h3>
+          </h2>
           <p className="text-xs text-text-muted">
             {data?.pushed_by
               ? t("sync.join.lastPushed", {
@@ -125,15 +121,13 @@ export function SyncJoinPreview({
             {replace ? t("sync.join.replaceLead") : t("sync.join.lead")}
           </p>
         </div>
-      </div>
-      <div className="px-4 pb-2">
         {preview.isLoading ? (
           <div className="flex flex-col gap-2 py-2">
             <Skeleton className="h-8 w-full" />
             <Skeleton className="h-8 w-full" />
           </div>
         ) : waiting ? (
-          <SyncApprovalWait onRetry={() => void preview.refetch()} />
+          <SyncApprovalWait onReview={openApprovalsSheet} onRetry={() => void preview.refetch()} />
         ) : preview.error ? (
           <LoadError
             className="py-2"
@@ -141,11 +135,9 @@ export function SyncJoinPreview({
             onRetry={() => void preview.refetch()}
           />
         ) : data ? (
-          replace ? (
-            <SyncReplaceLines preview={data} />
-          ) : (
-            <Lines preview={data} />
-          )
+          <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
+            {replace ? <SyncReplaceLines preview={data} /> : <Lines preview={data} />}
+          </div>
         ) : null}
         {refused ? (
           <p className="py-2 text-sm text-danger" role="alert">
@@ -153,7 +145,7 @@ export function SyncJoinPreview({
           </p>
         ) : null}
       </div>
-      <div className="flex items-center gap-2 rounded-b-xl border-t border-border-subtle bg-surface-footer px-4 py-3">
+      <div className="flex items-center gap-2">
         <Button
           type="button"
           disabled={!data || refused !== null}
@@ -177,8 +169,8 @@ export function SyncJoinPreview({
         >
           {t("sync.setup.back")}
         </Button>
-        <span className="ml-auto text-xs text-text-muted">{t("sync.join.snapshot")}</span>
+        <span className="ml-auto text-xs text-text-subtle">{t("sync.join.snapshot")}</span>
       </div>
-    </Card>
+    </div>
   );
 }

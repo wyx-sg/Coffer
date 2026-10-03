@@ -7,7 +7,7 @@ description: How an agent on an API-key or local connection reaches its model �
 
 An agent on its own login talks to its vendor directly, and Coffer stays out of the way. An agent that Coffer switches onto a **connection** — an API key for a gateway, a vendor account, or a model runtime on this machine — talks to the **local model proxy** instead. The proxy is a small process on `127.0.0.1`. It forwards each request to the connection's endpoint with the real key attached, and writes down what the request cost.
 
-The decisions and the options weighed are in two ADRs: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) and [Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md). This page explains how it works.
+The decisions and the options weighed are in two ADRs: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) and [Usage Is Metered at the Proxy; Subscription Agents Are Not Metered](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md). This page explains how it works.
 
 ## Why a proxy at all
 

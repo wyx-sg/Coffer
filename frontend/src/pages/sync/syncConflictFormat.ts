@@ -80,8 +80,20 @@ export function fileState(t: TFunction, file: ConflictFile, editing: boolean): s
   if (file.answer === "theirs") {
     return t("sync.resolve.state.theirs", { machine: otherMachine(t, file) });
   }
-  if (file.answer === "edited") return t("sync.resolve.state.edited");
-  return editing ? t("sync.resolve.state.editing") : t("sync.resolve.state.open");
+  if (file.answer === "edited") {
+    return file.agent_state === "merged_by_agent"
+      ? t("sync.resolve.state.agentResolved")
+      : t("sync.resolve.state.edited");
+  }
+  if (editing) return t("sync.resolve.state.editing");
+  if (file.agent_state === "merged_by_agent") return t("sync.resolve.state.merged");
+  if (file.agent_state === "handed_off") return t("sync.resolve.state.handedOff");
+  return file.secret ? t("sync.resolve.state.secret") : t("sync.resolve.state.open");
+}
+
+/** Whether "Ask an agent" is offered for a file: only a merge, and only while it has no answer. */
+export function canAskAgent(file: ConflictFile): boolean {
+  return file.agent_mergeable && !file.secret && file.answer === null;
 }
 
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/;

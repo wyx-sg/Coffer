@@ -6,7 +6,6 @@
 import type { TFunction } from "i18next";
 import { PencilLine, ScrollText, Server, type LucideIcon } from "lucide-react";
 
-import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
 import type { StatusTone } from "@/lib/statusTone";
 import { describeActivity, describeDaemonRecord } from "@/lib/activity/activityText";
@@ -127,7 +126,7 @@ export function EventCell({ t, record }: { t: TFunction; record: ActivityRecord 
   );
 }
 
-/** Who did it: an agent's badge for a call, the actor for a change, Coffer for the daemon. */
+/** Who did it: an agent's name for a call, the actor for a change, Coffer for the daemon. */
 export function ByCell({
   t,
   record,
@@ -139,8 +138,11 @@ export function ByCell({
 }) {
   if (record.source === "call") {
     const agent = record.call.agent_uid ? agents.get(record.call.agent_uid) : undefined;
-    if (!agent) return <span className="text-xs text-text-subtle">—</span>;
-    return <AgentBadge type={agent.type} name={agent.name} size="sm" />;
+    return agent ? (
+      <span className="block truncate text-xs text-text">{agent.name}</span>
+    ) : (
+      <span className="text-xs text-text-subtle">—</span>
+    );
   }
   const text =
     record.source === "change" ? actorLabel(t, record.entry.actor) : actorLabel(t, "system");
@@ -150,7 +152,7 @@ export function ByCell({
 export function TookCell({ record }: { record: ActivityRecord }) {
   if (record.source !== "call") return null;
   return (
-    <span className="whitespace-nowrap font-mono text-xs text-text-muted">
+    <span className="block whitespace-nowrap text-right font-mono text-xs text-text-muted">
       {formatDuration(record.call.duration_ms)}
     </span>
   );
@@ -169,31 +171,8 @@ export function CallStatus({ t, call }: { t: TFunction; call: Invocation }) {
   );
 }
 
-/** A call's status as the drawer's tinted chip: a dot and the word. */
-export function CallStatusChip({ t, call }: { t: TFunction; call: Invocation }) {
-  const tone = STATUS_TONE[call.status];
-  return (
-    <span
-      className={cn(
-        "inline-flex h-[22px] items-center rounded-md px-2 font-semibold",
-        tone === "err"
-          ? "bg-danger-soft"
-          : tone === "warn"
-            ? "bg-warning-soft"
-            : tone === "ok"
-              ? "bg-success-soft"
-              : "bg-chip",
-      )}
-    >
-      <StatusWord tone={tone} className="font-semibold">
-        {t(`activity.status.${call.status}`)}
-      </StatusWord>
-    </span>
-  );
-}
-
-/** A daemon record's level as a small tinted chip, as the Daemon log table shows it. */
-export function LevelChip({ record }: { record: ActivityRecord }) {
+/** A daemon record's level as plain mono text: grey, except a warning (amber) and an error (red). */
+export function LevelText({ record }: { record: ActivityRecord }) {
   if (record.source !== "daemon") return null;
   const level = daemonLevel(record.log);
   if (!level) return <span className="text-xs text-text-subtle">—</span>;
@@ -201,12 +180,12 @@ export function LevelChip({ record }: { record: ActivityRecord }) {
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center rounded-sm px-[7px] font-mono text-2xs uppercase",
+        "font-mono text-xs",
         severity === "error"
-          ? "bg-danger-soft text-danger"
+          ? "text-danger"
           : severity === "warning"
-            ? "bg-warning-soft text-warning"
-            : "bg-chip text-text-muted",
+            ? "text-warning"
+            : "text-text-muted",
       )}
     >
       {level}

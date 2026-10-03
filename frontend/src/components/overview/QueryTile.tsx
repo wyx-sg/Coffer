@@ -17,7 +17,7 @@ export function QueryTile<T>({
   content: (data: T) => TileContent;
 }) {
   const { t } = useTranslation();
-  const entry = NAV_ENTRIES.find((e) => e.to === area.to);
+  const entry = area.own ?? NAV_ENTRIES.find((e) => e.to === area.to);
   if (!entry) return null;
   const label = t(entry.labelKey);
   const state = query.isPending
@@ -29,7 +29,7 @@ export function QueryTile<T>({
     <HealthTile
       to={area.to}
       label={label}
-      area={area.to.slice(1)}
+      area={area.own?.key ?? area.to.slice(1)}
       icon={entry.icon}
       state={state}
     />

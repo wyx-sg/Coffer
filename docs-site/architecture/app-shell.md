@@ -17,7 +17,7 @@ The app shell is the frame every page of the web UI sits in: the sidebar, the co
 
 ## The sidebar is grouped by what you come to do
 
-The sidebar has fifteen entries: **Overview** on top under no heading, then five groups.
+The sidebar has fourteen entries: **Overview** on top under no heading, then five groups.
 
 | Group | Entries | The question it answers |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ The sidebar has fifteen entries: **Overview** on top under no heading, then five
 | Run | Conversations, Channels | How do I put an agent to work — directly or from IM? |
 | Capabilities | MCP servers, Custom tools, Skills, CLIs | What can my agents do? |
 | Context | Knowledge, Memory | What do my agents know? |
-| System | Secrets, Activity, Usage, Sync | How do I look after Coffer and what every part shares? |
+| System | Secrets, Activity, Sync | How do I look after Coffer and what every part shares? |
 
 The earlier sidebar grouped by role — agents as consumers, a large Resources group of what they consume, and System. It was accurate, but it was the architecture's view: a person looking for "where do I add a tool" had to know that tools, skills, knowledge and channels are all resources. Grouping by intent puts the answer under the question. It also keeps every group short: none has more than four entries, so each heading is scannable at a glance, and the rule that no group passes five tells the next change where a new entry belongs or when the grouping must be revisited.
 
@@ -37,7 +37,7 @@ The alternatives — keeping the role groups, one big Resources group, a flat li
 
 ### Experimental entries
 
-An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and its **Experimental** mark sits beside the page's title and in Settings › Features, not on the sidebar row (the collapsed rail's tooltip still says so). Knowledge belongs to `knowledge`, Memory to `memory`, Sync to `sync`, and Model providers and Usage to `models`; every other entry, Conversations and Channels included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
+An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and its **Experimental** mark sits beside the page's title and in Settings › Features, not on the sidebar row (the collapsed rail's tooltip still says so). Knowledge belongs to `knowledge`, Memory to `memory`, Sync to `sync`, and Model providers (with its Usage tab) to `models`; every other entry, Conversations and Channels included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
 
 ## One list of names and routes
 

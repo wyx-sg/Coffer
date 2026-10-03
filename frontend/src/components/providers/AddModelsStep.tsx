@@ -52,7 +52,7 @@ export function AddModelsStep({ models, selected, onChange, emptyNote }: Props) 
         <SearchInput
           value={query}
           onChange={setQuery}
-          placeholder={t("providers.add.models.search", { count: models.length })}
+          placeholder={t("providers.models.search")}
           ariaLabel={t("providers.models.search")}
           className="w-56"
         />
