@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SETTINGS_TABS, type SettingsTabId } from "@/lib/navigation";
 import { useCloseSettings, useOpenSettings } from "@/lib/settingsModal";
 import { shortcutLabel } from "@/lib/shortcuts";
@@ -70,12 +71,19 @@ export function SettingsModal() {
             <kbd className="inline-flex h-[18px] items-center rounded-xs border border-border px-1 font-sans text-2xs text-text-subtle">
               {shortcutLabel(",")}
             </kbd>
-            <DialogPrimitive.Close
-              aria-label={t("settings.close")}
-              className="ml-auto inline-flex size-7 items-center justify-center rounded-item text-text-muted transition-colors duration-fast hover:bg-surface-hover hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              <X className="size-4" aria-hidden />
-            </DialogPrimitive.Close>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogPrimitive.Close
+                  aria-label={t("settings.close")}
+                  className="ml-auto inline-flex size-7 items-center justify-center rounded-item text-text-muted transition-colors duration-fast hover:bg-surface-hover hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                >
+                  <X className="size-4" aria-hidden />
+                </DialogPrimitive.Close>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" shortcut="Esc">
+                {t("settings.close")}
+              </TooltipContent>
+            </Tooltip>
           </div>
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
             <nav

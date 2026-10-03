@@ -5,12 +5,16 @@
 // between items, Home / End jump, Escape closes and focus returns to the
 // trigger (Radix Popover). Choosing an item closes the menu before running it,
 // so a dialog the item opens takes focus cleanly. Destructive items read in the
-// danger role; a separator groups them apart.
+// danger role; a separator groups them apart. The icon-only trigger carries the
+// tooltip "More actions" (it only names the control) while its aria-label stays
+// the specific one callers pass; the tooltip stays shut while the menu is open.
 import * as React from "react";
 import { MoreHorizontal, type LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export interface MenuAction {
@@ -37,6 +41,7 @@ interface Props {
 }
 
 export function ActionMenu({ label, actions, align = "end", className }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -62,18 +67,25 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          aria-haspopup="menu"
-          className={className}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <MoreHorizontal className="size-4" aria-hidden />
-        </Button>
-      </PopoverTrigger>
+      <TooltipProvider>
+        <Tooltip open={open ? false : undefined}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={label}
+                aria-haspopup="menu"
+                className={className}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal className="size-4" aria-hidden />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{t("common.moreActions")}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent
         align={align}
         className="w-auto min-w-[180px] p-1"

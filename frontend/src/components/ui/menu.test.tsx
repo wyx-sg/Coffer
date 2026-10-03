@@ -59,4 +59,14 @@ describe("ActionMenu", () => {
     fireEvent.keyDown(copy, { key: "End" });
     expect(remove).toHaveFocus();
   });
+
+  test('the icon-only trigger shows the tooltip "More actions" on focus, and stays quiet while open', async () => {
+    renderMenu();
+    const trigger = screen.getByRole("button", { name: "More actions for Codex" });
+    fireEvent.focus(trigger);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("More actions");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
 });

@@ -84,9 +84,14 @@ describe("SidebarFooter", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
   });
 
-  test("the tooltip reads Settings and its shortcut", async () => {
+  test("the collapsed gear's tooltip reads Settings and its shortcut; the labelled row has none", async () => {
     answer({});
-    renderFooter();
+    const expanded = renderFooter();
+    fireEvent.focus(screen.getByTestId("sidebar-settings"));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expanded.unmount();
+    renderFooter(true);
     fireEvent.focus(screen.getByTestId("sidebar-settings"));
     expect(await screen.findByRole("tooltip")).toHaveTextContent(/^Settings\s+\S/);
   });

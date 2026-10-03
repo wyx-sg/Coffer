@@ -87,6 +87,7 @@
     "summaryWithCoffer": "{{agents}}和 Coffer 中的{{changes}}"
   },
   "common": {
+    "moreActions": "更多操作",
     "enabled": "已启用",
     "close": "关闭",
     "save": "保存",
@@ -168,8 +169,8 @@
     "knowledge": "知识",
     "memory": "记忆",
     "settings": "设置",
-    "collapse": "折叠侧边栏",
-    "expand": "展开侧边栏",
+    "collapse": "隐藏侧边栏",
+    "expand": "显示侧边栏",
     "back": "后退",
     "forward": "前进",
     "agents": "智能体",

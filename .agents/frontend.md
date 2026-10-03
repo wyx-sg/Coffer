@@ -260,6 +260,13 @@ return useMutation({
 
 ## 6. Components & Design System
 
+- **A tooltip only names an icon-only control** (its name, plus its shortcut when
+  it has one — one or two words: `More actions`, `Back ⌘[`, `Hide sidebar ⌘\`)
+  **or shows the full text of something truncated.** A button or menu item that
+  carries words gets no tooltip; a tooltip never explains what will happen — that
+  goes in a menu item's `description` (its second line) or behind a `HelpTip`.
+  The shared `ActionMenu` trigger carries `More actions` while its `aria-label`
+  stays the caller's specific label.
 - **Build from `src/components/ui/` primitives** (shadcn: `Button`, `Dialog`,
   `Select`, `Textarea`, `Tooltip`, `Skeleton`, `ConfirmDialog`, …). Don't
   hand-roll a control a primitive already covers — no native `title=` hints

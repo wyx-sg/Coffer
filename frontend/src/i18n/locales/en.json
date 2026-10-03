@@ -87,6 +87,7 @@
     "summaryWithCoffer": "{{changes}} in {{agents}} and Coffer"
   },
   "common": {
+    "moreActions": "More actions",
     "enabled": "Enabled",
     "close": "Close",
     "save": "Save",
@@ -168,8 +169,8 @@
     "knowledge": "Knowledge",
     "memory": "Memory",
     "settings": "Settings",
-    "collapse": "Collapse sidebar",
-    "expand": "Expand sidebar",
+    "collapse": "Hide sidebar",
+    "expand": "Show sidebar",
     "back": "Back",
     "forward": "Forward",
     "agents": "Agents",
