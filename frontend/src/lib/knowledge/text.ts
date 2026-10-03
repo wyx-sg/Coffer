@@ -1,9 +1,8 @@
 // frontend/src/lib/knowledge/text.ts
 // Small pieces of wording the Knowledge page derives rather than stores: the
 // progress label of a Curate now run, the description an item added from the
-// web UI carries (the daemon requires one; the dialog has no field for it), a
-// document's outline for the reader's "On this page", and an undo refusal in
-// words.
+// web UI carries (the daemon requires one; the dialog has no field for it), and
+// an undo refusal in words.
 import type { TFunction } from "i18next";
 
 import { errorHandoff } from "@/lib/api/errorHandoff";
