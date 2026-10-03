@@ -9,6 +9,8 @@ outline: 2
 The terms Coffer uses in its UI, CLI, API and documentation, in alphabetical order. Each
 entry links to the page that explains the concept in depth.
 
+<AzBar />
+
 ## A
 
 ### Actor

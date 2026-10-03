@@ -1,43 +1,59 @@
 ---
 title: coffer drift
 description: "See and repair drift between Coffer and the agents' own files"
+pageClass: cli-ref
 ---
 
 # coffer drift
 
-属于 [CLI 参考](/zh/reference/cli)，由 CLI 自己的命令树生成；用 `make docs-reference` 重新生成，不要手工编辑。
+See and repair drift between Coffer and the agents' own files
 
 ```sh
 coffer drift [OPTIONS] COMMAND [ARGS]...
 ```
 
-See and repair drift between Coffer and the agents' own files
+本页与 `coffer drift --help` 打印的内容一致。在下面任何命令后加 `--help`，即可在终端里查看它的选项。
+
+## 命令 {#commands}
+
+| 命令 | 说明 |
+| --- | --- |
+| [`drift list`](#drift-list) | List every difference a reconcile pass would find now. |
+| [`drift repair`](#drift-repair) | Apply drift items now. |
 
 ## drift list
+
+List every difference a reconcile pass would find now. Writes nothing.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer drift list [OPTIONS]
 ```
 
-List every difference a reconcile pass would find now. Writes nothing.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--target` | 选项 | text |  | One target only |
-| `--kind` | 选项 | text |  | Only items about this kind |
-| `--uid` | 选项 | text |  | Only items about this resource |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--target` <span class="cli-chip">选项</span> | text |  | One target only |
+| `--kind` <span class="cli-chip">选项</span> | text |  | Only items about this kind |
+| `--uid` <span class="cli-chip">选项</span> | text |  | Only items about this resource |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## drift repair
+
+Apply drift items now. Each repair is audited with you as the actor.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer drift repair [OPTIONS] [IDS]...
 ```
 
-Apply drift items now. Each repair is audited with you as the actor.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `IDS` | 参数 | text（可变个数） |  | Item ids from `coffer drift list` |
-| `--all` | 选项 | 开关 |  | Every item a request would repair |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `IDS` <span class="cli-chip">参数</span> | text（可变个数） |  | Item ids from `coffer drift list` |
+| `--all` <span class="cli-chip">选项</span> | 开关 |  | Every item a request would repair |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |

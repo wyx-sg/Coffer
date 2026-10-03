@@ -23,51 +23,49 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 
 ## 环境变量 {#environment-variables}
 
-链接指向 GitHub 上读取各个变量的文件。
-
 ### 守护进程与网络 {#daemon-and-network}
 
-| 名称 | 默认值 | 作用 | 读取位置 |
-| --- | --- | --- | --- |
-| `COFFER_FEATURES` | 未设置 | 为该守护进程固定实验功能状态，覆盖本机设置和默认值（关闭）。语法见下文。启动时读取一次。 | [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) |
-| `COFFER_ALLOWED_HOSTS` | 未设置 | 逗号分隔的额外 `Host` 请求头名称，守护进程除 `127.0.0.1`、`localhost` 和 `::1` 之外也会应答它们；`*` 关闭该检查。请求中写的是其他主机，或是另一个端口上的回环名称时，返回 `403 HOST_NOT_ALLOWED`。从不放宽 `Origin` 检查。正式发布构建会忽略它。 | [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) |
-| `COFFER_CORS_ORIGINS` | 未设置 | 逗号分隔的精确源列表，整体替换跨源允许列表，同时作用于 CORS 和 `Origin` 检查。不设置时，守护进程只允许桌面应用的源（`tauri://localhost`、`http://tauri.localhost`）。守护进程自己的源始终允许；其他任何源返回 `403 ORIGIN_NOT_ALLOWED`。正式发布构建会忽略它。 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
-| `COFFER_DEV_CORS` | 未设置 | `1` 会把 Vite 开发服务器的源 `http://localhost:5173` 和 `http://127.0.0.1:5173` 加入默认允许列表，同时作用于 CORS 和 `Origin` 检查。设置了 `COFFER_CORS_ORIGINS` 时忽略。正式发布构建会忽略它。`make dev` 会设置它。 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
-| `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
-| `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
-| `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
-| `COFFER_QUOTA_POLL` | 未设置 | `off` 停止在后台拉取 Codex 的订阅额度（每次拉取会起一个短命的 `codex app-server`）。测试套件会设置它。 | [`surfaces/http/usage_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/usage_wiring.py) |
+| 名称 | 默认值 | 作用 |
+| --- | --- | --- |
+| `COFFER_FEATURES` | 未设置 | 为该守护进程固定实验功能状态，覆盖本机设置和默认值（关闭）。语法见下文。启动时读取一次。 |
+| `COFFER_ALLOWED_HOSTS` | 未设置 | 逗号分隔的额外 `Host` 请求头名称，守护进程除 `127.0.0.1`、`localhost` 和 `::1` 之外也会应答它们；`*` 关闭该检查。请求中写的是其他主机，或是另一个端口上的回环名称时，返回 `403 HOST_NOT_ALLOWED`。从不放宽 `Origin` 检查。正式发布构建会忽略它。 |
+| `COFFER_CORS_ORIGINS` | 未设置 | 逗号分隔的精确源列表，整体替换跨源允许列表，同时作用于 CORS 和 `Origin` 检查。不设置时，守护进程只允许桌面应用的源（`tauri://localhost`、`http://tauri.localhost`）。守护进程自己的源始终允许；其他任何源返回 `403 ORIGIN_NOT_ALLOWED`。正式发布构建会忽略它。 |
+| `COFFER_DEV_CORS` | 未设置 | `1` 会把 Vite 开发服务器的源 `http://localhost:5173` 和 `http://127.0.0.1:5173` 加入默认允许列表，同时作用于 CORS 和 `Origin` 检查。设置了 `COFFER_CORS_ORIGINS` 时忽略。正式发布构建会忽略它。`make dev` 会设置它。 |
+| `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 |
+| `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 |
+| `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 |
+| `COFFER_QUOTA_POLL` | 未设置 | `off` 停止在后台拉取 Codex 的订阅额度（每次拉取会起一个短命的 `codex app-server`）。测试套件会设置它。 |
 
 ### MCP 网关 {#mcp-gateway}
 
-| 名称 | 默认值 | 作用 | 读取位置 |
-| --- | --- | --- | --- |
-| `COFFER_TOOL_TIERING` | `auto` | `off` 向客户端列出所有上游工具。其他任何值都保持按预算分层开启。 | [`application/mcp/tiering_config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/tiering_config.py) |
-| `COFFER_TOOL_TIERING_BUDGET` | `50` | 直接列出多少个上游工具，其余的只能通过 `coffer__search_tools` 找到。非正数或格式错误的值回退到默认值。 | [`application/mcp/tiering_config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/tiering_config.py) |
-| `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | 为预算给工具排序时使用的调用历史的回溯窗口。 | [`application/mcp/tiering_config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/tiering_config.py) |
-| `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | 一个会话同时冷启动多少个上游 MCP 服务器。 | [`application/mcp/supervisor.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/supervisor.py) |
-| `COFFER_MCP_SESSION_IDLE_S` | `1800` | `/mcp` 会话可空闲多少秒，之后回收器会关闭它及其上游进程。 | [`surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) |
-| `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | 回收器两次扫描之间的秒数。 | [`surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) |
-| `COFFER_MCP_SHIM_PATH` | 未设置 | `coffer-mcp-shim` 二进制的绝对路径，会写进智能体的 MCP 条目，优先于 `PATH` 和打包附带的副本。文件不存在时忽略。 | [`application/agent/mcp_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/agent/mcp_service.py) |
+| 名称 | 默认值 | 作用 |
+| --- | --- | --- |
+| `COFFER_TOOL_TIERING` | `auto` | `off` 向客户端列出所有上游工具。其他任何值都保持按预算分层开启。 |
+| `COFFER_TOOL_TIERING_BUDGET` | `50` | 直接列出多少个上游工具，其余的只能通过 `coffer__search_tools` 找到。非正数或格式错误的值回退到默认值。 |
+| `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | 为预算给工具排序时使用的调用历史的回溯窗口。 |
+| `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | 一个会话同时冷启动多少个上游 MCP 服务器。 |
+| `COFFER_MCP_SESSION_IDLE_S` | `1800` | `/mcp` 会话可空闲多少秒，之后回收器会关闭它及其上游进程。 |
+| `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | 回收器两次扫描之间的秒数。 |
+| `COFFER_MCP_SHIM_PATH` | 未设置 | `coffer-mcp-shim` 二进制的绝对路径，会写进智能体的 MCP 条目，优先于 `PATH` 和打包附带的副本。文件不存在时忽略。 |
 
 ### 聊天与消息渠道 {#chat-and-channels}
 
-| 名称 | 默认值 | 作用 | 读取位置 |
-| --- | --- | --- | --- |
-| `COFFER_TURN_IDLE_TIMEOUT_SECONDS` | `300` | 聊天或消息渠道的轮次在没有任何事件的情况下可持续多少秒，超过后看门狗会取消它。`0`、负数或非数字会关闭看门狗。 | [`surfaces/http/chat_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/chat_wiring.py) |
-| `COFFER_SEATALK_SDK_DIR` | `~/.coffer/vendor` | 导入 SeaTalk WebSocket SDK 包（`seatalk_oapi_sdk`）的目录。 | [`infrastructure/channel/seatalk_sdk.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/channel/seatalk_sdk.py) |
-| `COFFER_SEATALK_STREAM_INTERVAL` | `0.1` | SeaTalk 回复两次流式更新之间的最小秒数。 | [`infrastructure/channel/live_text.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/channel/live_text.py) |
+| 名称 | 默认值 | 作用 |
+| --- | --- | --- |
+| `COFFER_TURN_IDLE_TIMEOUT_SECONDS` | `300` | 聊天或消息渠道的轮次在没有任何事件的情况下可持续多少秒，超过后看门狗会取消它。`0`、负数或非数字会关闭看门狗。 |
+| `COFFER_SEATALK_SDK_DIR` | `~/.coffer/vendor` | 导入 SeaTalk WebSocket SDK 包（`seatalk_oapi_sdk`）的目录。 |
+| `COFFER_SEATALK_STREAM_INTERVAL` | `0.1` | SeaTalk 回复两次流式更新之间的最小秒数。 |
 
 ### 存储位置 {#storage-locations}
 
 保险库、本地状态、内容和派生状态都没有单独的覆盖变量：它们都在需要时从 `$HOME` 解析，`coffer path` 会打印各个根目录。下面的变量只移动历史数据库、模型代理的暂存目录和日志。它们主要是为了让测试和开发环境永远不碰真实的 home；要让守护进程使用另一个 home，请设置 `HOME`。
 
-| 名称 | 默认值 | 作用 | 读取位置 |
-| --- | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | 历史数据库的 SQLAlchemy URL。无论它怎么设，主密钥文件（`master.key`）都留在 `~/.coffer`。 | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
-| `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | 模型代理写入用量暂存文件、守护进程从中读取的目录。两个进程必须看到相同的值。 | [`infrastructure/model_proxy/spool.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/spool.py)、[`infrastructure/usage/spool_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/spool_reader.py) |
-| `COFFER_LOG_DIR` | `~/.coffer/logs` | 存放 `daemon.log`、`proxy.log`、上游服务器日志、MCP shim 日志以及开机自启服务输出的目录。 | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
-| `HOME` | 用户的主目录 | 每个 `~/.coffer` 路径都在需要的那一刻相对 `$HOME` 解析，所以换一个 `HOME` 就得到完全独立的保险库。 | [`infrastructure/vault/home.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/home.py) |
+| 名称 | 默认值 | 作用 |
+| --- | --- | --- |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | 历史数据库的 SQLAlchemy URL。无论它怎么设，主密钥文件（`master.key`）都留在 `~/.coffer`。 |
+| `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | 模型代理写入用量暂存文件、守护进程从中读取的目录。两个进程必须看到相同的值。 |
+| `COFFER_LOG_DIR` | `~/.coffer/logs` | 存放 `daemon.log`、`proxy.log`、上游服务器日志、MCP shim 日志以及开机自启服务输出的目录。 |
+| `HOME` | 用户的主目录 | 每个 `~/.coffer` 路径都在需要的那一刻相对 `$HOME` 解析，所以换一个 `HOME` 就得到完全独立的保险库。 |
 
 ### 安装脚本 {#installer}
 
@@ -89,11 +87,11 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 这些是给贡献者用的。不要在你日常使用的守护进程上设置它们。
 
-| 名称 | 默认值 | 作用 | 读取位置 |
-| --- | --- | --- | --- |
-| `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 未设置 | 绑定该范围内第一个空闲端口，而不是配置的单一端口。优先级高于 `daemon-config.json`。只设置一端时，另一端回退到 `8000` 或 `8009`。 | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py) |
-| `COFFER_EVAL_CAPTURE` | 未设置 | 把每次 `coffer__search_tools` 查询及其结果以 JSON 行的形式记录下来，供评测工具使用。`1`、`true` 或 `yes` 写入 `~/.coffer/eval-capture.jsonl`；其他任何非假值都被当作输出路径。 | [`application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py)、[`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) |
-| `COFFER_RUN_BENCHMARKS` | 未设置 | `1` 运行慢到进不了 `make verify` 的性能预算测试，比如调和单轮成本（`make verify-benchmark`）。 | [`backend/tests/integration/perf/test_reconcile_pass_cost.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/perf/test_reconcile_pass_cost.py) |
+| 名称 | 默认值 | 作用 |
+| --- | --- | --- |
+| `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 未设置 | 绑定该范围内第一个空闲端口，而不是配置的单一端口。优先级高于 `daemon-config.json`。只设置一端时，另一端回退到 `8000` 或 `8009`。 |
+| `COFFER_EVAL_CAPTURE` | 未设置 | 把每次 `coffer__search_tools` 查询及其结果以 JSON 行的形式记录下来，供评测工具使用。`1`、`true` 或 `yes` 写入 `~/.coffer/eval-capture.jsonl`；其他任何非假值都被当作输出路径。 |
+| `COFFER_RUN_BENCHMARKS` | 未设置 | `1` 运行慢到进不了 `make verify` 的性能预算测试，比如调和单轮成本（`make verify-benchmark`）。 |
 
 ### Coffer 为它启动的进程设置的变量 {#variables-coffer-sets-for-processes-it-starts}
 

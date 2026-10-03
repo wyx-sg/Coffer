@@ -33,14 +33,46 @@ credentials: if a step needs a login, tell me what to do instead.
 
 | 方式 | 适合 | 你会得到 |
 | --- | --- | --- |
-| [一行安装脚本](#one-line-installer) | 在 Mac 上用终端的人 | `~/.coffer/bin` 里的 `coffer`、`coffer-daemon`、`coffer-mcp-shim` |
 | [桌面应用](#desktop-app) | 喜欢窗口和菜单栏图标的人 | `Coffer.app`，首次打开后还有同样的三个二进制 |
+| [一行安装脚本](#one-line-installer) | 在 Mac 上用终端的人 | `~/.coffer/bin` 里的 `coffer`、`coffer-daemon`、`coffer-mcp-shim` |
 | [发布压缩包](#release-archive) | 手动安装，或没有图形界面的机器 | 同样的三个二进制，解压到你选的位置 |
 | [从源码](#from-source) | 贡献者、Linux 用户，以及想跟进 `main` 的人 | 一套 Python 安装，`PATH` 上有 `coffer` 和 `coffer-mcp-shim` |
 
 预编译二进制只面向 **Apple 芯片（arm64）的 macOS**。Intel Mac、Linux 和 Windows 没有发布构建，在这些机器上请从源码安装（Python 3.12 或更高版本）。
 
 每种方式装的都是完整的 Coffer。Web 界面由守护进程自己提供，所以装了 CLI 也就有了界面（`coffer open`），装了桌面应用也就有了 CLI。
+
+## 桌面应用 {#desktop-app}
+
+::: steps
+
+### 下载 .dmg {#download-the-dmg}
+
+从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载 `.dmg`。经过签名和公证的正式版名为 `Coffer-aarch64-apple-darwin.dmg`；没有代码签名的构建会在名字里注明，即 `Coffer-unsigned-aarch64-apple-darwin.dmg`。
+
+### 把 Coffer 拖到应用程序 {#drag-coffer-to-applications}
+
+打开 `.dmg`，把 **Coffer** 拖到**应用程序**。
+
+### 打开 Coffer {#open-coffer}
+
+仅限未签名的构建：对于从浏览器下载的副本，macOS 会拒绝打开并提示 "Coffer is damaged and can't be opened"。应用并没有损坏。清除隔离标记后再打开即可：
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+打开 Coffer。应用会找到正在运行的守护进程，或启动它内置的那个，并在原生窗口里显示界面。关闭窗口后，菜单栏图标会留着。
+
+:::
+
+应用内置了和发布压缩包相同的三个二进制。它的守护进程第一次启动时，会把它们复制到 `~/.coffer/bin`。如果还想用 CLI，把这个目录加到你的 `PATH`：
+
+```sh
+export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
+```
+
+菜单栏、更新、重启和离线横幅见[桌面应用](/zh/guides/desktop-app)。
 
 ## 一行安装脚本 {#one-line-installer}
 
@@ -80,26 +112,6 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 ```
 
 用 `curl` 安装的二进制不会被加上隔离标记，所以 macOS Gatekeeper 不会拦它。
-
-## 桌面应用 {#desktop-app}
-
-1. 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载 `.dmg`。经过签名和公证的正式版名为 `Coffer-aarch64-apple-darwin.dmg`；没有代码签名的构建会在名字里注明，即 `Coffer-unsigned-aarch64-apple-darwin.dmg`。
-2. 打开 `.dmg`，把 **Coffer** 拖到**应用程序**。
-3. 仅限未签名的构建：对于从浏览器下载的副本，macOS 会拒绝打开并提示 "Coffer is damaged and can't be opened"。应用并没有损坏。清除隔离标记后再打开即可：
-
-   ```sh
-   xattr -dr com.apple.quarantine /Applications/Coffer.app
-   ```
-
-4. 打开 Coffer。应用会找到正在运行的守护进程，或启动它内置的那个，并在原生窗口里显示界面。关闭窗口后，菜单栏图标会留着。
-
-应用内置了和发布压缩包相同的三个二进制。它的守护进程第一次启动时，会把它们复制到 `~/.coffer/bin`。如果还想用 CLI，把这个目录加到你的 `PATH`：
-
-```sh
-export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
-```
-
-菜单栏、更新、重启和离线横幅见[桌面应用](/zh/guides/desktop-app)。
 
 ## 发布压缩包 {#release-archive}
 

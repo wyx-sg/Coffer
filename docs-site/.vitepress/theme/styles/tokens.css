@@ -1,0 +1,120 @@
+:root {
+  --vp-c-brand-1: #3342c4;
+  --vp-c-brand-2: #4353d8;
+  --vp-c-brand-3: #5a66e6;
+  --vp-c-brand-soft: #eef0fc;
+
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #fbfbfc;
+  --vp-c-bg-soft: #f6f7f9;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-sidebar: #fbfbfc;
+
+  --vp-c-text-1: #16181d;
+  --vp-c-text-2: #4b515d;
+  --vp-c-text-3: #6b717d;
+
+  --vp-c-border: #e6e8ec;
+  --vp-c-divider: #f0f1f4;
+  --vp-c-gutter: #f0f1f4;
+
+  --coffer-selected: #eef0f6;
+  --coffer-accent-soft: #eef0fc;
+  --coffer-chip: #eef0f4;
+  --coffer-warning: #945800;
+  --coffer-warning-soft: #fbf3e4;
+  --coffer-danger: #c8372d;
+  --coffer-danger-soft: #fbedeb;
+  --coffer-success: #177a4f;
+
+  --vp-font-family-base: "Figtree", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --vp-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --vp-font-family-heading: var(--vp-font-family-base);
+
+  --vp-button-brand-bg: #4353d8;
+  --vp-button-brand-hover-bg: #3342c4;
+  --vp-button-brand-active-bg: #2b38a8;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
+
+  --vp-home-hero-name-color: var(--vp-c-text-1);
+  --vp-home-hero-image-background-image: none;
+
+  --vp-code-block-bg: var(--vp-c-bg-soft);
+  --vp-code-tab-bg: var(--vp-c-bg-soft);
+  --vp-code-tab-divider: var(--vp-c-border);
+  --vp-code-tab-text-color: var(--vp-c-text-2);
+  --vp-code-tab-hover-text-color: var(--vp-c-text-1);
+  --vp-code-tab-active-text-color: var(--vp-c-text-1);
+  --vp-code-tab-active-bar-color: var(--vp-c-text-1);
+  --vp-code-copy-code-bg: var(--vp-c-bg-elv);
+  --vp-code-copy-code-border-color: var(--vp-c-border);
+  --vp-code-copy-code-hover-bg: var(--vp-c-bg-soft);
+  --vp-code-copy-code-hover-border-color: var(--vp-c-border);
+  --vp-code-bg: var(--coffer-chip);
+  --vp-code-color: var(--vp-c-text-1);
+  --vp-code-block-color: var(--vp-c-text-1);
+  --vp-code-line-height: 22px;
+  --vp-code-font-size: 13px;
+
+  --vp-sidebar-width: 272px;
+  --vp-layout-max-width: 1440px;
+}
+
+.dark {
+  --vp-c-brand-1: #a3abff;
+  --vp-c-brand-2: #5a66e6;
+  --vp-c-brand-3: #4353d8;
+  --vp-c-brand-soft: #262a45;
+
+  --vp-c-bg: #1a1b20;
+  --vp-c-bg-alt: #16171b;
+  --vp-c-bg-soft: #202127;
+  --vp-c-bg-elv: #202127;
+  --vp-c-bg-sidebar: #16171b;
+
+  --vp-c-text-1: #e4e5ea;
+  --vp-c-text-2: #a3a6b1;
+  --vp-c-text-3: #868a97;
+
+  --vp-c-border: #2c2e36;
+  --vp-c-divider: #24262d;
+  --vp-c-gutter: #16171b;
+
+  --coffer-selected: #262833;
+  --coffer-accent-soft: #262a45;
+  --coffer-chip: #2a2c35;
+  --coffer-warning: #d9a441;
+  --coffer-warning-soft: rgba(217, 164, 65, 0.12);
+  --coffer-danger: #e5695e;
+  --coffer-danger-soft: rgba(229, 105, 94, 0.12);
+  --coffer-success: #4cb782;
+
+  --vp-button-brand-bg: #5a66e6;
+  --vp-button-brand-hover-bg: #4353d8;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
+
+  --vp-code-block-bg: #16171b;
+  --vp-code-tab-bg: #16171b;
+  --vp-code-copy-code-bg: #202127;
+}
+
+/* Chinese: system CJK faces behind Figtree, no negative tracking, 1.8 body. */
+html[lang="zh-CN"] {
+  --vp-font-family-base: "Figtree", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC",
+    "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-heading: var(--vp-font-family-base);
+}
+html[lang="zh-CN"] .vp-doc h1,
+html[lang="zh-CN"] .vp-doc h2,
+html[lang="zh-CN"] .vp-doc h3,
+html[lang="zh-CN"] .VPHero .name,
+html[lang="zh-CN"] .VPHero .text {
+  letter-spacing: 0;
+}
+html[lang="zh-CN"] .vp-doc p,
+html[lang="zh-CN"] .vp-doc li {
+  line-height: 1.8;
+}

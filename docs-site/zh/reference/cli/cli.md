@@ -1,115 +1,156 @@
 ---
 title: coffer cli
 description: "Add and check command-line tools, and read their interface"
+pageClass: cli-ref
 ---
 
 # coffer cli
 
-属于 [CLI 参考](/zh/reference/cli)，由 CLI 自己的命令树生成；用 `make docs-reference` 重新生成，不要手工编辑。
+Add and check command-line tools, and read their interface
 
 ```sh
 coffer cli [OPTIONS] COMMAND [ARGS]...
 ```
 
-Add and check command-line tools, and read their interface
+本页与 `coffer cli --help` 打印的内容一致。在下面任何命令后加 `--help`，即可在终端里查看它的选项。
+
+## 命令 {#commands}
+
+| 命令 | 说明 |
+| --- | --- |
+| [`cli list`](#cli-list) | List every command-line tool — added by hand or required — problems first. |
+| [`cli add`](#cli-add) | Add a command-line tool by hand; no skill is needed. |
+| [`cli edit`](#cli-edit) | Change a tool you added by hand (only the options you give change). |
+| [`cli rm`](#cli-rm) | Remove a tool you added by hand. |
+| [`cli show`](#cli-show) | Show one command-line tool: where it is, its version, login state and its interface — the options and subcommands its own --help lists. |
+| [`cli check`](#cli-check) | Probe the required commands again (or one of them). |
+| [`cli prompt`](#cli-prompt) | Print the prompt to give your agent for a command that needs you. |
 
 ## cli list
+
+List every command-line tool — added by hand or required — problems first.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli list [OPTIONS]
 ```
 
-List every command-line tool — added by hand or required — problems first.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## cli add
+
+Add a command-line tool by hand; no skill is needed.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli add [OPTIONS] COMMAND
 ```
 
-Add a command-line tool by hand; no skill is needed.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `COMMAND` | 参数 | text | 必填 | A command name (jq) or the absolute path of an executable |
-| `--title` | 选项 | text |  | A display name |
-| `--description` | 选项 | text |  | What it is for |
-| `--min-version` | 选项 | text |  | Oldest wanted, like "2.40" |
-| `--login-check` | 选项 | text |  | A command line that exits 0 when logged in, like "gh auth status" |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `COMMAND` <span class="cli-chip">参数</span> | text | 必填 | A command name (jq) or the absolute path of an executable |
+| `--title` <span class="cli-chip">选项</span> | text |  | A display name |
+| `--description` <span class="cli-chip">选项</span> | text |  | What it is for |
+| `--min-version` <span class="cli-chip">选项</span> | text |  | Oldest wanted, like "2.40" |
+| `--login-check` <span class="cli-chip">选项</span> | text |  | A command line that exits 0 when logged in, like "gh auth status" |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## cli edit
+
+Change a tool you added by hand (only the options you give change).
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli edit [OPTIONS] COMMAND
 ```
 
-Change a tool you added by hand (only the options you give change).
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `COMMAND` | 参数 | text | 必填 | A tool you added, e.g. jq |
-| `--title` | 选项 | text |  | A display name; '' clears it |
-| `--description` | 选项 | text |  | '' clears it |
-| `--min-version` | 选项 | text |  | '' clears it |
-| `--login-check` | 选项 | text |  | '' clears it |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `COMMAND` <span class="cli-chip">参数</span> | text | 必填 | A tool you added, e.g. jq |
+| `--title` <span class="cli-chip">选项</span> | text |  | A display name; '' clears it |
+| `--description` <span class="cli-chip">选项</span> | text |  | '' clears it |
+| `--min-version` <span class="cli-chip">选项</span> | text |  | '' clears it |
+| `--login-check` <span class="cli-chip">选项</span> | text |  | '' clears it |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## cli rm
+
+Remove a tool you added by hand. A skill that requires it keeps it listed.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli rm [OPTIONS] COMMAND
 ```
 
-Remove a tool you added by hand. A skill that requires it keeps it listed.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `COMMAND` | 参数 | text | 必填 | A tool you added, e.g. jq |
-| `--force, --yes, -f, -y` | 选项 | 开关 |  | Do not ask |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `COMMAND` <span class="cli-chip">参数</span> | text | 必填 | A tool you added, e.g. jq |
+| `--force, --yes, -f, -y` <span class="cli-chip">选项</span> | 开关 |  | Do not ask |
 
 ## cli show
+
+Show one command-line tool: where it is, its version, login state and its interface — the options and subcommands its own --help lists.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli show [OPTIONS] COMMAND [SUBCOMMAND]...
 ```
 
-Show one command-line tool: where it is, its version, login state and its interface — the options and subcommands its own --help lists.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `COMMAND` | 参数 | text | 必填 | The command, e.g. gh |
-| `[SUBCOMMAND]...` | 参数 | text（可变个数） |  | Show one subcommand |
-| `--tree` | 选项 | 开关 |  | Every command of the tool, one per line |
-| `--refresh` | 选项 | 开关 |  | Read the tool's help again |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `COMMAND` <span class="cli-chip">参数</span> | text | 必填 | The command, e.g. gh |
+| `[SUBCOMMAND]...` <span class="cli-chip">参数</span> | text（可变个数） |  | Show one subcommand |
+| `--tree` <span class="cli-chip">选项</span> | 开关 |  | Every command of the tool, one per line |
+| `--refresh` <span class="cli-chip">选项</span> | 开关 |  | Read the tool's help again |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## cli check
+
+Probe the required commands again (or one of them).
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli check [OPTIONS] [COMMAND]
 ```
 
-Probe the required commands again (or one of them).
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `[COMMAND]` | 参数 | text |  | One command only |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `[COMMAND]` <span class="cli-chip">参数</span> | text |  | One command only |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## cli prompt
+
+Print the prompt to give your agent for a command that needs you.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer cli prompt [OPTIONS] COMMAND
 ```
 
-Print the prompt to give your agent for a command that needs you.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `COMMAND` | 参数 | text | 必填 | The command, e.g. jq |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `COMMAND` <span class="cli-chip">参数</span> | text | 必填 | The command, e.g. jq |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |

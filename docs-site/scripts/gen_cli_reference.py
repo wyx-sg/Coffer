@@ -93,7 +93,11 @@ LABELS: dict[str, dict[str, str]] = {
         "global": "## Global options",
         "groups": "## Command groups",
         "groups_table": "| Group | Description |",
-        "params_table": "| Name | Kind | Type | Default | Description |",
+        "params_table": "| Name | Type | Default | Description |",
+        "commands": "## Commands",
+        "commands_table": "| Command | What it does |",
+        "synopsis": "Synopsis",
+        "args": "Arguments and options",
         "argument": "argument",
         "option": "option",
         "flag": "flag",
@@ -103,8 +107,8 @@ LABELS: dict[str, dict[str, str]] = {
         "deprecated": "::: warning Deprecated\nThis command is deprecated.\n:::",
         "subcommands": "Subcommands: {names}.",
         "group_note": (
-            "Part of the [CLI reference](/reference/cli), generated from the CLI's own "
-            "command tree; regenerate it with `make docs-reference`, never by hand."
+            "This page matches what `coffer {name} --help` prints. Add `--help` to any "
+            "command below to see its options in the terminal."
         ),
     },
     "zh": {
@@ -112,7 +116,11 @@ LABELS: dict[str, dict[str, str]] = {
         "global": "## 全局选项 {#global-options}",
         "groups": "## 命令组 {#command-groups}",
         "groups_table": "| 命令组 | 说明 |",
-        "params_table": "| 名称 | 类别 | 类型 | 默认值 | 说明 |",
+        "params_table": "| 名称 | 类型 | 默认值 | 说明 |",
+        "commands": "## 命令 {#commands}",
+        "commands_table": "| 命令 | 说明 |",
+        "synopsis": "概要",
+        "args": "参数与选项",
         "argument": "参数",
         "option": "选项",
         "flag": "开关",
@@ -122,8 +130,8 @@ LABELS: dict[str, dict[str, str]] = {
         "deprecated": "::: warning 已弃用\n这个命令已弃用。\n:::",
         "subcommands": "子命令：{names}。",
         "group_note": (
-            "属于 [CLI 参考](/zh/reference/cli)，由 CLI 自己的命令树生成；用 "
-            "`make docs-reference` 重新生成，不要手工编辑。"
+            "本页与 `coffer {name} --help` 打印的内容一致。在下面任何命令后加 `--help`，"
+            "即可在终端里查看它的选项。"
         ),
     },
 }
@@ -249,13 +257,12 @@ def _params_table(cmd: Any, lab: dict[str, str]) -> list[str]:
     params = _visible_params(cmd)
     if not params:
         return []
-    rows = [lab["params_table"], "| --- | --- | --- | --- | --- |"]
+    rows = [lab["params_table"], "| --- | --- | --- | --- |"]
     for prm in params:
         kind = lab["argument"] if prm.param_type_name == "argument" else lab["option"]
         help_text = getattr(prm, "help", None) or ""
         cells = (
-            _param_name(prm),
-            kind,
+            f'{_param_name(prm)} <span class="cli-chip">{kind}</span>',
             _param_type(prm, lab),
             _param_default(prm, lab),
             _cell(help_text),
@@ -271,15 +278,39 @@ def _children(group: Any) -> list[tuple[str, Any]]:
 Chain = list[tuple[str, Any]]
 
 
+def _label(text: str) -> list[str]:
+    return [f'<p class="cli-label">{text}</p>', ""]
+
+
+def _anchor(title: str) -> str:
+    """The id VitePress gives a ``##`` heading with this text."""
+    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+
+
+def _command_titles(chain: Chain) -> list[tuple[str, str]]:
+    """(heading, first sentence) for every command under a group, in page order."""
+    out: list[tuple[str, str]] = []
+    for name, child in _children(chain[-1][1]):
+        child_chain = [*chain, (name, child)]
+        title = " ".join(n for n, _ in child_chain[1:])
+        out.append((title, _first_sentence(child.help or child.short_help or "")))
+        if hasattr(child, "commands"):
+            out += _command_titles(child_chain)
+    return out
+
+
 def _command_block(chain: Chain, lab: dict[str, str]) -> list[str]:
     cmd = chain[-1][1]
     lines = [f"## {' '.join(name for name, _ in chain[1:])}", ""]
-    lines += ["```sh", _usage(chain), "```", ""]
     if getattr(cmd, "deprecated", False):
         lines += [lab["deprecated"], ""]
     for para in _paragraphs(cmd.help or cmd.short_help or ""):
         lines += [para, ""]
-    lines += _params_table(cmd, lab)
+    lines += _label(lab["synopsis"])
+    lines += ["```sh", _usage(chain), "```", ""]
+    table = _params_table(cmd, lab)
+    if table:
+        lines += _label(lab["args"]) + table
     if hasattr(cmd, "commands"):
         subs = _children(cmd)
         if subs:
@@ -358,18 +389,27 @@ def render_group(lang: str, name: str, group: Any) -> str:
         "---",
         f"title: coffer {name}",
         f"description: {json.dumps(description, ensure_ascii=False)}",
+        "pageClass: cli-ref",
         "---",
         "",
         f"# coffer {name}",
         "",
-        lab["group_note"],
-        "",
     ]
+    paras = _paragraphs(group.help or "")
+    if paras:
+        lines += [paras[0], ""]
     lines += ["```sh", _usage(chain), "```", ""]
-    for para in _paragraphs(group.help or ""):
+    lines += [lab["group_note"].format(name=name), ""]
+    for para in paras[1:]:
         lines += [para, ""]
     lines += _params_table(group, lab)
     if hasattr(group, "commands"):
+        titles = _command_titles(chain)
+        if titles:
+            lines += [lab["commands"], "", lab["commands_table"], "| --- | --- |"]
+            for title, summary in titles:
+                lines.append(f"| [`{title}`](#{_anchor(title)}) | {summary} |")
+            lines.append("")
         lines += _walk_group(chain, lab)
     return _finish(lines)
 

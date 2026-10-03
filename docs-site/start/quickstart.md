@@ -15,7 +15,11 @@ You need:
 - **Claude Code installed**, with its config directory at `~/.claude`. Codex works the same way. Use `codex` wherever this page says `claude_code` or `claude-code`.
 - **Node.js**, so that `npx` can run the example MCP server.
 
-## 1. Start Coffer and open the UI
+## Six steps
+
+::::: steps
+
+### Start Coffer and open the UI
 
 ```sh
 coffer daemon start
@@ -29,7 +33,7 @@ opened http://127.0.0.1:8000/ in your browser
 
 `coffer open` opens `http://127.0.0.1:8000/` in your browser, already signed in. You can skip `coffer daemon start`, because any command that needs the daemon starts it. Running it here just shows you that the daemon is up. If a daemon is already running, the command prints `daemon already running`.
 
-## 2. Register Claude Code
+### Register Claude Code
 
 Coffer never registers an agent on its own. Ask it what it can find, then confirm.
 
@@ -58,7 +62,7 @@ registered: agent claude-code
 
 **In the web UI:** open **Agents**. The page always lists Claude Code and Codex; on the Claude Code row choose **Add**, review the lines Coffer will write, and apply them. With both agents installed and neither added, **Add both** does the two at once.
 
-## 3. Connect Claude Code to Coffer
+### Connect Claude Code to Coffer
 
 ```sh
 coffer agent connect claude-code
@@ -90,7 +94,7 @@ The `--agent-uid` argument is how Coffer knows which agent a session belongs to.
 You can add `coffer-mcp-shim` to any MCP client by hand. However, a hand-written entry has no `--agent-uid`, so Coffer cannot tell which agent the session belongs to, and servers restricted to particular agents stay hidden from it. For Claude Code and Codex, use `coffer agent connect`. See [Connect a client](/guides/connect-a-client) for other clients.
 :::
 
-## 4. Register an upstream MCP server
+### Register an upstream MCP server
 
 Register the reference [filesystem server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) and give it access to one directory:
 
@@ -145,7 +149,7 @@ The first test can take a few seconds while `npx` downloads the package. An agen
 
 Click **Continue**, review what will be imported, and click **Import 1**. On the server's page, **Test connection** runs the same check as `coffer mcp test`. The **Tools** tab lists each tool with an **Enabled** switch.
 
-## 5. Use the tools from Claude Code
+### Use the tools from Claude Code
 
 Start a **new** Claude Code session. A session that was already open loaded its MCP servers when it started. Run `/mcp`, and `coffer` appears as a connected server. Its tools include:
 
@@ -168,7 +172,7 @@ or on the server's **Invocations** tab. The record holds the tool, the time, the
 
 Every agent you connect in step 3 now gets this server. You did not edit Claude Code's MCP config again, and you will not need to for the next server either.
 
-## 6. Import and deliver a skill
+### Import and deliver a skill
 
 A skill is a folder containing a `SKILL.md` in the [AgentSkills](https://agentskills.io) format. Create a small one:
 
@@ -227,6 +231,8 @@ Some things to know:
 
 Start a new Claude Code session and ask for a commit message. Claude Code finds `commit-message` among its skills.
 
+:::::
+
 ## What you have now
 
 ```mermaid
@@ -240,9 +246,11 @@ flowchart LR
 
 ## Next steps
 
-- **Add Codex.** Run `coffer agent add codex` and `coffer agent connect codex`. Codex gets the same servers and skills with no further setup. See [Agents](/guides/agents).
-- **Curate tools.** Switch off tools you do not want agents to see, or restrict a server to particular agents. See [MCP servers](/guides/mcp-servers).
-- **Store a key.** Register a server that needs an API key, using a secret ref. See [Secret store](/guides/secret-store).
-- **Share knowledge.** Create a collection with `coffer knowledge add handbook` and drop Markdown files into it. See [Knowledge](/guides/knowledge).
-- **Switch providers.** Point both agents at the same model gateway in one step. See [Model providers](/guides/providers).
-- **Learn the model.** [Core concepts](/start/concepts) explains the terms used throughout these docs.
+<LinkList variant="cards" :items="[
+{ title: 'Add Codex', desc: 'Run coffer agent add codex and coffer agent connect codex. Codex gets the same servers and skills.', link: '/guides/agents' },
+{ title: 'Curate tools', desc: 'Switch off tools you do not want agents to see, or restrict a server to particular agents.', link: '/guides/mcp-servers' },
+{ title: 'Store a key', desc: 'Register a server that needs an API key, using a secret ref.', link: '/guides/secret-store' },
+{ title: 'Share knowledge', desc: 'Create a collection and drop Markdown files into it.', link: '/guides/knowledge' },
+{ title: 'Switch providers', desc: 'Point both agents at the same model gateway in one step.', link: '/guides/providers' },
+{ title: 'Learn the model', desc: 'Core concepts explains the terms used throughout these docs.', link: '/start/concepts' }
+]" />

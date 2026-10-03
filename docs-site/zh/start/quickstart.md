@@ -15,7 +15,11 @@ description: 用大约 15 分钟把 Claude Code 连到 Coffer，注册 filesyste
 - **已安装 Claude Code**，配置目录在 `~/.claude`。Codex 的用法完全一样：本页凡是写 `claude_code` 或 `claude-code` 的地方，换成 `codex` 即可。
 - **Node.js**，这样 `npx` 才能运行示例 MCP 服务器。
 
-## 1. 启动 Coffer 并打开界面 {#_1-start-coffer-and-open-the-ui}
+## 六个步骤 {#six-steps}
+
+::::: steps
+
+### 启动 Coffer 并打开界面 {#start-coffer-and-open-the-ui}
 
 ```sh
 coffer daemon start
@@ -29,7 +33,7 @@ opened http://127.0.0.1:8000/ in your browser
 
 `coffer open` 会在浏览器里打开 `http://127.0.0.1:8000/`，并且已经处于登录状态。`coffer daemon start` 其实可以跳过，因为任何需要守护进程的命令都会启动它；这里运行一下只是让你看到守护进程已经起来了。如果守护进程已经在运行，这条命令会打印 `daemon already running`。
 
-## 2. 注册 Claude Code {#_2-register-claude-code}
+### 注册 Claude Code {#register-claude-code}
 
 Coffer 从不自行注册智能体。先让它看看能找到什么，再由你确认。
 
@@ -58,7 +62,7 @@ registered: agent claude-code
 
 **在 Web 界面中：** 打开**智能体**。这个页面总会列出 Claude Code 和 Codex；在 Claude Code 那一行选择**添加**，检查 Coffer 将要写入的内容，然后应用。如果两个智能体都装了、都还没添加，**全部添加**可以一次加两个。
 
-## 3. 把 Claude Code 连到 Coffer {#_3-connect-claude-code-to-coffer}
+### 把 Claude Code 连到 Coffer {#connect-claude-code-to-coffer}
 
 ```sh
 coffer agent connect claude-code
@@ -90,7 +94,7 @@ Coffer 靠 `--agent-uid` 参数知道一个会话属于哪个智能体，之后�
 你可以手动把 `coffer-mcp-shim` 加到任何 MCP 客户端。但手写的条目没有 `--agent-uid`，Coffer 就分不清会话属于哪个智能体，限定给特定智能体的服务器对它也就一直不可见。对于 Claude Code 和 Codex，请用 `coffer agent connect`。其他客户端见[连接客户端](/zh/guides/connect-a-client)。
 :::
 
-## 4. 注册一个上游 MCP 服务器 {#_4-register-an-upstream-mcp-server}
+### 注册一个上游 MCP 服务器 {#register-an-upstream-mcp-server}
 
 注册官方参考实现 [filesystem 服务器](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)，并给它一个目录的访问权限：
 
@@ -145,7 +149,7 @@ OK  (993 ms)
 
 点击**继续**，检查将要导入的内容，再点击**导入 1 个服务器**。在该服务器的页面上，**测试连接**做的检查和 `coffer mcp test` 一样。**工具** tab 列出每个工具，并带一个**已启用**开关。
 
-## 5. 在 Claude Code 中使用这些工具 {#_5-use-the-tools-from-claude-code}
+### 在 Claude Code 中使用这些工具 {#use-the-tools-from-claude-code}
 
 开一个**新的** Claude Code 会话。已经打开的会话在启动时就加载好了它的 MCP 服务器。运行 `/mcp`，`coffer` 会显示为一个已连接的服务器。它的工具包括：
 
@@ -168,7 +172,7 @@ coffer log mcp --server filesystem
 
 你在第 3 步连接的每个智能体现在都能用这个服务器。你没有再改过 Claude Code 的 MCP 配置，下一个服务器也不需要改。
 
-## 6. 导入并投递一个技能 {#_6-import-and-deliver-a-skill}
+### 导入并投递一个技能 {#import-and-deliver-a-skill}
 
 技能是一个包含 `SKILL.md` 的文件夹，格式遵循 [AgentSkills](https://agentskills.io)。先建一个小的：
 
@@ -227,6 +231,8 @@ commit-message -> /Users/you/.coffer/vault/skills/commit-message
 
 开一个新的 Claude Code 会话，让它写一条提交信息。Claude Code 会在自己的技能中找到 `commit-message`。
 
+:::::
+
 ## 你现在有了什么 {#what-you-have-now}
 
 ```mermaid
@@ -240,9 +246,11 @@ flowchart LR
 
 ## 下一步 {#next-steps}
 
-- **添加 Codex。** 运行 `coffer agent add codex` 和 `coffer agent connect codex`。Codex 无需额外配置就能拿到同样的服务器和技能。见[智能体](/zh/guides/agents)。
-- **整理工具。** 关掉你不想让智能体看到的工具，或把某个服务器限定给特定智能体。见 [MCP 服务器](/zh/guides/mcp-servers)。
-- **保存密钥。** 用密钥引用注册一个需要 API 密钥 的服务器。见[密钥存储](/zh/guides/secret-store)。
-- **共享知识。** 用 `coffer knowledge add handbook` 创建一个知识集，把 Markdown 文件放进去。见[知识](/zh/guides/knowledge)。
-- **切换提供商。** 一步把两个智能体都指向同一个模型网关。见[模型提供商](/zh/guides/providers)。
-- **理解模型。** [核心概念](/zh/start/concepts)解释了这些文档里用到的术语。
+<LinkList variant="cards" :items="[
+{ title: '添加 Codex', desc: '运行 coffer agent add codex 和 coffer agent connect codex，Codex 就能拿到同样的服务器和技能。', link: '/zh/guides/agents' },
+{ title: '整理工具', desc: '关掉你不想让智能体看到的工具，或把某个服务器限定给特定智能体。', link: '/zh/guides/mcp-servers' },
+{ title: '保存密钥', desc: '用密钥引用注册一个需要 API 密钥的服务器。', link: '/zh/guides/secret-store' },
+{ title: '共享知识', desc: '创建一个知识集，把 Markdown 文件放进去。', link: '/zh/guides/knowledge' },
+{ title: '切换提供商', desc: '一步把两个智能体都指向同一个模型网关。', link: '/zh/guides/providers' },
+{ title: '理解模型', desc: '核心概念解释了这些文档里用到的术语。', link: '/zh/start/concepts' }
+]" />

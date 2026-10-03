@@ -1,0 +1,402 @@
+/* ---- top bar ---- */
+.VPNavBar {
+  background: var(--vp-c-bg);
+}
+.VPNavBar .divider-line {
+  background: var(--vp-c-border) !important;
+}
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .button {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+}
+.VPNavBarMenuLink.active,
+.VPNavBarMenuLink:hover {
+  color: var(--vp-c-brand-1);
+}
+.VPNavBarMenuLink.active {
+  font-weight: 600;
+}
+.VPNavBarTitle .title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.VPNavBarSearch .DocSearch-Button,
+.VPNavBarSearch .VPNavBarSearchButton {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+}
+.VPNavBarSearchButton {
+  height: 40px;
+  width: 260px;
+  max-width: 100%;
+}
+.VPNavBarSearchButton .vp-icon {
+  color: var(--vp-c-text-3);
+}
+.VPNavBarSearchButton .DocSearch-Button-Key,
+.VPNavBarSearchButton .DocSearch-Button-Placeholder {
+  font-size: 14px;
+}
+.VPNavBarSearchButton .DocSearch-Button-Key {
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vp-c-text-3);
+}
+.VPNavBarSocialLinks .VPSocialLink,
+.VPNavBarAppearance .VPSwitchAppearance,
+.VPNavBarTranslations .VPFlyout .button {
+  color: var(--vp-c-text-2);
+}
+.VPNavBarExtra,
+.VPNavBarTranslations,
+.VPNavBarAppearance,
+.VPNavBarSocialLinks {
+  align-items: center;
+}
+/* flyouts */
+.VPFlyout .VPMenu {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(22, 24, 29, 0.12);
+  background: var(--vp-c-bg-elv);
+}
+.VPMenuLink a,
+.VPMenuGroup .title {
+  font-size: 14px;
+}
+.VPMenuLink a.active {
+  color: var(--vp-c-brand-1);
+  background: var(--coffer-selected);
+}
+
+/* ---- sidebar ---- */
+.VPSidebar {
+  background: var(--vp-c-bg-sidebar);
+  border-right: 1px solid var(--vp-c-border);
+}
+@media (min-width: 960px) {
+  .VPSidebar {
+    width: var(--vp-sidebar-width) !important;
+    padding: 24px 16px 96px !important;
+  }
+  .VPContent.has-sidebar {
+    padding-left: var(--vp-sidebar-width) !important;
+  }
+  .VPNavBar.has-sidebar .title {
+    width: var(--vp-sidebar-width) !important;
+    padding-left: 32px !important;
+    padding-right: 16px !important;
+    background: transparent;
+    border-bottom: 0 !important;
+  }
+  .VPNavBar.has-sidebar .content {
+    padding-left: var(--vp-sidebar-width) !important;
+    padding-right: 32px !important;
+  }
+}
+.VPSidebar .group {
+  padding: 0;
+  margin-top: 16px;
+  border: 0;
+}
+.VPSidebar .group:first-child {
+  margin-top: 0;
+}
+.VPSidebarItem.level-0 {
+  padding-bottom: 8px;
+}
+.VPSidebarItem.level-0 > .item > .text,
+.VPSidebarItem.level-0 > .item > .link > .text {
+  font-size: 14px;
+  line-height: 32px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+.VPSidebarItem .item {
+  padding: 0;
+}
+.VPSidebarItem .link,
+.VPSidebarItem.level-0 .items .link {
+  padding: 0 12px;
+  border-radius: 6px;
+  min-height: 34px;
+}
+.VPSidebarItem.level-1 .text,
+.VPSidebarItem.level-2 .text,
+.VPSidebarItem.level-3 .text {
+  font-size: 14px;
+  line-height: 34px;
+  font-weight: 400;
+  color: var(--vp-c-text-2);
+}
+.VPSidebarItem .link:hover .text {
+  color: var(--vp-c-text-1);
+}
+.VPSidebarItem.is-active > .item,
+.VPSidebarItem.is-active > .item > .link {
+  background: transparent;
+}
+.VPSidebarItem.is-active > .item > .link {
+  background: var(--coffer-selected);
+}
+.VPSidebarItem.is-active > .item > .link > .text,
+.VPSidebarItem.is-active > .item .text {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+.VPSidebarItem.is-link > .item > .indicator {
+  display: none;
+}
+.VPSidebarItem.level-0.has-active > .item > .text {
+  color: var(--vp-c-text-1);
+}
+/* CLI command pages are commands, so they read as code */
+.VPSidebar a[href*="/reference/cli/"] .text {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+}
+
+/* ---- article frame: 688 column, 224 outline ---- */
+@media (min-width: 960px) {
+  .VPDoc {
+    padding: 48px 32px 0;
+  }
+  .VPDoc.has-sidebar {
+    padding-left: 0;
+  }
+  .VPDoc.has-sidebar .container {
+    margin: 0 auto 0 max(32px, calc((100vw - var(--vp-sidebar-width) - 976px) / 2 - 32px));
+    max-width: 976px;
+    justify-content: flex-start;
+  }
+  .VPDoc.has-sidebar .content {
+    padding: 0 !important;
+    max-width: 688px;
+    min-width: 0;
+    flex: 0 0 688px;
+  }
+  .VPDoc.has-sidebar .content-container {
+    max-width: 688px;
+  }
+  .VPDoc .aside {
+    width: 288px;
+    max-width: 288px;
+    padding-left: 64px;
+  }
+}
+@media (min-width: 960px) and (max-width: 1279px) {
+  .VPDoc.has-sidebar .content {
+    flex: 1 1 auto;
+  }
+}
+.VPDocAsideOutline {
+  border-left: 0;
+  padding-left: 0;
+}
+.VPDocAsideOutline .content {
+  position: relative;
+  border-left: 1px solid var(--vp-c-border);
+  padding-left: 0;
+}
+.VPDocAsideOutline .outline-marker {
+  left: -1px;
+  width: 2px;
+  height: 22px;
+  border-radius: 0;
+  background: var(--vp-c-brand-1);
+  opacity: 1;
+}
+.VPDocAsideOutline .outline-title {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  margin-bottom: 8px;
+}
+.VPDocOutlineItem .outline-link {
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 0;
+  font-weight: 400;
+  color: var(--vp-c-text-2);
+}
+.VPDocOutlineItem .outline-link.active {
+  color: var(--vp-c-brand-1);
+}
+.VPDocOutlineItem .root {
+  padding-left: 13px;
+}
+.VPDocOutlineItem .nested {
+  padding-left: 12px;
+}
+/* local nav (phones) */
+.VPLocalNav {
+  border-bottom: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+}
+
+/* ---- page footer ---- */
+.VPDocFooter {
+  margin-top: 64px;
+  border-top: 1px solid var(--vp-c-divider);
+  padding-top: 24px;
+}
+.VPDocFooter .edit-info {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0;
+}
+.VPDocFooter .edit-link-button,
+.VPDocFooter .last-updated-text {
+  font-size: 13px;
+  line-height: 20px;
+}
+.VPDocFooter .edit-link-button {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+.VPDocFooter .last-updated {
+  padding-top: 0;
+}
+.VPDocFooter .last-updated-text {
+  color: var(--vp-c-text-2);
+}
+.VPDocFooter .prev-next {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 24px;
+  gap: 16px;
+}
+.VPDocFooter .pager-link {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--vp-c-bg);
+}
+.VPDocFooter .pager-link:hover {
+  border-color: var(--vp-c-text-3);
+}
+.VPDocFooter .pager-link .desc {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--vp-c-text-2);
+}
+.VPDocFooter .pager-link .title {
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+}
+.VPFooter {
+  border-top: 1px solid var(--vp-c-border);
+}
+
+/* ---- home / free-form pages ---- */
+.VPPage:has(.coffer-home) {
+  padding: 0;
+}
+.VPPage:has(.coffer-home) > .coffer-home,
+.VPPage:has(.coffer-home) .container {
+  max-width: none;
+}
+
+/* ---- fixes after first visual pass ---- */
+.VPNavBarTitle .logo {
+  width: 24px;
+  height: 24px;
+}
+.VPNavBarSearch {
+  padding-left: 0 !important;
+}
+@media (min-width: 960px) {
+  .VPSidebar {
+    padding-top: calc(var(--vp-nav-height) + 24px) !important;
+  }
+}
+.VPSidebar .group + .group,
+.VPSidebar .group {
+  border-top: 0;
+}
+.VPSidebar .group + .group {
+  padding-top: 0;
+  margin-top: 16px;
+}
+.VPSidebarItem.level-0 {
+  padding-bottom: 0;
+}
+.VPSidebarItem .text {
+  padding: 0 !important;
+}
+.VPSidebarItem .items {
+  padding-left: 0;
+  border-left: 0;
+}
+.VPSidebarItem.level-2 .link {
+  padding-left: 24px;
+}
+/* theme toggle as a plain icon button, moon in light mode */
+.VPSwitchAppearance {
+  width: 40px !important;
+  min-width: 40px;
+}
+.VPNavBarAppearance .VPSwitch,
+.VPSwitch {
+  width: 40px !important;
+  height: 40px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.VPSwitch .check {
+  position: static;
+  width: 40px;
+  height: 40px;
+  transform: none !important;
+  background: transparent !important;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.VPSwitch .icon {
+  position: static;
+  width: 18px;
+  height: 18px;
+}
+.VPSwitchAppearance .sun,
+.VPSwitchAppearance .moon {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin: -9px 0 0 -9px;
+  color: var(--vp-c-text-2) !important;
+  opacity: 0 !important;
+}
+.VPSwitchAppearance .moon {
+  opacity: 1 !important;
+}
+.dark .VPSwitchAppearance .sun {
+  opacity: 1 !important;
+}
+.dark .VPSwitchAppearance .moon {
+  opacity: 0 !important;
+}
+.VPSwitchAppearance .check {
+  position: relative !important;
+}
+
+@media (min-width: 960px) {
+  .VPNavBar:not(.has-sidebar) .VPNavBarSearch {
+    margin-left: 144px;
+  }
+}

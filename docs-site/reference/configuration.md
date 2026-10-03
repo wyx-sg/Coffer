@@ -23,51 +23,49 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 
 ## Environment variables
 
-Links point at the file that reads each variable on GitHub.
-
 ### Daemon and network
 
-| Name | Default | Effect | Where read |
-| --- | --- | --- | --- |
-| `COFFER_FEATURES` | unset | Pins experimental features for this daemon process, overriding the machine setting and the default (off). Syntax below. Read once at start. | [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) |
-| `COFFER_ALLOWED_HOSTS` | unset | Comma-separated extra `Host` header names the daemon answers besides `127.0.0.1`, `localhost` and `::1`; `*` disables the check. Requests naming any other host, or a loopback name on another port, get `403 HOST_NOT_ALLOWED`. Never relaxes the `Origin` check. A tagged release build ignores it. | [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) |
-| `COFFER_CORS_ORIGINS` | unset | Comma-separated list of exact origins that replaces the cross-origin allow-list entirely, for both CORS and the `Origin` check. Without it the daemon allows only the desktop app's origins (`tauri://localhost`, `http://tauri.localhost`). The daemon's own origins are always allowed; any other origin gets `403 ORIGIN_NOT_ALLOWED`. A tagged release build ignores it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
-| `COFFER_DEV_CORS` | unset | `1` adds the Vite dev server origins `http://localhost:5173` and `http://127.0.0.1:5173` to the default allow-list, for both CORS and the `Origin` check. Ignored when `COFFER_CORS_ORIGINS` is set. A tagged release build ignores it. `make dev` sets it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
-| `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
-| `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
-| `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
-| `COFFER_QUOTA_POLL` | unset | `off` stops the background pull of Codex's subscription quota, which spawns a short-lived `codex app-server`. The test suite sets it. | [`surfaces/http/usage_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/usage_wiring.py) |
+| Name | Default | Effect |
+| --- | --- | --- |
+| `COFFER_FEATURES` | unset | Pins experimental features for this daemon process, overriding the machine setting and the default (off). Syntax below. Read once at start. |
+| `COFFER_ALLOWED_HOSTS` | unset | Comma-separated extra `Host` header names the daemon answers besides `127.0.0.1`, `localhost` and `::1`; `*` disables the check. Requests naming any other host, or a loopback name on another port, get `403 HOST_NOT_ALLOWED`. Never relaxes the `Origin` check. A tagged release build ignores it. |
+| `COFFER_CORS_ORIGINS` | unset | Comma-separated list of exact origins that replaces the cross-origin allow-list entirely, for both CORS and the `Origin` check. Without it the daemon allows only the desktop app's origins (`tauri://localhost`, `http://tauri.localhost`). The daemon's own origins are always allowed; any other origin gets `403 ORIGIN_NOT_ALLOWED`. A tagged release build ignores it. |
+| `COFFER_DEV_CORS` | unset | `1` adds the Vite dev server origins `http://localhost:5173` and `http://127.0.0.1:5173` to the default allow-list, for both CORS and the `Origin` check. Ignored when `COFFER_CORS_ORIGINS` is set. A tagged release build ignores it. `make dev` sets it. |
+| `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. |
+| `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. |
+| `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. |
+| `COFFER_QUOTA_POLL` | unset | `off` stops the background pull of Codex's subscription quota, which spawns a short-lived `codex app-server`. The test suite sets it. |
 
 ### MCP gateway
 
-| Name | Default | Effect | Where read |
-| --- | --- | --- | --- |
-| `COFFER_TOOL_TIERING` | `auto` | `off` lists every upstream tool to clients. Any other value keeps budget-driven tiering on. | [`application/mcp/tiering_config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/tiering_config.py) |
-| `COFFER_TOOL_TIERING_BUDGET` | `50` | How many upstream tools are listed directly before the rest are reachable only through `coffer__search_tools`. Non-positive or malformed values fall back to the default. | [`application/mcp/tiering_config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/tiering_config.py) |
-| `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | The trailing window of invocation history used to rank tools for the budget. | [`application/mcp/tiering_config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/tiering_config.py) |
-| `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | How many upstream MCP servers one session cold-starts at the same time. | [`application/mcp/supervisor.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/supervisor.py) |
-| `COFFER_MCP_SESSION_IDLE_S` | `1800` | Seconds a `/mcp` session may sit idle before the reaper closes it and its upstream processes. | [`surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) |
-| `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | Seconds between reaper sweeps. | [`surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) |
-| `COFFER_MCP_SHIM_PATH` | unset | Absolute path to a `coffer-mcp-shim` binary to write into an agent's MCP entry, tried before `PATH` and the bundled copy. Ignored if the file does not exist. | [`application/agent/mcp_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/agent/mcp_service.py) |
+| Name | Default | Effect |
+| --- | --- | --- |
+| `COFFER_TOOL_TIERING` | `auto` | `off` lists every upstream tool to clients. Any other value keeps budget-driven tiering on. |
+| `COFFER_TOOL_TIERING_BUDGET` | `50` | How many upstream tools are listed directly before the rest are reachable only through `coffer__search_tools`. Non-positive or malformed values fall back to the default. |
+| `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | The trailing window of invocation history used to rank tools for the budget. |
+| `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | How many upstream MCP servers one session cold-starts at the same time. |
+| `COFFER_MCP_SESSION_IDLE_S` | `1800` | Seconds a `/mcp` session may sit idle before the reaper closes it and its upstream processes. |
+| `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | Seconds between reaper sweeps. |
+| `COFFER_MCP_SHIM_PATH` | unset | Absolute path to a `coffer-mcp-shim` binary to write into an agent's MCP entry, tried before `PATH` and the bundled copy. Ignored if the file does not exist. |
 
 ### Chat and channels
 
-| Name | Default | Effect | Where read |
-| --- | --- | --- | --- |
-| `COFFER_TURN_IDLE_TIMEOUT_SECONDS` | `300` | Seconds a chat or channel turn may go without an event before the watchdog cancels it. `0`, a negative value or a non-number turns the watchdog off. | [`surfaces/http/chat_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/chat_wiring.py) |
-| `COFFER_SEATALK_SDK_DIR` | `~/.coffer/vendor` | Directory the SeaTalk WebSocket SDK package (`seatalk_oapi_sdk`) is imported from. | [`infrastructure/channel/seatalk_sdk.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/channel/seatalk_sdk.py) |
-| `COFFER_SEATALK_STREAM_INTERVAL` | `0.1` | Minimum seconds between streamed updates of a SeaTalk reply. | [`infrastructure/channel/live_text.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/channel/live_text.py) |
+| Name | Default | Effect |
+| --- | --- | --- |
+| `COFFER_TURN_IDLE_TIMEOUT_SECONDS` | `300` | Seconds a chat or channel turn may go without an event before the watchdog cancels it. `0`, a negative value or a non-number turns the watchdog off. |
+| `COFFER_SEATALK_SDK_DIR` | `~/.coffer/vendor` | Directory the SeaTalk WebSocket SDK package (`seatalk_oapi_sdk`) is imported from. |
+| `COFFER_SEATALK_STREAM_INTERVAL` | `0.1` | Minimum seconds between streamed updates of a SeaTalk reply. |
 
 ### Storage locations
 
 The vault, local state, content and derived state have no per-tree override: every one of them is resolved from `$HOME` when it is needed, and `coffer path` prints the roots. The variables below move only the history database, the model proxy's spool and the logs. They exist mainly so tests and development setups never touch a real home; to run a daemon against a different home, set `HOME`.
 
-| Name | Default | Effect | Where read |
-| --- | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key file (`master.key`) stays in `~/.coffer` whatever this says. | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
-| `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | Directory the model proxy writes its usage spool files to and the daemon ingests them from. Both processes must see the same value. | [`infrastructure/model_proxy/spool.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/spool.py), [`infrastructure/usage/spool_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/spool_reader.py) |
-| `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, `proxy.log`, upstream server logs, MCP shim logs and the login service's output. | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
-| `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME` at the moment it is needed, so an alternate `HOME` gives a fully separate vault. | [`infrastructure/vault/home.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/home.py) |
+| Name | Default | Effect |
+| --- | --- | --- |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key file (`master.key`) stays in `~/.coffer` whatever this says. |
+| `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | Directory the model proxy writes its usage spool files to and the daemon ingests them from. Both processes must see the same value. |
+| `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, `proxy.log`, upstream server logs, MCP shim logs and the login service's output. |
+| `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME` at the moment it is needed, so an alternate `HOME` gives a fully separate vault. |
 
 ### Installer
 
@@ -89,11 +87,11 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 These are for contributors. Do not set them on a daemon you use day to day.
 
-| Name | Default | Effect | Where read |
-| --- | --- | --- | --- |
-| `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | unset | Bind the first free port in this range instead of the single configured port. Outranks `daemon-config.json`. If only one end is set, the other falls back to `8000` or `8009`. | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py) |
-| `COFFER_EVAL_CAPTURE` | unset | Records each `coffer__search_tools` query and its results as JSON lines for the eval harness. `1`, `true` or `yes` writes to `~/.coffer/eval-capture.jsonl`; any other non-falsy value is taken as the output path. | [`application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py), [`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) |
-| `COFFER_RUN_BENCHMARKS` | unset | `1` runs the perf-budget tests too slow for `make verify`, such as the reconcile pass cost (`make verify-benchmark`). | [`backend/tests/integration/perf/test_reconcile_pass_cost.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/perf/test_reconcile_pass_cost.py) |
+| Name | Default | Effect |
+| --- | --- | --- |
+| `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | unset | Bind the first free port in this range instead of the single configured port. Outranks `daemon-config.json`. If only one end is set, the other falls back to `8000` or `8009`. |
+| `COFFER_EVAL_CAPTURE` | unset | Records each `coffer__search_tools` query and its results as JSON lines for the eval harness. `1`, `true` or `yes` writes to `~/.coffer/eval-capture.jsonl`; any other non-falsy value is taken as the output path. |
+| `COFFER_RUN_BENCHMARKS` | unset | `1` runs the perf-budget tests too slow for `make verify`, such as the reconcile pass cost (`make verify-benchmark`). |
 
 ### Variables Coffer sets for processes it starts
 

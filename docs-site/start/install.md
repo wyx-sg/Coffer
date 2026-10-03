@@ -33,14 +33,46 @@ The agent reads this page, chooses the path that fits your machine and checks th
 
 | Path | Best for | Gives you |
 | --- | --- | --- |
-| [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim` in `~/.coffer/bin` |
 | [Desktop app](#desktop-app) | Anyone who prefers a window and a menu-bar icon | `Coffer.app`, plus the same three binaries once you first open it |
+| [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim` in `~/.coffer/bin` |
 | [Release archive](#release-archive) | Installing by hand, or on machines with no GUI | The same three binaries, extracted wherever you choose |
 | [From source](#from-source) | Contributors, Linux users, and anyone tracking `main` | A Python install with `coffer` and `coffer-mcp-shim` on your `PATH` |
 
 Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source (Python 3.12 or later).
 
 Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (`coffer open`), and the desktop app also gives you the CLI.
+
+## Desktop app
+
+::: steps
+
+### Download the .dmg
+
+Download the `.dmg` from [Releases](https://github.com/wyx-sg/Coffer/releases/latest). A signed and notarised release is named `Coffer-aarch64-apple-darwin.dmg`; a build without code signing says so in its name, `Coffer-unsigned-aarch64-apple-darwin.dmg`.
+
+### Drag Coffer to Applications
+
+Open the `.dmg` and drag **Coffer** to **Applications**.
+
+### Open Coffer
+
+Only for an unsigned build: macOS refuses a browser-downloaded copy with "Coffer is damaged and can't be opened". The app is not damaged. Clear the quarantine flag and open it again:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+Open Coffer. The app finds a running daemon, or starts the one bundled inside it, and shows the UI in a native window. A menu-bar icon stays after you close the window.
+
+:::
+
+The app bundles the same three binaries as the release archive. The first time its daemon starts, it copies them into `~/.coffer/bin`. To use the CLI as well, add that directory to your `PATH`:
+
+```sh
+export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
+```
+
+See [Desktop app](/guides/desktop-app) for the menu bar, updates, restarts and the offline banner.
 
 ## One-line installer
 
@@ -80,26 +112,6 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 ```
 
 A binary installed by `curl` is not quarantined, so macOS Gatekeeper does not block it.
-
-## Desktop app
-
-1. Download the `.dmg` from [Releases](https://github.com/wyx-sg/Coffer/releases/latest). A signed and notarised release is named `Coffer-aarch64-apple-darwin.dmg`; a build without code signing says so in its name, `Coffer-unsigned-aarch64-apple-darwin.dmg`.
-2. Open the `.dmg` and drag **Coffer** to **Applications**.
-3. Only for an unsigned build: macOS refuses a browser-downloaded copy with "Coffer is damaged and can't be opened". The app is not damaged. Clear the quarantine flag and open it again:
-
-   ```sh
-   xattr -dr com.apple.quarantine /Applications/Coffer.app
-   ```
-
-4. Open Coffer. The app finds a running daemon, or starts the one bundled inside it, and shows the UI in a native window. A menu-bar icon stays after you close the window.
-
-The app bundles the same three binaries as the release archive. The first time its daemon starts, it copies them into `~/.coffer/bin`. To use the CLI as well, add that directory to your `PATH`:
-
-```sh
-export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
-```
-
-See [Desktop app](/guides/desktop-app) for the menu bar, updates, restarts and the offline banner.
 
 ## Release archive
 

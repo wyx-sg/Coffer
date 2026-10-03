@@ -1,43 +1,59 @@
 ---
 title: coffer drift
 description: "See and repair drift between Coffer and the agents' own files"
+pageClass: cli-ref
 ---
 
 # coffer drift
 
-Part of the [CLI reference](/reference/cli), generated from the CLI's own command tree; regenerate it with `make docs-reference`, never by hand.
+See and repair drift between Coffer and the agents' own files
 
 ```sh
 coffer drift [OPTIONS] COMMAND [ARGS]...
 ```
 
-See and repair drift between Coffer and the agents' own files
+This page matches what `coffer drift --help` prints. Add `--help` to any command below to see its options in the terminal.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| [`drift list`](#drift-list) | List every difference a reconcile pass would find now. |
+| [`drift repair`](#drift-repair) | Apply drift items now. |
 
 ## drift list
+
+List every difference a reconcile pass would find now. Writes nothing.
+
+<p class="cli-label">Synopsis</p>
 
 ```sh
 coffer drift list [OPTIONS]
 ```
 
-List every difference a reconcile pass would find now. Writes nothing.
+<p class="cli-label">Arguments and options</p>
 
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--target` | option | text |  | One target only |
-| `--kind` | option | text |  | Only items about this kind |
-| `--uid` | option | text |  | Only items about this resource |
-| `--json` | option | flag |  | JSON output for scripts |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--target` <span class="cli-chip">option</span> | text |  | One target only |
+| `--kind` <span class="cli-chip">option</span> | text |  | Only items about this kind |
+| `--uid` <span class="cli-chip">option</span> | text |  | Only items about this resource |
+| `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 
 ## drift repair
+
+Apply drift items now. Each repair is audited with you as the actor.
+
+<p class="cli-label">Synopsis</p>
 
 ```sh
 coffer drift repair [OPTIONS] [IDS]...
 ```
 
-Apply drift items now. Each repair is audited with you as the actor.
+<p class="cli-label">Arguments and options</p>
 
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `IDS` | argument | text (variadic) |  | Item ids from `coffer drift list` |
-| `--all` | option | flag |  | Every item a request would repair |
-| `--json` | option | flag |  | JSON output for scripts |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `IDS` <span class="cli-chip">argument</span> | text (variadic) |  | Item ids from `coffer drift list` |
+| `--all` <span class="cli-chip">option</span> | flag |  | Every item a request would repair |
+| `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |

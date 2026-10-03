@@ -1,19 +1,20 @@
 ---
 title: coffer open
 description: "Open Coffer's web UI in your browser."
+pageClass: cli-ref
 ---
 
 # coffer open
 
-Part of the [CLI reference](/reference/cli), generated from the CLI's own command tree; regenerate it with `make docs-reference`, never by hand.
+Open Coffer's web UI in your browser.
 
 ```sh
 coffer open [OPTIONS] COMMAND [ARGS]...
 ```
 
-Open Coffer's web UI in your browser.
+This page matches what `coffer open --help` prints. Add `--help` to any command below to see its options in the terminal.
 
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-| `--no-browser` | option | flag |  | Print the URL instead of launching a browser. |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">option</span> | flag |  |  |
+| `--no-browser` <span class="cli-chip">option</span> | flag |  | Print the URL instead of launching a browser. |

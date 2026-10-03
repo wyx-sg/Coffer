@@ -3,6 +3,167 @@ title: Architecture overview
 description: How Coffer is built — its processes, the parts inside the daemon, the four main data flows, the tech stack, and a guide to the rest of the architecture section.
 ---
 
+<script setup>
+const flows = [
+  {
+    "tab": "An agent's tool call",
+    "steps": [
+      {
+        "who": "Agent",
+        "text": "The agent calls a tool on its <code>coffer</code> MCP server."
+      },
+      {
+        "who": "coffer-mcp-shim",
+        "text": "The shim forwards the JSON-RPC message to <code>POST /mcp</code> with the daemon token."
+      },
+      {
+        "who": "MCP gateway",
+        "text": "The gateway resolves the session — each downstream client session gets its own set of upstream subprocesses — and routes a namespaced name such as <code>github__create_issue</code> to the <code>github</code> server's session, or answers a <code>coffer__*</code> builtin itself."
+      },
+      {
+        "who": "Reach check",
+        "text": "Before listing or calling, the gateway checks the server's reach against the agent uid the shim reported at the handshake, so a server scoped away from this agent presents no tools."
+      },
+      {
+        "who": "Tool budget",
+        "text": "When the full tool list would exceed the configured budget, the gateway lists a subset and <code>coffer__search_tools</code> finds the rest. Details: <a href=\"/Coffer/architecture/mcp-gateway\">MCP gateway</a>."
+      }
+    ]
+  },
+  {
+    "tab": "A chat turn",
+    "steps": [
+      {
+        "who": "You",
+        "text": "You send a message on the <strong>Conversations</strong> page, or a paired owner sends one from Telegram or SeaTalk."
+      },
+      {
+        "who": "Turn orchestrator",
+        "text": "Both surfaces call the same turn orchestrator, which starts the turn when the conversation is idle or queues the message behind the running one."
+      },
+      {
+        "who": "Agent adapter",
+        "text": "The orchestrator asks the agent-provider registry for the conversation's agent and builds an adapter (Claude Agent SDK or Codex app-server)."
+      },
+      {
+        "who": "Event bus",
+        "text": "It publishes every event to a per-conversation bus that the web page and the channel renderer both subscribe to. Once a message reaches the orchestrator, nothing downstream knows which surface it came from. Details: <a href=\"/Coffer/architecture/chat\">Chat and turns</a>."
+      }
+    ]
+  },
+  {
+    "tab": "A skill delivery",
+    "steps": [
+      {
+        "who": "Library",
+        "text": "A skill is a master folder under <code>~/.coffer/vault/skills/<name>/</code> and a <code>skill</code> resource file. It reaches an agent if and only if the skill is enabled and the agent is inside its scope."
+      },
+      {
+        "who": "Reconcile",
+        "text": "Any change to either — enabling, disabling, widening or narrowing the scope — reconciles every agent: Coffer links the master folder into <code><config_dir>/skills/</code> (symlink, junction or copy fallback), or reclaims a copy that is no longer in reach."
+      },
+      {
+        "who": "Drift check",
+        "text": "A boot-time drift check repairs links someone broke by hand. Coffer's own manual, <code>coffer-guide</code>, is delivered by exactly the same code."
+      },
+      {
+        "who": "Import",
+        "text": "A skill enters the library from a folder, an archive or a Git repository, staged and confirmed first; one from Git stays pinned to its commit until you take an update. Details: <a href=\"/Coffer/architecture/skills\">Skills</a>."
+      }
+    ]
+  },
+  {
+    "tab": "A sync round",
+    "steps": [
+      {
+        "who": "Worker",
+        "text": "When you configure a git remote you own, a worker runs a round on the remote's interval, hourly by default."
+      },
+      {
+        "who": "Merge",
+        "text": "The vault is already a git repository, so a round only fetches, lets git compute the merge outside the working tree, and, if the merge is clean, valid and within the deletion breaker, snapshots the vault, checks the merge out and pushes."
+      },
+      {
+        "who": "Conflict",
+        "text": "Any conflict stops the round with nothing changed on either side until you answer per file."
+      },
+      {
+        "who": "What travels",
+        "text": "Reach and agents never travel (they are in <code>local/</code>), secrets travel only as Fernet ciphertext and only when you opt in, and a round that would lose too much holds for your answer. Details: <a href=\"/Coffer/architecture/vault-sync\">Vault sync</a>."
+      }
+    ]
+  }
+]
+const decisions = [
+  {
+    "title": "One resident daemon per vault; every other process is a client that finds it or spawns it.",
+    "why": "One SQLite writer and one set of upstream processes, with no \"start the daemon first\" step. An idle exit would make an agent's next call pay a cold start.",
+    "link": "/architecture/daemon",
+    "linkText": "Daemon and processes"
+  },
+  {
+    "title": "Loopback, a per-start token and a `Host` check are the whole access model.",
+    "why": "Coffer serves one person on one machine. Binding `127.0.0.1` stops remote hosts; the `Host` check stops a web page that re-points its own DNS name at loopback.",
+    "link": "/architecture/security",
+    "linkText": "Security model"
+  },
+  {
+    "title": "Every managed thing is a Resource with an immutable `uid`; behaviour stays inside its kind.",
+    "why": "Identity, lifecycle, audit and reach are the same for every kind and are built once. Invoking a tool and delivering a skill have nothing in common, so they are not unified.",
+    "link": "/architecture/resource-framework",
+    "linkText": "Resource framework"
+  },
+  {
+    "title": "Reach is machine-local and enforced where the asking agent is known.",
+    "why": "A permission merged through sync would let another machine's round decide what this one exposes. A central gate would sit on every kind's read path.",
+    "link": "/architecture/resource-framework#reach",
+    "linkText": "Resource framework"
+  },
+  {
+    "title": "Each MCP client session gets its own lazily started upstream processes.",
+    "why": "MCP is a per-session protocol. Sharing an upstream across clients would mean re-implementing capability negotiation and notification routing inside the gateway.",
+    "link": "/architecture/mcp-gateway",
+    "linkText": "MCP gateway"
+  },
+  {
+    "title": "The gateway lists a usage-ranked slice of tools and offers search for the rest.",
+    "why": "Past roughly 30 to 50 tools a model picks tools less reliably. Tiering decides what is listed, never what may be called.",
+    "link": "/architecture/mcp-gateway#budget-driven-tiering",
+    "linkText": "MCP gateway"
+  },
+  {
+    "title": "Knowledge is plain Markdown with no index; its catalogue reaches agents as a skill.",
+    "why": "Agents read files all day and rarely call a retrieval tool. Nothing derived can disagree with the files.",
+    "link": "/architecture/knowledge",
+    "linkText": "Knowledge"
+  },
+  {
+    "title": "Memory is aggregated read-only from each agent's own files and never written back.",
+    "why": "Each agent keeps its own memory loop untouched, and everything Coffer derives can be deleted and rebuilt.",
+    "link": "/architecture/memory",
+    "linkText": "Memory"
+  },
+  {
+    "title": "The vault is a git repository; sync pulls and pushes it, applies a clean merge and stops on any conflict.",
+    "why": "A shared base is the only way to tell \"never had it\" from \"deleted it\", and nothing Coffer does on its own ever needs undoing. Your remote stays an ordinary repository you can inspect.",
+    "link": "/architecture/vault-sync",
+    "linkText": "Vault sync"
+  },
+  {
+    "title": "Secrets are Fernet ciphertext under one master key, kept in a `0600` file by default.",
+    "why": "Coffer's builds are unsigned, and macOS re-prompts for every keychain item a new build touches. One key in a file removes the prompts; the keychain stays an opt-in.",
+    "link": "/architecture/security#the-secret-store",
+    "linkText": "Security model"
+  },
+  {
+    "title": "Unfinished features ship in every build, off until you switch them on, instead of living on a branch.",
+    "why": "One line of development, and the owner tests exactly what users run. Switching a feature off hides it and keeps its data.",
+    "link": "/architecture/distribution#experimental-features",
+    "linkText": "Distribution and releases"
+  }
+]
+</script>
+
 # Architecture overview
 
 This page is the map of the architecture section: one diagram of every moving part, the processes that run, how the four main data flows cross them, and the technology underneath. It is written for engineers who want to understand how Coffer is built and why, before reading any one subsystem in depth.
@@ -34,44 +195,7 @@ Coffer is one local process that holds those assets once and hands them to every
 
 The container view below shows every process and store, and what talks to what. Solid arrows are calls; the daemon's internal parts are grouped in the middle.
 
-```mermaid
-flowchart LR
-  subgraph clients["Clients on this machine"]
-    AG["Coding agents"]
-    SHIM["coffer-mcp-shim"]
-    CLI["coffer CLI"]
-    WEB["Web UI"]
-    DESK["Desktop shell"]
-  end
-  subgraph daemon["coffer-daemon on 127.0.0.1"]
-    API["HTTP API"]
-    GW["MCP gateway"]
-    RF["Resource framework and kinds"]
-    WK["Background workers"]
-  end
-  subgraph disk["~/.coffer"]
-    FS["vault/ (git): resources, knowledge, skills, secrets"]
-    DB[("runs.db: history")]
-  end
-  UP["Upstream MCP servers"]
-  LLM["Model providers"]
-  IM["Telegram and SeaTalk"]
-  GIT["Your git remote"]
-  AG -->|stdio| SHIM
-  SHIM -->|"/mcp"| GW
-  CLI --> API
-  WEB --> API
-  DESK --> API
-  API --> RF
-  GW --> RF
-  WK --> RF
-  RF --> DB
-  RF --> FS
-  GW --> UP
-  WK --> LLM
-  WK --> IM
-  WK --> GIT
-```
+<ArchDiagram />
 
 What each box is:
 
@@ -110,39 +234,13 @@ The CLI, the shim and the desktop shell all discover the daemon through `~/.coff
 
 ## Main data flows
 
-### An agent's tool call
-
-The agent calls a tool on its `coffer` MCP server. The shim forwards the JSON-RPC message to `POST /mcp` with the daemon token. The gateway resolves the session — each downstream client session gets its own set of upstream subprocesses — and routes a namespaced name such as `github__create_issue` to the `github` server's session, or answers a `coffer__*` builtin itself. Before listing or calling, the gateway checks the server's reach against the agent uid the shim reported at the handshake, so a server scoped away from this agent presents no tools. When the full tool list would exceed the configured budget, the gateway lists a subset and `coffer__search_tools` finds the rest. Details: [MCP gateway](/architecture/mcp-gateway).
-
-### A chat turn
-
-You send a message on the **Conversations** page, or a paired owner sends one from Telegram or SeaTalk. Both surfaces call the same turn orchestrator, which starts the turn when the conversation is idle or queues the message behind the running one. The orchestrator asks the agent-provider registry for the conversation's agent, builds an adapter (Claude Agent SDK or Codex app-server), and publishes every event to a per-conversation bus that the web page and the channel renderer both subscribe to. Once a message reaches the orchestrator, nothing downstream knows which surface it came from. Details: [Chat and turns](/architecture/chat).
-
-### A skill delivery
-
-A skill is a master folder under `~/.coffer/vault/skills/<name>/` and a `skill` resource file. It reaches an agent if and only if the skill is enabled and the agent is inside its scope. Any change to either — enabling, disabling, widening or narrowing the scope — reconciles every agent: Coffer links the master folder into `<config_dir>/skills/` (symlink, junction or copy fallback), or reclaims a copy that is no longer in reach. A boot-time drift check repairs links someone broke by hand. Coffer's own manual, `coffer-guide`, is delivered by exactly the same code. A skill enters the library from a folder, an archive or a Git repository, staged and confirmed first; one from Git stays pinned to its commit until you take an update. Details: [Skills](/architecture/skills).
-
-### A sync round
-
-When you configure a git remote you own, a worker runs a round on the remote's interval, hourly by default. The vault is already a git repository, so a round only fetches, lets git compute the merge outside the working tree, and, if the merge is clean, valid and within the deletion breaker, snapshots the vault, checks the merge out and pushes. Any conflict stops the round with nothing changed on either side until you answer per file. Reach and agents never travel (they are in `local/`), secrets travel only as Fernet ciphertext and only when you opt in, and a round that would lose too much holds for your answer. Details: [Vault sync](/architecture/vault-sync).
+<DataFlows :flows="flows" />
 
 ## The design in eleven decisions
 
 Most of Coffer's shape follows from a handful of decisions. Each one below is argued in full on the page it links to, with the alternatives that lost.
 
-| Decision | Why | Page |
-| --- | --- | --- |
-| One resident daemon per vault; every other process is a client that finds it or spawns it. | One SQLite writer and one set of upstream processes, with no "start the daemon first" step. An idle exit would make an agent's next call pay a cold start. | [Daemon and processes](/architecture/daemon) |
-| Loopback, a per-start token and a `Host` check are the whole access model. | Coffer serves one person on one machine. Binding `127.0.0.1` stops remote hosts; the `Host` check stops a web page that re-points its own DNS name at loopback. | [Security model](/architecture/security) |
-| Every managed thing is a Resource with an immutable `uid`; behaviour stays inside its kind. | Identity, lifecycle, audit and reach are the same for every kind and are built once. Invoking a tool and delivering a skill have nothing in common, so they are not unified. | [Resource framework](/architecture/resource-framework) |
-| Reach is machine-local and enforced where the asking agent is known. | A permission merged through sync would let another machine's round decide what this one exposes. A central gate would sit on every kind's read path. | [Resource framework](/architecture/resource-framework#reach) |
-| Each MCP client session gets its own lazily started upstream processes. | MCP is a per-session protocol. Sharing an upstream across clients would mean re-implementing capability negotiation and notification routing inside the gateway. | [MCP gateway](/architecture/mcp-gateway) |
-| The gateway lists a usage-ranked slice of tools and offers search for the rest. | Past roughly 30 to 50 tools a model picks tools less reliably. Tiering decides what is listed, never what may be called. | [MCP gateway](/architecture/mcp-gateway#budget-driven-tiering) |
-| Knowledge is plain Markdown with no index; its catalogue reaches agents as a skill. | Agents read files all day and rarely call a retrieval tool. Nothing derived can disagree with the files. | [Knowledge](/architecture/knowledge) |
-| Memory is aggregated read-only from each agent's own files and never written back. | Each agent keeps its own memory loop untouched, and everything Coffer derives can be deleted and rebuilt. | [Memory](/architecture/memory) |
-| The vault is a git repository; sync pulls and pushes it, applies a clean merge and stops on any conflict. | A shared base is the only way to tell "never had it" from "deleted it", and nothing Coffer does on its own ever needs undoing. Your remote stays an ordinary repository you can inspect. | [Vault sync](/architecture/vault-sync) |
-| Secrets are Fernet ciphertext under one master key, kept in a `0600` file by default. | Coffer's builds are unsigned, and macOS re-prompts for every keychain item a new build touches. One key in a file removes the prompts; the keychain stays an opt-in. | [Security model](/architecture/security#the-secret-store) |
-| Unfinished features ship in every build, off until you switch them on, instead of living on a branch. | One line of development, and the owner tests exactly what users run. Switching a feature off hides it and keeps its data. | [Distribution and releases](/architecture/distribution#experimental-features) |
+<DecisionList :items="decisions" />
 
 ### What Coffer deliberately is not
 

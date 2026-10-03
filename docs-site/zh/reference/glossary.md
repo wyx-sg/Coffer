@@ -8,6 +8,8 @@ outline: 2
 
 Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序排列。每个条目都链接到深入讲解该概念的页面。
 
+<AzBar />
+
 ## A {#a}
 
 ### 执行者（Actor） {#actor}
