@@ -1,4 +1,4 @@
-// src/components/agents/AgentAdoptMcpDialog.tsx — adopt one direct MCP entry into Coffer (boards 2.1.24, 2.1.25).
+// src/components/agents/AgentAdoptMcpDialog.tsx — adopt one direct MCP entry into Coffer (boards 2.1.27, 2.1.28, 640).
 //
 // Spec agent-registry "Adopt a direct MCP entry into Coffer". The dialog says
 // what will happen — Coffer serves the server to every agent and then takes
@@ -11,10 +11,11 @@
 // field (409 name conflict) and the user renames and retries; any other failure
 // is shown inline. The primary button reads "Adopting…" while it runs.
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 
 import { AdoptKeyTable } from "@/components/agents/mcp/AdoptKeyTable";
 import { entryCommand } from "@/components/agents/mcp/mcpRows";
+import { ReadOnlyCopyField } from "@/components/agents/tabs/ReadOnlyCopyField";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,11 +116,15 @@ export function AgentAdoptMcpDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-[640px]">
         <DialogHeader>
           <DialogTitle>{t("agents.mcpTab.adoptDialog.title", { name: entry.name })}</DialogTitle>
           <DialogDescription>
-            {t("agents.mcpTab.adoptDialog.description", { file: fileLabel })}
+            <Trans
+              i18nKey="agents.mcpTab.adoptDialog.description"
+              values={{ file: fileLabel, agent: agentLabel }}
+              components={{ file: <code className="font-mono text-xs text-text" /> }}
+            />
           </DialogDescription>
         </DialogHeader>
 
@@ -135,21 +140,24 @@ export function AgentAdoptMcpDialog({
               onChange={(e) => setName(e.target.value)}
             />
             {conflict !== null ? (
-              <p className="text-xs text-destructive" role="alert">
+              <p className="text-xs text-danger" role="alert">
                 {t("agents.mcpTab.adoptDialog.nameConflict", { name: conflict })}
               </p>
-            ) : null}
+            ) : (
+              <p className="text-xs text-text-muted">{t("agents.mcpTab.adoptDialog.nameHint")}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs font-label text-text">
+            <p className="text-sm font-label text-text">
               {entry.transport === "stdio"
                 ? t("agents.mcpTab.adoptDialog.command")
                 : t("agents.mcpTab.adoptDialog.url")}
             </p>
-            <p className="break-all rounded-md bg-surface-sunken px-3 py-2 font-mono text-xs text-text">
-              {entryCommand(entry)}
-            </p>
+            <ReadOnlyCopyField
+              value={entryCommand(entry)}
+              copyLabel={t("agents.mcpTab.adoptDialog.copy")}
+            />
           </div>
 
           {entry.env_keys.length > 0 ? (
@@ -179,9 +187,6 @@ export function AgentAdoptMcpDialog({
               })}
             </p>
           ) : null}
-          <p className="text-xs text-text-muted">
-            {t("agents.mcpTab.adoptDialog.leaves", { file: fileLabel, agent: agentLabel })}
-          </p>
 
           {errorMsg ? (
             <Alert variant="error">

@@ -11,18 +11,18 @@ import {
 } from "./routes";
 
 describe("agent addresses", () => {
-  test("the nine tabs, in the page's order", () => {
+  test("the eight tabs, in the page's order: six in the strip, two behind More", () => {
     expect(AGENT_TABS).toEqual([
       "overview",
-      "model",
       "skills",
       "mcp-servers",
-      "plugins",
       "hooks",
-      "memory",
-      "sessions",
       "config",
+      "sessions",
+      "plugins",
+      "memory",
     ]);
+    expect(AGENT_TABS).not.toContain("model");
   });
 
   test("Overview is the bare address, every other tab a path segment", () => {

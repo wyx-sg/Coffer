@@ -1,16 +1,16 @@
-// src/components/agents/mcp/AgentMcpEntryDialog.tsx — one direct MCP server of an agent, read-only, in a dialog.
+// src/components/agents/mcp/AgentMcpEntryDialog.tsx — one direct MCP server of an agent, read-only, in a dialog (board 2.1.59, 640).
 //
 // Spec agent-registry "Show one direct MCP entry's full configuration without
 // its secrets". Reached from the name on the agent's MCP servers tab. A direct
 // entry has one thing to show — its JSON as the agent's own config file holds
-// it — so it opens as a dialog over the table rather than a page of its own
+// it — so it opens as a dialog over the list rather than a page of its own
 // (.agents/frontend.md "A page only when there is a page's worth"). The two
-// writes the row carries sit in the footer: adopt it into Coffer, or take it
-// out of the file (the row's own Remove duplicate when Coffer already has it).
+// writes the row carries sit in the footer around Close (ghost): take it out of
+// the file (Remove, or Remove duplicate when Coffer already has it) on the
+// left, adopt it into Coffer on the right.
 // The entry has no uid: it is addressed by its name and the config file's key.
 import { useTranslation } from "react-i18next";
 
-import { HelpTip } from "@/components/HelpTip";
 import { AgentMcpEntryOverview } from "@/components/agents/AgentMcpEntryOverview";
 import type { OwnMcpRow } from "@/components/agents/mcp/mcpRows";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import { useAgentMcpEntry } from "@/lib/hooks/useAgents";
 
 interface Props {
   agentUid: string;
-  /** The agent's product name, for "Direct server of {agent}". */
+  /** The agent's product name, for "{agent}'s own server". */
   agentLabel: string;
   /** The row opened; null keeps the dialog closed. */
   row: OwnMcpRow | null;
@@ -54,14 +54,9 @@ export function AgentMcpEntryDialog({
     <Dialog open={row !== null} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="max-w-[640px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {row?.name}
-            <HelpTip>{t("agents.workspace.mcp.detail.hint")}</HelpTip>
-          </DialogTitle>
+          <DialogTitle className="font-mono">{row?.name}</DialogTitle>
           <DialogDescription>
-            {t("agents.mcpTab.directOf", { agent: agentLabel })}
-            {entry.data ? ` · ${entry.data.transport}` : ""}
-            {duplicate !== null ? ` · ${t("agents.mcpTab.duplicateOf", { name: duplicate })}` : ""}
+            {t("agents.mcpTab.entry.description", { agent: agentLabel })}
           </DialogDescription>
         </DialogHeader>
 
@@ -78,19 +73,19 @@ export function AgentMcpEntryDialog({
         )}
 
         <DialogFooter className="sm:justify-between">
-          <Button
-            variant="outline"
-            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-            disabled={readOnly || !row}
-            onClick={() => row && onRemove(row)}
-          >
+          <Button variant="danger" disabled={readOnly || !row} onClick={() => row && onRemove(row)}>
             {duplicate !== null ? t("agents.mcpTab.removeDuplicate") : t("agents.mcpTab.remove")}
           </Button>
-          {duplicate === null ? (
-            <Button disabled={readOnly || !row} onClick={() => row && onAdopt(row)}>
-              {t("agents.mcpTab.adopt")}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              {t("common.close")}
             </Button>
-          ) : null}
+            {duplicate === null ? (
+              <Button disabled={readOnly || !row} onClick={() => row && onAdopt(row)}>
+                {t("agents.mcpTab.adopt")}
+              </Button>
+            ) : null}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,12 +1,14 @@
-// src/components/agents/detail/AgentDetailTabs.tsx — the agent page's nine tabs, each at its own path.
+// src/components/agents/detail/AgentDetailTabs.tsx — the agent page's tabs, each at its own path.
 //
-// Overview · Model · Skills · MCP servers · Plugins · Hooks · Memory · Sessions · Config files ·
-// Memory · Sessions (spec agent-registry "Expose every agent operation
-// through REST, CLI and the Agents page"). The open tab is the path segment (`useDetailTab`); only the open
-// tab is mounted, so a tab reads its data when it is opened. The list tabs
-// carry their count, read from the same queries the tabs make. Leaving Config
-// files with an unsaved draft asks first, through the shell's unsaved-changes
-// guard, like every other way out of an editor.
+// Overview · Skills · MCP servers · Hooks · Config files · Sessions, then More
+// (Plugins · Memory, the least used) — no counts. The open tab is the path
+// segment (`useDetailTab`); only the open tab is mounted, so a tab reads its
+// data when it is opened. A tab inside More that needs attention (a plugin
+// whose files are gone, Coffer's memory hook out of order) puts a dot on More,
+// and while one of them is open More wears its name and the underline. There is
+// no Model tab: the model is a section of Overview. Leaving Config files with
+// an unsaved draft asks first, through the shell's unsaved-changes guard, like
+// every other way out of an editor.
 import { useTranslation } from "react-i18next";
 
 import { AgentConfigFilesTab } from "@/components/agents/AgentConfigFilesTab";
@@ -17,12 +19,20 @@ import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
-import { AgentModelTab } from "@/components/agents/model/AgentModelTab";
 import { AgentSessionsTab } from "@/components/agents/sessions/AgentSessionsTab";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AGENT_TABS, agentBasePath, DEFAULT_AGENT_TAB, type AgentTab } from "@/lib/agents/routes";
+import { DetailTabsMore, type DetailTab } from "@/components/DetailTabsMore";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import {
+  AGENT_MORE_TABS,
+  AGENT_PRIMARY_TABS,
+  AGENT_TABS,
+  agentBasePath,
+  DEFAULT_AGENT_TAB,
+  type AgentTab,
+} from "@/lib/agents/routes";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useDetailTab } from "@/lib/detailTabs";
+import { useAgentHooks, useAgentPlugins } from "@/lib/hooks/useAgents";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 interface Props {
@@ -33,7 +43,6 @@ interface Props {
 
 const LABEL_KEY: Record<AgentTab, string> = {
   overview: "agents.tabs.overview",
-  model: "agents.tabs.model",
   skills: "agents.tabs.skills",
   "mcp-servers": "agents.tabs.mcpServers",
   plugins: "agents.tabs.plugins",
@@ -43,45 +52,57 @@ const LABEL_KEY: Record<AgentTab, string> = {
   sessions: "agents.tabs.sessions",
 };
 
+/** Which of the tabs behind More hold something that needs the user. */
+function useMoreAttention(uid: string): Partial<Record<AgentTab, boolean>> {
+  const plugins = useAgentPlugins(uid).data?.items;
+  const hook = useAgentHooks(uid).data?.coffer_hook;
+  const memoryOn = useFeatureEnabled("memory") === true;
+  return {
+    plugins: !!plugins?.some((p) => p.cache_present === false),
+    // The memory tab carries Coffer's memory hook, and Repair when it is off.
+    memory: memoryOn && !!hook && hook.health !== "current",
+  };
+}
+
 export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const { t } = useTranslation();
-  // The Model tab is about connections to model providers, so it exists only
-  // while the Models feature is on; with it off the tab is simply not there and
-  // its address falls back to Overview like any unknown tab.
-  const models = useFeatureEnabled("models");
-  const tabs = models === true ? AGENT_TABS : AGENT_TABS.filter((id) => id !== "model");
-  const [tab, setTab] = useDetailTab(tabs, DEFAULT_AGENT_TAB, agentBasePath(agent.type), {
-    enabled: models !== undefined,
+  const [tab, setTab] = useDetailTab(AGENT_TABS, DEFAULT_AGENT_TAB, agentBasePath(agent.type));
+  const attention = useMoreAttention(agent.uid);
+  const entry = (id: AgentTab): DetailTab => ({
+    id,
+    label: t(LABEL_KEY[id]),
+    attention: attention[id],
   });
   const { open } = rowActions;
   const overviewActions = {
     onConnection: (kind: "connect" | "disconnect") => open.change(kind),
     onEnable: open.enable,
     onChangeConfigDir: open.configDir,
-    onRemove: open.remove,
     busy: !!rowActions.pending,
   };
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-col">
-      <TabsList className="overflow-x-auto">
-        {tabs.map((id) => (
-          <TabsTrigger key={id} value={id}>
-            {t(LABEL_KEY[id])}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      <DetailTabsMore
+        tabs={AGENT_PRIMARY_TABS.map(entry)}
+        more={AGENT_MORE_TABS.map(entry)}
+        value={tab}
+        onSelect={setTab}
+        moreLabel={t("agents.tabs.more")}
+        className="overflow-x-auto"
+      />
       <TabsContent value={tab} className="mt-[18px] min-h-0">
         {tab === "overview" && (
           <AgentOverviewTab agent={agent} typeRow={typeRow} actions={overviewActions} />
         )}
-        {tab === "model" && <AgentModelTab agent={agent} />}
         {tab === "skills" && <AgentSkillsTab agent={agent} />}
         {tab === "mcp-servers" && <AgentMcpServersTab agent={agent} />}
         {tab === "plugins" && <AgentPluginsTab agent={agent} />}
         {tab === "hooks" && <AgentHooksTab agent={agent} onRepair={() => open.change("connect")} />}
         {tab === "config" && <AgentConfigFilesTab agent={agent} />}
-        {tab === "memory" && <AgentMemoryTab agent={agent} />}
+        {tab === "memory" && (
+          <AgentMemoryTab agent={agent} onRepair={() => open.change("connect")} />
+        )}
         {tab === "sessions" && <AgentSessionsTab agent={agent} />}
       </TabsContent>
     </Tabs>

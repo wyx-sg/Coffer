@@ -17,6 +17,7 @@ from collections.abc import Callable
 from coffer.application.agent.attention import AgentAttentionSource
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.connection_service import AgentConnectionService
+from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.attention import AttentionSource
 from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.service import ChannelService
@@ -27,6 +28,7 @@ from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.sync.attention import SyncAttentionSource
 from coffer.application.sync.service import SyncService
+from coffer.domain.features import MEMORY
 from coffer.infrastructure.mcp.health_repo import MCPServerHealthRepo
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
@@ -43,7 +45,9 @@ def build_attention_sources(
     channel_service: ChannelService | None,
     health_repo: MCPServerHealthRepo | None,
     cli_service: CliRequirementService | None = None,
+    agent_hooks: AgentHooksService | None = None,
     protections_on: Callable[[], bool] | None = None,
+    memory_on: Callable[[], bool] | None = None,
 ) -> list[AttentionSource]:
     """Every kind's source, in the order the Overview groups them."""
     sources: list[AttentionSource] = []
@@ -57,7 +61,13 @@ def build_attention_sources(
             )
         )
     sources.append(
-        AgentAttentionSource(agents=resource_svc, detect=auto_detect, connection=connection_service)
+        AgentAttentionSource(
+            agents=resource_svc,
+            detect=auto_detect,
+            connection=connection_service,
+            hooks=agent_hooks,
+            memory_on=memory_on,
+        )
     )
     if channel_service is not None:
         sources.append(
@@ -87,8 +97,14 @@ def lifespan_attention_sources(
     from coffer.surfaces.http.agent_dependencies import get_auto_detect_service
     from coffer.surfaces.http.channel_routes import get_channel_service
     from coffer.surfaces.http.cli_dependencies import get_cli_requirement_service_optional
+    from coffer.surfaces.http.feature_dependencies import get_feature_service_optional
     from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
     from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
+    from coffer.surfaces.http.workspace_dependencies import get_agent_hooks_service
+
+    def memory_on() -> bool:
+        features = get_feature_service_optional()
+        return features is None or features.is_enabled(MEMORY)
 
     return build_attention_sources(
         resource_svc=resource_svc,
@@ -99,7 +115,9 @@ def lifespan_attention_sources(
         channel_service=get_channel_service(),
         health_repo=get_health_repo_optional(),
         cli_service=get_cli_requirement_service_optional(),
+        agent_hooks=get_agent_hooks_service(),
         protections_on=lambda: get_secret_boundary().protections_on(),
+        memory_on=memory_on,
     )
 
 

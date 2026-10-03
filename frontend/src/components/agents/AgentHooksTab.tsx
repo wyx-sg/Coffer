@@ -1,68 +1,61 @@
-// src/components/agents/AgentHooksTab.tsx — the agent's Hooks tab: every hook it will run, in one table.
+// src/components/agents/AgentHooksTab.tsx — the agent's Hooks tab: Coffer's memory hook, then the agent's own.
 //
-// Spec agent-registry "List every hook in the agent's native config" and
-// "Filter an agent's installed kinds by owner". Read only: the hooks are shown
-// grouped by event (AgentHooksByEvent) — what runs on PreToolUse, on
-// SessionStart, … — and nothing opens a file. Coffer's own hook is marked, and
-// its health, Codex's trust and its last fire are said once in a status block
-// that offers Repair when it is out of date or missing (`onRepair`, wired by the
-// detail page to the connection-change dialog). A file that does not parse is a
-// warning above the list, not a failure of the tab.
-import { useMemo } from "react";
+// Spec agent-registry "List every hook in the agent's native config". Read
+// only. Coffer's memory hook comes first, as one block of properties with its
+// fix at the title's right (Repair → the Review changes flow, `onRepair`, wired
+// by the detail page; Check again). Below it, the agent's own hooks as one
+// searchable table that opens a read-only details dialog. A file that does not
+// parse is a warning above both, not a failure of the tab.
 import { useTranslation } from "react-i18next";
-import { Webhook } from "lucide-react";
 
-import { AgentHooksByEvent } from "@/components/agents/AgentHooksByEvent";
-import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
+import { CofferHookSection } from "@/components/agents/hooks/CofferHookSection";
+import { OwnHooksSection } from "@/components/agents/hooks/OwnHooksSection";
+import { LoadError } from "@/components/LoadError";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import { hookRows, hookSummaryCounts, type HookRow } from "@/lib/agents/hookRows";
+import { abbreviateHomePath } from "@/lib/agents/display";
+import { ownHooks } from "@/lib/agents/hookRows";
 import type { AgentOut } from "@/lib/api/agents";
-import { useAgentHooks } from "@/lib/hooks/useAgents";
+import { useAgentConfigFiles, useAgentHooks } from "@/lib/hooks/useAgents";
 
 interface Props {
   agent: AgentOut;
-  /** Reinstall Coffer's hook (the Coffer connection's repair). Repair shows only when given. */
+  /** Opens the Review changes flow that reinstalls Coffer's hook. Repair shows only when given. */
   onRepair?: () => void;
 }
-
-const searchText = (row: HookRow) =>
-  `${row.event} ${row.command ?? ""} ${row.path} ${row.matcher ?? ""} ${row.plugin ?? ""}`;
 
 export function AgentHooksTab({ agent, onRepair }: Props) {
   const { t } = useTranslation();
   const hooks = useAgentHooks(agent.uid);
-  const rows = useMemo(() => hookRows(hooks.data), [hooks.data]);
-  const counts = hookSummaryCounts(hooks.data);
-  const agentName = agentTypeLabel(agent.type);
+  const files = useAgentConfigFiles(agent.uid);
+  const own = ownHooks(hooks.data);
   const parseErrors = hooks.data?.parse_errors ?? [];
+  const coffer = hooks.data?.coffer_hook ?? null;
+  // The Config files entry that holds a hook file, so a path can link to it.
+  const fileKeyOf = (path: string) => files.data?.find((f) => f.path === path)?.key ?? null;
 
-  const summary = [
-    `${t("agents.hooksTab.summary.hooks", { count: counts.hooks })} ${t(
-      "agents.hooksTab.summary.files",
-      { count: counts.files },
-    )}`,
-    counts.cofferMissing
-      ? t("agents.hooksTab.summary.cofferMissing")
-      : counts.coffer > 0
-        ? t("agents.hooksTab.summary.coffer", { count: counts.coffer })
-        : null,
-    t("agents.hooksTab.summary.own", { count: counts.own }),
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  const cofferRow = rows.find((r) => r.owner === "coffer") ?? null;
-
+  if (hooks.error) {
+    return <LoadError error={hooks.error} onRetry={() => void hooks.refetch()} />;
+  }
+  if (hooks.isPending) {
+    return (
+      <div className="flex flex-col gap-3" aria-busy>
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-col gap-8">
       {parseErrors.length > 0 ? (
         <Alert variant="warning">
           <AlertDescription>
             <ul className="space-y-0.5">
               {parseErrors.map((pe) => (
                 <li key={`${pe.source}:${pe.path}`} className="break-all">
-                  {t("agents.hooksTab.parseError", {
+                  {t("agents.hooks.parseError", {
                     file: abbreviateHomePath(pe.path),
                     error: pe.error,
                   })}
@@ -72,32 +65,17 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
           </AlertDescription>
         </Alert>
       ) : null}
-      <AgentKindTab
-        rows={rows}
-        summary={summary}
-        searchPlaceholder={t("agents.hooksTab.search")}
-        searchText={searchText}
-        isLoading={hooks.isPending}
-        error={hooks.error}
-        onRetry={() => void hooks.refetch()}
-        empty={{
-          icon: Webhook,
-          title: t("agents.hooksTab.emptyTitle", { agent: agentName }),
-          description: t("agents.hooksTab.emptyBody", { agent: agentName }),
-        }}
-        footnote={t("agents.hooksTab.footnote", { agent: agentName })}
-      >
-        {(visible) => (
-          <AgentHooksByEvent
-            rows={visible}
-            cofferRow={cofferRow}
-            agentType={agent.type}
-            onRepair={onRepair}
-            onCheckAgain={() => void hooks.refetch()}
-            checking={hooks.isFetching}
-          />
-        )}
-      </AgentKindTab>
+      {coffer ? (
+        <CofferHookSection
+          hook={coffer}
+          agentType={agent.type}
+          fileKey={fileKeyOf(coffer.path)}
+          onRepair={onRepair}
+          onCheckAgain={() => void hooks.refetch()}
+          checking={hooks.isFetching}
+        />
+      ) : null}
+      <OwnHooksSection hooks={own} agentType={agent.type} fileKeyOf={fileKeyOf} />
     </div>
   );
 }

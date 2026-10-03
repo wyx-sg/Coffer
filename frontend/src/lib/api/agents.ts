@@ -12,7 +12,7 @@
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/agent-registry";
 
-import type { AdoptMcpEntryBody, UnmanagedSkillOut } from "./agents-workspace";
+import type { AdoptMcpEntryBody, AdoptSkillReach, UnmanagedSkillOut } from "./agents-workspace";
 
 type Schemas = components["schemas"];
 
@@ -57,8 +57,6 @@ export const agentsApi = {
   get: (uid: string) => unwrap(getApiClient().GET("/agents/{uid}", { params: { path: { uid } } })),
   patch: (uid: string, body: AgentPatch) =>
     unwrap(getApiClient().PATCH("/agents/{uid}", { params: { path: { uid } }, body })),
-  remove: (uid: string) =>
-    unwrapVoid(getApiClient().DELETE("/agents/{uid}", { params: { path: { uid } } })),
   // One row per supported type, registered or not.
   types: () => unwrap(getApiClient().GET("/agents/types")),
 
@@ -170,11 +168,16 @@ export const agentsApi = {
   // Unmanaged skills (spec skill-manager "List unmanaged skills in an agent's skill locations")
   unmanagedSkills: (uid: string) =>
     unwrap(getApiClient().GET("/agents/{uid}/unmanaged-skills", { params: { path: { uid } } })),
-  adoptUnmanagedSkill: (uid: string, skill: string, location: string) =>
+  adoptUnmanagedSkill: (
+    uid: string,
+    skill: string,
+    location: string,
+    options: { name?: string | null; reach?: AdoptSkillReach | null } = {},
+  ) =>
     unwrap(
       getApiClient().POST("/agents/{uid}/unmanaged-skills/{skill}/adopt", {
         params: { path: { uid, skill } },
-        body: { location: loc(location) },
+        body: { location: loc(location), name: options.name, reach: options.reach },
       }),
     ),
   // Read-only preview of one unmanaged folder (spec skill-manager "Preview an

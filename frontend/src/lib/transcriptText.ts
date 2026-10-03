@@ -52,15 +52,3 @@ export function splitTurnText(text: string): TurnText {
   const harness = rest === text ? "" : text.slice(0, text.length - rest.length);
   return { harness, human: rest };
 }
-
-/**
- * The first line the person actually wrote in this turn, or `""` when they
- * wrote none — what a one-line summary of the turn should say.
- */
-export function firstHumanLine(text: string): string {
-  const { human } = splitTurnText(text);
-  for (const line of human.split("\n")) {
-    if (line.trim().length > 0) return line.trim();
-  }
-  return "";
-}

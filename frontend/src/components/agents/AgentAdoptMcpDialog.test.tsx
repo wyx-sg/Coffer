@@ -1,4 +1,4 @@
-// src/components/agents/AgentAdoptMcpDialog.test.tsx — adopting one direct MCP entry into Coffer (boards 2.1.24, 2.1.25).
+// src/components/agents/AgentAdoptMcpDialog.test.tsx — adopting one direct MCP entry into Coffer (boards 2.1.27, 2.1.28).
 //
 // Covered: what the dialog says will happen (file, agent), the name field
 // prefilled with the entry's name, every env key with how it is stored, the
@@ -62,17 +62,16 @@ describe("AgentAdoptMcpDialog", () => {
   test("says what adopting does and how each env key is stored", () => {
     renderDialog();
     expect(screen.getByText("Adopt postgres-local")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Coffer serves it to every agent, then takes the entry out of ~/.claude.json. A .bak is kept.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Coffer serves it through its gateway and takes the entry out of ~/.claude.json, so Claude Code never gets it twice. A .bak is kept.",
+    );
+    expect(screen.getByRole("dialog").className).toContain("max-w-[640px]");
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
     expect(screen.getByLabelText(/Name in Coffer/)).toHaveValue("postgres-local");
     expect(screen.getByText("uvx mcp-server-postgres")).toBeInTheDocument();
     expect(screen.getByText("Secret")).toBeInTheDocument();
     expect(screen.getByText("Plain value")).toBeInTheDocument();
     expect(screen.getByText(/DATABASE_URL looks like a secret/)).toBeInTheDocument();
-    expect(screen.getByText(/so Claude Code never gets the server twice/)).toBeInTheDocument();
   });
 
   test("submits the secret's secret reference, spelled with the agent's name", async () => {
@@ -126,7 +125,7 @@ describe("AgentAdoptMcpDialog", () => {
     fireEvent.click(adoptButton());
     expect(
       await screen.findByText(
-        "A server named postgres-local is already in Coffer — rename this one and retry.",
+        "A server named postgres-local is already in Coffer. Choose another name.",
       ),
     ).toBeInTheDocument();
 

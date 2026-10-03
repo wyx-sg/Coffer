@@ -1,11 +1,12 @@
 // src/pages/UnmanagedSkillDetailPage.test.tsx — one unmanaged skill folder, at /agents/:type/skills/unmanaged/:location/:name.
 //
 // One unmanaged skill's detail page (spec skill-manager "Preview an unmanaged
-// skill read-only"): the header (name, unmanaged + location badges, a back link
-// to the agent's Skills tab), the Overview (SKILL.md description, path), an
-// invalid folder's reason shown up front, the Files tab's tree + read-only
-// preview, and the three header actions — open folder, adopt (then on to the new
-// managed skill), delete (then back to the agent's Skills tab).
+// skill read-only"; boards 2.1.57, 2.1.58): the standard detail header (the
+// name in mono, an "Unmanaged" pill, the meta line, Adopt as the one button and
+// a ⋯ with only Delete…), the Overview as property rows, an invalid folder's
+// reason shown up front, the Files tab's tree + read-only viewer, and the two
+// header actions — adopt (the Adopt dialog) and delete (then back to the
+// agent's Skills tab).
 //
 // The hooks run for real against a mocked wire layer (agentsApi); the fs actions
 // are mocked at their hook. The page is addressed by the agent's TYPE; the REST
@@ -34,6 +35,8 @@ vi.mock("@/lib/api/agents", () => ({
   },
 }));
 
+vi.mock("@/lib/hooks/useSkills", () => ({ useSkills: () => ({ data: [] }) }));
+
 const openMock = vi.fn<(path: string, withApp: string) => Promise<void>>(() => Promise.resolve());
 vi.mock("@/lib/fsActions", () => ({
   useFsActions: () => ({ open: openMock, reveal: vi.fn(() => Promise.resolve()) }),
@@ -44,7 +47,7 @@ const api = vi.mocked(agentsApi);
 
 const GOOD: UnmanagedSkillDetailOut = {
   name: "loose",
-  path: "/x/skills/loose",
+  path: "/home/u/.claude/skills/loose",
   location: "skills",
   valid: true,
   reason: null,
@@ -55,8 +58,8 @@ const GOOD: UnmanagedSkillDetailOut = {
 const TREE: SkillFileNode = {
   name: "loose",
   path: "",
-  abs_path: "/x/skills/loose",
-  folder_abs_path: "/x/skills",
+  abs_path: "/home/u/.claude/skills/loose",
+  folder_abs_path: "/home/u/.claude/skills",
   type: "dir",
   size: null,
   truncated: false,
@@ -64,8 +67,8 @@ const TREE: SkillFileNode = {
     {
       name: "SKILL.md",
       path: "SKILL.md",
-      abs_path: "/x/skills/loose/SKILL.md",
-      folder_abs_path: "/x/skills/loose",
+      abs_path: "/home/u/.claude/skills/loose/SKILL.md",
+      folder_abs_path: "/home/u/.claude/skills/loose",
       type: "file",
       size: 30,
       truncated: false,
@@ -85,8 +88,8 @@ function stub(skill: UnmanagedSkillDetailOut = GOOD) {
   api.unmanagedSkillFiles.mockResolvedValue({ root: TREE });
   api.unmanagedSkillFileContent.mockResolvedValue({
     path: "SKILL.md",
-    abs_path: "/x/skills/loose/SKILL.md",
-    folder_abs_path: "/x/skills/loose",
+    abs_path: "/home/u/.claude/skills/loose/SKILL.md",
+    folder_abs_path: "/home/u/.claude/skills/loose",
     content: "# Loose skill body",
     truncated: false,
     binary: false,
@@ -126,25 +129,29 @@ function renderAt(search = "", location = "skills", name = "loose") {
 }
 
 describe("UnmanagedSkillDetailPage", () => {
-  test("the header names the skill, and badges it unmanaged", async () => {
+  test("the header names the skill in mono, with an Unmanaged pill and the meta line", async () => {
     stub();
     renderAt();
 
     expect(await screen.findByRole("heading", { name: "loose" })).toBeInTheDocument();
-    expect(screen.getByTestId("unmanaged-badge")).toHaveTextContent(
-      en.agents.skillsTab.unmanagedBadge,
-    );
-    // The location reads in the header badge and again in the Overview.
-    expect(screen.getAllByText(en.agents.skillsTab.locationSkills)).toHaveLength(2);
+    expect(screen.getByText(en.agents.skillsTab.unmanagedBadge)).toBeInTheDocument();
+    expect(
+      await screen.findByText("Claude Code’s own skill · ~/.claude/skills/loose · 1 file"),
+    ).toBeInTheDocument();
+    // No back link and no location badges in the header.
+    expect(screen.queryByRole("link", { name: /skills/i })).not.toBeInTheDocument();
     expect(api.unmanagedSkill).toHaveBeenCalledWith("u-cc", "loose", "skills");
   });
 
-  test("the overview shows the SKILL.md description and the folder path", async () => {
+  test("the overview is property rows: description, folder, found in, files", async () => {
     stub();
     renderAt();
     expect(await screen.findByText("Does loose things.")).toBeInTheDocument();
-    expect(screen.getByText("/x/skills/loose")).toBeInTheDocument();
-    expect(screen.queryByTestId("unmanaged-invalid")).not.toBeInTheDocument();
+    expect(screen.getByText("Description")).toBeInTheDocument();
+    expect(screen.getByText("~/.claude/skills/loose")).toBeInTheDocument();
+    expect(screen.getByText("Claude Code’s skills directory")).toBeInTheDocument();
+    expect(await screen.findByText("SKILL.md")).toBeInTheDocument();
+    expect(screen.getByText(/coffer reads this folder but doesn’t manage it/i)).toBeInTheDocument();
   });
 
   acceptance(
@@ -154,8 +161,8 @@ describe("UnmanagedSkillDetailPage", () => {
       stub();
       renderAt("?tab=files");
 
-      // The tree, then a file's read-only preview — no Edit affordance.
-      fireEvent.click(await screen.findByRole("button", { name: "SKILL.md" }));
+      // The tree, then a file's read-only viewer — SKILL.md opens first, no Edit.
+      fireEvent.click(await screen.findByRole("treeitem", { name: "SKILL.md" }));
       expect(await screen.findByText("Loose skill body")).toBeInTheDocument();
       expect(api.unmanagedSkillFileContent).toHaveBeenCalledWith(
         "u-cc",
@@ -163,6 +170,7 @@ describe("UnmanagedSkillDetailPage", () => {
         "skills",
         "SKILL.md",
       );
+      expect(screen.getByText("~/.claude/skills/loose/SKILL.md")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: en.common.edit })).not.toBeInTheDocument();
     },
   );
@@ -177,53 +185,37 @@ describe("UnmanagedSkillDetailPage", () => {
     });
     renderAt("", "skills", "broken");
 
-    const notice = await screen.findByTestId("unmanaged-invalid");
+    const notice = await screen.findByRole("alert");
     expect(within(notice).getByText("SKILL.md is missing")).toBeInTheDocument();
-    const adopt = screen.getByRole("button", { name: en.agents.skillsTab.adopt });
-    expect(adopt).toBeDisabled();
-    expect(screen.getByTitle(en.agents.skillsTab.adoptDisabledInvalid)).toBeInTheDocument();
+    // Adopt is left out for a folder that cannot be adopted.
+    expect(
+      screen.queryByRole("button", { name: en.agents.skillsTab.adopt }),
+    ).not.toBeInTheDocument();
   });
 
-  // Open folder and Delete sit behind the ⋯ at the header's right; Adopt is the one button.
-  async function openMenuItem(name: string) {
+  test("the ⋯ holds only Delete…", async () => {
+    stub();
+    renderAt();
     fireEvent.click(await screen.findByRole("button", { name: /^More for/ }));
-    fireEvent.click(await screen.findByRole("menuitem", { name }));
-  }
-
-  test("open folder asks the daemon to open the folder with the OS default", async () => {
-    stub();
-    renderAt();
-    await openMenuItem(en.agents.skillsTab.openFolder);
-    await waitFor(() => expect(openMock).toHaveBeenCalledWith("/x/skills/loose", ""));
-  });
-
-  test("a failed open surfaces an error toast", async () => {
-    stub();
-    openMock.mockRejectedValueOnce(new Error("nope"));
-    renderAt();
-    await openMenuItem(en.agents.skillsTab.openFolder);
-    expect(await screen.findByText(en.agents.skillsTab.openFolderFailed)).toBeInTheDocument();
+    expect((await screen.findAllByRole("menuitem")).map((i) => i.textContent)).toEqual(["Delete…"]);
   });
 
   acceptance(
     "skill-manager",
     "adopt or delete an unmanaged skill from its detail page",
     async () => {
-      // Adopt: on to the new managed skill's own page.
+      // Adopt: the primary button opens the Adopt dialog for this folder.
       stub();
       const first = renderAt();
       fireEvent.click(await screen.findByRole("button", { name: en.agents.skillsTab.adopt }));
-      await waitFor(() =>
-        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "loose", "skills"),
-      );
-      // Addressed by the new skill's fixed name, not its uid (revise-web-ui-ia).
-      expect(await screen.findByTestId("where")).toHaveTextContent(/^\/skills\/loose$/);
+      expect(await screen.findByRole("dialog", { name: "Adopt loose" })).toBeInTheDocument();
       first.unmount();
 
       // Delete: confirm, then back to the agent's Skills tab.
       stub();
       renderAt();
-      await openMenuItem(en.common.delete);
+      fireEvent.click(await screen.findByRole("button", { name: /^More for/ }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
       const dialog = await screen.findByRole("dialog");
       expect(api.deleteUnmanagedSkill).not.toHaveBeenCalled();
       fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));

@@ -30,7 +30,6 @@ import {
   useDeleteUnmanagedSkill,
   usePatchAgent,
   useRegisterAgent,
-  useRemoveAgent,
   useRemoveMcpEntry,
   useTogglePlugin,
   useUninstallPlugin,
@@ -136,24 +135,6 @@ describe("useRegisterAgent", () => {
     const url = request.url;
     expect(String(url)).toMatch(/\/agents$/);
     expect(request.method).toBe("POST");
-  });
-});
-
-describe("useRemoveAgent", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("DELETEs the agent the uid names", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useRemoveAgent(), {
-      wrapper: wrapper(),
-    });
-    await result.current.mutateAsync("u-cur");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const request = fetchMock.mock.calls[0][0] as Request;
-    const url = request.url;
-    expect(String(url)).toMatch(/\/agents\/u-cur$/);
-    expect(request.method).toBe("DELETE");
   });
 });
 
@@ -397,7 +378,7 @@ describe("useAdoptUnmanagedSkill", () => {
     const { result } = renderHook(() => useAdoptUnmanagedSkill("u-my-agent"), {
       wrapper: wrapper(),
     });
-    await result.current.mutateAsync({ skill: "my-skill", location: "global" });
+    await result.current.mutateAsync({ skill: "my-skill", location: "skills" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = fetchMock.mock.calls[0][0] as Request;
     const url = request.url;
@@ -423,7 +404,6 @@ describe("mutation failures are never silent", () => {
   }
 
   test.each([
-    ["useRemoveAgent", () => useRemoveAgent(), "u-cur"],
     ["useAgentConnect", () => useAgentConnect("u-cur"), true],
     ["useUninstallPlugin", () => useUninstallPlugin("u-cur"), { id: "p1" }],
     ["useTogglePlugin", () => useTogglePlugin("u-cur"), { id: "p1", enabled: true }],

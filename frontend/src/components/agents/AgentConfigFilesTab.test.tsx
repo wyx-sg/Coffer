@@ -1,10 +1,10 @@
 // frontend/src/components/agents/AgentConfigFilesTab.test.tsx
-// The Config files tab: every allowlisted file in one tree grouped by where it
-// lives (instructions beside settings, a not-created file marked so), the
-// selected file in the URL, a read-only preview behind an explicit Edit, JSON
-// checked while typing, a stale save that keeps the draft, a missing file that
-// can be created, a directory entry that lists its files, and the unsaved-draft
-// guard (the shell's, registered by the draft).
+// The Config files tab (boards 2.1.40–2.1.48): every allowlisted file in one
+// tree grouped by where it lives (instructions beside settings, a not-created
+// file marked so), the selected file in the URL, a read-only preview behind an
+// explicit Edit, JSON checked while typing, a stale save that keeps the draft,
+// a missing file that can be created, a directory entry that lists its files,
+// and the unsaved-draft guard (the shell's, registered by the draft).
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -161,21 +161,24 @@ afterEach(() => {
 
 describe("AgentConfigFilesTab", () => {
   // Config files lists the instructions file beside the settings files.
-  acceptance("agent-registry", "the agent detail page carries nine tabs", () => {
+  acceptance("agent-registry", "the agent detail page carries six tabs and a More menu", () => {
     stub();
     renderTab();
+    expect(screen.getByText("Config files · Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("~/.claude")).toBeInTheDocument();
     expect(screen.getByText("settings.json")).toBeInTheDocument();
     expect(screen.getByText("CLAUDE.md")).toBeInTheDocument();
-    expect(screen.getByText("Instructions")).toBeInTheDocument();
-    expect(screen.getByText("agents/")).toBeInTheDocument();
+    // No role labels beside the names.
+    expect(screen.queryByText("Instructions")).not.toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: "agents" })).toBeInTheDocument();
     // Directories start open.
     expect(screen.getByText("code-reviewer.md")).toBeInTheDocument();
     // Not hidden: shown and marked.
-    const local = screen.getByText("settings.local.json").closest("button") as HTMLElement;
+    const local = screen.getByRole("treeitem", { name: /settings\.local\.json/ });
     expect(within(local).getByText("not created")).toBeInTheDocument();
-    // The file kept beside the config directory is grouped under home.
-    expect(screen.getByText("~ (home)")).toBeInTheDocument();
-    expect(screen.getByText(".claude.json")).toBeInTheDocument();
+    // The file kept beside the config directory sits at the top, named from home.
+    expect(screen.queryByText("~ (home)")).not.toBeInTheDocument();
+    expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
     expect(screen.getByText(/select a file to view/i)).toBeInTheDocument();
   });
 
@@ -184,19 +187,20 @@ describe("AgentConfigFilesTab", () => {
     renderTab();
     fireEvent.click(screen.getByText("settings.json"));
     expect(fileParam()).toBe("settings");
-    expect(screen.getByText("Read-only")).toBeInTheDocument();
+    expect(screen.getByText("~/.claude/settings.json")).toBeInTheDocument();
     expect(document.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
     expect(document.querySelector("textarea")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     expect(screen.getByRole("textbox")).toHaveValue('{"theme": "dark"}');
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
-    expect(screen.getByText("/home/u/.claude/settings.json")).toBeInTheDocument();
   });
 
   test("?file= opens that file on load", () => {
     stub();
     renderTab("?file=instructions");
     expect(screen.getByText(/instructions claude code reads at the start/i)).toBeInTheDocument();
+    // Markdown opens rendered, with the Preview / Source switch.
+    expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("aria-pressed", "true");
   });
 
   test("an invalid JSON draft names the line and holds Save back", () => {
@@ -206,7 +210,7 @@ describe("AgentConfigFilesTab", () => {
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: '{\n  "a": 1\n  "b": 2\n}' },
     });
-    expect(screen.getByText("Unsaved change")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     expect(screen.getByText(/line 3, column \d+: not valid json/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"a": 2}' } });
@@ -224,25 +228,23 @@ describe("AgentConfigFilesTab", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"theme": "light"}' } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(
-      await screen.findByText(/save refused — settings.json changed on disk/i),
+      await screen.findByText(/settings.json changed on disk since you opened it/i),
     ).toBeInTheDocument();
+    expect(screen.getByText("Not saved")).toBeInTheDocument();
     expect(vi.mocked(agentsApi.writeConfigFile)).toHaveBeenCalledWith("agt_cc", "settings", {
       content: '{"theme": "light"}',
       expected_fingerprint: "fp1",
     });
     expect(screen.getByRole("textbox")).toHaveValue('{"theme": "light"}');
     expect(screen.getByRole("button", { name: /copy my edits/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /discard my edits and reload/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /discard and reload/i })).toBeInTheDocument();
   });
 
   test("a file not created yet offers to create it; saving writes it", async () => {
     stub({ exists: false });
     const write = vi.spyOn(agentsApi, "writeConfigFile").mockResolvedValue(FILES[1]);
     renderTab("?file=settings_local");
-    expect(screen.getByText(/this file doesn’t exist yet/i)).toBeInTheDocument();
-    expect(screen.getByText("Read-only until created")).toBeInTheDocument();
+    expect(screen.getByText("settings.local.json doesn’t exist yet")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /create settings.local.json/i }));
     expect(screen.getByRole("textbox")).toHaveValue("{}\n");
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
@@ -257,12 +259,14 @@ describe("AgentConfigFilesTab", () => {
   test("a directory entry lists its files; picking one opens it", () => {
     stub();
     renderTab("?file=subagents");
-    expect(screen.getByText("Directory · 2 files")).toBeInTheDocument();
-    const list = screen.getByText(/custom subagent definitions/i).closest("div")?.parentElement
-      ?.parentElement as HTMLElement;
-    fireEvent.click(within(list).getAllByText("test-runner.md")[0]);
+    // The folder's path on the toolbar, its purpose on the status line.
+    expect(screen.getByText("~/.claude/agents/")).toBeInTheDocument();
+    expect(screen.getByText(/custom subagents, one markdown file each/i)).toBeInTheDocument();
+    // Each row: name, size · date.
+    expect(screen.getByText("2 KB · Sep 3")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText("test-runner.md")[1]);
     expect(fileParam()).toBe("subagents/test-runner.md");
-    expect(document.querySelector(".cm-content")?.textContent).toContain("# reviewer");
+    expect(screen.getByRole("heading", { name: "reviewer" })).toBeInTheDocument();
   });
 
   test("a directory entry creates a file from a template and deletes one after asking", async () => {
@@ -271,7 +275,8 @@ describe("AgentConfigFilesTab", () => {
     const del = vi.spyOn(agentsApi, "deleteConfigChild").mockResolvedValue(undefined);
     renderTab("?file=subagents");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete test-runner.md" }));
+    fireEvent.click(screen.getByRole("button", { name: "More for test-runner.md" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
     const confirm = await screen.findByRole("dialog");
     expect(confirm).toHaveTextContent("Delete test-runner.md?");
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));

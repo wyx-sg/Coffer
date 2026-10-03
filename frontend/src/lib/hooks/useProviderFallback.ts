@@ -9,13 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import { priceListKey, providersApi, type Provider } from "@/lib/api/providers";
-import {
-  proxyAddress,
-  proxyApi,
-  proxyRouteKey,
-  proxyStatusKey,
-  proxyTokenHintKey,
-} from "@/lib/api/proxy";
+import { proxyAddress, proxyApi, proxyRouteKey, proxyStatusKey } from "@/lib/api/proxy";
 import { providerPricesKey, providersKey } from "@/lib/api/queryKeys";
 
 /** Each of `models`' price on the provider; refetched after every listing. */
@@ -93,26 +87,4 @@ export function useProxyAddress(): string {
     staleTime: 60_000,
   });
   return proxyAddress(status.data?.port);
-}
-
-export function useProxyTokenHint(agentUid: string, enabled = true) {
-  return useQuery({
-    queryKey: proxyTokenHintKey(agentUid),
-    queryFn: () => proxyApi.tokenHint(agentUid),
-    enabled: enabled && agentUid !== "",
-  });
-}
-
-export function useRotateProxyToken(agentUid: string) {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => proxyApi.rotateToken(agentUid),
-    onSuccess: () => {
-      toast.success(t("agents.modelTab.proxy.rotated"));
-      return qc.invalidateQueries({ queryKey: proxyTokenHintKey(agentUid) });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
 }
