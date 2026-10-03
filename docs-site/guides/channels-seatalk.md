@@ -155,7 +155,7 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-Because a main-chat @mention always roots a new thread, a command sent in the main chat sets the **group's defaults** instead: `@bot /model …`, `@bot /dir …` and `@bot /new <agent>` choose what every new thread in the group starts on, `@bot /status` shows those defaults and the running threads, and `@bot /stop` stops every turn running in the group. Inside a thread, commands apply to that thread. See [Group defaults on SeaTalk](/guides/channels#group-defaults-on-seatalk).
+Because a main-chat @mention always roots a new thread, a command sent in the main chat sets the **group's defaults** instead: `@bot /model …`, `@bot /dir …` and `@bot /new <agent>` choose what every new thread in the group starts on, `@bot /status` shows those defaults and the running threads, and `@bot /stop` stops every turn running in the group. Inside a thread, commands apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
 
 To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**, or run `coffer channel edit my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 

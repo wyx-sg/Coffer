@@ -120,6 +120,7 @@
         { "text": { "en": "Overview", "zh": "总览" }, "link": "/reference/" },
         { "text": { "en": "CLI", "zh": "CLI" }, "link": "/reference/cli" },
         { "text": { "en": "MCP tools", "zh": "MCP 工具" }, "link": "/reference/mcp-tools" },
+        { "text": { "en": "Channel commands", "zh": "渠道命令" }, "link": "/reference/channel-commands" },
         { "text": { "en": "Configuration", "zh": "配置" }, "link": "/reference/configuration" },
         { "text": { "en": "Files and directories", "zh": "文件与目录" }, "link": "/reference/filesystem" },
         { "text": { "en": "Error codes", "zh": "错误码" }, "link": "/reference/error-codes" },
