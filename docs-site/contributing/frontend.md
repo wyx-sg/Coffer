@@ -129,12 +129,13 @@ When a token is missing, add it to the Tailwind config in the same pull request 
 
 | Pattern | Use |
 | --- | --- |
-| `PageHeader` | The one header for list and detail pages: `back` on detail pages, `badges` beside the title, `actions` on the right. Detail actions keep a fixed order: reach, test or refresh, edit, delete |
+| `PageHeader` | The one header for list and detail pages: the title, `badges` beside it, `actions` on the right and one `subtitle` line. It has no back button: pages never carry a "← list" link, and the title bar's back and forward arrows are the only history controls. Detail actions keep a fixed order: reach, test or refresh, edit, delete |
 | `DataTable` | The one list table. Pass `isLoading` so the header stays mounted over skeleton rows, and `emptyAction` for the call to action. The reach column's header is `resources.cols.reach` on every table |
 | `EmptyState` | Every empty list, not-found page and zero-result search: icon, title, description, action |
 | `Skeleton` | Loading states keep the real shape of the surface. Never show a blank screen or a "Loading…" card |
 | `ConfirmDialog` | Every destructive confirmation, never `window.confirm`. It receives `pending` while the mutation runs and closes only in `onSuccess`, so a failed delete stays open with its error |
 | `Alert` (`warning` variant) | A non-fatal caution, such as an unusual but working configuration. Not a toast, and not a destructive alert |
+| Save on change | Settings, reach and providers write as the control changes and report a failed write under the control; there are no Save buttons. Only document editors (`SKILL.md`, knowledge documents, raw agent config files) keep an explicit Save and the unsaved-changes guard. A dialog's Cancel is a ghost button |
 | Tabs in the URL | Detail pages keep their tab in the path, `/<kind>/<id>/<tab>` |
 | Title over name | A resource of a kind that carries a title (provider, channel, knowledge collection, memory partition) shows its `title` when set and its `name` otherwise. Agents, MCP servers and skills carry no title and always show their name: an MCP server's and a skill's name is fixed once registered (`409 NAME_IMMUTABLE`), and an agent's is its type, so their edit forms offer neither a rename nor a title |
 

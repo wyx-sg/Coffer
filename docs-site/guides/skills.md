@@ -239,7 +239,7 @@ Agents → choose the agent → Skills tab → click the row
 
 :::
 
-The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Open folder** (the folder in your file manager), **Adopt** and **Delete**, and its back link returns to the agent's Skills tab. File reads stay inside the folder, as they do for a managed skill.
+The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Open folder** (the folder in your file manager), **Adopt** and **Delete**, and the title bar's back arrow returns to the agent's Skills tab. File reads stay inside the folder, as they do for a managed skill.
 
 ### Adopt one
 

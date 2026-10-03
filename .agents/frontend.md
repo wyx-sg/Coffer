@@ -98,14 +98,19 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
     through it, never with a hand-built `navigate("/settings/…")`.
   - `components/palette/` — the palette: navigation only; objects come from
     each kind's existing list hook, never an aggregate route.
-  - `components/shell/` — `SidebarFooter` (update card, Settings row, daemon
-    state) and the `VersionMenu` it opens (theme, language, docs, updates);
+  - `components/shell/` — `WindowTitleStrip` (the 44px desktop strip: traffic
+    lights, sidebar toggle, history arrows) and `useShellShortcuts` (⌘\ toggles
+    the sidebar, ⌘[ / ⌘] walk the app's history, ⌘, opens Settings);
+    `SidebarFooter` (update card and a gear + "Settings" row that always opens
+    Settings › General — no daemon state, no version menu; theme and language
+    live only in Settings › General);
     `daemonConnection.ts` — `useDaemonConnectionDriver`, mounted once in
     `Layout`, turns the one `useDaemonStatus` poll into the ok / reconnecting /
-    offline phase with its backoff, and every reader (`useDaemonFooterState`,
-    `DaemonOfflineBanner`'s bar and offline state) calls `useDaemonConnection`
-    — no second timer; `paletteRequest.ts` for a page that opens the palette;
-    `AttentionDot` (a count badge, a dot on the rail), fed by
+    offline phase with its backoff, and every reader (`DaemonOfflineBanner`'s
+    bar and offline state, the Settings › Daemon status) calls
+    `useDaemonConnection` — no second timer; `paletteRequest.ts` for a page that opens the palette;
+    `AttentionDot` (a count badge in `danger-strong`, capped at "9+", a dot on the
+    rail; ignored items are not counted), fed by
     `lib/hooks/useAttentionSignals.ts` — a kind that declares an attention
     signal adds it to that map, keyed by its entry's route; informational
     counts never become badges.
@@ -264,8 +269,9 @@ return useMutation({
   gives an object a menu of secondary commands (an agent's row and header).
   There is no `DropdownMenu`.
 - **Shared surfaces above the primitives**, used the same way everywhere:
-  - `PageHeader` is the one page header, list and detail alike: `back` (detail pages), `badges` beside the title, `actions` on the
-    right (there is no title icon: the sidebar entry already carries it). Detail-page actions keep one fixed order: reach → test/refresh →
+  - `PageHeader` is the one page header, list and detail alike: the title (18/650), `badges` beside it, `actions` on the
+    right and one `subtitle` line under the row (there is no title icon: the sidebar entry already carries it, and no `back`:
+    pages carry no back button or "← list" link — the title bar's global ← → (⌘[ / ⌘]) are the only back/forward). Detail-page actions keep one fixed order: reach → test/refresh →
     edit → delete.
   - `DataTable` is the one list table. Pass `isLoading` so the header stays
     mounted over skeleton rows (never a "Loading…" card in the table's place)
@@ -298,14 +304,21 @@ return useMutation({
     in a table cell — rows keep one height whatever the content.
   - A settings-style form that is a stack of titled blocks is built from
     `SettingsSection` + `SettingRow` (`components/settings/SettingsLayout.tsx`):
-    each section is a hairline card (`<section aria-labelledby>`, h3 title or h2
-    via `headingLevel`, optional `description`, `meta`, `action`) over
-    hairline-divided rows; a row is its label with its own helper line on the left
-    and its control on the right (`layout="stack"` for a wide control). Wrap the
-    stack in `SETTINGS_STACK` (24px between cards); a destructive or rare action
-    is the last section. Settings tabs and a channel's Settings use it; a bespoke
-    block takes `SETTINGS_CARD`. `Section` stays the card-less heading for
-    read-only overviews.
+    each section is unboxed (`<section aria-labelledby>`, h3 title or h2 via
+    `headingLevel`, one visible `description` line, optional `meta`, `action`)
+    over hairline-divided rows; a row is its label with its own helper line on
+    the left and its control on the right (`layout="stack"` for a wide control).
+    A tab opens with `SettingsTabHeader` (title 18/650 + one 13 intro line).
+    Wrap the stack in `SETTINGS_STACK` (32px between sections); a destructive or
+    rare action is the last section. Settings tabs and a channel's Settings use
+    it. `Section` is the same heading for read-only overviews.
+  - **Page grammar.** A bordered box is for *a group of things* (a list of rows,
+    a table, a set of cards); unboxed hairline-separated rows are for *one
+    thing's properties*. A section title is 15/600 with one visible description
+    line under it (12, muted) — the explanation is shown, not hidden behind a
+    "?"; `HelpTip` is only for the overflow of a long explanation. 32px between
+    sections. A tab's own title is 18/650 with a 13 intro line. Page content
+    padding is 16 top / 32 sides (`Layout`).
   - `EmptyState` is the shared "nothing here yet" card (icon, title,
     description, action).
   - A file/session browser (tree or list beside a viewer) ends at the bottom
@@ -364,6 +377,22 @@ return useMutation({
   (`src/components/**`) ≤ 250, a hook or utility (`src/lib/**`) ≤ 300. One
   component per file, test colocated (§8).
 
+### Saving, counts, dialogs and shortcuts
+
+- **Save on change everywhere** — settings, reach, providers, channel options,
+  feature switches: the control writes as it changes (text on Enter/blur, once
+  valid) and a failed write is said under the control ("Couldn't save the
+  change: …"). No Save buttons. Only **document editors** — `SKILL.md`,
+  knowledge documents, raw agent config files — keep an explicit **Save** and
+  the unsaved-changes guard.
+- **Count badges** — sidebar, tab and list counts that mean "needs you" are all
+  `danger-strong`, capped at `9+`.
+- **Dialogs** — Cancel is a `ghost` button beside the primary action.
+- **Shortcuts** — ⌘\ sidebar toggle, ⌘[ / ⌘] history back / forward, ⌘, Settings,
+  ⌘K palette (Ctrl on other platforms); handled once in `useShellShortcuts`.
+- **Experimental** tags sit beside the page title and in Settings › Features,
+  never on a sidebar row (the collapsed rail's tooltip names it).
+
 ### Hand a chore to an agent
 
 Coffer is AI-native: a chore that is open-ended and depends on the machine —
@@ -391,7 +420,8 @@ merge and repair flows.
   permissions, so the person reads it and presses Send.
 - **A surface with room for one button** (an Overview Needs you row, whose
   attention item carries `handoff`) uses `useAgentHandoff` and puts Copy
-  prompt / Ask an agent in its ⋯ menu instead.
+  prompt / Ask an agent in its ⋯ menu instead (every Needs-you row gets one
+  primary button plus a ⋯ menu: Copy prompt · Ask an agent · Ignore).
 
 ## 7. TypeScript & i18n
 

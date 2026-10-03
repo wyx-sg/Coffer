@@ -11,11 +11,11 @@ The Coffer desktop app is a macOS application that hosts Coffer's web UI in a na
 
 The app shows the same UI as `coffer open` — built from the same `frontend/dist` — so every page works identically. What it adds is what a browser tab cannot do for itself:
 
-- **A real application.** A window with a Dock icon and a Cmd-Tab entry, and a menu bar item that stays resident when the window is closed and says whether the daemon is running and whether anything needs you.
+- **A real application.** A window with a Dock icon and a Cmd-Tab entry, and a menu bar item that stays resident when the window is closed and says whether the daemon is running and how many things need you. The window has its own title bar with the sidebar toggle and back and forward arrows (see [Web UI](/guides/web-ui#the-sidebar)).
 - **Detect-or-spawn.** At launch it attaches to a running daemon or starts one. You never need to know the port.
 - **Recovery without a terminal.** **Restart daemon** in the menu bar and on the offline banner. A browser page cannot offer this: a daemon that is down cannot serve the page the button would live on.
 - **A version check.** It warns when it has attached to a daemon left running by an earlier version.
-- **Sync alerts where you look.** When [vault sync](/guides/vault-sync) needs you, the menu bar's dot, the Dock badge and a notification say so.
+- **Sync alerts where you look.** When [vault sync](/guides/vault-sync) needs you, the menu bar's count, the Dock badge and a notification say so.
 - **Updates.** It checks for a newer signed release at launch and every six hours, and installs it when you choose **Download and restart** on **Settings › About**. See [Update](#update).
 - **Presence checks.** Revealing or copying a secret, backing up the master key and approving an approval each ask for Touch ID or your login password first. A browser cannot run that check, so a browser tab shows **Open in Coffer app** in their place. See [Presence checks and approvals](#presence-checks-and-approvals).
 - **Approval alerts.** When a secret waits to be sent somewhere new, the app posts a notification and opens a sheet to answer it.
@@ -56,9 +56,9 @@ The app itself never writes to `~/.coffer/bin`; the daemon does it, so the two n
 
 ### Update
 
-The app updates itself. It checks the newest GitHub release's update manifest 30 seconds after launch and every six hours while it runs, without interrupting you: **Settings › About** shows when it last checked and whether a newer version exists, with its release notes, and the menu bar's update entry reads **Update available — Restart to install** with the version. Nothing is downloaded until you choose **Download and restart** there or in the menu bar. The app then downloads the update, checks its signature against the key built into the app — refusing an update whose signature does not verify — replaces itself, relaunches, and restarts the previous version's daemon so the new one answers. Agents reconnect on their own.
+The app updates itself. It checks the newest GitHub release's update manifest 30 seconds after launch and every six hours while it runs, without interrupting you: **Settings › About** shows when it last checked and whether a newer version exists, with its release notes, and the card above the sidebar footer offers **Restart** with the version. Nothing is downloaded until you choose **Download and restart** on About or **Restart** on the card. The app then downloads the update, checks its signature against the key built into the app — refusing an update whose signature does not verify — replaces itself, relaunches, and restarts the previous version's daemon so the new one answers. Agents reconnect on their own.
 
-- **Check for updates** on About (or **Check for updates…** in the menu bar) checks now.
+- **Check for updates** on About checks now.
 - **Check automatically** on About turns the launch and six-hourly checks off; checking by hand still works.
 - A check that fails — no network, the manifest unreachable — says why on About, keeps the time of the last successful check, and changes nothing. Failures are also written to `~/.coffer/logs/daemon.log`.
 - A build without an update key (every build from source, and a release made before the project's update key existed) says it does not check for updates. Update it by installing the new `.dmg` over it and choosing **Restart daemon**.
@@ -98,27 +98,23 @@ A daemon on a real vault can take several seconds to unpack, migrate and bring i
 
 ## The menu bar
 
-Coffer's item in the menu bar is the Coffer mark, drawn in the menu bar's own colour so it suits a light or a dark menu bar. It carries a **dot** when something on Overview needs you, and is **dimmed and struck through** when no daemon is running. Click it for the menu:
+Coffer's item in the menu bar is the Coffer mark, drawn in the menu bar's own colour so it suits a light or a dark menu bar. When something on Overview needs you, it shows the count beside the icon (**9+** above nine); an item you ignored is not counted. It is **dimmed and struck through** when no daemon is running. Click it for the menu:
 
 | Item | What it does |
 | --- | --- |
 | **Daemon running · port 8000 · 1.0.0** | Status only: the daemon's port and version, or **Daemon offline**. |
 | **N things need you** | Shown only when Overview lists something that needs you; opens Overview. A single sync problem is named instead, such as **Sync needs attention — conflict**. |
 | **Open Coffer** | Shows and focuses the window. |
-| **New conversation** | Opens Conversations. |
-| **Settings…** ⌘, | Opens the Settings window over the page you were on. |
-| **Check for updates…** | Opens **Settings › About** and checks. Once a newer signed release is found it reads **Update available — Restart to install 1.0.1**, and choosing it downloads, installs and relaunches. |
-| **Start at login** | Checked when the daemon starts at login — the same setting as **Settings → Daemon**. Choose it to switch. |
 | **Restart daemon** | Stops the running daemon and starts a fresh one. Reads **Start daemon** while none is running. |
 | **Quit Coffer** ⌘Q | Quits the app. The daemon keeps running. |
 
-While the daemon is offline, **New conversation**, **Settings…** and **Start at login** are greyed out. The menu follows the daemon on its own: it reads the daemon's status every 10 seconds and what needs you every minute.
+The menu is deliberately short: conversations, Settings, **Start at login** (in **Settings › Daemon**) and updates (the card above the sidebar footer and **Settings › About**) are all reached from the window. The menu follows the daemon on its own: it reads the daemon's status every 10 seconds and what needs you every minute.
 
-The menu, its tooltip and the sync notification use the interface language you pick in the sidebar (English or 中文). Switching language relabels the menu at once. Until the window has loaded, it uses your macOS language.
+The menu, its tooltip and the sync notification use the interface language you pick in **Settings › General** (English or 中文). Switching language relabels the menu at once. Until the window has loaded, it uses your macOS language.
 
 Closing the window hides the app to the menu bar instead of quitting it. Clicking Coffer in the Dock brings the window back.
 
-When a sync round needs a human — held for confirmation, a conflict, a failed push, a failed run, or a machine that has not joined yet — the app puts the dot on its menu bar icon, badges the Dock icon and posts one macOS notification titled **Coffer sync needs you**.
+When a sync round needs a human — held for confirmation, a conflict, a failed push, a failed run, or a machine that has not joined yet — the app counts it beside its menu bar icon, badges the Dock icon and posts one macOS notification titled **Coffer sync needs you**.
 
 ## Restart the daemon
 

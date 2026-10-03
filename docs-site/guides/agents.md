@@ -276,7 +276,7 @@ Agents often carry MCP servers configured directly in their own files. The **MCP
 | Claude Code | `mcpServers` in `.claude.json` (the `global` file) and in `settings.json` |
 | Codex | `[mcp_servers.*]` in `config.toml` (the `enabled` flag is shown but never written) |
 
-Click a direct server's name to open its detail page. It shows, read-only, everything the agent's file holds for that server: the transport, the command and each argument (or the URL), the working directory, the `enabled` flag where the format has one, the names of its environment variables and HTTP headers, any other keys the entry carries, and the config file it lives in, with **Open in editor** and **Reveal** beside the path. Secret values never leave the daemon: environment and header values are shown only as *set* or *secret · hidden*, and any other key whose name looks secret (the pattern below) shows as *hidden*. Coffer does not start a direct server to show this page, so it lists no tools. The back link returns to the agent's **MCP servers** tab, and the page carries the same two actions as the row.
+Click a direct server's name to open its detail page. It shows, read-only, everything the agent's file holds for that server: the transport, the command and each argument (or the URL), the working directory, the `enabled` flag where the format has one, the names of its environment variables and HTTP headers, any other keys the entry carries, and the config file it lives in, with **Open in editor** and **Reveal** beside the path. Secret values never leave the daemon: environment and header values are shown only as *set* or *secret · hidden*, and any other key whose name looks secret (the pattern below) shows as *hidden*. Coffer does not start a direct server to show this page, so it lists no tools. The page carries the same two actions as the row; use the title bar's back arrow to return to the agent's **MCP servers** tab.
 
 You can do two things with a direct entry:
 
@@ -308,7 +308,7 @@ Click a plugin's name to open its detail page. It shows the plugin's `<name>@<ma
 | Hook events | `hooks/hooks.json` |
 | MCP servers | `.mcp.json` |
 
-The page header has the same enabled switch and **Uninstall** as the tab. After an uninstall, and from its back link, the page returns to the agent's Plugins tab. The page only reads the plugin's files; it changes nothing.
+The page header has the same enabled switch and **Uninstall** as the tab. After an uninstall the page returns to the agent's Plugins tab; the title bar's back arrow does the same. The page only reads the plugin's files; it changes nothing.
 
 ```sh
 coffer agent plugin list claude-code

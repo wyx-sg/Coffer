@@ -1,18 +1,18 @@
 ---
 title: App shell
-description: How the web UI's frame is organised — the sidebar grouped by intent, one list of names and routes, Settings as an addressable modal, the daemon footer and its version menu, the connection states, the navigation-only palette, attention badges, resizable splits and tab addresses — and why each works the way it does.
+description: How the web UI's frame is organised — the sidebar grouped by intent, one list of names and routes, Settings as an addressable modal, the title bar and its history arrows, the connection states, the navigation-only palette, attention badges, resizable splits and tab addresses — and why each works the way it does.
 ---
 
 # App shell
 
-The app shell is the frame every page of the web UI sits in: the sidebar, the command palette, the Settings window, the daemon footer and the split views. None of it is a feature of its own, but every feature is reached through it, so its rules decide whether the product feels like one thing or like fifteen pages stitched together. This page explains those rules and the reasons behind them. For how to use the shell, see the [Web UI guide](/guides/web-ui).
+The app shell is the frame every page of the web UI sits in: the sidebar, the command palette, the Settings window, the title bar and the split views. None of it is a feature of its own, but every feature is reached through it, so its rules decide whether the product feels like one thing or like fifteen pages stitched together. This page explains those rules and the reasons behind them. For how to use the shell, see the [Web UI guide](/guides/web-ui).
 
 ## Principles
 
 - **Group by intent, not by implementation.** The sidebar is organised around what a person comes to do, not around how Coffer stores things.
 - **One name, one route, everywhere.** A surface is named and addressed once, and every place that shows it reads that one definition.
 - **Every view is an address.** What you are looking at — a page, a tab, the Settings window over a page — is in the URL, so a refresh, a bookmark or the Back button brings it back.
-- **One source per fact.** The footer and the offline banner read the same daemon status; the palette reads the same lists the pages read. Two readings of one fact would eventually disagree.
+- **One source per fact.** The reconnecting bar and the offline page read the same daemon status; the palette reads the same lists the pages read. Two readings of one fact would eventually disagree.
 - **The shell renders; capabilities decide.** The shell draws attention badges, gates experimental entries and lays out splits, but whether something needs attention or is switched on is decided by the capability that owns it.
 
 ## The sidebar is grouped by what you come to do
@@ -37,7 +37,7 @@ The alternatives — keeping the role groups, one big Resources group, a flat li
 
 ### Experimental entries
 
-An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and a switched-on one carries an **Experimental** label so its status is never a surprise. Knowledge belongs to `knowledge`, Memory to `memory`, Sync to `sync`, and Model providers and Usage to `models`; every other entry, Conversations and Channels included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
+An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and its **Experimental** mark sits beside the page's title and in Settings › Features, not on the sidebar row (the collapsed rail's tooltip still says so). Knowledge belongs to `knowledge`, Memory to `memory`, Sync to `sync`, and Model providers and Usage to `models`; every other entry, Conversations and Channels included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
 
 ## One list of names and routes
 
@@ -47,7 +47,7 @@ That single list is what makes the principle "one name everywhere" hold without 
 
 ## Settings is a modal with an address
 
-Settings opens as a large window over the page you were on, from the labelled **Settings** row in the sidebar footer, from **⌘,** (**Ctrl+,**), or from the palette. It has five tabs grouped by what they manage — General, Security, Data, Daemon and About.
+Settings opens as a large window over the page you were on, from the **Settings** row in the sidebar footer, from **⌘,** (**Ctrl+,**), or from the palette. It has six tabs grouped by what they manage — General, Security, Data, Daemon, Features and About. Each tab follows the page grammar below: a title and one intro line, then plain sections, and every control saves as you change it.
 
 Settings is a modal rather than a page because it is visited briefly and then left. As a page it took a sidebar slot and, worse, navigated you away: after changing the theme you had to find your way back to what you were doing. As a modal it keeps the page you came from underneath, so closing it is a return rather than a second journey.
 
@@ -57,15 +57,17 @@ A modal that is only state, though, cannot be linked to, reloaded or reached wit
 - **Closing** — with **×**, **Escape**, a click outside, or the browser's **Back** — returns to the background page's own address, exactly as it was.
 - **A fresh load** of `/settings/<tab>` has no page underneath to return to, so it opens over Overview, and closing lands on `/`.
 
-The **Settings** row is highlighted only while the modal is open. It is labelled with the word, not just a gear, because an icon alone at the foot of a long list is easy to miss; on the collapsed rail, where there is no room for words, the gear carries a tooltip.
+The **Settings** row always opens the General tab and is highlighted only while the modal is open. It is labelled with the word, not just a gear, because an icon alone at the foot of a long list is easy to miss; on the collapsed rail, where there is no room for words, the gear carries a tooltip.
 
-## The footer reads the same status as the banner
+## The title bar carries the controls that belong to the window
 
-Below the Settings row, the footer names the daemon's state in plain words — connecting, running, stopping, reconnecting or offline — with the app's version beside it. Clicking it opens the **version menu**: its head names the version and the daemon's address and opens **Settings → Daemon**; below it sit the theme, the language, the documentation and **Check for updates**. Theme and language live there because they are the two preferences people change on the spot; Settings is for machine-level configuration visited rarely, so it is only the sidebar row and **⌘,**.
+In the desktop app, one 44-pixel strip in the sidebar's colour runs across the whole window. It holds the native traffic lights, the **sidebar toggle** (**⌘\\**) and the **back and forward arrows** (**⌘[** and **⌘]**), and nothing else. With the sidebar open, the sidebar's edge line runs up through the strip; collapsed, a 56-pixel icon rail sits under it and badges shrink to dots. In full screen the lights are hidden and the controls move to the left edge. A browser draws no strip: the Coffer mark and the toggle sit at the top of the sidebar, and the browser's own arrows navigate.
 
-The web UI already polls the daemon's status every 30 seconds. One piece of the shell watches that poll: when it fails it retries after 1, 2, 4 and 8 seconds and publishes one connection phase — ok, reconnecting or offline — that every other part reads. The footer reads that same poll and phase and adds no timer of its own. This is not only economy: two timers would sample the daemon at different moments and could briefly disagree, with the workspace saying offline while the footer still says running. Reading one source, and checking for a failure before trusting a cached answer, makes that impossible.
+The arrows walk the app's own history, so no page needs a back button of its own. A per-page "back to the list" link would be a second, competing meaning of "back" — and one that disagrees with the arrows whenever you arrived somewhere else — so pages carry none, and a detail opened from a list returns with the arrows. Page content sits 16 pixels below the strip and 32 pixels in from the sides, the same on every page.
 
-The footer reports; it does not ask you to act. Coffer starts its daemon by itself, so the state is there for reassurance and diagnosis, and the workspace's connection states stay the one place that names a recovery.
+The sidebar footer shows no daemon state and has no version menu. Coffer starts its daemon by itself, so a permanently visible running dot only added noise; what you need to know is when something is wrong, and that is shown in the workspace itself. Theme and language are preferences and live with the other preferences in **Settings › General**; the version and **Check for updates** are in **Settings › About**, and an available update is offered by a card above the footer.
+
+The web UI polls the daemon's status every 30 seconds. One piece of the shell watches that poll: when it fails it retries after 1, 2, 4 and 8 seconds and publishes one connection phase — ok, reconnecting or offline — that every other part reads. The reconnecting bar and the offline page read that same phase and add no timer of their own: two timers would sample the daemon at different moments and could briefly disagree. Reading one source, and checking for a failure before trusting a cached answer, makes that impossible.
 
 ## Losing the daemon keeps the page
 
@@ -83,7 +85,7 @@ A daemon that restarts, or a laptop waking from sleep, drops the connection for 
 
 ## Attention signals belong to their capability
 
-An entry whose kind needs you carries a count badge — red while any of the things counted is a failure — and on the collapsed rail a dot of the same colour, with the count in the icon's tooltip. The sidebar speaks only through these badges, and only for things that need you: failures, drift, a held vault, a required CLI that is missing. An informational count — how many servers there are, how many documents wait in a knowledge collection's inbox — never becomes a badge, because a sidebar full of numbers stops saying where to look.
+An entry whose kind needs you carries a count badge — always the same red, capped at **9+** — and on the collapsed rail a dot of the same colour, with the count in the icon's tooltip. The sidebar speaks only through these badges, and only for things that need you: failures, drift, a held vault, a required CLI that is missing; items you ignored on Overview are not counted. An informational count — how many servers there are, how many documents wait in a knowledge collection's inbox — never becomes a badge, because a sidebar full of numbers stops saying where to look.
 
 The shell owns only the drawing. Whether a kind needs attention, and what clears it, is decided by the capability that owns the kind: Agents, MCP servers, Skills and Channels count what the daemon's cross-kind attention list (the list Overview's **Needs you** shows) reports for them; Sync keeps its own signal, cleared by visiting Sync; CLIs count the required commands that need you. The shell keeps one map from sidebar entry to signal, and a kind that wants a badge adds its signal to that map; the sidebar then marks it with the same badge and no other change. A signal that has not loaded, or whose read failed, simply shows no badge — the sidebar is never the place an error surfaces.
 
@@ -96,7 +98,7 @@ The sidebar against the page, the conversation list against the open conversatio
 - Limits keep both sides usable: a sidebar between 200 and 300 pixels, a list at least 240 pixels and at most half the split, a detail pane at least 480.
 - The width is remembered per page in this browser only.
 
-Widths are a per-browser convenience, not state. They are never sent to the daemon, never synced, and if the browser blocks storage the split simply opens at its default. Nothing about what you are looking at depends on them. The sidebar's other convenience, collapsing to a 56-pixel icon rail, is remembered the same way.
+Widths are a per-browser convenience, not state. They are never sent to the daemon, never synced, and if the browser blocks storage the split simply opens at its default. Nothing about what you are looking at depends on them. The sidebar's other convenience, collapsing to a 56-pixel icon rail with the title-bar toggle, is remembered the same way.
 
 ## Tabs live in the path
 

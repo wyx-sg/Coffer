@@ -71,7 +71,8 @@ The app runs on **13px**; hierarchy comes from weight and colour, not size.
 | Page title | `text-lg font-bold` (18/24, 650) |
 | Detail title | `text-xl font-bold` (20/26) |
 | Dialog / empty-state title | `text-md font-bold` / `text-md font-semibold` (15/20) |
-| Section title | `text-sm font-semibold` (13/18, 600) |
+| Section title | `text-md font-semibold` (15/20, 600), with one visible description line under it (`text-xs text-text-muted`, 12) |
+| Tab title / tab intro (Settings) | `text-lg font-bold` (18/650) / `text-sm` (13) muted |
 | Body | `text-sm` (13/19) — `text-base` is the same size |
 | Buttons, row titles, labels | `text-sm font-label` (550); field labels `text-xs font-label` |
 | Meta, help, status words | `text-xs text-text-muted` (12/16) |
@@ -85,8 +86,8 @@ everywhere (set on `body`). Sentence case everywhere; uppercase only for caption
 
 ## Spacing and sizes
 
-A 4px grid on Tailwind's default scale (`p-2.5` = 10px). Page padding 40 top /
-24 sides on a phone and 40 from `md` up (`Layout`); section gap 24; card padding 16; dialog padding 20. Fixed geometry:
+A 4px grid on Tailwind's default scale (`p-2.5` = 10px). Page padding 16 top /
+32 sides (`Layout`); gap between sections 32; card padding 16; dialog padding 20. The desktop title bar is one 44px strip in the sidebar colour. Fixed geometry:
 `h-control-sm` 26 (in rows, banners, toolbars), `h-control-md` 30 (every
 default control), `h-control-lg` 36 (full-page states, onboarding); `min-h-row`
 40 list rows (56 with a sub-line), `min-h-setting-row` 56; `w-sidebar` 220,
@@ -149,3 +150,21 @@ Every top-level route is captured in light and dark by the `visual`
 Playwright project (see [`testing.md`](./testing.md) "Visual baseline"). A
 change that moves pixels on purpose updates the baseline in the same PR, and
 the image diff is reviewed like code.
+
+## Page grammar
+
+- **Box = a group; hairlines = one thing.** A bordered box holds a *group of
+  things* (a list of rows, a table, cards). One thing's own properties are plain
+  rows separated by hairlines, with no box around them.
+- **Headings.** A page title is 18/650 with its actions on the right and one
+  subtitle line under it. A section title is 15/600 with one *visible*
+  description line (12, muted) under it — the explanation is shown, not hidden
+  in a "?" (a `HelpTip` only carries the overflow of a long one). 32px between
+  sections. A Settings tab opens with a 18/650 title and one 13 intro line.
+- **No per-page back buttons.** The title bar's global ← → (⌘[ ⌘]) navigate
+  history; the sidebar toggle is ⌘\ (before the Settings ⌘, and palette ⌘K).
+- **Count badges** are all `danger-strong` (red), capped at `9+`; on the rail
+  they shrink to dots. An Experimental tag sits beside a page title, not on a
+  sidebar row.
+- **Save on change.** Controls write as they change; only document editors have
+  an explicit Save and the unsaved-changes guard. A dialog's Cancel is `ghost`.
