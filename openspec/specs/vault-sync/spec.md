@@ -1239,25 +1239,52 @@ credential redacted. A failed fetch MUST leave the vault exactly as it was.
 - **WHEN** a round runs
 - **THEN** it is recorded `auth_failed` naming the token's ref, and the attention list carries a sign-in item
 
-### Requirement: Refuse a remote at another layout
+### Requirement: Refuse a newer-layout remote and replace an older one
 The remote's `manifest.json` carries the vault layout's `schema_version`. A
-round or a join SHALL refuse a remote at a newer layout (`remote_too_new`) and
-at an older one (`remote_too_old`), leaving this vault untouched. A remote in
-the layout builds before the vault files wrote is never converted: it is
-rebuilt from the first machine that ran the one-time upgrade — pointed at an
-empty branch or remote, which that machine then fills — and every other machine
-upgrades and joins it as a new machine.
+round or a join SHALL refuse a remote at a newer layout (`remote_too_new`),
+leaving this vault untouched: the person upgrades this machine. A round or a
+join that meets a remote at an older layout SHALL replace it with this vault,
+joined or not — never convert it. The push is a fast-forward of one commit
+whose tree is exactly this machine's content, with this machine's commit and
+the old tip as parents, so the old history stays reachable in git. The files
+only the old remote had go away on purpose, so the outgoing deletion breaker
+does not apply; the plaintext check still does, and a plaintext finding refuses
+with the remote keeping its old tip. The machine is marked joined and the round
+records `join: "replace"`. The join preview of such a remote (kind `REPLACE`)
+SHALL list what goes up by area, the files that go away (the first 100, with the
+exact total), who pushed the old tip and when, and that machines still on the
+older layout must upgrade.
 
-#### Scenario: a remote at another layout is refused
-- **GIVEN** a remote whose manifest names a newer layout, and another whose manifest names an older one
-- **WHEN** a round runs against each
-- **THEN** the first ends `remote_too_new` and the second `remote_too_old` with a message saying to rebuild it from a migrated machine
-- **AND** in both cases this vault's `HEAD` is unchanged
+#### Scenario: a remote at a newer layout is refused
+- **GIVEN** a remote whose manifest names a newer layout
+- **WHEN** a round runs against it
+- **THEN** the round ends `remote_too_new`
+- **AND** this vault's `HEAD` is unchanged
 
-#### Scenario: an old remote is rebuilt from the first upgraded machine
+#### Scenario: a remote at an older layout is replaced by this vault
+- **GIVEN** a remote at an older layout holding a file this vault does not have, and an upgraded machine that has not joined
+- **WHEN** its round runs
+- **THEN** the round ends `pushed` with `join: "replace"`, and the new remote tip has the old tip as an ancestor
+- **AND** the file only the old remote had is gone from the new tip and listed as removed, this vault's files are on it, and the machine is joined
+- **AND** the next round has nothing to do
+
+#### Scenario: the join preview of an older remote lists what goes away
+- **GIVEN** a remote at an older layout and a machine that has not joined
+- **WHEN** the join is previewed, and then confirmed
+- **THEN** the preview is of kind `REPLACE` with nothing pulled, the old tip, what goes up and the files that go away with their exact total
+- **AND** confirming replaces the remote, which is then at this vault's layout
+
+#### Scenario: replacing an older remote still refuses a plaintext secret
+- **GIVEN** a remote at an older layout and a vault holding a plaintext credential
+- **WHEN** a round runs
+- **THEN** the round ends `plaintext_found`
+- **AND** the remote keeps its old tip
+
+#### Scenario: two machines upgrade and keep syncing through the replaced remote
 - **GIVEN** two machines that synced through a remote before the upgrade, and the first of them upgraded
-- **WHEN** its round meets the old remote, and it is then pointed at an empty remote and joins, and the second machine upgrades and joins that remote
-- **THEN** the old remote is refused, the first machine fills the empty one, and the second machine joins as new with nothing lost on either
+- **WHEN** it joins and replaces the old remote, and the second machine upgrades and joins that remote
+- **THEN** the old history stays in the remote, and the second machine joins as new with nothing lost on either
+- **AND** both machines end with every resource byte-identical and one vault
 
 ### Requirement: Check a remote before it is saved
 A person SHALL be able to ask what a remote holds before saving it — empty, a

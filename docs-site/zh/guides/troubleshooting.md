@@ -180,7 +180,6 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 | `coffer sync status` 以 1 退出并显示 `deletions held` | 删除断路器扣住了某一轮。 | 看一下列表（`coffer sync hold`），然后运行 `coffer sync hold --confirm` 或 `--restore`。重装之后，选恢复。 |
 | `stopped on conflicts` | 两台机器以 git 无法合并的方式改了同一个文件。 | 运行 `coffer sync conflicts`，用 `coffer sync resolve <path> --mine\|--theirs\|--edited` 答复每个文件，然后运行 `coffer sync continue`；或者在**同步**页面上用**解决冲突**。要让你的智能体合并它们，点**交给智能体**（或把 `coffer sync conflicts --prompt` 给它）；它的合并显示为**智能体已合并 · 请检查**之后，看一眼 diff 再点**标记为已解决**（`coffer sync resolve <path> --edited`）。 |
 | `join required` | 这台机器还没有加入远端。 | `coffer sync join` |
-| `remote too old` | 远端是由采用保险库布局之前的 Coffer 写出的。 | 重建它：见[升级已有的 Coffer](/zh/guides/upgrading#rebuild-your-sync-remote)。 |
 | 密钥无法解密 | 这台机器没有主密钥。 | `coffer sync key import <file>` |
 | 推送因认证错误失败 | Coffer 不使用你的全局 git 配置，也不使用 macOS 钥匙串助手。 | 存储一个令牌并传入 `--secret-ref`，或者使用一把不需要 passphrase 提示的 SSH 密钥。通过 HTTPS 使用 GitLab 时，加上 `--username oauth2`。 |
 | 你解释不了的 `push failed`、`sign-in refused` 或 `remote unreachable` | 远端那一侧的问题：受保护的分支、没有写权限的令牌、网络或 VPN 问题。 | `coffer sync status --prompt`（或者**同步**页面上消息旁边的提示词）会把诊断交给你的智能体，且不含令牌。然后点**重试**。 |

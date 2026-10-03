@@ -174,6 +174,8 @@ _STATUS: dict[str, int] = {
     "ATTACHMENT_EXPIRED": 410,
     # the thread's thumbnail of a file that is not this conversation's, or was pruned
     "ATTACHMENT_UNAVAILABLE": 404,
+    # a changed file's diff under a path the reply did not record
+    "REPLY_FILE_NOT_FOUND": 404,
     # a question the agent asked the owner (spec chat "Pause a turn on a question
     # for the owner"): a second answer to a closed question conflicts with the
     # first; an answer that does not fit its question is a bad body.

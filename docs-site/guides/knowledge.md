@@ -400,7 +400,7 @@ Knowledge → choose the collection → ⋯ → Delete collection
 :::
 
 ::: tip A delete can be restored
-In the web UI a delete happens at once: no confirmation, no typed name, and a toast, *Deleted <name>*, with **Undo**. A deleted document or collection stays in the [history](#history-and-undo), so **Undo** puts it back even after the toast is gone. **Recent changes** lists the delete with **Restore**, which puts back exactly what it removed — a document into its collection, a collection with its documents, its README and the items that were waiting in its Inbox — as one new change by you. On the CLI, find the delete with `coffer knowledge changes` and run `coffer knowledge restore --deleted <version>`. A restore is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again.
+In the web UI a delete happens at once: no confirmation, no typed name, and a toast, *Deleted `<name>`*, with **Undo**. A deleted document or collection stays in the [history](#history-and-undo), so **Undo** puts it back even after the toast is gone. **Recent changes** lists the delete with **Restore**, which puts back exactly what it removed — a document into its collection, a collection with its documents, its README and the items that were waiting in its Inbox — as one new change by you. On the CLI, find the delete with `coffer knowledge changes` and run `coffer knowledge restore --deleted <version>`. A restore is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again.
 :::
 
 ## What not to put in knowledge

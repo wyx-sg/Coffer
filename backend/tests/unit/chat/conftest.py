@@ -129,6 +129,7 @@ class FakeMessageRepo:
         self._messages: list[Message] = []
         # How many mid-stream partial flushes reached the store.
         self.partial_writes = 0
+        self.files: dict[str, list[Any]] = {}
 
     async def append(self, message: Message) -> Message:
         self._messages.append(message)
@@ -164,6 +165,15 @@ class FakeMessageRepo:
             if m.id == message_id and m.status == "streaming":
                 self._messages[i] = dataclasses.replace(m, content=content)
                 return
+
+    async def record_files(self, message_id: str, files: Sequence[Any]) -> None:
+        self.files[message_id] = list(files)
+
+    async def list_files(self, message_id: str) -> list[Any]:
+        return list(self.files.get(message_id, []))
+
+    async def get_file(self, message_id: str, path: str) -> Any:
+        return next((f for f in self.files.get(message_id, []) if f.path == path), None)
 
     async def delete_message(self, message_id: str) -> None:
         self._messages = [m for m in self._messages if m.id != message_id]

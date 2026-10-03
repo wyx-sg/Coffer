@@ -41,8 +41,8 @@ interface Props {
   bannerState?: "failed" | "lost";
   /** A question is pending for the user (the header says "Waiting for you"). */
   waiting?: boolean;
-  /** A "Files changed" row was pressed; `selectedPath` is the row whose diff is open. */
-  onOpenFile?: (path: string) => void;
+  /** A "Files changed" row with a diff was pressed; `selectedPath` is the row whose diff is open. */
+  onOpenFile?: (messageId: string, path: string) => void;
   selectedPath?: string | null;
 }
 
@@ -180,8 +180,10 @@ function MessageBubbleImpl({
         {state === "stopped" && <StoppedLine unfinished={unfinishedWork(blocks)} />}
         {!working && (
           <FilesChangedCard
-            files={filesChanged(blocks)}
-            onOpenFile={onOpenFile}
+            conversationId={message?.conversation_id ?? ""}
+            messageId={message?.id ?? null}
+            estimate={filesChanged(blocks)}
+            onOpenFile={message && onOpenFile ? (path) => onOpenFile(message.id, path) : undefined}
             selectedPath={selectedPath}
           />
         )}

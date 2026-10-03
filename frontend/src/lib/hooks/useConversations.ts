@@ -17,6 +17,8 @@ import {
   conversationKey,
   conversationsKey as CONVERSATIONS_KEY,
   messagesKey,
+  replyFileDiffKey,
+  replyFilesKey,
 } from "@/lib/api/queryKeys";
 import { useToast } from "@/components/ui/toast";
 
@@ -68,6 +70,25 @@ export function useAgentConfig(id: string, enabled = true) {
     queryKey: agentConfigKey(id),
     queryFn: () => chatApi.getAgentConfig(id),
     enabled: !!id && enabled,
+  });
+}
+
+/** The files a finished reply changed, as recorded (empty for an older reply). */
+export function useReplyFiles(conversationId: string, messageId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: replyFilesKey(conversationId, messageId ?? ""),
+    queryFn: () => chatApi.listReplyFiles(conversationId, messageId!),
+    enabled: !!conversationId && !!messageId && enabled,
+    staleTime: Infinity,
+  });
+}
+
+/** One recorded file's unified diff for a reply. */
+export function useReplyFileDiff(conversationId: string, messageId: string, path: string) {
+  return useQuery({
+    queryKey: replyFileDiffKey(conversationId, messageId, path),
+    queryFn: () => chatApi.getReplyFileDiff(conversationId, messageId, path),
+    staleTime: Infinity,
   });
 }
 

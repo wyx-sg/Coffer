@@ -58,6 +58,7 @@ from coffer.domain.chat.events import (
     TurnError,
 )
 from coffer.domain.chat.message import AttachmentBlock, Message, Role
+from coffer.domain.chat.reply_file import ReplyFile
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +101,16 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
                 if isinstance(b, AttachmentBlock)
             ]
     return []
+
+
+def _reply_files_of(adapter: AgentAdapter) -> list[ReplyFile]:
+    """The files the adapter says the reply changed; none for an adapter that does
+    not track them, and none when working them out fails."""
+    try:
+        return list(getattr(adapter, "reply_files", ()))
+    except Exception:
+        log.warning("Could not work out the files a reply changed", exc_info=True)
+        return []
 
 
 def _is_ask_tool(name: str) -> bool:
@@ -201,6 +212,9 @@ async def run_turn_task(
         # adapter reports"). It learns that while the turn streams, so it is read
         # now, at finalize time, never before the turn starts. Best-effort.
         model_id: str | None = getattr(adapter, "model_id", None)
+        # Likewise what the reply changed in each file, which the adapter works
+        # out as the reply ends (spec chat "Record what each reply changed in each file").
+        reply_files = _reply_files_of(adapter)
         await finalize_assistant_message(
             chat=chat,
             conversation_id=conversation_id,
@@ -209,6 +223,7 @@ async def run_turn_task(
             content=content,
             final_done=done,
             error_event=error,
+            reply_files=reply_files,
         )
 
     try:

@@ -1,7 +1,7 @@
 # Data Model: Chat
 
-Two tables, one JSON column, one block union, one event union. Everything a
-turn produces lands in the two tables, which are history in `~/.coffer/runs.db`
+Three tables, one JSON column, one block union, one event union. Everything a
+turn produces lands in the tables, which are history in `~/.coffer/runs.db`
 (machine-local, never synced); everything a turn streams is the event
 union, which is a wire contract and not storage.
 
@@ -78,6 +78,24 @@ Constraints: `uq_chat_messages_conv_seq (conversation_id, seq)` — one message
 per position, which is what makes the sequence a sequence — and
 `idx_chat_messages_conv (conversation_id, seq)`, the history read of "Bound turn
 context to the most recent 200 messages".
+
+## `chat_reply_files`
+
+What one assistant reply changed in each file it wrote (see "Record what each
+reply changed in each file"). One row per file per reply; none for a reply that
+changed nothing and for replies from before the table existed.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `message_id` | TEXT, PK part, FK → `chat_messages.id` `ON DELETE CASCADE` | The reply. The cascade is what deletes the rows with the reply, with its conversation and with retention's prune. |
+| `path` | TEXT, PK part | The file's absolute path as the agent wrote it. |
+| `seq` | INTEGER, NOT NULL | Position in the reply's list, first-touched first. |
+| `added` | INTEGER, NOT NULL | Lines added, counted from the diff. |
+| `removed` | INTEGER, NOT NULL | Lines removed, counted from the diff. |
+| `diff` | TEXT, NULL | The unified diff (3 lines of context, `--- a/<path>` / `+++ b/<path>`). NULL when `diff_omitted` is set, or for an empty file that was created. |
+| `diff_omitted` | TEXT, NULL | `binary` (not UTF-8 text) or `too_large` (over 1 MB); the counts are then line totals either side. |
+
+Index: `idx_chat_reply_files_message (message_id, seq)`. At most 200 files are kept per reply.
 
 ### Content blocks
 

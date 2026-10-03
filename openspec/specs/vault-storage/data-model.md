@@ -93,8 +93,8 @@ except `.inbox`, and `/secret/` unless the sync remote has `include_secret`.
 ```
 
 The one vault-wide number left: the **layout**. A sync round refuses a remote
-whose manifest names a newer layout (`remote_too_new`) or an older one
-(`remote_too_old`, rebuilt from an upgraded machine rather than converted), and
+whose manifest names a newer layout (`remote_too_new`) and replaces one at an
+older layout with this vault (never converting it), and
 `3` is what makes a build from before per-file versions refuse the file layout
 rather than misread it.
 

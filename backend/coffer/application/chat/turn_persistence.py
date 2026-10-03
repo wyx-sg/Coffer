@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import replace
 
 from coffer.application.chat.service import ChatService
@@ -34,6 +35,7 @@ from coffer.domain.chat.message import (
     ToolUseBlock,
 )
 from coffer.domain.chat.question import QuestionBlock
+from coffer.domain.chat.reply_file import ReplyFile
 
 log = logging.getLogger(__name__)
 
@@ -241,6 +243,7 @@ async def finalize_assistant_message(
     content: TurnContent,
     final_done: TurnDone | None,
     error_event: TurnError | None,
+    reply_files: Sequence[ReplyFile] = (),
 ) -> None:
     """Finalise the streaming placeholder with its content/status.
 
@@ -266,8 +269,9 @@ async def finalize_assistant_message(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )
+            await _record_files(chat, message_id, reply_files)
         else:
-            await chat.append_message(
+            appended = await chat.append_message(
                 conversation_id,
                 role=Role.ASSISTANT,
                 content=blocks,
@@ -276,8 +280,18 @@ async def finalize_assistant_message(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )
+            await _record_files(chat, appended.id, reply_files)
     except Exception:
         log.exception("Failed to finalize assistant message for conversation %s", conversation_id)
+
+
+async def _record_files(chat: ChatService, message_id: str, files: Sequence[ReplyFile]) -> None:
+    """Keep what the reply changed in each file. Best effort: the reply itself is
+    already saved, and its list of changed files is the lesser loss."""
+    try:
+        await chat.record_reply_files(message_id, files)
+    except Exception:
+        log.warning("Failed to record the files reply %s changed", message_id, exc_info=True)
 
 
 async def recover_placeholder_id(

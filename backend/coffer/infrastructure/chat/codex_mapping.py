@@ -27,7 +27,7 @@ Exactly one terminal (``TurnDone``/``TurnError``) is emitted per turn: once
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from coffer.domain.chat.events import (
@@ -38,6 +38,7 @@ from coffer.domain.chat.events import (
     TurnDone,
     TurnError,
 )
+from coffer.infrastructure.chat.codex_reply_files import CodexReplyFiles
 
 
 @dataclass
@@ -51,6 +52,9 @@ class CodexParseState:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     terminal_emitted: bool = False
+    #: The diffs the turn's file-change items carried (spec chat "Record what each
+    #: reply changed in each file").
+    reply_files: CodexReplyFiles = field(default_factory=CodexReplyFiles)
 
 
 def map_codex_notification(
@@ -75,7 +79,7 @@ def map_codex_notification(
     if method == "item/started":
         return []
     if method == "item/completed":
-        return _item_completed(params)
+        return _item_completed(params, state)
     if method == "thread/tokenUsage/updated":
         _stash_tokens(params, state)
         return []
@@ -112,13 +116,13 @@ def _stash_tokens(params: dict[str, Any], state: CodexParseState) -> None:
         state.completion_tokens = last.get("outputTokens")
 
 
-def _item_completed(params: dict[str, Any]) -> list[AgentEvent]:
+def _item_completed(params: dict[str, Any], state: CodexParseState) -> list[AgentEvent]:
     item = params.get("item") or {}
     item_type = item.get("type")
     if item_type == "commandExecution":
         return _command_execution(item)
     if item_type == "fileChange":
-        return _file_change(item)
+        return _file_change(item, state)
     # agentMessage / mcpToolCall / dynamicToolCall etc. — text already streamed
     # via deltas; nothing else to surface in v1.
     return []
@@ -146,11 +150,13 @@ def _command_execution(item: dict[str, Any]) -> list[AgentEvent]:
     return [call, result]
 
 
-def _file_change(item: dict[str, Any]) -> list[AgentEvent]:
+def _file_change(item: dict[str, Any], state: CodexParseState) -> list[AgentEvent]:
     item_id = str(item.get("id") or "")
     changes = item.get("changes") or []
     status = item.get("status")
     is_error = status == "failed"
+    if not is_error:
+        state.reply_files.add(changes)
     call = ToolCall(
         tool_use_id=item_id,
         tool_name="file_change",

@@ -25,8 +25,9 @@ interface Props {
   bannerState?: "failed" | "lost";
   /** A question waits on the owner: the live reply's header says so. */
   waiting?: boolean;
-  onOpenFile?: (path: string) => void;
-  selectedPath?: string | null;
+  onOpenFile?: (messageId: string, path: string) => void;
+  /** The reply and file whose diff is open. */
+  openFile?: { messageId: string; path: string } | null;
 }
 
 export function ThreadMessages({
@@ -41,7 +42,7 @@ export function ThreadMessages({
   bannerState,
   waiting = false,
   onOpenFile,
-  selectedPath,
+  openFile,
 }: Props) {
   const last = messages.at(-1);
   const bannerOnLast =
@@ -63,7 +64,7 @@ export function ThreadMessages({
           agentName={agentName}
           waiting={waiting}
           onOpenFile={onOpenFile}
-          selectedPath={selectedPath}
+          selectedPath={openFile?.messageId === msg.id ? openFile.path : null}
           {...(bannerOnLast && msg === last ? bannerProps : {})}
         />
       ))}
@@ -76,8 +77,6 @@ export function ThreadMessages({
           agentKey={agentKey}
           agentName={agentName}
           waiting={waiting}
-          onOpenFile={onOpenFile}
-          selectedPath={selectedPath}
           {...bannerProps}
         />
       )}

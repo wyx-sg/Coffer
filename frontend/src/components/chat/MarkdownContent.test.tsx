@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 
 import { acceptance } from "@/test/acceptance";
 import { MarkdownContent } from "./MarkdownContent";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageBubble } from "./MessageBubble";
 import { contentBlock } from "@/lib/chat/contentBlock";
 
@@ -110,21 +111,23 @@ acceptance("chat", "assistant text keeps its line breaks and every code block co
     "```",
   ].join("\n");
   const { container } = render(
-    <MessageBubble
-      message={{
-        id: "m-1",
-        conversation_id: "c-1",
-        seq: 1,
-        role: "assistant",
-        status: "complete",
-        prompt_tokens: null,
-        completion_tokens: null,
-        model_id: null,
-        finished_at: null,
-        created_at: "2026-01-01T00:00:00Z",
-        content: [contentBlock({ type: "text", text: reply })],
-      }}
-    />,
+    <QueryClientProvider client={new QueryClient()}>
+      <MessageBubble
+        message={{
+          id: "m-1",
+          conversation_id: "c-1",
+          seq: 1,
+          role: "assistant",
+          status: "complete",
+          prompt_tokens: null,
+          completion_tokens: null,
+          model_id: null,
+          finished_at: null,
+          created_at: "2026-01-01T00:00:00Z",
+          content: [contentBlock({ type: "text", text: reply })],
+        }}
+      />
+    </QueryClientProvider>,
   );
 
   const firstParagraph = container.querySelector("p")!;

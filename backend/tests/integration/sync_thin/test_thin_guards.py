@@ -162,7 +162,7 @@ def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(
     assert mac.repo.read("HEAD", "secret/provider/p1/key.enc") is None
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a remote at another layout is refused")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a remote at a newer layout is refused")
 def test_a_remote_at_a_newer_layout_is_refused(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     mac.put("manifest.json", '{\n  "schema_version": 4\n}\n')
@@ -182,7 +182,7 @@ def _old_layout_remote(mac: Machine) -> str:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
+    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
 )
 def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
@@ -207,7 +207,7 @@ def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machi
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
+    spec="vault-sync", scenario="the join preview of an older remote lists what goes away"
 )
 def test_the_join_preview_reports_the_replace_and_the_join_does_it(
     pair: tuple[Machine, Machine],
@@ -227,7 +227,7 @@ def test_the_join_preview_reports_the_replace_and_the_join_does_it(
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
+    spec="vault-sync", scenario="replacing an older remote still refuses a plaintext secret"
 )
 def test_replacing_an_older_remote_still_refuses_a_plaintext_secret(
     pair: tuple[Machine, Machine],

@@ -313,7 +313,6 @@ coffer sync machine rm <machine_id>         # retire a machine you no longer use
 | `git missing` | 守护进程使用的 PATH 上没有 `git`。 | 按适合这台机器的方式安装 git（卡片上的**交给智能体**），然后点**再检查一次**。 |
 | `paused (cloud folder)` | 保险库在一个 Dropbox、iCloud Drive、Syncthing 或类似工具也在同步的文件夹里。 | 在状态标签页点**移动保险库…**：Coffer 会暂停各轮和智能体的写入，移动文件夹（默认到 `~/.coffer/vault`，也可以选任何不在同步文件夹里的位置），在新位置检查 git 仓库，然后恢复。旧文件夹留空，请自己删除。 |
 | `remote too new` | 另一台机器运行着更新版本的 Coffer。 | 升级这台机器。 |
-| `remote too old` | 远端是由采用保险库布局之前的 Coffer，或者更旧的布局写出的。 | 从一台已升级的机器重建它：见[升级已有的 Coffer](/zh/guides/upgrading#rebuild-your-sync-remote)。 |
 | `waiting on an edit` | 在这一轮会改动的某个文件上，你有一处未保存或无效的编辑。 | 完成或修好这处编辑（`coffer vault problems` 会列出无效的编辑）；下一轮会继续。 |
 | 重装 Coffer 后有一轮被扣住 | 空的保险库会把它的丢失推送出去。 | `coffer sync hold --restore`。 |
 | 密钥无法解密 | 这台机器没有加密它们时用的主密钥。 | 用从有主密钥的机器上拿到的密钥运行 `coffer sync key import <file>`。 |

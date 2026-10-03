@@ -818,6 +818,114 @@ paths:
       summary: Send Message
       tags:
       - chat
+  /api/v1/chat/conversations/{id}/messages/{message_id}/changes:
+    get:
+      description: |-
+        The files an assistant reply of the conversation changed, with added and
+        removed line counts. An id that is not an assistant message of the
+        conversation is ``MessageNotFound`` (404); a reply with no records lists
+        none.
+      operationId: list_reply_files_api_v1_chat_conversations__id__messages__message_id__changes_get
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          title: Id
+          type: string
+      - in: path
+        name: message_id
+        required: true
+        schema:
+          title: Message Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyFileListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Reply Files
+      tags:
+      - chat
+  /api/v1/chat/conversations/{id}/messages/{message_id}/changes/diff:
+    get:
+      description: |-
+        One changed file's unified diff for that reply. ``MessageNotFound`` (404)
+        for a message that is not an assistant reply of the conversation,
+        ``ReplyFileNotFound`` (404) for a path the reply did not record.
+      operationId: get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__changes_diff_get
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          title: Id
+          type: string
+      - in: path
+        name: message_id
+        required: true
+        schema:
+          title: Message Id
+          type: string
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyFileDiffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Reply File Diff
+      tags:
+      - chat
   /api/v1/chat/conversations/{id}/messages/{message_id}/resend:
     post:
       description: |-
@@ -1897,6 +2005,80 @@ components:
       - type
       - pending
       title: QueueChangedEventOut
+      type: object
+    ReplyFileDiffOut:
+      description: |-
+        One changed file's unified diff. ``diff`` is ``null`` when it is left out,
+        and ``diff_omitted`` then says why: ``binary`` (not text) or ``too_large``
+        (over 1 MB).
+      properties:
+        added:
+          title: Added
+          type: integer
+        diff:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Diff
+        diff_omitted:
+          anyOf:
+          - enum:
+            - binary
+            - too_large
+            type: string
+          - type: 'null'
+          title: Diff Omitted
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+      required:
+      - path
+      - added
+      - removed
+      - diff
+      - diff_omitted
+      title: ReplyFileDiffOut
+      type: object
+    ReplyFileListOut:
+      description: |-
+        The files a reply changed, first-touched first; empty for a reply that
+        changed none and for one recorded before files were.
+      properties:
+        files:
+          items:
+            $ref: '#/components/schemas/ReplyFileOut'
+          title: Files
+          type: array
+      required:
+      - files
+      title: ReplyFileListOut
+      type: object
+    ReplyFileOut:
+      description: |-
+        One file a reply changed: its added and removed line counts, and whether
+        a diff can be opened (false for a file too large or not text).
+      properties:
+        added:
+          title: Added
+          type: integer
+        has_diff:
+          title: Has Diff
+          type: boolean
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+      required:
+      - path
+      - added
+      - removed
+      - has_diff
+      title: ReplyFileOut
       type: object
     SendMessageAck:
       description: |-

@@ -38,7 +38,4 @@ export interface MessageThreadProps {
   readOnly?: boolean;
   onUnarchive?: () => void;
   unarchivePending?: boolean;
-  /** A "Files changed" row was pressed (the diff drawer opens from it); `selectedPath` is the open one. */
-  onOpenFile?: (path: string) => void;
-  selectedPath?: string | null;
 }

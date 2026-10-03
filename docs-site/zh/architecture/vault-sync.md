@@ -65,7 +65,7 @@ sequenceDiagram
     S->>V: 检查：是仓库，且不在云同步文件夹内
     S->>V: 落定你的有效编辑；L := HEAD
     S->>O: fetch；R := origin/branch
-    S->>S: 拒绝布局不同的远端
+    S->>S: 拒绝更新的布局，替换更旧的
     S->>V: git merge-tree L R，得到树 T（在工作树之外）
     S->>S: 有冲突、身份冲突或无效文件？停止
     S->>S: 删除断路器，入站（L 到 T）与出站（基准到 L）
@@ -77,7 +77,7 @@ sequenceDiagram
 
 1. **检查。** 保险库是一个仓库，并且不在另一个工具同步的文件夹里（Syncthing 文件夹、Dropbox、iCloud Drive 或 File Provider 根目录）。两个工具同步同一个 git 仓库会把它弄坏，所以这样的保险库会以 `paused_cloud_folder` 暂停。
 2. **本地。** 先提交你有效的手工编辑，这样 `L`，即本机的 `HEAD`，就包含了本机接受的一切。没有单独的导出步骤：每次被接受的写入本来就是一个提交。
-3. **Fetch。** `origin/<branch>` 成为 `R`。`manifest.json` 写着另一种布局的远端，会在合并任何东西之前被拒绝：更新的是 `remote_too_new`（升级这台机器），更旧的是 `remote_too_old`（远端必须重建，见[远端布局](#remote-layout)）。
+3. **Fetch。** `origin/<branch>` 成为 `R`。`manifest.json` 写着更新布局的远端，会在合并任何东西之前被拒绝（`remote_too_new`：升级这台机器）；更旧布局的远端则由这个保险库替换（见[远端布局](#remote-layout)）。
 4. **合并。** `git merge-tree --write-tree L R` 在对象库中计算出合并后的树 `T`。保险库里什么都不变。
 5. **停止？** 内容冲突、同一个资源名对应两个不同的 uid，或者合并后的文件校验失败，都会让整轮停止。什么都不检出，什么都不推送。
 6. **防护。** [删除断路器](#the-deletion-breaker)检查这一轮会在本机移除的内容，以及本机自己的提交会从共享历史中移除的内容。
@@ -102,7 +102,7 @@ sequenceDiagram
 | `join_required`、`joined` | 本机尚未加入远端；现在已加入。 |
 | `unreachable`、`auth_failed` | 远端无法访问，或拒绝登录。 |
 | `paused_cloud_folder` | 保险库位于另一个工具同步的文件夹中。 |
-| `remote_too_new`、`remote_too_old` | 远端处于另一种保险库布局。 |
+| `remote_too_new` | 远端处于更新的保险库布局。 |
 | `rolled_back` | 某一轮已被回滚。 |
 | `failed` | 其他任何情况，附带 git 的消息。 |
 
@@ -180,13 +180,13 @@ sequenceDiagram
 | 推送被拒绝 | `push_failed` | 已在本机应用；远端拒绝了推送。 | 检查分支的保护规则和令牌的权限。 |
 | 明文密钥 | `plaintext_found` | 这次推送会发布的某个文件含有明文密钥；会写明文件、行号和键名，从不显示值。 | 把值移入密钥（交给智能体的提示词）后重试，或者仍然推送，这会记入审计日志。 |
 | 云文件夹 | `paused_cloud_folder` | 保险库位于另一个工具同步的文件夹中。 | 把保险库移出那个文件夹：**移动保险库…**（`POST /api/v1/sync/vault/move`）会暂停各轮和智能体的写入，移动文件夹（目标在另一个文件系统时改为复制），在新位置检查仓库，并让 `~/.coffer/vault` 指向它。相对路径、重叠、位于另一个同步文件夹里或不为空的目标会被拒绝（`SYNC_VAULT_TARGET_INVALID`、`_IN_CLOUD`、`_NOT_EMPTY`），移动失败会把保险库放回原处（`SYNC_VAULT_MOVE_FAILED`）。 |
-| 布局 | `remote_too_new`、`remote_too_old` | 远端是用另一种保险库布局写的。 | 更新的：升级这台机器。更旧的：重建远端。 |
+| 布局 | `remote_too_new` | 远端是用更新的保险库布局写的。 | 升级这台机器。 |
 
 每个问题都会在**同步**页面上显示为一条横幅（带一个 **×** 用来忽略它，与总览共用，情况变化时它会回来），在侧边栏的**同步**入口上打上标记，并让 `coffer sync status` 以非零状态退出。
 
 ### 远端布局 {#remote-layout}
 
-保险库的 `manifest.json` 只携带一个数字 `schema_version`，当前是 `3`。数字相同的远端会与之收敛。数字更新的远端是由更新版本的 Coffer 写的，在本机升级之前会被拒绝。数字更旧的远端，比如由保险库布局出现之前的 Coffer 写的，会被拒绝，而且从不原地转换：在其他机器仍在推送旧布局时，从一台机器上转换共享的远端，正是丢数据的方式。取而代之的是重建。让第一台升级的机器指向一个空分支或空仓库，并把它的保险库发布到那里；其他机器升级后，再作为新机器加入它。见[升级已有的 Coffer](/zh/guides/upgrading)。
+保险库的 `manifest.json` 只携带一个数字 `schema_version`，当前是 `3`。数字相同的远端会与之收敛。数字更新的远端是由更新版本的 Coffer 写的，在本机升级之前会被拒绝。数字更旧的远端，比如由保险库布局出现之前的 Coffer 写的，从不原地转换：升级后的保险库才是事实来源，所以由它替换远端。推送是一次快进：一个提交，其树恰好是这台机器的内容，父提交是这台机器的提交和旧的远端顶端，因此旧历史仍可在 git 中找到。只有旧远端有的文件会被有意移除（删除断路器不适用，明文检查仍然适用）。替换前会先给人预览，这一轮记为 `join: "replace"`。其他机器升级后，再作为新机器加入被替换的远端。见[升级已有的 Coffer](/zh/guides/upgrading)。
 
 ## 与整理共用一把锁 {#sharing-the-lock-with-curation}
 

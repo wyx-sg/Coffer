@@ -1683,6 +1683,7 @@
     "ATTACHMENT_UNAVAILABLE": "这个附件已不可用。",
     "QUESTION_ANSWER_INVALID": "这个回答与问题不符。请从选项中选择，或输入你自己的回答。",
     "MESSAGE_NOT_FOUND": "该消息已不在此对话中。",
+    "REPLY_FILE_NOT_FOUND": "这个文件不在该回复记录的改动里。",
     "SECRET_BINDING_PENDING": "该密钥需在 Coffer 应用中批准后才会发送到这里。",
     "PRESENCE_GRANT_INVALID": "无法验证这次批准，请在 Coffer 应用中重试。",
     "APPROVAL_NOT_FOUND": "该审批已不存在。",
@@ -3546,6 +3547,14 @@
     },
     "files": {
       "title": "改动的文件"
+    },
+    "diff": {
+      "position": "第 {{n}} 个，共 {{total}} 个",
+      "previous": "上一个文件",
+      "next": "下一个文件",
+      "binary": "此文件是二进制文件",
+      "tooLarge": "此文件太大，无法显示（超过 1 MB）",
+      "empty": "此文件没有可显示的内容"
     },
     "question": {
       "needsYou": "等你处理",

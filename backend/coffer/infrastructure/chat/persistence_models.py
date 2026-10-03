@@ -1,4 +1,5 @@
-"""The two tables chat is stored in: ``conversations`` and ``chat_messages``.
+"""The tables chat is stored in: ``conversations``, ``chat_messages`` and
+``chat_reply_files``.
 
 Beside the repos rather than inside them, because a table's shape is read far
 more often than the queries over it — a migration, a retention policy and a
@@ -13,6 +14,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     TIMESTAMP,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -82,6 +84,29 @@ class MessageModel(Base):
         UniqueConstraint("conversation_id", "seq", name="uq_chat_messages_conv_seq"),
         Index("idx_chat_messages_conv", "conversation_id", "seq"),
     )
+
+
+class ReplyFileModel(Base):
+    """Row in the ``chat_reply_files`` table: one file one assistant reply changed.
+
+    Deleted with the reply (``ON DELETE CASCADE``), so a conversation's delete and
+    retention's prune, which both delete message rows, take these with them."""
+
+    __tablename__ = "chat_reply_files"
+
+    message_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chat_messages.id", ondelete="CASCADE"), primary_key=True
+    )
+    path: Mapped[str] = mapped_column(String, primary_key=True)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    added: Mapped[int] = mapped_column(Integer, nullable=False)
+    removed: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The unified diff; NULL when it is left out (see ``diff_omitted``).
+    diff: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "binary" | "too_large" when the diff is left out; NULL otherwise.
+    diff_omitted: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (Index("idx_chat_reply_files_message", "message_id", "seq"),)
 
 
 # ---------------------------------------------------------------------------

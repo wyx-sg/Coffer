@@ -66,6 +66,12 @@ export type ConversationPatch = Schemas["ConversationPatch"];
  */
 export type AgentConfigOut = Schemas["AgentConfigOut"];
 
+/** One file a reply changed, and whether a diff can be opened for it. */
+export type ReplyFile = Schemas["ReplyFileOut"];
+
+/** One changed file's unified diff, or why it is left out. */
+export type ReplyFileDiff = Schemas["ReplyFileDiffOut"];
+
 /** A question the agent asked the owner: the `question` block of a reply
  *  (spec chat "Pause a turn on a question for the owner"). */
 export type Question = Schemas["QuestionOut"];
@@ -123,6 +129,21 @@ export const chatApi = {
 
   updateConversation: (id: string, body: ConversationPatch) =>
     unwrap(getApiClient().PATCH("/chat/conversations/{id}", { ...conv(id), body })),
+
+  // What an assistant reply changed (spec chat "Record what each reply changed in each file").
+  listReplyFiles: (id: string, messageId: string): Promise<ReplyFile[]> =>
+    unwrap(
+      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/changes", {
+        params: { path: { id, message_id: messageId } },
+      }),
+    ).then((out) => out.files),
+
+  getReplyFileDiff: (id: string, messageId: string, path: string): Promise<ReplyFileDiff> =>
+    unwrap(
+      getApiClient().GET("/chat/conversations/{id}/messages/{message_id}/changes/diff", {
+        params: { path: { id, message_id: messageId }, query: { path } },
+      }),
+    ),
 
   // Per-conversation managed-agent model (agent_config.model), mirrors `/model`.
   getAgentConfig: (id: string): Promise<AgentConfigOut> =>
