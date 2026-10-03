@@ -1,9 +1,11 @@
 // frontend/src/components/channel/ChannelPlatformCards.tsx
-// The platforms a channel can connect, as cards: what each is for, what it
-// can do in a chat, and what connecting it takes. Shared by the first-run
-// page and step 1 of Add channel, so both offer the same choice in the same
-// words. A card is a button; choosing one opens (or advances) the add flow.
+// The platforms a channel can connect: each one's logo and name, what
+// connecting it takes, what it is for and what it can do in a chat. Shared by
+// the first-run page (a bordered list whose rows lead on, with a chevron) and
+// step 1 of Add channel (radio rows, one chosen), so both offer the same choice
+// in the same words. Every row is a button.
 import { useTranslation } from "react-i18next";
+import { ChevronRight } from "lucide-react";
 
 import type { ChannelType } from "@/lib/api/channels";
 import { cn } from "@/lib/utils";
@@ -12,47 +14,95 @@ import { PlatformMark, platformLabel } from "./PlatformMark";
 
 interface Props {
   platforms?: readonly ChannelType[];
-  /** The chosen card, highlighted (step 1 of the add dialog). */
+  /** `radio`: stacked cards with a radio dot (the add dialog's step 1).
+   *  `list`: one bordered container, rows ending in a chevron (first run). */
+  variant: "radio" | "list";
+  /** The chosen row, outlined (radio only). */
   selected?: ChannelType | null;
   onChoose: (platform: ChannelType) => void;
 }
 
-export function ChannelPlatformCards({ platforms = PLATFORMS, selected = null, onChoose }: Props) {
+function Tags({ platform }: { platform: ChannelType }) {
   const { t } = useTranslation();
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <span className="flex flex-wrap gap-1">
+      {(CAPABILITIES[platform] ?? []).map((c) => (
+        <span
+          key={c}
+          className="inline-flex h-5 items-center rounded-[5px] bg-chip px-[7px] text-2xs text-text-muted"
+        >
+          {t(`channels.platforms.capabilities.${c}`)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function ChannelPlatformCards({
+  platforms = PLATFORMS,
+  variant,
+  selected = null,
+  onChoose,
+}: Props) {
+  const { t } = useTranslation();
+  const list = variant === "list";
+  return (
+    <div
+      className={cn(
+        "flex flex-col",
+        list
+          ? "divide-y divide-border-subtle overflow-hidden rounded-xl border border-border"
+          : "gap-2.5",
+      )}
+    >
       {platforms.map((p) => (
         <button
           key={p}
           type="button"
-          aria-pressed={selected === p}
+          aria-pressed={list ? undefined : selected === p}
           onClick={() => onChoose(p)}
           className={cn(
-            "flex flex-col gap-2.5 rounded-xl border bg-surface-raised p-3.5 text-left transition-colors duration-fast hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            selected === p ? "border-accent" : "border-border-subtle",
+            "flex gap-3 text-left transition-colors duration-fast hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            list
+              ? "items-center px-4 py-3.5"
+              : cn(
+                  "items-start rounded-xl border p-3.5",
+                  selected === p
+                    ? "border-accent bg-accent-soft"
+                    : "border-border bg-surface-raised",
+                ),
           )}
         >
-          <span className="flex items-center gap-2.5">
-            <PlatformMark platform={p} size="md" />
-            <span className="text-sm font-semibold text-text">{platformLabel(p)}</span>
+          {list ? null : (
+            <span
+              aria-hidden
+              className={cn(
+                "mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full border",
+                selected === p ? "border-[5px] border-accent" : "border-text-subtle",
+              )}
+            />
+          )}
+          <PlatformMark platform={p} size="lg" />
+          <span className="flex min-w-0 grow flex-col gap-1.5">
+            <span className="flex items-baseline gap-2">
+              <span className="text-sm font-semibold text-text">{platformLabel(p)}</span>
+              {list ? null : (
+                <span className="ml-auto text-xs text-text-subtle">
+                  {t(`channels.platforms.${p}.needs`)}
+                </span>
+              )}
+            </span>
+            <span className="text-xs text-text-muted">{t(`channels.platforms.${p}.body`)}</span>
+            <Tags platform={p} />
           </span>
-          <span className="text-xs leading-normal text-text-muted">
-            {t(`channels.platforms.${p}.body`)}
-          </span>
-          <span className="flex flex-wrap gap-1">
-            {(CAPABILITIES[p] ?? []).map((c) => (
-              <span
-                key={c}
-                className="rounded-sm bg-chip px-1.5 py-0.5 text-2xs font-label text-text-muted"
-              >
-                {t(`channels.platforms.capabilities.${c}`)}
+          {list ? (
+            <>
+              <span className="whitespace-nowrap text-xs text-text-subtle">
+                {t(`channels.platforms.${p}.needs`)}
               </span>
-            ))}
-          </span>
-          <span className="text-xs text-text-muted">
-            {t("channels.platforms.toConnect")}{" "}
-            <span className="font-label text-text">{t(`channels.platforms.${p}.needs`)}</span>
-          </span>
+              <ChevronRight className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
+            </>
+          ) : null}
         </button>
       ))}
     </div>

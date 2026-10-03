@@ -25,18 +25,16 @@ There is no `coffer chat` command group. Conversations are reachable from the Co
 
 You do **not** need a [model provider](/guides/providers). A provider is an optional override; without one the agent runs on its own login.
 
-If no managed agent is available, the page shows **No managed agent available** instead of a composer. While no supported agent is installed on this machine it offers **Copy prompt**: the daemon's prompt that has any assistant install Claude Code or Codex (copy only, since Coffer has no agent to ask yet). Once one is installed but not added, it links to the **Agents** page, where you add it.
+If no managed agent is available, a new conversation shows **No agent connected** instead of a composer, with an **Open Agents** link to the **Agents** page, where you connect Claude Code or Codex first.
 
 ## Start a conversation
 
 1. Open **Conversations** in the sidebar (under **Run**). The page opens on the list of conversations; there is no welcome or suggestions page.
-2. Choose **New conversation** beside the page title. A dialog asks for two things:
-   - **Agent** — only agents that are installed and added (and enabled) on the Agents page are offered. One that is not installed, or installed but not added, does not appear; with none, the draft links to the **Agents** page.
-   - **Working directory** — the folder the agent works in (see [Working directory](#working-directory)).
-3. Choose **Start**. The draft opens at `/conversations/new`, with the agent, its model and effort and the folder in its header.
+2. Choose **New conversation** beside the page title. The draft opens at `/conversations/new`: **New conversation** in the title bar and one line in the middle saying which agent will run in which folder.
+3. Pick what you need in the reply box's toolbar: the folder beside the paperclip (see [Working directory](#working-directory)), and on the right the **agent** (only agents that are installed and added and enabled on the Agents page are offered), the model and the reasoning effort.
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
 
-A conversation can also start from **Ask an agent** elsewhere in the app — on a command the [CLIs](/guides/clis) page says is missing, for example. The same dialog opens, and the draft's message box already holds the prompt Coffer wrote for that job. Read it, edit it if you like, and press **Enter**; nothing is sent until you do.
+A conversation can also start from **Ask an agent** elsewhere in the app — on a command the [CLIs](/guides/clis) page says is missing, for example. The same draft opens, and its message box already holds the prompt Coffer wrote for that job, with a line under the box saying **Nothing is sent until you press Send**. Read it, edit it if you like, and press **Enter**.
 
 The first send creates the conversation. Opening the draft and leaving creates nothing. The conversation is titled after the first thing you wrote; rename it at any time and Coffer does not overwrite your name.
 
@@ -44,7 +42,7 @@ The open conversation is part of the URL, `/conversations/<id>`, so a refresh, a
 
 ### Working directory
 
-A conversation's working directory is chosen in the **New conversation** dialog: pick a folder with **Browse**, or type or paste its absolute path. The dialog opens on the folder you used last. Leave the field empty and the turn runs in the Coffer-managed workspace, `~/.coffer/content/workspace`, which is created on first use. The draft's header shows the folder the conversation will use.
+A conversation's working directory is chosen on the draft, in the folder control beside the paperclip: a recent folder, **Choose a folder…**, or a typed absolute path. It opens on the folder you used last. Leave it on **Coffer’s workspace** and the turn runs in the Coffer-managed workspace, `~/.coffer/content/workspace`, which is created on first use. Once the conversation exists the folder stays in the same place as a read-only path.
 
 A conversation's agent and working directory are fixed when it is created, because the agent's session belongs to that one directory. To work somewhere else, start a new conversation.
 
@@ -54,7 +52,7 @@ The agent runs with full permissions, so it can read and write outside its worki
 
 ## Choose the model and reasoning effort
 
-Two controls sit beside the agent in the header, both on the draft and in an open conversation. The dialog does not ask for them: a new conversation starts from the agent's own settings (its **Model** tab), and you switch them here.
+Two controls sit beside the agent on the right of the reply box's toolbar, both on the draft and in an open conversation (the effort reads like **High effort**). A new conversation starts from the agent's own settings (its **Model** tab), and you switch them here.
 
 | Control | Label | What it offers |
 | --- | --- | --- |
@@ -67,19 +65,32 @@ The model list is the agent's own catalogue, read from the installed CLI. If the
 - A change applies from the next turn. Model and effort are re-read every turn; the agent and working directory are not.
 - Every turn carries a short note telling the agent which model Coffer put it on, so asking the agent "which model are you?" gives the right answer.
 
-Once a conversation exists, its agent is shown by its mark and name and cannot be changed. To talk to a different agent, start a new conversation.
+Once a conversation exists, its agent is shown by its mark and name, as plain text, and cannot be changed. To talk to a different agent, start a new conversation.
 
 ## Watch a turn
 
-A reply streams into the thread as the agent writes it, under the agent's mark, name and the time. While it streams:
+A reply streams into the thread as the agent writes it, under the agent's mark, name, the time and its state: **10:14 · 42s** once finished, **Working · 1m 12s** (counting up) while it runs, **Stopped after 12s** or **Failed after 38s** when it did not finish. The conversation and the reply box use the full width of the page. While it streams:
 
 - Assistant text renders as GitHub-flavoured Markdown. Single newlines are kept as line breaks, tables render as tables, and every fenced code block has its own **Copy** control.
-- Each tool call is a card between the text around it, in the order the agent made it. The card names the tool and what it was called on — the file, the pattern, the command — and reads **Running** until its result arrives, then **Done** or **Error**. Open it to see **Input** and **Result**.
-- When the reply is complete, **Files changed** lists every file its tool calls wrote, with the lines each added and removed.
-- A finished assistant message shows its token usage (for example `18.2k in · 1.4k out`) and records the model that produced it.
+- Each tool call is a card between the text around it, in the order the agent made it. The card names the tool and what it was called on — the file, the pattern, the command — and reads **Running** until its result arrives, then **Done · 0.3s** (with how long the call took) or **Error**. Open it to see **Input** and **Result**.
+- When the reply is complete, **Files changed** lists every file its tool calls wrote, with the lines each added and removed, at the end of the reply after its text.
+- A finished assistant message ends with a **Copy reply** button (it copies what the agent wrote, without the tool calls) and its token usage (for example `18.2k in · 1.4k out`), and records the model that produced it.
 - If you scroll up, **Jump to latest** takes you back to the live end.
 
-The turn runs as a detached task in the daemon. Closing the tab, losing Wi-Fi or refreshing does not stop it: the reply finishes and is saved, and when you come back the page subscribes again and replays the turn in progress from its start. If the live stream drops mid-turn, the page reconnects on its own; after five failed attempts it says **Lost the live stream from the daemon** with **Reload conversation**, which shows everything the turn has written so far.
+The turn runs as a detached task in the daemon. Closing the tab, losing Wi-Fi or refreshing does not stop it: the reply finishes and is saved, and when you come back the page subscribes again and replays the turn in progress from its start. If the live stream drops mid-turn, the page reconnects on its own; after five failed attempts a warning inside the reply says **Lost the live stream from the daemon** with **Reload conversation**, which shows everything the turn has written so far. A tool call that had not returned reads **Unknown**, because the page cannot tell whether it finished.
+
+## Answer a question from the agent {#answer-a-question}
+
+When an agent needs a decision it asks through `coffer__ask` (or Claude Code's own `AskUserQuestion`), and its turn pauses until you answer. The reply's header reads **Waiting for you**, the conversation's row in the list shows **Needs you**, and the sidebar's **Conversations** entry carries a red count of the conversations waiting on you.
+
+A **Needs you** card sits at the end of the reply, above the reply box. It shows the agent's context (Markdown — a summary, a diff, a path), the question, and up to four options as equal buttons, each with its description under the label, and the line "Claude Code is waiting for your answer." In a channel conversation it adds that the question was also asked in that chat.
+
+- **Single choice**: tap an option; that is the answer.
+- **Several choices**: the options toggle (a check marks the ones picked), then press **Submit**.
+- **Your own words**: type in the reply box, whose placeholder reads **Reply, or answer with the buttons above**, and press Send. While a question waits, text sent there answers it instead of joining the queue; no message is added to the conversation. Files cannot be sent along with an answer.
+- **Several questions in one ask** appear one at a time, marked **Question 2 of 3**.
+
+Whoever answers first wins, here or in the channel's chat. Once answered the card shrinks to one line: **✓ Restart the channel now? · Answered: Yes · 10:16**, with **· in SeaTalk** when the answer came from the chat. If you stop the turn, or it ends without an answer, the line reads **Not answered**. An answer to a question that already closed is refused, and the page just shows the closed line.
 
 ## Send while a turn runs
 
@@ -100,14 +111,14 @@ The pending queue lives in the daemon's memory. Restarting the daemon drops mess
 
 While a turn runs, **Send** becomes **Stop**. Stopping:
 
-- ends the turn and keeps whatever text it had already produced, saved as a complete message;
+- ends the turn and keeps whatever text it had already produced, saved as a stopped reply that ends with **Stopped by you.** — and, when an edit or a command was still running, a note that it was not finished and that sending a message continues;
 - **pauses** the pending queue, so the next queued message does not fire straight into the turn you just stopped.
 
 The next message you send — from the page or from a channel — resumes the paused queue. **Stop** works on any turn in the conversation, including one started from your phone. It is the same action as `/stop` in a channel.
 
 ## When a turn fails
 
-A failed turn replaces the in-progress bubble with one error banner above the composer, carrying **Retry** (resend the message that failed, with its attachments) and **Dismiss**. Whatever the agent had written before the failure stays in the thread, marked **This response did not complete.**
+A failed turn replaces the in-progress bubble with one error banner inside the reply that failed, lined up with its text: **The turn failed:** and the reason, carrying **Retry** (resend the message that failed, with its attachments) and **Dismiss**. Whatever the agent had written before the failure stays in the thread above it, and the reply's header reads **Failed after 38s**.
 
 A message the daemon refuses before it runs, for example because an attached file is no longer available, is not a failed turn: the banner gives the reason without **Retry**, and the message stays in the composer with its text and files so you can fix it and send again. This holds for the first message of a new conversation too.
 
@@ -127,13 +138,13 @@ If Claude Code is not logged in, the banner says so and tells you to run `claude
 
 A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Conversations page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
 
-- Before you send, a line above the reply box says where the reply will also go, for example **Also sends to SeaTalk · 🧵#1 deploy check**, or **Replies stay in Coffer** with a **?** that says why.
+- The title bar shows where the conversation came from, for example **SeaTalk · coffer-dev › thread**; a reply typed here also goes there. When a reply cannot go back to the chat it says **Replies stay in Coffer** with a **?** that says why.
 - The reply is posted in that chat or thread as `(from Coffer) …`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
 - A reply goes only to the chat and thread the conversation belongs to, never anywhere else.
 
 A conversation that lives in a **group's main chat** is never mirrored: the composer says the reply stays in Coffer. A main chat is where the whole room reads, and a reply you typed at your desk, with an answer the room did not ask for, is not something to drop in front of everyone. A direct chat, its parallel threads and a group thread are yours to continue, so they are mirrored.
 
-When the channel cannot send right now — it is not running on this machine, or the platform refused — the reply is not lost. It is marked **Not delivered to *platform* yet** (for example **Not delivered to SeaTalk yet**), the agent still answers on the page, and the reply and the answer are sent to the chat, in order, once the channel runs again. The mark disappears when they arrive.
+When the channel cannot send right now — it is not running on this machine, or the platform refused — the reply is not lost. It is marked **Not delivered to *platform* yet · will retry** (for example **Not delivered to SeaTalk yet · will retry**) under the message, the agent still answers on the page, and the reply and the answer are sent to the chat, in order, once the channel runs again. The mark disappears when they arrive.
 
 Only sending mirrors. **Retry** after a failed turn runs it again on the page but does not post the message to the chat a second time.
 
@@ -157,7 +168,7 @@ Video, archives and other binary files are refused, because neither agent can us
 
 An image's type is read from its bytes, not from its name or what the browser reported: a JPEG saved as `photo.png` is stored and shown as `image/jpeg`. A file that claims to be an image but is not PNG, JPEG, GIF or WEBP, such as a HEIC photo or an SVG, is kept as a plain file (`application/octet-stream`).
 
-Attachments also reach a conversation through a [channel](/guides/channels): a photo, file or voice message you send to the bot. Both kinds show in the thread as chips naming the file and its type, and read the same after a reload.
+Attachments also reach a conversation through a [channel](/guides/channels): a photo, file or voice message you send to the bot. Both kinds show in the thread as chips naming the file and its type (and its size, for a file you attached on the page), and read the same after a reload. An image you attached on the page shows as a thumbnail instead of a chip, for as long as the file is kept; once it is pruned, or for a file a channel received, the chip is shown.
 
 How the agent receives an attachment depends on its kind, whichever way it arrived:
 
@@ -171,27 +182,30 @@ Retrying a failed turn resends the message with its attachments. If a file it ca
 
 ## Manage conversations
 
-`/conversations` lists every conversation, whatever opened it, newest activity first, under **Today**, **Yesterday** and earlier dates. A conversation moves to the top when a turn starts in it, not only when one ends. Each row shows:
+`/conversations` lists every conversation, whatever opened it, newest activity first, as one list with no header row, grouped under **Today**, **Yesterday** and **Earlier**. A conversation moves to the top when a turn starts in it, not only when one ends. The list reads 30 conversations and loads more as you scroll. Each row shows:
 
-- the title, with **Running** while a turn is in progress, and the latest message's first line under it;
-- **Source** — **Coffer** for a conversation started on this page, or the platform and the place in its chat for one a [channel](/guides/channels) opened: `SeaTalk · DM`, `SeaTalk · DM · 🧵#2` for a parallel thread, `SeaTalk · Group › thread`, `Telegram · Group › topic`. Hover the badge for the channel's name;
-- **Agent** and **Last activity**.
+- the title, then a status word — **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer — and the latest message's first line under it;
+- on the right, its **source** — the Coffer mark and **Coffer** for a conversation started on this page, or the platform's logo and the place in its chat for one a [channel](/guides/channels) opened: `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread`, `Telegram · Group › topic` — then the agent and the time of the last activity (the clock for today and yesterday, a date such as `Sep 22` for earlier).
 
-The filters above the list are part of the URL, so a filtered list is a link:
+Above the list, from left to right: an **Active / Archived** switch, a search box over titles and message text (press `/` to jump to it), a **Source** pill, an **Agent** pill, and **Clear filters** once anything narrows the list. Source lists **Coffer** and each of your channels (`SeaTalk · Team bot`) and takes several at once; Agent does the same. The list shows no count. The filters are part of the URL, so a filtered list is a link:
 
-- **All sources / Coffer / SeaTalk / Telegram** — `?source=seatalk`.
-- **All agents** or one agent — `?agent=codex`.
-- One channel — `?channel=<uid>`. A channel's **Conversations from *name*** link on the Channels page opens this; the list keeps the source switch and shows a **Channel: *name*** chip beside the agent filter, whose **×** clears it. When no conversation matches the filters, **Clear filters** resets them.
-- **Archived** — the archived conversations instead of the active ones.
+- Search — `?q=sentry`.
+- Sources — `?source=coffer,<channel uid>`. A channel's **Conversations from *name*** link on the Channels page opens `?source=<uid>`, with that channel ticked in the Source pill.
+- Agents — `?agent=codex`.
+- **Archived** — `?archived=1`.
 
-Opening a conversation puts the list beside it, with the same filters and a **Search conversations** box that filters the loaded list by title. The divider between them can be dragged. The conversation's header carries a **⋯** menu:
+Hover a row for a checkbox on its left and a **⋯** menu on its right. **Rename** opens the conversation with its title ready to edit; **Archive** (**Unarchive** in the archived view) acts at once and a toast offers **Undo**; **Delete…** asks first. Tick rows (shift-click ticks a range) and the filter row gives way to a bar — `3 of 8 selected`, **Archive**, **Delete…**, **Clear**. A bulk delete lists the titles it will remove, five at a time with **Show all**.
+
+When there is no conversation yet, the page is its header and one message. When filters match nothing, **No conversations match** offers **Clear filters**; if the list cannot be read it says so, with **Retry**.
+
+Opening a conversation puts the list beside it, with the same filters and a **Search conversations** box that filters the loaded list by title. The divider between them can be dragged. The conversation's title sits in the window title bar (in a browser, a bar at the top of the page) with a **⋯** menu on its right:
 
 | Action | Effect |
 | --- | --- |
-| **Rename** | Sets a title Coffer will not overwrite. |
+| **Rename** | Turns the title into an input in place: **Enter** saves, **Esc** cancels. Coffer will not overwrite the name you set. |
 | **Archive** | Moves it to **Archived** at once, without deleting anything. |
 | **Restore** | Returns an archived conversation to the active list. |
-| **Delete…** | Asks first, then removes Coffer's copy of the conversation and its messages and cancels a turn running in it. The agent's own session files are left alone; archive a conversation to keep it. |
+| **Delete…** | Asks first (**Delete “title”?**), then removes Coffer's copy of the conversation and its messages and cancels a turn running in it. The agent's own session files are left alone; archive a conversation to keep it. |
 
 An archived conversation opens read-only: its history reads normally, the composer and the model and effort controls are disabled, and **Restore to continue** is offered in their place.
 

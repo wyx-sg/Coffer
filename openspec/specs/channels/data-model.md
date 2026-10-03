@@ -248,7 +248,7 @@ re-keys it to `resource_uid`.
 ### `channel_outbox`
 
 Messages Coffer owes a chat and has not delivered: a web reply (`kind=reply`,
-stored with its `(from Coffer) ` prefix) and the agent's answer collected behind
+stored with its `<owner name> · from Coffer` prefix line) and the agent's answer collected behind
 it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
 
 | column            | type                                         | notes                                   |

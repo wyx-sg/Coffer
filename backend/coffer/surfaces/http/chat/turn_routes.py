@@ -143,9 +143,10 @@ async def resend_message(
 @router.get(
     "/conversations/{id}/events",
     response_class=EventSourceResponse,
-    response_description="A Server-Sent Events stream of the seven turn events "
+    response_description="A Server-Sent Events stream of the nine turn events "
     "(`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, "
-    "`queue_changed`) that stays open across turns until the client disconnects.",
+    "`queue_changed`, `question_asked`, `question_closed`) that stays open across "
+    "turns until the client disconnects.",
 )
 async def subscribe_events(
     id: str,

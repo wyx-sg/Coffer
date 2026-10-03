@@ -15,6 +15,7 @@ const msg = (over: Partial<Message>): Message => ({
   prompt_tokens: null,
   completion_tokens: null,
   model_id: null,
+  finished_at: null,
   created_at: "",
   ...over,
 });

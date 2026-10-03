@@ -27,6 +27,9 @@ const syncStatus = vi.fn((): { data: unknown; isError: boolean } => ({
 }));
 vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: () => syncStatus() }));
 
+const needsYou = vi.fn((): { data: { count: number } | undefined } => ({ data: undefined }));
+vi.mock("@/lib/hooks/useNeedsYouCount", () => ({ useNeedsYouCount: () => needsYou() }));
+
 vi.mock("@/lib/api/clis", () => ({ clisApi: { list: vi.fn() } }));
 const { clisApi } = await import("@/lib/api/clis");
 
@@ -67,6 +70,8 @@ afterEach(() => {
   attention.mockReturnValue({ data: undefined });
   syncStatus.mockReset();
   syncStatus.mockReturnValue({ data: undefined, isError: false });
+  needsYou.mockReset();
+  needsYou.mockReturnValue({ data: undefined });
   localStorage.clear();
 });
 
@@ -241,4 +246,18 @@ acceptance("web-ui", "the badge count caps at 9+", async () => {
   const badge = await screen.findByTestId("nav-dot-mcp-servers");
   expect(badge).toHaveTextContent("9+");
   expect(badge).toHaveClass("bg-danger-strong");
+});
+
+test("the Conversations entry counts the conversations waiting on a question", async () => {
+  needsYou.mockReturnValue({ data: { count: 1 } });
+  renderNav("/agents");
+  const dot = await screen.findByTestId("nav-dot-conversations");
+  expect(dot).toHaveTextContent("1");
+  expect(dot).toHaveClass("bg-danger-strong");
+});
+
+test("the Conversations entry has no badge when nothing waits", () => {
+  needsYou.mockReturnValue({ data: { count: 0 } });
+  renderNav("/agents");
+  expect(badges()).toHaveLength(0);
 });

@@ -43,6 +43,14 @@ interface Props {
   placeholder?: string;
   /** Compact controls (agent, model, effort) shown in the footer, left of Send. */
   controls?: ReactNode;
+  /** The working folder of an open conversation, read-only, beside the paperclip (null: Coffer's workspace). */
+  cwd?: string | null;
+  /** A control in the folder's place — the draft's folder picker. */
+  workspace?: ReactNode;
+  /** A question waits: text answers it, so files cannot go with the message. */
+  attachmentsBlocked?: boolean;
+  /** One muted line under the box ("Nothing is sent until you press Send."). */
+  note?: string;
 }
 
 /** Lets the parent load text in — a queued message pulled back to be edited. */
@@ -63,6 +71,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     onRestored,
     placeholder,
     controls,
+    cwd,
+    workspace,
+    note,
+    attachmentsBlocked = false,
   },
   ref,
 ) {
@@ -98,7 +110,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // A message needs words or a finished file, and never leaves while an upload
   // is in flight or a failed one is still attached — nothing is dropped silently.
   const hasContent = value.trim().length > 0 || files.ready.length > 0;
-  const canSend = hasContent && !files.uploading && !files.failed && !disabled && !sending;
+  const canSend =
+    hasContent &&
+    !files.uploading &&
+    !files.failed &&
+    !disabled &&
+    !sending &&
+    !(attachmentsBlocked && files.ready.length > 0);
 
   const handleSend = () => {
     if (!canSend) return;
@@ -150,7 +168,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     // and "Drop to attach" — never a full-pane overlay; the limits are said
     // only by the line under the box when a file is refused.
     <div className="px-8 pb-4 pt-2" {...dropHandlers} data-testid="composer">
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-1.5">
+      <div className="flex w-full flex-col gap-1.5">
         <div
           className={cn(
             "flex flex-col gap-2.5 rounded-xl border bg-surface-raised pb-2.5 pl-3.5 pr-3 pt-3 transition-colors duration-fast",
@@ -202,12 +220,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             onPickFiles={(picked) => files.add(picked)}
             disabled={disabled}
             controls={controls}
+            cwd={cwd}
+            workspace={workspace}
             showStop={showStop}
             onStop={onStop}
             canSend={canSend}
             onSend={handleSend}
           />
         </div>
+        {note ? (
+          <p data-testid="composer-note" className="px-1 text-xs text-text-muted">
+            {note}
+          </p>
+        ) : null}
         {files.refusal ? (
           <p role="alert" data-testid="composer-refusal" className="px-1 text-xs text-danger">
             {files.refusal}

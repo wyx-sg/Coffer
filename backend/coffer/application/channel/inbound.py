@@ -19,9 +19,9 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.bot_label import bot_handle
 from coffer.application.channel.commands import ChannelCommands
 from coffer.application.channel.ephemeral import safe_send
 from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, window_for
@@ -35,6 +35,7 @@ from coffer.application.channel.ports import (
     ChannelBinding,
     ModelSuggestionPort,
 )
+from coffer.application.channel.question_flow import QuestionPort, answer_message
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
@@ -82,6 +83,7 @@ class InboundProcessor:
         collections: CollectionCatalogPort,
         ingest: IngestPort,
         knowledge_enabled: Callable[[], bool] = lambda: True,
+        questions: QuestionPort | None = None,
     ) -> None:
         self._peers = peers
         self._threads = threads
@@ -89,6 +91,7 @@ class InboundProcessor:
         self._conversations = conversations
         self._turns = turns
         self._audit = audit
+        self._questions = questions
         self._bindings: dict[str, ChannelBinding] = {}
         # Keyed by (channel, chat_id, conversation thread): one peer's DM, one
         # group's main chat, each of that group's threads and each parallel
@@ -128,7 +131,7 @@ class InboundProcessor:
             stop_chat_sessions=self._stop_chat_sessions,
             session=self._session,
             burst=self._burst,
-            submit_reply=self._submit_reply,
+            questions=questions,
         )
 
     # -- runtime registry ------------------------------------------------
@@ -238,6 +241,18 @@ class InboundProcessor:
             conversation_thread_id=conv_thread,
         ):
             return
+        # A question is waiting on the owner in this chat: the words are the
+        # answer, not a message (see "Ask the owner in the chat and take the
+        # answer back to the agent").
+        if (
+            text
+            and not attachments
+            and self._questions is not None
+            and await answer_message(
+                self._questions, self._threads, binding, peer, msg, text, conv_thread
+            )
+        ):
+            return
         # The thread it landed in and the message it quotes ground the turn
         # (see "Ground a turn in the message it quotes").
         text, attachments = await fold_turn_context(binding, msg, text, attachments)
@@ -292,31 +307,6 @@ class InboundProcessor:
         )
         await self._events.on_callback(binding, cb, conversation_thread_id=conv_thread)
 
-    async def _submit_reply(
-        self, binding: ChannelBinding, cb: InboundCallback, answer: str
-    ) -> None:
-        """A tapped answer, sent as if the owner had typed it where the card is
-        (see "Turn a question for the owner into buttons"): through
-        ``on_message``, so the owner gate, the burst window and the turn queue
-        treat it exactly like a typed reply."""
-        del binding  # ``on_message`` finds the binding by the callback's channel
-        await self.on_message(
-            InboundMessage(
-                channel=cb.channel,
-                chat_id=cb.chat_id,
-                sender_display=cb.sender_display,
-                text=answer,
-                platform_message_id="",
-                timestamp=datetime.now(tz=UTC),
-                sender_id=cb.sender_id,
-                sender_mention_id=cb.sender_mention_id,
-                sender_mention_email=cb.sender_mention_email,
-                chat_kind=cb.chat_kind,
-                addressed=True,
-                thread_id=cb.thread_id,
-            )
-        )
-
     async def on_lifecycle(self, event: InboundLifecycle) -> None:
         """The bot's standing in a chat changed — removed from a group, or the
         group turned external (handled in ``inbound_events``, never a turn)."""
@@ -361,14 +351,18 @@ class InboundProcessor:
         )
         if peer is None:
             return
+        hint = (
+            "tap / for the commands"
+            if binding.channel_type == "telegram"
+            else "send /help for the commands"
+        )
         await safe_send(
             binding,
             msg.chat_id,
-            f"✅ Paired. This chat now controls Coffer channel '{binding.resource.name}'.",
+            f"✅ Paired — you own {bot_handle(binding)}.\n"
+            "Only you can use it. To use it in a group, add it there and @mention it.\n"
+            f"Try a question, or {hint}.",
         )
-        # Then the commands, once, as a card where the transport has buttons
-        # (spec channels "Offer the commands as a help card").
-        await self._commands.send_help(binding, peer, safe_send)
 
     # -- helpers ---------------------------------------------------------------
 

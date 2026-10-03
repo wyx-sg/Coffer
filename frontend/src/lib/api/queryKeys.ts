@@ -38,8 +38,6 @@ export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
-/** The install hand-off the types read carries while no agent is installed. */
-export const agentInstallHandoffKey = ["agents", "types", "install-handoff"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
@@ -230,6 +228,9 @@ export const conversationHeadKey = (archived: boolean, q: string) =>
 /** What the command palette lists: a small read, by the text typed. */
 export const paletteConversationsKey = (q: string) =>
   ["conversations", "lists", "palette", { q }] as const;
+/** How many conversations wait on an answer — under `conversationsKey`, so a
+ *  list refresh re-reads it too. */
+export const needsYouCountKey = ["conversations", "needs-you-count"] as const;
 export const conversationKey = (id: string) => ["conversations", id] as const;
 /** A conversation's managed-agent config (model, effort). A CHILD of the
  *  conversation, so removing `conversationKey(id)` drops it too. */

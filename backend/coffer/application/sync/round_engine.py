@@ -111,8 +111,7 @@ class RoundEngine:
             return rec(refused[0], detail=refused[1])
         if is_older(d, tip):
             # This vault is the source of truth: it replaces a remote at an
-            # older layout, joined or not (spec vault-sync "Replace a remote
-            # at an older layout").
+            # older layout, joined or not (spec vault-sync "Refuse a remote at another layout").
             return replace(self, rec, remote, token, local, tip)
         base = d.git.merge_base(local, tip)
         if base is None:

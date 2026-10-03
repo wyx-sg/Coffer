@@ -36,6 +36,7 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.app_mcp_composition import build_retention_service
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.chat.attachment_bytes_routes import router as attachment_bytes_router
 from coffer.surfaces.http.chat.attachment_routes import MULTIPART_OVERHEAD_BYTES
 from coffer.surfaces.http.chat.attachment_routes import router as attachment_router
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
@@ -87,6 +88,7 @@ class _Env:
         app = FastAPI()
         err_handlers.register(app)
         app.include_router(attachment_router)
+        app.include_router(attachment_bytes_router)
         app.include_router(conversation_router)
         app.include_router(turn_router)
         app.dependency_overrides[get_chat_service] = lambda: chat_svc
@@ -282,7 +284,11 @@ def test_the_adapter_receives_the_upload_rematerialised_from_history(env: _Env) 
     assert env.adapter.recorded_attachments == [
         [
             Attachment(
-                path=str(env.media / f"{png['id']}.png"), mime="image/png", filename="shot.png"
+                path=str(env.media / f"{png['id']}.png"),
+                mime="image/png",
+                filename="shot.png",
+                id=png["id"],
+                size=40,
             )
         ]
     ]
@@ -366,6 +372,66 @@ def test_a_pruned_upload_no_longer_resolves(env: _Env) -> None:
         )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "ATTACHMENT_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# Thumbnails in the thread
+# ---------------------------------------------------------------------------
+
+
+def _send_with(client: TestClient, conv_id: str, attachment: dict[str, Any]) -> dict[str, Any]:
+    resp = client.post(
+        f"/api/v1/chat/conversations/{conv_id}/messages",
+        json={"text": "look", "attachment_ids": [attachment["id"]]},
+    )
+    assert resp.status_code == 202, resp.text
+    rows = _messages_when_settled(client, conv_id)
+    user = next(r for r in rows if r["role"] == "user")
+    return dict(user["content"][1])
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="an attached image is fetched by its id for the thread's thumbnail"
+)
+def test_the_thread_fetches_an_attached_image_by_its_id(env: _Env) -> None:
+    with _client(env) as client:
+        conv_id = _conversation(client)
+        png = _upload(client, "shot.png", _PNG, "image/png").json()
+        block = _send_with(client, conv_id, png)
+        got = client.get(
+            f"/api/v1/chat/conversations/{conv_id}/attachments/{block['attachment_id']}"
+        )
+
+    assert (block["attachment_id"], block["size"]) == (png["id"], 40)
+    assert got.status_code == 200
+    assert got.content == _PNG
+    assert got.headers["content-type"] == "image/png"
+    assert got.headers["content-disposition"].startswith("inline")
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="another conversation's attachment and a pruned one are not served"
+)
+def test_another_conversations_or_a_pruned_attachment_is_404(env: _Env) -> None:
+    with _client(env) as client:
+        conv_id = _conversation(client)
+        other = _conversation(client)
+        png = _upload(client, "shot.png", _PNG, "image/png").json()
+        _send_with(client, conv_id, png)
+        stranger = client.get(f"/api/v1/chat/conversations/{other}/attachments/{png['id']}")
+        traversal = client.get(f"/api/v1/chat/conversations/{conv_id}/attachments/..%2F..%2Fetc")
+        unknown = client.get(f"/api/v1/chat/conversations/{conv_id}/attachments/{'0' * 32}")
+        (env.media / f"{png['id']}.png").unlink()
+        pruned = client.get(f"/api/v1/chat/conversations/{conv_id}/attachments/{png['id']}")
+    with TestClient(env.app) as anonymous:
+        unauthenticated = anonymous.get(
+            f"/api/v1/chat/conversations/{conv_id}/attachments/{png['id']}"
+        )
+
+    for resp in (stranger, traversal, unknown, pruned):
+        assert resp.status_code == 404
+    assert pruned.json()["error"]["code"] == "ATTACHMENT_UNAVAILABLE"
+    assert unauthenticated.status_code == 401
 
 
 # ---------------------------------------------------------------------------

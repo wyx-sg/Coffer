@@ -121,6 +121,7 @@ NOT_A_CAPABILITY = frozenset(
 #: A comment leader at the start of a continuation line, dropped from a title.
 _CONTINUATION = re.compile(_BREAK)
 
+
 @dataclass(frozen=True)
 class Citation:
     line: int

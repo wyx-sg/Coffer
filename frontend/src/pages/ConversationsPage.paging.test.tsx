@@ -9,6 +9,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { makeConversation } from "@/test/conversationFixtures";
 import { makeBinding } from "@/test/conversationFixtures";
+import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/chat", () => ({ chatApi: { listConversations: vi.fn() } }));
 vi.mock("@/lib/api/agentProviders", () => ({
@@ -112,7 +113,7 @@ describe("ConversationsPage paging", () => {
     }));
     renderPage();
     await screen.findByText("a 0");
-    const box = screen.getByRole("textbox", { name: "Search titles…" });
+    const box = screen.getByRole("textbox", { name: "Search titles and messages" });
     fireEvent.change(box, { target: { value: "dep" } });
     fireEvent.change(box, { target: { value: "deploy" } });
     expect(list).toHaveBeenCalledTimes(1); // nothing asked for per keystroke
@@ -123,15 +124,38 @@ describe("ConversationsPage paging", () => {
     expect(screen.queryByText("a 0")).not.toBeInTheDocument();
   });
 
+  acceptance("chat", "a search that matches nothing is not an empty list", async () => {
+    list.mockImplementation(async (opts: { q?: string }) => ({
+      conversations: opts.q ? [] : rows("a", 1),
+      next_cursor: null,
+    }));
+    renderPage();
+    await screen.findByText("a 0");
+    const box = screen.getByRole("textbox", { name: "Search titles and messages" });
+    fireEvent.change(box, { target: { value: "zzz" } });
+    expect(await screen.findByText("No conversations match")).toBeInTheDocument();
+    expect(screen.queryByText("No conversations yet")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Search titles and messages" })).toHaveValue("zzz");
+  });
+
+  acceptance("chat", "an empty conversation list offers no search", async () => {
+    list.mockResolvedValue({ conversations: [], next_cursor: null });
+    renderPage();
+    expect(await screen.findByText("No conversations yet")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Search titles and messages" }),
+    ).not.toBeInTheDocument();
+  });
+
   test("a filter that empties what is loaded keeps reading while more exist", async () => {
-    const tg = makeBinding({ platform: "telegram" });
+    const tg = makeBinding({ platform: "telegram", channel_uid: "ch-t" });
     list
       .mockResolvedValueOnce({ conversations: rows("a", 30), next_cursor: "c1" })
       .mockResolvedValueOnce({
         conversations: rows("t", 2, { channel_binding: tg }),
         next_cursor: null,
       });
-    renderPage("/conversations?source=telegram");
+    renderPage("/conversations?source=ch-t");
     expect(await screen.findByText("t 1")).toBeInTheDocument();
     expect(screen.queryByText("No conversations match")).not.toBeInTheDocument();
     expect(list).toHaveBeenCalledTimes(2);

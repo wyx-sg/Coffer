@@ -71,9 +71,6 @@ PAGED_KINDS: frozenset[str] = frozenset({"model", "effort", "collection", "resum
 #: The ``effort:`` value of the effort step's "Keep …" button: no change.
 KEEP_EFFORT = "-"
 
-#: A button label longer than this is cut (a resume card's titles).
-_LABEL_MAX = 32
-
 
 def callback_fits(value: str) -> bool:
     return len(value.encode("utf-8")) <= CALLBACK_MAX_BYTES
@@ -124,7 +121,7 @@ class SelectionCard:
 def tick(label: str, selected: bool) -> str:
     """Mark the option currently in effect. The tick is what makes a refreshed
     card readable at a glance: the same list, one mark moved."""
-    return f"{label} ✓" if selected else label
+    return f"✓ {label}" if selected else label
 
 
 def _home_page(options: Sequence[ChoiceButton], current_value: str | None) -> int | None:
@@ -145,14 +142,16 @@ def _home_page(options: Sequence[ChoiceButton], current_value: str | None) -> in
 
 
 def _navigation(kind: str, page: int, pages: int) -> list[ChoiceButton]:
-    """Prev/Next for this page — each omitted at the end it would run off, so
-    the last page is never followed by an empty one."""
-    nav: list[ChoiceButton] = []
-    if page > 0:
-        nav.append(ChoiceButton(label="← Prev", value=f"{PAGE_PREFIX}:{kind}:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(ChoiceButton(label="Next →", value=f"{PAGE_PREFIX}:{kind}:{page + 1}"))
-    return nav
+    """Prev/Next for this page — each shown but inactive at the end it would run
+    off, so the card keeps one shape on every page."""
+    prev = max(page - 1, 0)
+    after = min(page + 1, pages - 1)
+    return [
+        ChoiceButton(label="← Prev", value=f"{PAGE_PREFIX}:{kind}:{prev}", disabled=page == 0),
+        ChoiceButton(
+            label="Next →", value=f"{PAGE_PREFIX}:{kind}:{after}", disabled=page + 1 >= pages
+        ),
+    ]
 
 
 def paginate(
@@ -200,9 +199,10 @@ def model_card(
     current: str | None,
     picks: Sequence[str],
     labels: Mapping[str, str] | None = None,
+    effort: str | None = None,
     page: int | None = None,
 ) -> SelectionCard:
-    """Pick the model the agent's CLI runs next turn.
+    """Pick the model the agent's CLI runs from the next message — step 1 of 2.
 
     ``current`` is ``None`` when no model is pinned, in which case the body says
     the CLI's own default is in effect and no option carries the tick.
@@ -216,7 +216,9 @@ def model_card(
     shows itself. The tap still carries the id.
     """
     names = labels or {}
-    shown = current or "(CLI default)"
+    shown = names.get(current or "") or current or "Default model"
+    if effort:
+        shown = f"{shown} · {effort.capitalize()}"
     options = [
         ChoiceButton(
             label=tick(names.get(name) or name, name == current),
@@ -229,10 +231,10 @@ def model_card(
     return paginate(
         kind="model",
         title="Model",
-        header=f"Current model: {shown}\nTap a choice (or send /model <name>):",
+        header=(f"Current: {shown}\nStep 1 of 2 — tap a model (or send /model <name> <level>):"),
         options=options,
         current_value=f"model:{current}" if current else None,
-        current_label=shown,
+        current_label=names.get(current or "") or current or "Default model",
         page=page,
     )
 
@@ -267,12 +269,11 @@ def effort_card(
         for level in dict.fromkeys(levels)
         if callback_fits(f"effort:{level}")
     ]
-    options.append(ChoiceButton(label=f"Keep {shown}", value=f"effort:{KEEP_EFFORT}"))
-    header = f"Model: {model}\n" if model else ""
+    lead = f"{model} · step 2 of 2" if model else "Step 2 of 2"
     return paginate(
         kind="effort",
         title="Effort",
-        header=f"{header}Current effort: {shown}\nTap a level (or send /model <level>):",
+        header=f"{lead} — tap an effort level:",
         options=options,
         current_value=f"effort:{current}" if current else None,
         current_label=shown,
@@ -355,11 +356,7 @@ def dir_card(
     return paginate(
         kind="dir",
         title="Working directory",
-        header=(
-            f"Current: {path_label(current)}\n"
-            "Only directories allowed for this channel are offered. "
-            "A new directory starts a new conversation."
-        ),
+        header=(f"Current: {path_label(current)}\nA new directory starts a new conversation."),
         options=options,
         current_value=current_value,
         current_label=path_label(current),
@@ -378,10 +375,8 @@ def resume_card(
     "Resume an earlier conversation from chat"). ``entries`` is
     ``(conversation id, title)``, newest first; ``header`` is the listing."""
     options = []
-    for n, (conversation_id, title) in enumerate(entries, start=1):
-        label = f"{n}. {title}"
-        if len(label) > _LABEL_MAX:
-            label = label[: _LABEL_MAX - 1].rstrip() + "…"
+    for n, (conversation_id, _title) in enumerate(entries, start=1):
+        label = str(n)
         value = f"resume:{conversation_id}"
         if callback_fits(value):
             selected = conversation_id == active
@@ -390,7 +385,7 @@ def resume_card(
             )
     return paginate(
         kind="resume",
-        title="Resume",
+        title="Resume a conversation",
         header=header,
         options=options,
         current_value=f"resume:{active}" if active else None,

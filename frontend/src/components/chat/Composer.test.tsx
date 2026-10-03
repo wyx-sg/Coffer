@@ -5,6 +5,40 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Composer, type ComposerHandle } from "./Composer";
 
 describe("Composer", () => {
+  test("an open conversation's working folder is a read-only chip beside the paperclip", () => {
+    render(<Composer onSend={vi.fn()} cwd="/Users/me/WorkEnv/AI/Coffer" />);
+    const chip = screen.getByTestId("composer-folder");
+    expect(chip).toHaveTextContent("~/WorkEnv/AI/Coffer");
+    expect(chip.querySelector("button, input, [role=combobox]")).toBeNull();
+    expect(screen.queryByTestId("composer-folder")).toBeInTheDocument();
+  });
+
+  test("a conversation with no folder names Coffer's workspace; one with no cwd prop shows none", () => {
+    const { unmount } = render(<Composer onSend={vi.fn()} cwd={null} />);
+    expect(screen.getByTestId("composer-folder")).toHaveTextContent("Coffer’s workspace");
+    unmount();
+    render(<Composer onSend={vi.fn()} />);
+    expect(screen.queryByTestId("composer-folder")).not.toBeInTheDocument();
+  });
+
+  test("a picker passed as `workspace` stands in for the folder chip", () => {
+    render(<Composer onSend={vi.fn()} cwd="/x" workspace={<button>Pick folder</button>} />);
+    expect(screen.getByRole("button", { name: "Pick folder" })).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-folder")).not.toBeInTheDocument();
+  });
+
+  test("shows a muted note under the box when given one", () => {
+    render(<Composer onSend={vi.fn()} note="Nothing is sent until you press Send." />);
+    expect(screen.getByTestId("composer-note")).toHaveTextContent(
+      "Nothing is sent until you press Send.",
+    );
+  });
+
+  test("fills the content width — no centred max-width column", () => {
+    render(<Composer onSend={vi.fn()} />);
+    expect(screen.getByTestId("composer").innerHTML).not.toMatch(/max-w-\[/);
+  });
+
   test("shows its controls in the footer beside Send", () => {
     render(<Composer onSend={vi.fn()} controls={<span data-testid="ctl">agent</span>} />);
     expect(screen.getByTestId("composer-controls")).toContainElement(screen.getByTestId("ctl"));

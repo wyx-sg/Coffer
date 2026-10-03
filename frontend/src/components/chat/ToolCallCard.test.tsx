@@ -84,4 +84,29 @@ describe("ToolCallCard", () => {
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByText(errMsg)).toBeInTheDocument();
   });
+
+  test("a done call shows how long it ran", () => {
+    render(
+      <ToolCallCard toolUse={makeToolUse()} toolResult={makeToolResult({ duration_ms: 300 })} />,
+    );
+    expect(screen.getByText("Done · 0.3s")).toBeInTheDocument();
+  });
+
+  test("a running call is muted text with a spinner, not a status colour", () => {
+    const { container } = render(<ToolCallCard toolUse={makeToolUse()} />);
+    expect(screen.getByText("Running")).toHaveClass("text-text-muted");
+    expect(container.querySelector("[data-spinner]")).not.toBeNull();
+  });
+
+  test("a call with no result in a stopped reply reads Stopped, with no spinner", () => {
+    const { container } = render(<ToolCallCard toolUse={makeToolUse()} unfinished="stopped" />);
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
+    expect(container.querySelector("[data-spinner]")).toBeNull();
+  });
+
+  test("a call with no result after a lost stream reads Unknown", () => {
+    render(<ToolCallCard toolUse={makeToolUse()} unfinished="lost" />);
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
+    expect(screen.queryByText("Running")).not.toBeInTheDocument();
+  });
 });

@@ -47,7 +47,10 @@ async def test_a_near_miss_is_corrected_not_sent(env: ChannelEnv) -> None:
     await env.send(inbound("tg", "owner", "/stpo"))
     await env.send(inbound("tg", "owner", "/threads"))
 
-    assert adapter.texts() == ["Did you mean /stop?", "Did you mean /thread?"]
+    assert adapter.texts() == [
+        "Unknown command /stpo. Did you mean /stop? Send /help for all commands.",
+        "Unknown command /threads. Did you mean /thread? Send /help for all commands.",
+    ]
     assert await env.chat.list_conversations() == []
 
 
@@ -67,7 +70,7 @@ async def test_a_command_is_matched_whatever_its_case(env: ChannelEnv) -> None:
 
     await env.send(inbound("tg", "owner", "/Model high"))
 
-    assert adapter.texts() == ["🎚 Effort set to high for the next turn."]
+    assert adapter.texts() == ["Model: Default model · effort High — from your next message"]
 
 
 async def test_a_did_you_mean_in_a_group_is_private(env: ChannelEnv) -> None:
@@ -77,6 +80,8 @@ async def test_a_did_you_mean_in_a_group_is_private(env: ChannelEnv) -> None:
         inbound("tg", "-100g", "/stauts", chat_kind="group", sender_id="4242", ephemeral_id="77")
     )
 
-    assert adapter.texts() == ["Did you mean /status?"]
+    assert adapter.texts() == [
+        "Unknown command /stauts. Did you mean /status? Send /help for all commands."
+    ]
     target = adapter.sent_ephemeral[-1]
     assert target is not None and target.receiver_id == "4242"

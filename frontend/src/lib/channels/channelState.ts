@@ -5,8 +5,8 @@
 // The inputs are the resource (enabled, its configured machine), the live
 // status (`GET /channels/{uid}/status`, which may still be loading or may have
 // failed) and the machine registry. The answer names a state, the list group
-// it belongs to, the tone of its status word and the header's one primary
-// action. Order matters: where the channel runs comes first (a channel another
+// it belongs to, the tone of its status word and the fix its banner
+// offers. Order matters: where the channel runs comes first (a channel another
 // machine runs is quiet here by design, whatever its local adapter says), then
 // whether it is switched on, then the connection, then pairing.
 import type { StatusTone } from "@/lib/statusTone";
@@ -35,9 +35,9 @@ export type ChannelStateKey =
 export const CHANNEL_GROUPS = ["attention", "connected", "elsewhere", "off"] as const;
 type ChannelGroup = (typeof CHANNEL_GROUPS)[number];
 
-/** The header's one primary action for a state. */
+/** The one fix a state offers, drawn inside its banner (or grey box); null when
+ *  there is nothing to fix. The header itself carries no state-dependent button. */
 export type ChannelPrimaryAction =
-  | "sendTest"
   | "reconnect"
   | "takeBack"
   | "retryStart"
@@ -105,7 +105,7 @@ const PRIMARY: Record<ChannelStateKey, ChannelPrimaryAction> = {
   approvalRefused: "openSecrets",
   stopped: "replaceSecret",
   notPaired: null,
-  connected: "sendTest",
+  connected: null,
 };
 
 function configuredMachine(config: Record<string, unknown>): string | null {
@@ -158,7 +158,7 @@ function groupOf(state: ChannelStateKey, status: ChannelStatus | undefined): Cha
   return "attention";
 }
 
-/** Describe one channel: its state, list group, status tone and primary action. */
+/** Describe one channel: its state, list group, status tone and fix action. */
 export function describeChannel(input: ChannelStateInput): ChannelView {
   // The daemon's answer wins once there is one; the config is the fallback.
   const runsOn = input.status ? input.status.runs_on : configuredMachine(input.config);

@@ -18,8 +18,9 @@ integrations against Coffer. For how the gateway works internally, see
 | --- | --- | --- |
 | [`coffer__write`](#coffer-write) | File a durable fact into Coffer's knowledge. | While the `knowledge` feature is on. |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
+| [`coffer__ask`](#coffer-ask) | Ask the owner a question and wait for the answer. | Only inside a turn Coffer runs. |
 
-Those two are the whole list. Coffer's memory notes and its own records have no tool:
+Those three are the whole list. Coffer's memory notes and its own records have no tool:
 they are read with the agent's own file tools and with the `coffer` command line. See
 [Memory and logs without a tool](#memory-and-logs-without-a-tool).
 
@@ -176,6 +177,58 @@ Always present. Background: [MCP gateway](/architecture/mcp-gateway).
   }
 }
 ```
+
+## coffer\_\_ask {#coffer-ask}
+
+Asks the owner a question in the middle of a task and waits. The turn pauses; the
+question shows on the [Conversations](/guides/chat) page (and as a card in the chat, for a
+conversation a [channel](/guides/channels) drives); the call returns when the owner answers
+in either place, when they stop the task, or after 24 hours. It takes the shape of Claude
+Code's own `AskUserQuestion`, which Coffer turns into the same question inside a Coffer
+conversation.
+
+It is **turn-scoped**: Coffer starts every agent process it runs a turn on with a random
+`COFFER_TURN_TOKEN`; the shim sends it as the `X-Coffer-Turn` header, and the gateway lists
+`coffer__ask` only in a session whose header names a turn that is running now. An agent
+started in a terminal never sees it, and a direct call there is answered "coffer__ask works
+only inside a Coffer conversation" (`isError: true`). The tool is not named in the
+handshake instructions or on the built-in server's page for that reason. The `coffer` entry
+Coffer writes into Codex's `config.toml` passes the variable through (`env_vars`) and
+allows a tool call to run for a day (`tool_timeout_sec = 86400`).
+
+### Input
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| `context` | string | no | Markdown shown above the questions: a summary, a diff, a path. |
+| `questions` | array | yes | One to four questions. |
+
+Each question:
+
+| Property | Type | Required | Description |
+| --- | --- | --- | --- |
+| `header` | string | yes | A short label. |
+| `question` | string | yes | The question. |
+| `options` | array | yes | Two to four options, each `{label, description?}`. Labels differ within a question. |
+| `multi_select` | boolean | no | Let the owner pick several options. Default `false`. |
+
+The owner can always type their own answer instead of choosing an option.
+
+### Result
+
+```json
+{
+  "answered": true,
+  "answers": [
+    { "header": "Apply", "question": "Apply this change to staging?", "selected": ["Yes"], "text": null }
+  ]
+}
+```
+
+`selected` holds the chosen labels and `text` the owner's own words (either may be empty,
+not both). When no answer came (the owner stopped the task, or 24 hours passed) the result
+is `{"answered": false, "message": "…"}`. A malformed ask fails with `isError: true` and a
+message saying what to fix.
 
 ## Upstream names
 

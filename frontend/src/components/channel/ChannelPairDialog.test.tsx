@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ToastProvider } from "@/components/ui/toast";
 import type { ChannelStatus } from "@/lib/api/channels";
+import { acceptance } from "@/test/acceptance";
 import { makeChannel, makeStatus } from "@/test/channelKit";
 import { ChannelPairDialog } from "./ChannelPairDialog";
 
@@ -67,7 +68,11 @@ describe("add an owner dialog", () => {
     fireEvent.click(screen.getByText("open"));
     expect(await screen.findByText("K7QM 4XPT")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toHaveTextContent("Add an owner");
-    expect(screen.getByText("Waiting for them to send the code…")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for your message…")).toBeInTheDocument();
+    expect(
+      screen.getByText(/open a direct chat with .+ and send exactly this code/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Expires in 5\d min · single use/)).toBeInTheDocument();
     expect(issuePairingCode).toHaveBeenCalledWith(CH.uid, undefined);
   });
 
@@ -97,17 +102,44 @@ describe("add an owner dialog", () => {
     expect(cancelPairingCode).not.toHaveBeenCalled();
   });
 
-  test.each([
-    ["Cancel", () => fireEvent.click(screen.getByRole("button", { name: "Cancel" }))],
-    ["Esc", () => fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" })],
-  ])("%s withdraws the outstanding code", async (_name, leave) => {
+  test("Esc withdraws the outstanding code", async () => {
     setup();
     fireEvent.click(screen.getByText("open"));
     await screen.findByText("K7QM 4XPT");
-    leave();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(cancelPairingCode).toHaveBeenCalledWith(CH.uid));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.queryByText("K7QM 4XPT")).not.toBeInTheDocument();
+  });
+
+  test("Done closes while waiting and leaves a code the person may have sent", async () => {
+    setup();
+    fireEvent.click(screen.getByText("open"));
+    await screen.findByText("K7QM 4XPT");
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(cancelPairingCode).not.toHaveBeenCalled();
+  });
+
+  test("New code replaces the code while waiting", async () => {
+    setup();
+    fireEvent.click(screen.getByText("open"));
+    await screen.findByText("K7QM 4XPT");
+    fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    await waitFor(() => expect(issuePairingCode).toHaveBeenCalledTimes(2));
+  });
+
+  acceptance("channels", "an expired pairing code is struck through in place", async () => {
+    h.expiresInMs = -1000;
+    setup();
+    fireEvent.click(screen.getByText("open"));
+    expect(await screen.findByText("Expired")).toBeInTheDocument();
+    expect(screen.getByText(/The code ran out after an hour/)).toBeInTheDocument();
+    expect(screen.getByText("K7QM 4XPT")).toHaveClass("line-through");
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate a new code" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(cancelPairingCode).toHaveBeenCalledWith(CH.uid));
   });
 
   test("an expired code offers a new one, which is requested again", async () => {

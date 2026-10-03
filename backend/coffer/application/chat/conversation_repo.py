@@ -34,12 +34,17 @@ class ConversationRepo(Protocol):
         archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
-        title_contains: str | None = None,
+        contains: str | None = None,
     ) -> list[Conversation]:
         """Conversations newest activity first, the id breaking ties; active
         when ``archived`` is False. ``after`` (a row's ``(updated_at, id)``) and
         ``limit`` cut one page of that order; without them, the whole listing.
-        ``title_contains`` keeps the rows whose title holds it (case-insensitive)."""
+        ``contains`` keeps the rows whose title or any message's text holds it
+        (case-insensitive)."""
+        ...
+
+    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
+        """How many conversations ``list`` would return without ``after``/``limit``."""
         ...
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation: ...
@@ -75,7 +80,7 @@ async def page_conversations(
 
     The cursor is bound to which listing it came from: one issued for the
     active threads sent to the archived listing is ``CursorInvalid``, and so is
-    one issued for another ``q`` (the title search).
+    one issued for another ``q`` (the title-and-messages search).
     """
     q = q.strip() if q else None
     q = q or None
@@ -83,7 +88,7 @@ async def page_conversations(
     if q is not None:
         filters["q"] = q.casefold()
     after = time_and_id(decode_cursor(cursor, list_tag=_TAG, filters=filters), str)
-    rows = await repo.list(archived=archived, limit=limit + 1, after=after, title_contains=q)
+    rows = await repo.list(archived=archived, limit=limit + 1, after=after, contains=q)
     return paginate(
         rows,
         limit,

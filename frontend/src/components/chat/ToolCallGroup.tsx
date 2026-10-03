@@ -9,25 +9,22 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 
 import { StatusWord } from "@/components/status/StatusWord";
-import type { ContentBlock } from "@/lib/api/chat";
+import { Spinner } from "@/components/ui/spinner";
+import type { ToolCall } from "@/lib/chat/replyRows";
 import { ToolCallCard } from "./ToolCallCard";
-
-export interface ToolCall {
-  key: string;
-  use: ContentBlock;
-  result?: ContentBlock;
-}
 
 interface Props {
   calls: ToolCall[];
   /** The turn is still streaming and this is its last row: keep it open. */
   trailing?: boolean;
+  /** Calls with no result are not running: the reply was stopped or its stream lost. */
+  unfinished?: "stopped" | "lost";
 }
 
-export function ToolCallGroup({ calls, trailing = false }: Props) {
+export function ToolCallGroup({ calls, trailing = false, unfinished }: Props) {
   const { t } = useTranslation();
   const [override, setOverride] = useState<boolean | null>(null);
-  const running = calls.some((c) => c.result === undefined);
+  const running = !unfinished && calls.some((c) => c.result === undefined);
   const failed = calls.filter((c) => c.result?.error).length;
   const open = override ?? (running || failed > 0 || trailing);
 
@@ -44,7 +41,10 @@ export function ToolCallGroup({ calls, trailing = false }: Props) {
           {t("conversations.tools.group", { count: calls.length })}
         </span>
         {running ? (
-          <StatusWord tone="off">{t("conversations.toolCard.running")}</StatusWord>
+          <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+            <Spinner />
+            {t("conversations.toolCard.running")}
+          </span>
         ) : failed > 0 ? (
           <StatusWord tone="err">{t("conversations.tools.failed", { count: failed })}</StatusWord>
         ) : null}
@@ -57,7 +57,12 @@ export function ToolCallGroup({ calls, trailing = false }: Props) {
       {open && (
         <div className="space-y-2 border-l border-border-subtle pl-3">
           {calls.map((c) => (
-            <ToolCallCard key={c.key} toolUse={c.use} toolResult={c.result} />
+            <ToolCallCard
+              key={c.key}
+              toolUse={c.use}
+              toolResult={c.result}
+              unfinished={unfinished}
+            />
           ))}
         </div>
       )}

@@ -297,9 +297,9 @@ Two settings on the skill decide where it is delivered, and nothing else does:
 
 | Reach | Effect |
 | --- | --- |
-| Every agent (no scope) | Delivered to every registered agent, including agents you register later. This is the default. |
-| Only selected agents | Delivered only to the agents you pick. |
-| No agent selected | Delivered to nobody. The skill stays in the library, listed and synced. |
+| All agents (no scope) | Delivered to every registered agent, including agents you register later. This is the default. |
+| Chosen agents | Delivered only to the agents you pick. |
+| No agent selected (Chosen agents with nothing ticked) | Delivered to nobody. The skill stays in the library, listed and synced. |
 
 A skill is delivered to an agent if and only if the skill is enabled **and** its reach includes that agent. There is no per-agent switch for "this agent gets no skills"; to keep an agent away from a skill, leave it out of that skill's reach.
 

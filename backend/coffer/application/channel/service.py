@@ -150,7 +150,7 @@ class ChannelService:
 
         The person who claims it is added beside the ones already paired; with
         ``replaces`` (a paired person's ``sender_id``) they take that person's
-        place instead (spec channels "Serve several paired people").
+        place instead (spec channels "Gate inbound traffic on sender identity").
 
         Returns the code, its expiry, and — where the platform has a
         parameterised start link and the bot's username is known — a link that

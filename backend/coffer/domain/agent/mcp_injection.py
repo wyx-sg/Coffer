@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 
@@ -59,3 +60,9 @@ class McpInjectionSpec:
     container_key: str
     format: ConfigFileFormat
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP
+    #: Further fields of the entry, as ``(key, value)`` pairs: the Codex entry
+    #: passes the turn token through to the shim (``env_vars``) and lets a tool
+    #: call run for 24 hours (``tool_timeout_sec``) — a ``coffer__ask`` waits on
+    #: the owner (spec mcp-gateway "Let an agent ask the owner a question during
+    #: a Coffer turn").
+    entry_extras: tuple[tuple[str, Any], ...] = ()

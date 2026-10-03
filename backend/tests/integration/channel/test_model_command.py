@@ -50,7 +50,7 @@ async def test_a_level_sets_the_effort_only(env: ChannelEnv) -> None:
 
     assert await _config(env, resource) == ("opus", "xhigh")
     assert await _sticky(env, resource) == ("opus", "xhigh")
-    assert adapter.texts()[-1] == "🎚 Effort set to xhigh for the next turn."
+    assert adapter.texts()[-1] == "Model: opus · effort Xhigh — from your next message"
 
 
 async def test_a_name_and_a_level_set_both(env: ChannelEnv) -> None:
@@ -59,7 +59,7 @@ async def test_a_name_and_a_level_set_both(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "/model gpt-5 high"))
 
     assert await _config(env, resource) == ("gpt-5", "high")
-    assert adapter.texts() == ["🧠 Model set to gpt-5, effort high for the next turn."]
+    assert adapter.texts() == ["Model: gpt-5 · effort High — from your next message"]
 
 
 async def test_a_model_is_matched_by_its_shown_name(env: ChannelEnv) -> None:
@@ -71,7 +71,7 @@ async def test_a_model_is_matched_by_its_shown_name(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "/model fable 1m"))
 
     assert (await _config(env, resource))[0] == "claude-fable-5-1[1m]"
-    assert adapter.texts() == ["🧠 Model set to Fable 1M for the next turn."]
+    assert adapter.texts() == ["Model: Fable 1M — from your next message"]
 
 
 async def test_an_unknown_model_passes_through_verbatim(env: ChannelEnv) -> None:
@@ -93,7 +93,7 @@ async def test_default_clears_the_model_and_effort(env: ChannelEnv) -> None:
 
     assert await _config(env, resource) == (None, None)
     assert await _sticky(env, resource) == (None, None)
-    assert "reset to the agent's defaults" in adapter.texts()[-1]
+    assert adapter.texts()[-1] == "Model and effort: the agent's defaults — from your next message"
 
 
 async def test_bare_model_without_buttons_answers_in_text(env: ChannelEnv) -> None:
@@ -136,9 +136,8 @@ async def test_a_model_tap_rewrites_the_card_into_the_effort_step(env: ChannelEn
     assert (await _config(env, resource))[0] == "gpt-5"
     [(_chat, mid, text, buttons, title)] = adapter.card_updates
     assert (mid, title) == ("card-1", "Effort")
-    assert "Model: gpt-5" in text
-    assert [b.value for b in buttons] == ["effort:low", "effort:high", "effort:-"]
-    assert buttons[-1].label == "Keep default"
+    assert "gpt-5 · step 2 of 2 — tap an effort level:" in text
+    assert [b.value for b in buttons] == ["effort:low", "effort:high"]
 
     await env.processor.on_callback(
         tap_event("tg", "owner", "effort:high", platform_message_id="card-1")
@@ -165,7 +164,7 @@ async def test_keep_leaves_the_effort_alone(env: ChannelEnv) -> None:
     )
 
     assert await _config(env, resource) == ("gpt-5", "low")
-    assert adapter.texts()[-1] == "🎚 Effort kept at low."
+    assert adapter.texts()[-1] == "Model: gpt-5 · effort Low — from your next message"
     # The card goes back to the model step with the new model ticked.
     _chat, _mid, _text, buttons, title = adapter.card_updates[-1]
     assert title == "Model"

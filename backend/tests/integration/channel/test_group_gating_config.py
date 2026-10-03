@@ -86,7 +86,7 @@ async def test_require_mention_off_drops_a_non_owners_chatter_silently(env: Chan
     await env.processor.on_message(
         inbound("tg", "grp-1", "@bot do it", chat_kind="group", addressed=True, sender_id="x-2")
     )
-    assert "Not authorized" in adapter.sent[-1][1]
+    assert "owners can use it here" in adapter.sent[-1][1]
 
 
 @pytest.mark.acceptance(

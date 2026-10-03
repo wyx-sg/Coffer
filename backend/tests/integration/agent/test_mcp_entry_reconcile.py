@@ -147,16 +147,50 @@ async def test_a_stale_or_missing_agent_uid_is_drift_and_is_repaired(
     )
     rec, audit, _ = _setup([agent], "/bin/shim")
     (item,) = (await rec.plan()).results
-    assert item.change.difference.changed_params == ("args",)
+    # The hand-written entry also lacks the turn-token pass-through and the
+    # 24-hour tool timeout an install writes for Codex.
+    assert item.change.difference.changed_params == ("args", "env_vars", "tool_timeout_sec")
 
     await rec.run(trigger=Trigger.BOOT)
     doc = tomllib.loads(path.read_text(encoding="utf-8"))
     assert doc["model"] == "o4"
-    assert doc["mcp_servers"]["coffer"] == {
-        "command": "/bin/shim",
-        "args": ["--agent-uid", agent.uid],
-    }
+    assert doc["mcp_servers"]["coffer"] == _CODEX_ENTRY | {"args": ["--agent-uid", agent.uid]}
     assert [r.event_type for r in audit.rows] == ["agent_mcp_installed"]
+
+
+#: What Codex's ``coffer`` entry holds besides the uid: the turn token passed
+#: through to the shim and a tool call allowed to wait a day on the owner.
+_CODEX_ENTRY: dict[str, Any] = {
+    "command": "/bin/shim",
+    "env_vars": ["COFFER_TURN_TOKEN"],
+    "tool_timeout_sec": 86400,
+}
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="an agent in a Coffer turn sees and calls coffer__ask",
+)
+async def test_a_codex_entry_without_the_ask_settings_is_repaired(
+    isolated_home: IsolatedHome,
+) -> None:
+    """An entry an older Coffer wrote (uid right, nothing else) would cut a
+    ``coffer__ask`` off after Codex's 60 s default and hide the turn token from
+    the shim: it is drift, and the repair writes both settings."""
+    codex = fake_agent_dir(isolated_home, AgentType.CODEX)
+    agent = _agent("u-codex", AgentType.CODEX)
+    path = codex.write(
+        "config",
+        f'[mcp_servers.coffer]\ncommand = "/bin/shim"\nargs = ["--agent-uid", "{agent.uid}"]\n',
+    )
+    rec, _audit, _ = _setup([agent], "/bin/shim")
+    (item,) = (await rec.plan()).results
+    assert item.change.difference.changed_params == ("env_vars", "tool_timeout_sec")
+
+    await rec.run(trigger=Trigger.BOOT)
+    entry = tomllib.loads(path.read_text(encoding="utf-8"))["mcp_servers"]["coffer"]
+    assert entry == _CODEX_ENTRY | {"args": ["--agent-uid", agent.uid]}
+    assert (await rec.plan()).results == ()
 
 
 async def test_an_agent_without_an_entry_is_never_given_one(isolated_home: IsolatedHome) -> None:

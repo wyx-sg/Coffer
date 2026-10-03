@@ -323,7 +323,7 @@ describe("SkillAddDialog", () => {
     expect(screen.queryByText(/rename/i)).not.toBeInTheDocument();
   });
 
-  test("Available to defaults to every agent and writes nothing extra", async () => {
+  test("Available to defaults to all agents and writes nothing extra", async () => {
     const { resourcesApi } = await import("@/lib/api/resources");
     api.stageArchive.mockResolvedValue(stage([staged({ folder: ".", name: "changelog" })]));
     api.confirmStage.mockResolvedValue({

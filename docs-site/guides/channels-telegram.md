@@ -174,7 +174,7 @@ Until you do, `coffer channel show` prints a `warning:` line naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **New bot token** and choose **Replace and restart**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
+On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
 
 ```sh
 coffer channel show my-telegram               # find the bot_token_ref

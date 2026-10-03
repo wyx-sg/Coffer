@@ -33,4 +33,22 @@ def is_channel_turn(environ: Mapping[str, str]) -> bool:
     return environ.get(CHANNEL_TURN_ENV) == "1"
 
 
-__all__ = ["CHANNEL_TURN_ENV", "channel_turn_env", "is_channel_turn"]
+#: Set in the environment of every agent process Coffer spawns for a turn (a
+#: Coffer conversation or a channel's): a random token naming the turn. The shim
+#: forwards it as the ``X-Coffer-Turn`` header, which is how the gateway knows an
+#: MCP session belongs to a turn Coffer runs (spec mcp-gateway "Let an agent ask
+#: the owner a question during a Coffer turn"). Kind-agnostic for the same reason
+#: as the mark above: the agent kind writes the Codex entry that passes it
+#: through, the chat kind sets it, the mcp kind reads the header.
+TURN_TOKEN_ENV = "COFFER_TURN_TOKEN"
+
+#: The request header the shim sends it in.
+TURN_HEADER = "X-Coffer-Turn"
+
+__all__ = [
+    "CHANNEL_TURN_ENV",
+    "TURN_HEADER",
+    "TURN_TOKEN_ENV",
+    "channel_turn_env",
+    "is_channel_turn",
+]

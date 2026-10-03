@@ -165,7 +165,10 @@ export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelet
         </SettingRow>
       </SettingsSection>
 
-      <SettingsSection title={t("channels.settings.receiving.title")}>
+      <SettingsSection
+        title={t("channels.settings.receiving.title")}
+        description={t("channels.settings.receiving.description")}
+      >
         <ChannelReceivingFields settings={settings} save={save} />
       </SettingsSection>
 
@@ -173,17 +176,21 @@ export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelet
         <ChannelReplyFields settings={settings} save={save} />
       </SettingsSection>
 
-      <SettingsSection title={t("channels.edit.directories.title")} testId="channel-directories">
+      <SettingsSection
+        title={t("channels.edit.directories.title")}
+        description={t("channels.settings.directories.description")}
+        testId="channel-directories"
+      >
         <ChannelDirectoryFields settings={settings} save={save} />
       </SettingsSection>
 
       {/* The one destructive action is a row, not a section of its own. */}
-      <div className="flex items-center justify-between gap-4 px-1">
+      <div className="flex min-h-setting-row items-center justify-between gap-4 border-t border-border-subtle py-2.5">
         <div className="min-w-0">
           <p className="text-sm font-medium text-text">{t("channels.actions.delete")}</p>
           <p className="text-xs text-text-muted">{t("channels.settings.danger.body")}</p>
         </div>
-        <Button size="sm" variant="destructive" onClick={onDelete}>
+        <Button size="sm" variant="danger" onClick={onDelete}>
           {t("channels.settings.danger.button")}
         </Button>
       </div>

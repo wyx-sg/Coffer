@@ -282,11 +282,10 @@ The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry
 - **THEN** Coffer returns its transport, command, arguments, working directory, the environment key names with the secret-like one flagged, every other key sorted by name with plain values shown as text, and the absolute path of the file it came from
 - **AND** the secret-like extra key and the table nesting one are reported masked with no value, and no environment, header or masked value appears anywhere in the response
 
-#### Scenario: open a direct MCP server's detail page from the agent
+#### Scenario: open a direct MCP server from the agent
 - **GIVEN** the agent's MCP servers tab lists a direct server
 - **WHEN** the user clicks the server's name
-- **THEN** its detail page opens showing it as a direct server of that agent, with its command, arguments, working directory, config file and variable names, and marking secret-looking names and masked fields as hidden without showing any value
-- **AND** the back link returns to the agent's MCP servers tab
+- **THEN** a dialog opens showing its configuration read from the agent's config file, with secret-looking values hidden, and an Adopt button that continues into adopting it
 
 ### Requirement: Remove a direct MCP entry from its source file
 Users MUST be able to remove a direct MCP entry — from the agent's page, the REST route, or `coffer discard mcp <agent>:<entry>` on the command line. Removal edits only the entry's source file, reuses the atomic-write + `.bak` machinery of "Write config files atomically with a backup and an audit entry", and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by "Install Coffer's MCP server into an agent in one action" and "Uninstall Coffer's MCP server from an agent".

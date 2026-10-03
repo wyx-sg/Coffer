@@ -1,6 +1,6 @@
 """Message domain entity and ContentBlock value-object union.
 
-A ``ContentBlock`` is one of ``text | tool_use | tool_result | attachment``.
+A ``ContentBlock`` is one of ``text | tool_use | tool_result | attachment | question``.
 The persistence layer stores ``content`` as a JSON array of block dicts.
 The helpers ``block_to_dict`` / ``block_from_dict`` are the single point of
 that serialisation logic so the infrastructure layer does not need to know
@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
+
+from coffer.domain.chat import question as _question
+from coffer.domain.chat.question import QuestionBlock
 
 # ---------------------------------------------------------------------------
 # Role
@@ -57,6 +60,9 @@ class ToolResultBlock:
     tool_name: str
     output: dict[str, Any] | None  # structurally mutable despite frozen=True — acceptable for v1
     error: str | None
+    #: How long the tool ran (the runner stamps it between the call and its
+    #: result); null when unknown.
+    duration_ms: int | None = None
     type: Literal["tool_result"] = "tool_result"
 
 
@@ -71,10 +77,15 @@ class AttachmentBlock:
     path: str  # absolute local path in the media dir (NOT emitted to the wire)
     mime: str
     filename: str
+    #: A web upload's id and byte size, so the thread can fetch its bytes and
+    #: show its size; ``None`` on channel media and on blocks saved before these
+    #: existed (those keep the plain chip).
+    id: str | None = None
+    size: int | None = None
     type: Literal["attachment"] = "attachment"
 
 
-ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | AttachmentBlock
+ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | AttachmentBlock | QuestionBlock
 
 
 # ---------------------------------------------------------------------------
@@ -100,14 +111,22 @@ def block_to_dict(block: ContentBlock) -> dict[str, Any]:
             "tool_name": block.tool_name,
             "output": block.output,
             "error": block.error,
+            "duration_ms": block.duration_ms,
         }
     if isinstance(block, AttachmentBlock):
-        return {
+        out: dict[str, Any] = {
             "type": "attachment",
             "path": block.path,
             "mime": block.mime,
             "filename": block.filename,
         }
+        if block.id is not None:
+            out["id"] = block.id
+        if block.size is not None:
+            out["size"] = block.size
+        return out
+    if isinstance(block, QuestionBlock):
+        return _question.block_to_dict(block)
     # This branch is unreachable given the union, but makes mypy happy.
     raise TypeError(f"unhandled ContentBlock type: {type(block)!r}")  # pragma: no cover
 
@@ -134,13 +153,18 @@ def block_from_dict(data: dict[str, Any]) -> ContentBlock:
                 tool_name=data["tool_name"],
                 output=data.get("output"),
                 error=data.get("error"),
+                duration_ms=data.get("duration_ms"),
             )
         if block_type == "attachment":
             return AttachmentBlock(
                 path=data["path"],
                 mime=data["mime"],
                 filename=data["filename"],
+                id=data.get("id"),
+                size=data.get("size"),
             )
+        if block_type == "question":
+            return _question.block_from_dict(data)
     except KeyError as exc:
         raise ValueError(
             f"ContentBlock type {block_type!r} is missing required field {exc}"
@@ -158,8 +182,13 @@ class Message:
     """One entry in a conversation.
 
     ``status`` is ``"complete"`` for user messages and finished assistant
-    messages, ``"streaming"`` for an in-flight assistant turn, and ``"failed"``
-    for a turn that was interrupted or errored.
+    messages, ``"streaming"`` for an in-flight assistant turn, ``"stopped"`` for
+    a reply the user interrupted (its partial output kept), and ``"failed"`` for
+    a turn that errored.
+
+    ``finished_at`` is when an assistant reply ended (complete, stopped or
+    failed); ``None`` while it streams, on user messages, and on rows written
+    before the column existed.
 
     ``model_id``, ``prompt_tokens``, and ``completion_tokens`` are only set
     on assistant messages.
@@ -170,8 +199,9 @@ class Message:
     seq: int
     role: Role
     content: list[ContentBlock]  # structurally mutable despite frozen=True — acceptable for v1
-    status: Literal["complete", "streaming", "failed"]
+    status: Literal["complete", "streaming", "stopped", "failed"]
     model_id: str | None
     prompt_tokens: int | None
     completion_tokens: int | None
     created_at: datetime
+    finished_at: datetime | None = None

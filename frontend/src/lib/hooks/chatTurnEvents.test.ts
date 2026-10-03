@@ -36,6 +36,7 @@ function userRow(id: string, seq: number, text: string, createdAt: number): Mess
     prompt_tokens: null,
     completion_tokens: null,
     model_id: null,
+    finished_at: null,
     created_at: iso(createdAt),
   };
 }
@@ -51,6 +52,7 @@ function assistantRow(id: string, seq: number, text: string): Message {
     prompt_tokens: null,
     completion_tokens: null,
     model_id: null,
+    finished_at: null,
     created_at: iso(T0),
   };
 }

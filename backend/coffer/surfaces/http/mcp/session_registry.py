@@ -155,7 +155,13 @@ async def reap_idle_sessions(max_idle_seconds: float = _DEFAULT_IDLE_TIMEOUT_S) 
     Returns the list of dropped session ids (useful for logging/testing).
     """
     now = time.monotonic()
-    stale = [sid for sid, last in list(_LAST_ACTIVITY.items()) if now - last > max_idle_seconds]
+    # A session with a request in flight is not idle, however long it has run: a
+    # ``coffer__ask`` waits on the owner for hours.
+    stale = [
+        sid
+        for sid, last in list(_LAST_ACTIVITY.items())
+        if now - last > max_idle_seconds and _SESSION_REFS.get(sid, 0) == 0
+    ]
     for sid in stale:
         await _drop_session(sid)
     return stale

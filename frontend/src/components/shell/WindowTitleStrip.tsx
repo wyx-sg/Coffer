@@ -9,7 +9,8 @@
 // sidebar changes width; they have their own pointer events instead of being
 // drag handles. In full screen the lights are hidden and the controls start at
 // x 14. With the sidebar expanded, its right edge runs up through the strip as
-// a 1px line; collapsed, the strip runs across and the rail sits under it.
+// a 1px line; collapsed, the strip runs across and the rail sits under it. To the
+// right of the sidebar a page may register one title row (titleBarSlot.tsx).
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
@@ -23,6 +24,9 @@ import { SidebarToggle } from "./SidebarToggle";
 // The three 12px lights at x 20 with 8px gaps end at x 72; the toggle follows 16px later.
 const CONTROLS_LEFT = 88;
 const CONTROLS_LEFT_FULLSCREEN = 14;
+const RAIL_WIDTH = 56;
+// Where the toggle and the two arrows end (88 + 3 × 28), plus a gap.
+const SLOT_AFTER_CONTROLS = 192;
 
 interface Props {
   /** Below md the sidebar is always the rail, so there is nothing to toggle. */
@@ -33,6 +37,8 @@ interface Props {
   sidebarWidth: number;
   onBack: () => void;
   onForward: () => void;
+  /** Receives the element to the right of the sidebar that a page may put its title row in. */
+  onSlot?: (el: HTMLElement | null) => void;
 }
 
 function HistoryButton({
@@ -75,10 +81,14 @@ export function WindowTitleStrip({
   sidebarWidth,
   onBack,
   onForward,
+  onSlot,
 }: Props) {
   const { t } = useTranslation();
   const fullscreen = useWindowFullscreen();
   const history = useHistoryNav();
+  // 32px in from the sidebar's edge; with the rail collapsed the strip's own
+  // controls run on past it, so the title starts after them.
+  const slotLeft = collapsed ? Math.max(RAIL_WIDTH + 32, SLOT_AFTER_CONTROLS) : sidebarWidth + 32;
   return (
     <div
       data-tauri-drag-region
@@ -117,6 +127,15 @@ export function WindowTitleStrip({
           <ArrowRight className="size-[15px]" />
         </HistoryButton>
       </div>
+      {/* The one page-level exception: an open conversation's title row. The
+          container passes pointer events through (so empty space still drags the
+          window); its own children take them. */}
+      <div
+        ref={onSlot}
+        data-testid="title-slot"
+        className="pointer-events-none absolute inset-y-0 right-0 flex min-w-0 items-center gap-2.5 pr-4 [&>*]:pointer-events-auto"
+        style={{ left: slotLeft }}
+      />
       {collapsed ? null : (
         <span
           aria-hidden

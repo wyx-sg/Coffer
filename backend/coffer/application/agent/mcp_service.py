@@ -167,6 +167,7 @@ class AgentMcpService:
             container_key=inj.container_key,
             entry_style=inj.entry_style,
             agent_uid=agent.uid,
+            extras=inj.entry_extras,
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(

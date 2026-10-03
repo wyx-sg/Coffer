@@ -198,8 +198,8 @@ reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output
 
 - Two machines can legitimately disagree about one resource's reach, and
   neither is wrong.
-- Every reach control states that the setting is for this machine only and is
-  not synced, and names an empty agent list as dormant.
+- The docs state that reach is for this machine only and is not synced; an
+  empty agent list reads "No agent selected" on the control.
 - The machine registry belongs to sync alone; nothing about permissions reads
   it.
 - A newly converged resource is live here at its kind's default reach; a user

@@ -84,6 +84,35 @@ describe("WindowTitleStrip", () => {
     expect(screen.queryByTestId("title-sidebar-edge")).toBeNull();
   });
 
+  test("leaves a slot for the conversation title: 32px right of the sidebar, after the controls when collapsed", () => {
+    const onSlot = vi.fn();
+    const first = render(
+      <TooltipProvider>
+        <BrowserRouter>
+          <WindowTitleStrip
+            showToggle
+            collapsed={false}
+            onToggle={() => {}}
+            sidebarWidth={220}
+            onBack={() => {}}
+            onForward={() => {}}
+            onSlot={onSlot}
+          />
+        </BrowserRouter>
+      </TooltipProvider>,
+    );
+    const slot = screen.getByTestId("title-slot");
+    expect(slot.style.left).toBe("252px");
+    expect(onSlot).toHaveBeenCalledWith(slot);
+    // Empty space in it still drags the window; its children take the pointer.
+    expect(slot).toHaveClass("pointer-events-none");
+    first.unmount();
+    renderStrip(true);
+    expect(Number.parseInt(screen.getByTestId("title-slot").style.left, 10)).toBeGreaterThanOrEqual(
+      144,
+    );
+  });
+
   acceptance(
     "web-ui",
     "the arrows in the title bar go back and forward through the app's history",

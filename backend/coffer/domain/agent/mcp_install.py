@@ -23,7 +23,7 @@ Both wire Coffer via the stdio shim: ``command = <abs path to coffer-mcp-shim>``
 from __future__ import annotations
 
 import json
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Sequence
 from itertools import pairwise
 from typing import Any
 
@@ -57,7 +57,10 @@ def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, A
 
 
 def _entry_fields(
-    shim_path: str, entry_style: McpEntryStyle, agent_uid: str | None = None
+    shim_path: str,
+    entry_style: McpEntryStyle,
+    agent_uid: str | None = None,
+    extras: Sequence[tuple[str, Any]] = (),
 ) -> dict[str, Any]:
     """The key/value pairs of a single stdio ``coffer`` entry for the style.
 
@@ -79,6 +82,8 @@ def _entry_fields(
     fields: dict[str, Any] = {"command": shim_path}
     if agent_uid:
         fields["args"] = ["--agent-uid", agent_uid]
+    for key, value in extras:
+        fields[key] = list(value) if isinstance(value, (list, tuple)) else value
     return fields
 
 
@@ -105,6 +110,7 @@ def apply_install(
     container_key: str | None = None,
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP,
     agent_uid: str | None = None,
+    extras: Sequence[tuple[str, Any]] = (),
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
@@ -112,7 +118,7 @@ def apply_install(
     never duplicated.
     """
     ck = container_key or default_container_key(fmt)
-    fields = _entry_fields(shim_path, entry_style, agent_uid)
+    fields = _entry_fields(shim_path, entry_style, agent_uid, extras)
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)
@@ -191,8 +197,24 @@ def installed_command(
     return _coffer_command(_parse_toml_readonly(text)[ck][COFFER_SERVER_KEY])
 
 
+def _plain(value: Any) -> Any:
+    """A config value as plain data (lists of strings, numbers) so it compares
+    with what an install writes."""
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value]
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, int):
+        return int(value)
+    return value if value is None else str(value)
+
+
 def installed_entry(
-    fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
+    fmt: ConfigFileFormat,
+    text: str,
+    *,
+    container_key: str | None = None,
+    extra_keys: Sequence[str] = (),
 ) -> dict[str, Any] | None:
     """The installed coffer entry's parameters — ``{"command": <shim>, "args":
     [...]}`` — or ``None`` when there is no entry.
@@ -212,17 +234,25 @@ def installed_entry(
     else:
         entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
     args = entry.get("args") if isinstance(entry, MutableMapping) else None
-    return {
+    params: dict[str, Any] = {
         "command": _coffer_command(entry),
         "args": [str(a) for a in args] if isinstance(args, (list, tuple)) else [],
     }
+    for key in extra_keys:
+        params[key] = _plain(entry.get(key)) if isinstance(entry, MutableMapping) else None
+    return params
 
 
-def desired_entry(shim_path: str | None, agent_uid: str) -> dict[str, Any]:
+def desired_entry(
+    shim_path: str | None, agent_uid: str, extras: Sequence[tuple[str, Any]] = ()
+) -> dict[str, Any]:
     """What :func:`apply_install` writes for ``agent_uid``, in the shape
     :func:`installed_entry` reads — so the two compare directly."""
-    fields = _entry_fields(shim_path or "", McpEntryStyle.COMMAND_MAP, agent_uid)
-    return {"command": shim_path, "args": list(fields.get("args", []))}
+    fields = _entry_fields(shim_path or "", McpEntryStyle.COMMAND_MAP, agent_uid, extras)
+    params = {"command": shim_path, "args": list(fields.get("args", []))}
+    for key, _ in extras:
+        params[key] = _plain(fields[key])
+    return params
 
 
 def installed_agent_uid(

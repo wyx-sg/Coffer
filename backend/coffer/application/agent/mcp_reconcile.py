@@ -130,7 +130,12 @@ class McpEntryTarget:
             if not text:
                 continue
             try:
-                params = installed_entry(home.fmt, text, container_key=home.injection.container_key)
+                params = installed_entry(
+                    home.fmt,
+                    text,
+                    container_key=home.injection.container_key,
+                    extra_keys=[k for k, _ in home.injection.entry_extras],
+                )
             except ConfigFileFormatInvalid:
                 _log.warning("mcp_entry: %s does not parse; left alone", home.path)
                 continue
@@ -154,7 +159,7 @@ class McpEntryTarget:
         for uid, home in homes.items():
             if uid not in wanted:
                 continue
-            params = desired_entry(shim, uid)
+            params = desired_entry(shim, uid, home.injection.entry_extras)
             items.append(
                 Item(
                     key=uid,
@@ -221,6 +226,7 @@ class McpEntryTarget:
             container_key=home.injection.container_key,
             entry_style=home.injection.entry_style,
             agent_uid=uid,
+            extras=home.injection.entry_extras,
         )
         self._store.write_text_atomic(
             home.path, new, expected_fingerprint=self._store.fingerprint(before)

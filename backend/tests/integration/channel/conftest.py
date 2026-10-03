@@ -62,6 +62,7 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.surfaces.http.channel_wiring import ChatQuestions
 from tests.support.channel import FakeChannelAdapter as FakeChannelAdapter
 from tests.support.channel import FakeLiveText as FakeLiveText
 from tests.support.vault_stores import make_resource_repo
@@ -687,6 +688,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         model_suggestions=model_suggestions,
         collections=collections,
         ingest=ingest,
+        questions=ChatQuestions(),
     )
 
     created_adapters: list[FakeChannelAdapter] = []

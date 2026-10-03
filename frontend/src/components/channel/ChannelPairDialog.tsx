@@ -1,9 +1,11 @@
 // frontend/src/components/channel/ChannelPairDialog.tsx
 // The whole "add an owner" flow in one dialog: what will happen, the pairing
 // code (requested as the dialog opens), the platform's instruction, a live
-// waiting line, and — once somebody pairs — who. Closing it any other way
-// (Cancel, Esc, the ×, a click outside) withdraws the outstanding code. Used
-// for the first pairing and Add owner; the page itself prints nothing of this.
+// waiting line, and — once somebody pairs — who. Dismissing it without a
+// pairing (Cancel on an expired code, Esc, the ×, a click outside) withdraws
+// the outstanding code; Done leaves a code the person may already have sent.
+// Used for the first pairing and Add owner; the page itself prints nothing of
+// this.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2 } from "lucide-react";
@@ -21,6 +23,7 @@ import type { PairingCode } from "@/lib/api/channels";
 import { useCancelPairingCode, useIssuePairingCode } from "@/lib/hooks/useChannelPairing";
 import { useChannelStatus } from "@/lib/hooks/useChannels";
 import { ChannelPairingCode } from "./ChannelPairingCode";
+import { usePairingExpired } from "./pairingCode";
 
 interface Props {
   uid: string;
@@ -48,6 +51,7 @@ function PairDialogBody({
   const [issuedAt, setIssuedAt] = useState(0);
   const started = useRef(false);
   const { mutateAsync } = issuePairing;
+  const expired = usePairingExpired(code);
 
   const issue = useCallback(() => {
     setIssuing(true);
@@ -92,19 +96,34 @@ function PairDialogBody({
         ) : (
           <ChannelPairingCode
             platform={platform}
+            channelName={status ? (status.title ?? status.name) : ""}
             code={code}
+            expired={expired}
             isPending={issuing}
             onGenerate={issue}
-            waitingText={t("channels.pair.waiting")}
           />
         )}
         <DialogFooter>
           {paired ? (
             <Button onClick={onClose}>{t("common.done")}</Button>
+          ) : expired ? (
+            <>
+              <Button variant="ghost" onClick={dismiss}>
+                {t("common.cancel")}
+              </Button>
+              <Button onClick={issue} disabled={issuing}>
+                {t("channels.pairing.newCodeAfterExpiry")}
+              </Button>
+            </>
           ) : (
-            <Button variant="ghost" onClick={dismiss}>
-              {t("common.cancel")}
-            </Button>
+            <>
+              <Button variant="ghost" onClick={issue} disabled={issuing || code === undefined}>
+                {t("channels.pairing.newCode")}
+              </Button>
+              <Button variant="outline" onClick={onClose}>
+                {t("common.done")}
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

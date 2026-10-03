@@ -18,6 +18,10 @@ export function contentBlock(
     error: null,
     filename: null,
     mime: null,
+    attachment_id: null,
+    size: null,
+    duration_ms: null,
+    question: null,
     ...fields,
   };
 }

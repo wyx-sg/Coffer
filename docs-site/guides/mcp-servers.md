@@ -191,7 +191,7 @@ The **Edit** dialog shows the name (fixed), a description only you see, the comm
 
 Disabling a server takes effect at once, including in sessions that are already connected: its tools leave the listings, a call to one is refused as `TOOL_DISABLED` and logged as `denied`, and every running copy of the server is stopped. Enabling it again needs nothing more; the next call starts it. Timeouts are per server: **Spawn** (5–120 seconds, default 30) and **Request** (5–1800 seconds, default 120).
 
-Deleting a server removes its registration and capability preferences and keeps its audit and invocation history. The confirmation lists what it costs — how many tools disappear from which agents ("26 tools disappear from Claude Code and Codex") — and one row per secret the server cites saying it stays in Secrets: deleting a server never deletes a secret. If the delete is refused, the dialog stays open under "Couldn’t delete <name>" with the reason.
+Deleting a server removes its registration and capability preferences and keeps its audit and invocation history. The confirmation lists what it costs — how many tools disappear from which agents ("26 tools disappear from Claude Code and Codex") — and one row per secret the server cites saying it stays in Secrets: deleting a server never deletes a secret. If the delete is refused, the dialog stays open under "Couldn’t delete `<name>`" with the reason.
 
 ### Health and a missing launcher
 

@@ -187,7 +187,7 @@ describe("AgentMcpServersTab", () => {
     expect(await within(fs).findByText("Not connected")).toBeInTheDocument();
   });
 
-  test("a direct entry's name opens its JSON in a dialog, and Manage opens a Coffer server's page", async () => {
+  acceptance("agent-registry", "open a direct MCP server from the agent", async () => {
     stub();
     api.mcpEntry.mockResolvedValue({
       name: "postgres-local",
