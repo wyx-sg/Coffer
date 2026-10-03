@@ -1,5 +1,6 @@
 import { readdirSync } from 'node:fs'
 import { defineConfig, type DefaultTheme } from 'vitepress'
+import type MarkdownIt from 'markdown-it'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 import sidebarSource from './sidebar.json' with { type: 'json' }
 
@@ -61,7 +62,7 @@ const navLabels: Record<Lang, Record<string, string>> = {
     architecture: 'Architecture',
     reference: 'Reference',
     contributing: 'Contributing',
-    links: 'Links',
+    links: 'More',
     releases: 'Releases',
     specs: 'Specifications',
     decisions: 'Decision records',
@@ -72,7 +73,7 @@ const navLabels: Record<Lang, Record<string, string>> = {
     architecture: '架构',
     reference: '参考',
     contributing: '参与贡献',
-    links: '链接',
+    links: '更多',
     releases: '版本发布',
     specs: '规格说明',
     decisions: '决策记录',
@@ -86,7 +87,7 @@ function nav(lang: Lang): DefaultTheme.NavItem[] {
     { text: t.start, link: `${p}/start/`, activeMatch: `^${p}/start/` },
     { text: t.guides, link: `${p}/guides/`, activeMatch: `^${p}/guides/` },
     { text: t.architecture, link: `${p}/architecture/`, activeMatch: `^${p}/architecture/` },
-    { text: t.reference, link: `${p}/reference/cli`, activeMatch: `^${p}/reference/` },
+    { text: t.reference, link: `${p}/reference/`, activeMatch: `^${p}/reference/` },
     { text: t.contributing, link: `${p}/contributing/`, activeMatch: `^${p}/contributing/` },
     {
       text: t.links,
@@ -99,6 +100,91 @@ function nav(lang: Lang): DefaultTheme.NavItem[] {
   ]
 }
 
+// `::: steps` wraps a run of `###` headings into numbered steps: each heading
+// and what follows it until the next heading becomes one <div class="vp-step">.
+function stepsPlugin(md: MarkdownIt) {
+  md.block.ruler.before(
+    'fence',
+    'coffer_steps',
+    (state, startLine, endLine, silent) => {
+      const line = (n: number) => state.src.slice(state.bMarks[n] + state.tShift[n], state.eMarks[n])
+      if (state.sCount[startLine] - state.blkIndent >= 4) return false
+      // Any fence of three or more colons works, so a step can hold a
+      // shorter `:::` container; only a fence of the same length closes it.
+      const opener = /^(:{3,})\s*steps\s*$/.exec(line(startLine))
+      if (!opener) return false
+      if (silent) return true
+      const marker = opener[1].length
+      let depth = 1
+      let end = startLine + 1
+      for (; end < endLine; end++) {
+        const fence = /^(:{3,})\s*(\S?)/.exec(line(end))
+        if (!fence || fence[1].length !== marker) continue
+        if (!fence[2]) {
+          if (--depth === 0) break
+        } else depth++
+      }
+      const open = state.push('steps_open', 'div', 1)
+      open.block = true
+      open.attrs = [['class', 'vp-steps']]
+      open.map = [startLine, end]
+      const first = state.tokens.length
+      const oldParent = state.parentType
+      const oldMax = state.lineMax
+      state.parentType = 'container' as typeof state.parentType
+      state.lineMax = end
+      state.md.block.tokenize(state, startLine + 1, end)
+      state.parentType = oldParent
+      state.lineMax = oldMax
+      // group the inner tokens by top-level h3
+      const inner = state.tokens.splice(first)
+      const level = state.level
+      let inStep = false
+      const closeStep = () => {
+        if (!inStep) return
+        const c = new state.Token('step_close', 'div', -1)
+        c.block = true
+        state.tokens.push(c)
+        inStep = false
+      }
+      for (const tok of inner) {
+        if (tok.type === 'heading_open' && tok.tag === 'h3' && tok.level === level) {
+          closeStep()
+          const o = new state.Token('step_open', 'div', 1)
+          o.block = true
+          o.attrs = [['class', 'vp-step']]
+          state.tokens.push(o)
+          inStep = true
+        }
+        state.tokens.push(tok)
+      }
+      closeStep()
+      const close = state.push('steps_close', 'div', -1)
+      close.block = true
+      state.line = end + 1
+      return true
+    },
+    { alt: ['paragraph', 'reference', 'blockquote', 'list'] },
+  )
+}
+
+// Tables get a rounded, bordered wrapper that scrolls sideways when wide.
+function tableWrap(md: MarkdownIt) {
+  const render = (tokens: any[], idx: number, options: any, _env: any, self: any) =>
+    self.renderToken(tokens, idx, options)
+  const open = md.renderer.rules.table_open ?? render
+  const close = md.renderer.rules.table_close ?? render
+  md.renderer.rules.table_open = (...a) => '<div class="vp-table">' + open(...a)
+  md.renderer.rules.table_close = (...a) => close(...a) + '</div>'
+}
+
+// The Vault C mark, inlined so the site needs no extra asset.
+const mark = (stroke: string, accent: string) =>
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M20 8.5V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="${stroke}" stroke-width="1.75"/><circle cx="12" cy="12" r="1.9" fill="none" stroke="${accent}" stroke-width="1.75"/></svg>`,
+  )
+
 const editPattern = `${repo}/edit/main/docs-site/:path`
 
 export default withMermaid(
@@ -110,6 +196,10 @@ export default withMermaid(
     head: [['meta', { name: 'theme-color', content: '#4353d8' }]],
     markdown: {
       theme: { light: 'github-light', dark: 'github-dark' },
+      config: (md) => {
+        md.use(stepsPlugin)
+        md.use(tableWrap)
+      },
     },
     mermaid: {},
     locales: {
@@ -122,6 +212,7 @@ export default withMermaid(
           nav: nav('en'),
           sidebar: sidebar('en'),
           editLink: { pattern: editPattern, text: 'Edit this page on GitHub' },
+          docFooter: { prev: 'Previous', next: 'Next' },
           footer: {
             message: 'Released under the MIT License.',
             copyright: 'Coffer contributors',
@@ -161,6 +252,7 @@ export default withMermaid(
       },
     },
     themeConfig: {
+      logo: { light: mark('#16181D', '#4353D8'), dark: mark('#E4E5EA', '#5A66E6'), alt: 'Coffer' },
       search: {
         provider: 'local',
         options: {
@@ -207,7 +299,7 @@ export default withMermaid(
           },
         },
       },
-      outline: { level: [2, 3] },
+      outline: { level: [2, 3], label: 'On this page' },
       socialLinks: [{ icon: 'github', link: repo }],
     },
   }),

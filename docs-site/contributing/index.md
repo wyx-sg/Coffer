@@ -126,6 +126,7 @@ This site and the README ship in English and Simplified Chinese. Every other doc
 - **One sidebar.** Both sidebars are built from `docs-site/.vitepress/sidebar.json`, where each entry carries its English and Chinese label.
 - **The app's words.** Use the Chinese terms the web UI uses (`frontend/src/i18n/locales/zh.json`): 智能体, 技能, 知识, 记忆, 密钥, MCP 服务器, 模型提供商, 消息渠道, 对话, 整理. Code, commands, paths, config keys and error codes stay in English.
 - **Generated pages.** `make docs-reference` writes the CLI reference in both languages. The command help comes from the CLI itself, so it is English on both pages.
+- **Page building blocks.** The site follows the design canvas "7 · Docs site": one board per page template. Number a task's steps by wrapping its `###` headings in `::: steps` … `:::` (use a longer fence, such as `::::: steps`, when a step holds a container of its own). Diagrams and lists that need more than Markdown are Vue components under `docs-site/.vitepress/theme/components/`, registered by file name, so a page writes `<ArchDiagram />` with no import. The home page is one such component, `CofferHome`, and its screenshot is `docs-site/public/overview.png`.
 
 `scripts/check_docs_locales.py`, part of `make lint`, fails with the path when a page, a sidebar entry, a heading anchor or a link is in one language and not the other.
 
