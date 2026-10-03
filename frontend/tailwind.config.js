@@ -58,6 +58,7 @@ export default {
           strong: role("danger-strong"),
         },
         neutral: { DEFAULT: role("neutral"), soft: role("neutral-soft") },
+        data: role("data"),
         "on-accent": role("on-accent"),
         "on-status": role("on-status"),
         chip: role("chip"),

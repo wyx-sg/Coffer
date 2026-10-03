@@ -33,10 +33,9 @@ import {
 // Re-exported so call sites keep importing these from "@/components/DataTable".
 export type { Column, FilterDef };
 
-// Cap the body at 20 rows (row ≈ 3rem) — beyond that the container scrolls
-// vertically under the sticky header (#227), so a long list keeps its
-// Load more and toolbar on screen. Tailwind's max-h scale stops at 24rem, so
-// the value has to be arbitrary; it lives here, named, rather than inline.
+// Cap the body at 20 rows (row ≈ 3rem): beyond that it scrolls under the
+// sticky header (#227), keeping Load more and the toolbar on screen. Tailwind's
+// max-h scale stops at 24rem, so the arbitrary value lives here, named.
 const BODY_MAX_HEIGHT = "max-h-[60rem]";
 
 interface Props<T> extends ListLoading {
@@ -53,7 +52,7 @@ interface Props<T> extends ListLoading {
   };
   filters?: FilterDef<T>[];
   onRowClick?: (row: T) => void;
-  /** Rows returning false do not open on click (default: all do). */
+  /** Rows returning false do not open on click. */
   isRowClickable?: (row: T) => boolean;
   /** A full-width row under a row — a notice about it; null renders nothing. */
   rowFooter?: (row: T) => ReactNode;
@@ -61,7 +60,7 @@ interface Props<T> extends ListLoading {
   getRowDetail?: (row: T) => ReactNode;
   /** When set, a leading checkbox column + bulk action bar are rendered. */
   selection?: TableSelection<T>;
-  /** Rows returning false get no checkbox + are excluded from bulk (default: all). */
+  /** Rows returning false get no checkbox and are left out of bulk. */
   isSelectable?: (row: T) => boolean;
   /** How many rows show at first and each "Load N more" adds (default: Settings). */
   pageSize?: number;
@@ -73,7 +72,8 @@ interface Props<T> extends ListLoading {
    *  Pair it with `TruncatedText` / `TruncatedPath` in cells that can be long. */
   fixed?: boolean;
   emptyMessage: string;
-  /** Rendered under the empty message, e.g. the primary "create" button. */
+  footer?: boolean; // false drops the "Showing x of y" footer (an always-short list)
+  /** Under the empty message, e.g. the primary "create" button. */
   emptyAction?: ReactNode;
 }
 
@@ -95,6 +95,7 @@ export function DataTable<T>({
   emptyMessage,
   emptyAction,
   fixed = false,
+  footer = true,
   isLoading = false,
 }: Props<T>) {
   const server = serverPagination;
@@ -108,7 +109,6 @@ export function DataTable<T>({
   };
 
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
-  // N: the `pageSize` prop, else the Settings default (reactive to Settings).
   const globalDefault = useDefaultPageSize();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const expandable = Boolean(getRowDetail);
@@ -226,7 +226,7 @@ export function DataTable<T>({
         </Table>
       </div>
 
-      {infinite ? (
+      {!footer ? null : infinite ? (
         <LoadMoreFooter
           loaded={infinite.loaded}
           total={infinite.total}

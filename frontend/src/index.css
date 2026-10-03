@@ -95,6 +95,7 @@
     --warning: 148 88 0; /* #945800 */
     --danger: 200 55 45; /* #c8372d */
     --neutral: 160 165 174; /* #a0a5ae */
+    --data: 124 133 153; /* #7c8599 — chart bars and data marks */
     --success-soft: 233 245 239; /* #e9f5ef */
     --warning-soft: 251 243 228; /* #fbf3e4 */
     --on-warning: 255 255 255; /* #ffffff */
@@ -176,6 +177,7 @@
     --warning: 217 164 65; /* #d9a441 */
     --danger: 229 105 94; /* #e5695e */
     --neutral: 107 111 123; /* #6b6f7b */
+    --data: 107 116 137; /* #6b7489 */
     --success-soft: 32 46 44; /* rgba(76, 183, 130, 0.12) over surface */
     --warning-soft: 49 43 36; /* rgba(217, 164, 65, 0.12) over surface */
     --on-warning: 22 23 27; /* #16171b */

@@ -97,7 +97,7 @@ export function ChangePreview({
           : title;
 
   const cancel = (
-    <Button variant="outline" onClick={close} disabled={locked}>
+    <Button variant="ghost" onClick={close} disabled={locked}>
       {t("common.cancel")}
     </Button>
   );
