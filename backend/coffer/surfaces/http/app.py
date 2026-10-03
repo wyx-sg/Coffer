@@ -233,7 +233,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             kinds.memory.turn_retrieval, features.is_enabled
         ),
         retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
-        observe_quota=kinds.usage.quota.observe_agent_event,
     )
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors

@@ -687,6 +687,14 @@ timer-driven, so a notice that re-raised itself on each would cover every page
 hourly with something the user read the first time. A mark keyed on what is
 wrong asks once, and asks again only when the answer would be different.
 
+The attention list's sync items MUST be named by their situation, so ignoring one — on the Overview
+or from the Sync page, which share the key — hides that situation and no other: the conflicts item
+by the commits and files in conflict, a hold's by its commits and files, a join's by its files, a
+plaintext secret's by what was found, and a remote's failure by the remote. A situation that
+changes is a new item. The list MUST also carry an item while `git` is missing
+(`sync_git_missing`) and while the remote is unreachable (`sync_unreachable`), each with its
+hand-off, so every problem the Sync page shows can be ignored.
+
 The status MUST also say how far this vault and the remote (as last fetched) have drifted: `ahead`, the commits this vault has that the remote lacks, and `behind`, the commits the remote has that this vault lacks. The Overview's Sync tile words them as "1 behind · 0 ahead".
 
 #### Scenario: the status counts commits ahead of and behind the remote
@@ -709,6 +717,12 @@ The status MUST also say how far this vault and the remote (as last fetched) hav
 - **GIVEN** a round stopped on a conflict
 - **WHEN** the attention list is read
 - **THEN** it carries one sync item for the conflicts, pointing at the stopped round
+
+#### Scenario: an ignored item returns when the situation changes
+- **GIVEN** a round stopped on one conflicting file and its attention item
+- **WHEN** the attention list is read again, and then the round is stopped on another set of files
+- **THEN** the item keeps the same key while the situation is the same, and has a different key for the other set of files
+- **AND** a machine without `git`, and a remote that cannot be reached, each have their own item
 
 ### Requirement: Release a hold whose diff no longer breaches
 A hold is a question about one pair of commits. It MUST stand while neither this
@@ -899,9 +913,9 @@ The CLI MUST cover the round and the vault's lifecycle:
 - `coffer sync now`, `status [--json] [--prompt]`, `history [--limit]` and
   `rollback <round> [--yes]`;
 - `join [--yes]`;
-- `conflicts [--prompt]`, `resolve <path> --mine|--theirs|--edited`, `resolve --merged`,
-  `edit <path>` and `continue`;
-- `hold [--confirm|--restore]` and `choose [<path> --mine|--theirs]`;
+- `conflicts [--prompt]`, `resolve <path> --mine|--theirs|--edited`,
+  `edit <path> [--join]` and `continue`;
+- `hold [--confirm|--restore]` and `choose [<path> --mine|--theirs|--edited]`;
 - `push-anyway [--yes]`.
 
 It MUST cover the administration too:
@@ -915,7 +929,8 @@ There is no `key export`: a key backup leaves a machine only through the desktop
 `remote set` is not given keeps the stored remote's value. `remote pause` and `remote resume` switch
 the remote's `enabled` switch off and on (see "Pause a configured remote without forgetting it") and
 change nothing else. `--prompt` prints the hand-off prompt for the person's agent: on `status` the
-current problem's, on `conflicts` the stopped round's merge. It exits `5` when there is none.
+current problem's, on `conflicts` the stopped round's merge, which also records the hand-off. It exits `5` when there
+is none.
 `push-anyway` lists the places the last round found and asks before pushing, unless given `--yes`.
 
 `status` MUST report the configured remote and every one of its settings beside this machine, the
@@ -944,13 +959,14 @@ The HTTP API MUST cover the same operations under `/api/v1/sync`:
 
 - `GET /status`, `POST /run`, `GET /runs` and `GET /runs/{id}`;
 - `GET /runs/{id}/rollback-plan` and `POST /runs/{id}/rollback`;
-- `GET|PUT|DELETE /remote` and `POST /remote/check`;
-- `GET /join/preview`, `POST /join` and `GET|POST /join-choices`;
+- `GET|PUT|DELETE /remote`, `POST /remote/check` and `POST /remote/restore`;
+- `GET /join/preview`, `POST /join`, `GET|POST /join-choices`, and `POST /join-choices/editor`,
+  `/join-choices/handoff` and `/join-choices/discard`;
 - `GET /stop`, `POST /stop/files/answer`, `POST /stop/files/editor`, `GET /stop/files/versions`,
-  `POST /stop/merged` and `POST /continue`;
+  `POST /stop/handoff`, `POST /stop/files/discard` and `POST /continue`;
 - `POST /hold/confirm` and `POST /hold/restore`;
 - `POST /plaintext/push-anyway`;
-- `GET /machines`, `PATCH /machines/self` and `DELETE /machines/{id}`;
+- `GET /machines`, `PATCH /machines/self`, `DELETE /machines/{id}` and `POST /machines/{id}/restore`;
 - `GET /key/fingerprint` and `POST /key/import`.
 
 No sync route returns the master key.
@@ -963,17 +979,21 @@ No sync route returns the master key.
 ### Requirement: Show a conflict as a banner
 A round stopped on conflicts MUST be shown as a card on the Status tab, above the rounds table, not
 as a row. The card lists each conflicting file with its area, when each machine changed it and
-whether it has an answer, and leads to the Resolve conflicts view. That view MUST offer, for each
-file:
+whether it has an answer, and carries **Resolve conflicts** beside a hand-off that gives every
+conflict to an agent at once. That card can be ignored, as the same item on the Overview, and returns
+when the set of conflicts changes. The Resolve conflicts view MUST offer, for each file:
 
 - keep this machine's, and take the other's, each saying what it changes here;
 - open in the editor and mark resolved, except for an encrypted secret;
-- merging with an agent (see "Hand a conflict's merge to an agent").
+- a hand-off that gives that one file to an agent (see "Hand conflicting files to an agent"), after
+  which the file reads "Merged by an agent · check it" and shows the merge's diff from this
+  machine's version with **Mark resolved**, **Open conversation** and **Back to two choices**.
 
 The view says how many files are answered, lets the person leave the round for later, and offers
 Continue round once every file has an answer. A hold is shown the same way, on its own card, leading
 to the Review held deletions view with its two answers. So are a join preview and a join's
-differing files, each on its own card with its own answers.
+differing files, each on its own card; a join's differing files are listed and opened in the same
+Resolve view as conflicts, titled for the join and ending in **Apply choices**.
 
 #### Scenario: a conflict is shown as a banner above the runs
 - **GIVEN** a vault whose last round stopped on a conflict
@@ -1130,8 +1150,9 @@ A merge that git cannot finish cleanly — both sides changed the same lines, on
 side deleted what the other changed, two resources claim one name — or whose
 merged tree fails validation MUST stop the round whole: nothing is checked out,
 nothing is pushed, this vault's `HEAD` and every file on disk stay as they were,
-and the remote is untouched. Coffer MUST NOT resolve a conflict by itself, by a
-rule or by an agent; the only exception is secret ciphertext (see "Let the
+and the remote is untouched. Coffer MUST NOT resolve a conflict by itself or by a
+rule, and an agent's merge counts only once the person marks it resolved (see "Hand conflicting files to an
+agent"); the only exception is secret ciphertext (see "Let the
 fresher secret ciphertext win"). Asking again while nobody answered and
 neither side moved changes nothing.
 
@@ -1360,47 +1381,6 @@ cannot decrypt. A key file that is blank or not a key MUST be refused.
 - **WHEN** a master key is imported that still does not open it
 - **THEN** the import names those refs as still locked, and a blank or malformed key is refused
 
-### Requirement: Hand a conflict's merge to an agent
-A round stopped on files both machines edited (both sides changed it, or the merge git made is not
-a valid document) MUST offer, beside the two answers and the editor, a hand-off that asks the
-person's agent to merge them. The prompt MUST name:
-
-- the vault's path;
-- each file, with the commit that last changed it on each side, when each side changed it, and the
-  marked-up copy under `derived/sync-conflicts/` to edit, which Coffer writes before it builds the
-  prompt;
-- how to see what each side changed (`git -C <vault> diff <base> <commit> -- <path>`);
-- the rule that the agent edits only those copies and runs no git command that changes the vault,
-  because Coffer commits the result;
-- how the person finishes: **I merged it**, then **Continue round**.
-
-The prompt is served as `handoff` on `GET /api/v1/sync/stop` and on the attention list's conflicts
-item. `coffer sync conflicts --prompt` prints it.
-
-**I merged it** (`POST /api/v1/sync/stop/merged`, `coffer sync resolve --merged`) MUST record, as the
-edited answer, the saved copy of every unanswered file the prompt handed over. It MUST check every
-copy first and refuse the whole request, naming the file and line, while any copy still holds a
-conflict marker. Nothing is written into the vault until the round continues.
-
-An encrypted secret (`secret/*.enc`) MUST NOT be handed to an agent or hand-merged. It offers only
-keep this machine's and take the other's: no editor copy is written, and an edited answer is refused
-(`SYNC_SECRET_NOT_EDITABLE`). The prompt MAY say how many secret files wait for the person, and MUST
-NOT carry a secret file's path, contents or any secret value. A same-name resource with another uid,
-one uid at two paths, and a file changed on one side and deleted on the other are decisions, not
-merges, and are not handed over either.
-
-#### Scenario: a conflict's merge is handed to an agent and recorded with I merged it
-- **GIVEN** a round stopped because both machines changed the same lines of one document
-- **WHEN** the stopped round is read, the agent edits the marked-up copy the prompt names, and the person presses I merged it and continues
-- **THEN** the prompt names the vault, the file, both sides' commits, a `git -C <vault> diff` command and `coffer sync resolve --merged`
-- **AND** I merged it is refused while a conflict marker is left in the copy, and once it is gone the merged text is what the vault holds after the round
-
-#### Scenario: an encrypted secret in conflict offers only the two choices
-- **GIVEN** a round stopped on a `secret/*.enc` file among its conflicts
-- **WHEN** the person asks for an editor copy of it, answers it "edited", or presses I merged it with nothing else to merge
-- **THEN** each is refused, the file is marked a secret that is not handed to the agent, and the prompt carries none of its contents
-- **AND** keeping this machine's or taking the other's version answers it
-
 ### Requirement: Hand a remote's failure to an agent
 A round the remote refused, whether a rejected push (`push_failed`), a refused sign-in
 (`auth_failed`) or a remote that cannot be reached (`unreachable`), MUST carry a hand-off. The fix is
@@ -1432,28 +1412,30 @@ the same hand-off in `details.handoff`.
 The web UI MUST present a top-level **Sync** page. The header says in one status whether this machine
 is in sync: In sync, N changes to push, N changes pulled, Syncing, Stopped (conflicts or deletions
 held), Push failed, Not pushed: plaintext secret, Remote unreachable, Sign-in failed, Paused or Not
-set up. Beside the status is the page's one round action (Sync now, or Try again after a failure),
-and under it the remote's URL with a copy button, the branch and when rounds run. A "?" beside the
-title explains how to add another machine. The page has **three** tabs:
+set up. Beside the status is the page's one round action, **Sync now** (Syncing… and disabled while a
+round runs), which never changes with the state; under the title is the remote's URL with a copy
+button, the branch and when rounds run. The title carries the Experimental mark. The page has **three** tabs:
 
 - **Status** is the landing tab. It holds:
-  - a banner saying what the status means now;
-  - what the vault holds that syncs: knowledge documents, skills, MCP servers and tools
-    definitions, and encrypted secrets, synced or not;
-  - what waits to push;
+  - a banner saying what the status means now, with one grey line under it of what the vault holds
+    that syncs: knowledge documents, skills, MCP server and tool definitions, and whether secrets
+    are synced;
+  - what waits to push, five lines then "Show all";
   - a card for a round stopped on conflicts or held deletions, and for a join's differing files;
-  - the problem a failed round met;
-  - every round this machine has run, as a table of when, the round, what it pulled and pushed, the
-    commits and Roll back. A round opens in a drawer with its snapshot, the commits it pulled, what
-    it changed here and what it pushed.
+  - the problem a failed round met, as a card with its own action and an × that ignores it like
+    Ignore on Overview. A card has no Retry; the vault inside a cloud-synced folder is moved with
+    "Move the vault…";
+  - every round this machine has run, as a table of when, the round, what it pulled and pushed. A
+    round opens in a drawer with its snapshot, the commits it pulled, what it changed here and what
+    it pushed, and Roll back to before the round is there and nowhere else.
 - **Machines** lists the machine registry. A user renames this machine and retires one that is
-  gone. The machine that runs knowledge curation carries a read-only "Runs curation" tag.
+  gone, at once, with Undo. The machine that runs knowledge curation carries a read-only "Runs curation" tag.
 - **Remote** holds the remote's settings, each saved as it is changed:
   - the URL, the branch, the push secret, and the user name an HTTPS token is sent with;
   - when a round runs. "Only when I press Sync now" pauses the remote;
   - whether secret ciphertext travels, which asks first when switched on;
   - the vault's folder, with a warning when it sits in a synchronised folder;
-  - Stop syncing, which asks first.
+  - Stop syncing, which runs at once and offers Undo.
 
 Resolving conflicts and reviewing held deletions each have their own view, `/sync/conflicts` and
 `/sync/deletions`, reached from the Status card and returning to it. Until this machine has joined
@@ -1520,5 +1502,122 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 #### Scenario: the Sync page names each place and offers the hand-off and push anyway
 - **GIVEN** the Sync page with a `plaintext_found` problem
 - **WHEN** it is shown
-- **THEN** its card lists each file, line and key a file still holds, with Retry and the agent hand-off
+- **THEN** its card lists each file, line and key a file still holds, with "Move into secrets…", which opens the Secrets scan limited to those files, and no Retry
 - **AND** Push anyway runs only after a confirmation that says it is recorded in the audit log
+
+### Requirement: Undo a retired machine
+Retiring another machine MUST run at once and MUST be undoable: `POST
+/api/v1/sync/machines/{id}/restore` registers the machine again with the descriptor it had the
+moment before it was retired, read from the vault's history, as a commit of this machine's.
+Restoring a machine that is registered already changes nothing, restoring this machine is refused,
+and restoring a machine the vault never held is `SYNC_MACHINE_NOT_FOUND`. The Machines tab retires
+without a confirmation and offers Undo in the toast that says so.
+
+#### Scenario: a retired machine is registered again with its descriptor
+- **GIVEN** a machine that retired another one
+- **WHEN** it restores the retired machine
+- **THEN** the retired machine's descriptor is in the vault again exactly as it was, and the registry lists it
+- **AND** restoring it a second time changes nothing, and restoring an unknown machine is `SYNC_MACHINE_NOT_FOUND`
+
+### Requirement: Undo stop syncing
+Stopping sync MUST run at once, without a confirmation, and MUST be undoable. `DELETE
+/api/v1/sync/remote` forgets the remote as before and keeps, on this machine only, what it
+forgot: the remote's settings (the push secret as a name, never its value), whether this machine had
+joined, a round waiting for a person and a join's differing files. `POST /api/v1/sync/remote/restore`
+puts them back as they were and returns the remote. It is `SYNC_NOTHING_TO_RESTORE` when nothing was
+stopped or another remote was set since, and `SYNC_REMOTE_EXISTS` while a remote is set. Setting a
+remote drops what was kept.
+
+#### Scenario: stopping sync can be undone
+- **GIVEN** a joined machine with a remote, a push secret, a custom interval and a round stopped on a conflict
+- **WHEN** sync is stopped and then restored
+- **THEN** the remote has the same URL, branch, secret name, user name, interval and secret setting, the machine is still joined, and the stopped round is waiting again
+- **AND** restoring a second time, or after setting another remote, is `SYNC_NOTHING_TO_RESTORE`
+
+### Requirement: Move the vault out of a synchronised folder
+A vault found inside a folder another tool synchronises (the "Cloud folder" problem) MUST be movable
+from the Sync page. `POST /api/v1/sync/vault/move` takes `{to}` and answers `{from, to}`. The vault's
+path is fixed (`~/.coffer/vault`), so a vault elsewhere is reached through that path and a move never
+changes a path any part of the daemon holds: when `to` is `~/.coffer/vault` itself a real folder
+replaces the link, otherwise the folder is placed at `to` and `~/.coffer/vault` becomes a link to it.
+No restart is needed. The target MUST be absolute (`~` allowed), absent or empty, outside and not
+around the current vault, in a writable parent, and not inside a folder the Cloud folder detector
+names: `SYNC_VAULT_TARGET_INVALID` (422), `SYNC_VAULT_TARGET_IN_CLOUD` (422) and
+`SYNC_VAULT_TARGET_NOT_EMPTY` (409). While it moves, rounds, the curation pass and agent writes are
+held off by the sync lock; the folder is renamed, or copied and then emptied when the target is on
+another filesystem; the git repository (HEAD, working-tree status, connectivity) is checked at the
+new place against the old; any failure puts the vault back and is `SYNC_VAULT_MOVE_FAILED` (500).
+The old folder is left empty for the person to delete. `GET /api/v1/sync/status` carries
+`vault_real_path` (where the files really are, the dialog's "From") and `default_vault_path` (the
+"To" it offers).
+
+#### Scenario: the vault is moved out of a synchronised folder
+- **GIVEN** a git vault in iCloud Drive that `~/.coffer/vault` links to, and the Cloud folder problem showing
+- **WHEN** the vault is moved to `~/.coffer/vault`
+- **THEN** the response is `{from, to}` with the iCloud folder and the new folder, the vault's files and history are at the new place unchanged, and the old folder exists empty
+- **AND** the status no longer reports a synchroniser or a problem, and rounds and writes go on at the same path
+- **AND** a target inside iCloud Drive, a cloud drive or a Syncthing folder is `SYNC_VAULT_TARGET_IN_CLOUD`, a relative or overlapping path is `SYNC_VAULT_TARGET_INVALID`, and a folder with files in it is `SYNC_VAULT_TARGET_NOT_EMPTY`, each leaving the vault where it was
+
+### Requirement: Hand conflicting files to an agent
+Files both machines edited MUST be offered to the person's agent to merge, beside the two
+answers and the editor: a round stopped on conflicts (both sides changed the file, or the merge git
+made is not a valid document) and a join's differing files (both sides hold the file with no common
+base) are the same question and share one set of routes and one prompt shape. The person hands over
+every such file at once or one file; `POST /api/v1/sync/stop/handoff` (a join's:
+`POST /api/v1/sync/join-choices/handoff`) takes the optional `paths`, writes each file's marked-up copy
+under `derived/sync-conflicts/`, records the hand-off with its time, and returns the prompt. The body
+may also carry the `agent` and the Coffer `conversation_id` it was opened in; sending the request
+again with them attaches them without a second hand-off. The prompt states the goal and the
+constraints only:
+
+- the vault's path, to read for context;
+- each file, when each machine changed it and the marked-up copy to write the merge into, which holds
+  both versions between conflict markers;
+- keep what each side added, and ask the person where the two contradict;
+- write only those copies, leaving the vault's own files and its git history alone, because Coffer
+  writes the merged file into the vault when the person marks it resolved.
+
+It MUST carry no shell command, no secret's value and no secret file's path or contents.
+
+An agent's merge is never an answer. A file handed over reads `handed_off` while its copy is still
+git's marked-up text or holds a conflict marker, and `merged_by_agent` once the copy differs from it
+and holds no marker, with `merged_at` the time the copy was saved. `GET /api/v1/sync/stop/files/versions`
+then carries the merged text and its unified diff from this machine's version (`merged`,
+`merged_diff`). The file stays unresolved: **Mark resolved** is the `edited` answer, read from the
+copy (`POST /api/v1/sync/stop/files/answer`, or a join's `POST /api/v1/sync/join-choices`, which commits
+the merge as this machine's version for the next round to push), and it is refused while a conflict
+marker is left, naming the line. **Back to two choices** (`POST /api/v1/sync/stop/files/discard`, a
+join's `.../join-choices/discard`) forgets the copy, the hand-off and any answer for the file. Asking
+again for a file already merged starts it over from the marked-up text. Nothing is written into the
+vault until the round continues, or, for a join, until the file is answered.
+
+An encrypted secret (`secret/*.enc`) MUST NOT be handed to an agent or hand-merged. It offers only
+keep this machine's and take the other's: no editor copy is written, and a hand-off or an edited
+answer for it is refused (`SYNC_SECRET_NOT_EDITABLE`). The prompt MAY say how many secret files wait
+for the person. A same-name resource with another uid, one uid at two paths, and a file changed on
+one side and deleted on the other are decisions, not merges, and are not handed over either.
+
+#### Scenario: an agent's merge is shown to be checked and marked resolved
+- **GIVEN** a round stopped because both machines changed the same lines of one document
+- **WHEN** the files are handed to an agent, the agent writes its merge into the copy the prompt names, and the person marks it resolved and continues
+- **THEN** the prompt names the vault, the file, both machines and the copy, and carries no shell command
+- **AND** the file reads `handed_off` until the copy holds a merge, then `merged_by_agent` with the merge and its diff from this machine's version while the round still has an unanswered file
+- **AND** marking it resolved is refused while a conflict marker is left, and once it is accepted the merged text is what the vault holds after the round
+
+#### Scenario: going back to two choices discards an agent's merge
+- **GIVEN** a conflicting file an agent has merged, even one already marked resolved
+- **WHEN** the person goes back to two choices
+- **THEN** the copy is gone, the file is unresolved with no agent state, and keeping this machine's or taking the other's answers it
+- **AND** handing it over again, or asking again after a merge, starts from the marked-up text
+
+#### Scenario: a join's differing files are handed to an agent too
+- **GIVEN** a machine that joined a remote holding a file that differs from this machine's, with no common base
+- **WHEN** the join's files are read, handed to an agent, merged in the copy and answered `edited`
+- **THEN** the file has the shape a stopped round's conflicting file has, with the same agent states
+- **AND** the merge is committed as this machine's version, so the next round pushes it and the other machine takes it
+
+#### Scenario: an encrypted secret in conflict offers only the two choices
+- **GIVEN** a round stopped on a `secret/*.enc` file among its conflicts
+- **WHEN** the person asks for an editor copy of it, hands it to an agent, or answers it "edited"
+- **THEN** each is refused, the file is marked a secret that an agent may not merge, and the prompt carries none of its contents
+- **AND** keeping this machine's or taking the other's version answers it

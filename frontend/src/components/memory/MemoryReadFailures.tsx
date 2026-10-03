@@ -8,7 +8,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { useMemoryReading, useSyncMemory } from "@/lib/hooks/useMemory";
@@ -64,7 +64,9 @@ export function MemoryReadFailures() {
               >
                 {t("memory.failure.retry")}
               </Button>
-              <AskAgentButton
+              <AgentHandoff
+                size="sm"
+                help={false}
                 prompt={t("memory.failure.prompt", {
                   agent,
                   path: f.path,

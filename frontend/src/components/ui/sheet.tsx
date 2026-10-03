@@ -1,6 +1,7 @@
 // src/components/ui/sheet.tsx
 // Drawer over @radix-ui/react-dialog: scrim, a raised panel on the right, header / scrolling body / footer band.
-// Scrim and panel start below the 44px title bar (Foundations 0.4.02), so the window controls stay usable.
+// Both scrim and panel start under the window title bar (--titlebar-inset), so the title bar is never
+// dimmed or covered (Foundations 0.4.02); the panel's left corners are r12, its right edge flush.
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
@@ -14,14 +15,17 @@ const Sheet = DialogPrimitive.Root;
 // body between them scrolls, so Save stays on screen however long the form.
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /** The built-in ✕; a header that carries its own close turns it off. */
+    showClose?: boolean;
+  }
+>(({ className, children, showClose = true, ...props }, ref) => {
   const { t } = useTranslation();
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         className={cn(
-          "fixed inset-x-0 bottom-0 top-11 z-dialog bg-scrim",
+          "fixed inset-x-0 bottom-0 top-[var(--titlebar-inset)] z-dialog bg-scrim",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-base",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-fast",
         )}
@@ -29,7 +33,7 @@ const SheetContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed bottom-0 right-0 top-11 z-dialog flex w-full max-w-[640px] flex-col bg-surface-raised text-sm text-text shadow-overlay outline-none",
+          "fixed bottom-0 right-0 top-[var(--titlebar-inset)] z-dialog flex w-full max-w-[640px] flex-col rounded-l-2xl bg-surface-raised text-sm text-text shadow-overlay outline-none",
           "data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:duration-slow data-[state=open]:ease-out",
           "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-fast data-[state=closed]:ease-in",
           className,
@@ -37,10 +41,12 @@ const SheetContent = React.forwardRef<
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-3.5 top-[18px] inline-flex size-6 items-center justify-center rounded-item text-text-subtle transition-colors duration-fast hover:bg-surface-hover hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
-          <X className="size-4" />
-          <span className="sr-only">{t("common.close")}</span>
-        </DialogPrimitive.Close>
+        {showClose ? (
+          <DialogPrimitive.Close className="absolute right-3.5 top-[18px] inline-flex size-6 items-center justify-center rounded-item text-text-subtle transition-colors duration-fast hover:bg-surface-hover hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
+            <X className="size-4" />
+            <span className="sr-only">{t("common.close")}</span>
+          </DialogPrimitive.Close>
+        ) : null}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

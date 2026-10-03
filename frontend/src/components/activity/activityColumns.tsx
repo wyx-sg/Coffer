@@ -1,13 +1,14 @@
 // src/components/activity/activityColumns.tsx — the columns of each Activity tab's table.
 //
-// Everything and Changes say what happened and who did it (Everything adds
-// how long a call took); MCP calls name the agent, the server and tool, how
-// long it took and how it went; the Daemon log shows level, logger and
-// message. Widths follow design 6.1 and include each cell's 12px padding.
+// Design 6.2.01, 6.2.07, 6.2.08, 6.2.10. Everything: Time 76 · icon 26 · Event
+// · By 110 · Took 64. Changes: Time · icon · Change · By. MCP calls: Time ·
+// Agent · `server.`(grey)+tool · Took (right-aligned, sortable) · Status. The
+// Daemon log: Time · Level · Logger · Message. Each width is the column's
+// content width; the table adds 5px either side of every cell (10px between
+// columns) and 12px at the box's edges.
 import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
 
-import { AgentBadge } from "@/components/agent/AgentBadge";
 import { describeDaemonRecord } from "@/lib/activity/activityText";
 import {
   recordLogger,
@@ -21,7 +22,7 @@ import {
   CallStatus,
   CallTarget,
   EventCell,
-  LevelChip,
+  LevelText,
   SourceIcon,
   TimeCell,
   TookCell,
@@ -32,8 +33,11 @@ import {
 export interface Column {
   key: string;
   header: string;
-  /** Tailwind width class for the column (its 12px padding included). */
-  width?: string;
+  /** Content width in px; the last flexible column leaves it out. */
+  width?: number;
+  align?: "right";
+  /** The header sorts the loaded rows (numbers only). */
+  sortable?: boolean;
   cell: (r: ActivityRecord) => ReactNode;
 }
 
@@ -45,7 +49,7 @@ export function columnsFor(
   const time: Column = {
     key: "time",
     header: t("activity.table.time"),
-    width: tab === "daemon" ? "w-[120px]" : "w-[88px]",
+    width: tab === "daemon" ? 96 : 76,
     cell: (r) => <TimeCell at={r.at} withMs={tab === "daemon"} />,
   };
   if (tab === "mcp") {
@@ -54,15 +58,12 @@ export function columnsFor(
       {
         key: "agent",
         header: t("activity.table.agent"),
-        width: "w-[134px]",
+        width: 120,
         cell: (r) => {
           if (r.source !== "call") return null;
           const agent = r.call.agent_uid ? agents.get(r.call.agent_uid) : undefined;
           return agent ? (
-            <span className="flex min-w-0 items-center gap-1.5">
-              <AgentBadge type={agent.type} name={agent.name} size="sm" tooltip={false} />
-              <span className="truncate text-xs text-text-muted">{agent.name}</span>
-            </span>
+            <span className="block truncate text-xs text-text">{agent.name}</span>
           ) : (
             <span className="text-xs text-text-subtle">—</span>
           );
@@ -76,13 +77,15 @@ export function columnsFor(
       {
         key: "took",
         header: t("activity.table.took"),
-        width: "w-[84px]",
+        width: 72,
+        align: "right",
+        sortable: true,
         cell: (r) => <TookCell record={r} />,
       },
       {
         key: "status",
         header: t("activity.table.status"),
-        width: "w-[96px]",
+        width: 84,
         cell: (r) => (r.source === "call" ? <CallStatus t={t} call={r.call} /> : null),
       },
     ];
@@ -93,13 +96,13 @@ export function columnsFor(
       {
         key: "level",
         header: t("activity.table.level"),
-        width: "w-[100px]",
-        cell: (r) => <LevelChip record={r} />,
+        width: 64,
+        cell: (r) => <LevelText record={r} />,
       },
       {
         key: "logger",
         header: t("activity.table.logger"),
-        width: "w-[160px]",
+        width: 140,
         cell: (r) => (
           <span className="block truncate font-mono text-xs text-text-muted">
             {recordLogger(r) || "—"}
@@ -125,16 +128,16 @@ export function columnsFor(
   }
   const columns: Column[] = [
     time,
-    { key: "icon", header: "", width: "w-[46px]", cell: (r) => <SourceIcon record={r} /> },
+    { key: "icon", header: "", width: 26, cell: (r) => <SourceIcon record={r} /> },
     {
       key: "event",
-      header: t("activity.table.event"),
+      header: t(tab === "changes" ? "activity.table.change" : "activity.table.event"),
       cell: (r) => <EventCell t={t} record={r} />,
     },
     {
       key: "by",
       header: t("activity.table.by"),
-      width: "w-[84px]",
+      width: 110,
       cell: (r) => <ByCell t={t} record={r} agents={agents} />,
     },
   ];
@@ -142,7 +145,8 @@ export function columnsFor(
     columns.push({
       key: "took",
       header: t("activity.table.took"),
-      width: "w-[80px]",
+      width: 64,
+      align: "right",
       cell: (r) => <TookCell record={r} />,
     });
   }

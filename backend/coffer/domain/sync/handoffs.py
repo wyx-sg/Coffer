@@ -1,15 +1,15 @@
 """The sync chores Coffer hands to the person's agent (spec vault-sync
-"Hand a conflict's merge to an agent", "Hand a remote's failure to an agent").
+"Hand conflicting files to an agent", "Hand a remote's failure to an agent").
 
 Two chores depend on judgement or on the machine rather than on anything
 Coffer can decide:
 
 * **merging a conflicting file.** Coffer offers two manual answers (keep this
   machine's, take the other's) and a marked-up copy to edit. Merging the two
-  edits is a chore for an agent. The agent edits only the marked-up copies
-  Coffer wrote outside the vault, never the vault's files and never git. The
-  person then records the merge with **I merged it** and continues the round,
-  the way a skill update's merge is recorded.
+  edits is a chore for an agent. The agent writes only the marked-up copies
+  Coffer prepared outside the vault, never the vault's files and never git.
+  Coffer then shows the merge for the person to check and mark resolved; an
+  agent's merge is never an answer by itself.
 * **a remote that refuses the round.** A rejected push, a sign-in the remote
   refused, or a remote that cannot be reached are fixed on the remote's side
   or on this machine's network, never by Coffer.
@@ -38,7 +38,9 @@ from coffer.domain.vault.layout import SECRET
 #: The conflict reasons whose file an agent can merge by editing it. Two
 #: resources claiming one name, one uid at two paths, or a file changed on
 #: one side and deleted on the other are decisions, not merges.
-MERGEABLE_REASONS = frozenset({ConflictReason.BOTH_CHANGED, ConflictReason.INVALID_MERGE})
+MERGEABLE_REASONS = frozenset(
+    {ConflictReason.BOTH_CHANGED, ConflictReason.INVALID_MERGE, ConflictReason.JOIN_DIFFERS}
+)
 
 #: How many files a prompt lists; the rest are counted.
 _MAX_FILES = 30
@@ -65,7 +67,8 @@ def is_secret_file(path: str) -> bool:
 
 def agent_mergeable(conflict: ConflictFile) -> bool:
     """Whether an agent may merge this file: never a secret, and only when
-    both sides edited it (or the merge git made is not a valid document)."""
+    both sides edited it (or the merge git made is not a valid document), or a
+    join found it different on both sides."""
     return not is_secret_file(conflict.path) and conflict.reason in MERGEABLE_REASONS
 
 
@@ -95,91 +98,75 @@ def scrub_git_text(text: str) -> str:
 
 @dataclass(frozen=True)
 class MergeFile:
-    """One file handed to the agent, and where each side last changed it."""
+    """One file handed to the agent, and where it writes the merge."""
 
     conflict: ConflictFile
     #: The marked-up copy the agent edits (outside the vault).
     copy: str
-    #: The newest commit touching the file on this machine's side and on the
-    #: other side (``None``: none found).
-    ours_commit: str | None = None
-    theirs_commit: str | None = None
-
-
-def _short(commit: str | None) -> str:
-    return commit[:7] if commit else "unknown"
 
 
 def conflict_merge_handoff(
     *,
     vault: str,
     machine: str,
-    local: str,
-    remote: str,
-    base: str | None,
     files: Sequence[MergeFile],
     secret_files: int = 0,
+    joining: bool = False,
 ) -> str | None:
-    """The prompt that asks an agent to merge a stopped round's files, or
-    ``None`` when none of them is the agent's to merge."""
+    """The prompt that asks an agent to merge the files two machines both
+    changed (a stopped round's, or a first join's differing ones), or ``None``
+    when none of them is the agent's to merge. It states the goal and the
+    constraints only: how the agent reads the two versions is its own business."""
     if not files:
         return None
     other = next((f.conflict.theirs_machine for f in files if f.conflict.theirs_machine), None)
     other = other or "the other machine"
     facts: list[str] = [
-        f"The vault (a git repository Coffer commits to): {vault}",
+        f"The vault (read it for context; do not edit its files): {vault}",
         f"This machine: {machine}; the other side: {other}.",
-        f"This machine's commit: {local}; the other side's commit: {remote}; "
-        f"their merge base: {base or 'none (no common history)'}.",
     ]
     for f in files[:_MAX_FILES]:
         c = f.conflict
         facts.append(
-            f"{c.path}: changed here in {_short(f.ours_commit)}"
-            + (f" at {c.ours_time}" if c.ours_time else "")
-            + f", and on {c.theirs_machine or other} in {_short(f.theirs_commit)}"
+            f"{c.path}: "
+            + (f"changed here at {c.ours_time}" if c.ours_time else "changed here")
+            + f", and on {c.theirs_machine or other}"
             + (f" at {c.theirs_time}" if c.theirs_time else "")
-            + f". Marked-up copy to edit: {f.copy}"
+            + f". Merged copy to write: {f.copy}"
         )
     more = len(files) - _MAX_FILES
     if more > 0:
-        facts.append(f"And {more} more files; `coffer sync conflicts` lists every one.")
+        facts.append(f"And {more} more files, each with its own merged copy.")
     if secret_files:
         noun = "file is" if secret_files == 1 else "files are"
         facts.append(
             f"{secret_files} encrypted secret {noun} in conflict too. Leave them alone: "
             "I choose a side for them in Coffer."
         )
-    diff_from = base or local
-    see = (
-        f"See what each side changed with `git -C {vault} diff {diff_from} {local} -- <path>` "
-        f"(this machine) and `git -C {vault} diff {diff_from} {remote} -- <path>` "
-        f"({other}); `git -C {vault} show {remote}:<path>` prints the other side's whole file."
-        if base
-        else f"See how the two sides differ with `git -C {vault} diff {local} {remote} -- <path>`; "
-        f"`git -C {vault} show {remote}:<path>` prints the other side's whole file."
-    )
+    one = len(files) == 1
+    count = "One file" if one else f"{len(files)} files"
+    what = ("differs" if one else "differ") if joining else ("was" if one else "were")
     return render_handoff(
         Handoff(
             task=(
-                f"A Coffer sync round stopped on {len(files)} "
-                + ("file" if len(files) == 1 else "files")
-                + f" that both this machine and {other} changed. Merge each file's two versions "
-                "in the marked-up copy Coffer prepared."
+                f"{count} {what} "
+                + ("between" if joining else "changed on both")
+                + f" this machine and {other}"
+                + (" when it joined the sync remote" if joining else ", so Coffer's sync stopped")
+                + ". Merge each file's two versions into one."
             ),
             facts=tuple(facts),
             steps=(
-                see,
-                "Only read the vault: run no git command that changes it (commit, merge, "
-                "checkout, reset, stash, push), and do not edit the vault's own files. "
-                "Coffer commits the merged result itself.",
-                "Edit only the marked-up copies listed above. Keep what each side meant; where "
-                "the two really disagree, ask me. Remove every conflict marker "
-                "(<<<<<<<, =======, >>>>>>>).",
-                "When every copy is merged, show me what you changed and tell me it is ready. "
-                "I finish it in Coffer with I merged it and Continue round (on the command "
-                "line: `coffer sync resolve --merged`, then `coffer sync continue`); do not run "
-                "them yourself.",
+                "Each merged copy starts with both versions between conflict markers "
+                "(<<<<<<<, =======, >>>>>>>): this machine's first, the other side's second.",
+                "Write the merged result into that copy, replacing its whole content, with no "
+                "marker left. Keep what each side added; where the two contradict, ask me "
+                "which to keep before writing it.",
+                "Edit only the merged copies listed above. Coffer writes the merged file into "
+                "the vault when I mark it resolved, so leave the vault's own files and its git "
+                "history alone.",
+                "When every copy is merged, tell me which files you merged and what you decided "
+                "where the sides differed. I check the result in Coffer.",
             ),
         )
     )

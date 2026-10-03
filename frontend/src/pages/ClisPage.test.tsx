@@ -156,7 +156,7 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("button", { name: /Install|Update/ })).toBeNull();
 
     // Copy prompt lives in the ▾ menu of the split button.
-    fireEvent.click(await screen.findByRole("button", { name: "More ways to hand it off" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More options" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /Copy prompt/ }));
     expect(writeText).toHaveBeenCalledWith(JQ_MISSING.handoff?.prompt);
 

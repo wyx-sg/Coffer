@@ -1,101 +1,103 @@
 // frontend/src/pages/sync/SyncJoinChoices.test.tsx
 //
-// The files a join left differing (6.5.19): each row names when each side
-// edited it, a choice is staged per row, and "Apply N choices" sends the
-// staged ones together — nothing is answered by a single click.
+// The files a join left differing (6.4.23): the same bordered list as a stopped
+// round's conflicts, each row saying when each Mac edited it and that a version
+// is still to be chosen, with Choose versions (the Resolve page in join mode)
+// and one Ask an agent for every file an agent may merge. Nothing is answered
+// from here.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 import type { ConflictFile } from "@/lib/api/sync";
 import { SyncJoinChoices } from "./SyncJoinChoices";
-import { idleMutation, makeStatus } from "./syncTestKit";
+import { makeConflict } from "./syncConflictTestKit";
 
-vi.mock("@/lib/hooks/useSyncStop", () => ({ useJoinChoices: vi.fn(), useChooseJoin: vi.fn() }));
-vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
-vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(() => Promise.resolve()) } }));
+vi.mock("@/lib/hooks/useSyncStop", () => ({ useJoinChoices: vi.fn(), useHandoffRequest: vi.fn() }));
+vi.mock("@/components/handoff/AgentHandoff", () => ({
+  AgentHandoff: ({
+    prompt,
+  }: {
+    prompt: string | ((t: { agent: string | null }) => Promise<string>);
+  }) => (
+    <button
+      type="button"
+      onClick={() => typeof prompt !== "string" && void prompt({ agent: "Claude Code" })}
+    >
+      Ask an agent
+    </button>
+  ),
+}));
 
 const hooks = await import("@/lib/hooks/useSyncStop");
-const { useSyncStatus } = await import("@/lib/hooks/useSync");
-const { fsApi } = await import("@/lib/api/fs");
 const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 
-const differing = (path: string): ConflictFile => ({
-  path,
-  area: "knowledge",
-  reason: "join_differs",
-  ours_time: "2026-09-26T09:00:00Z",
-  theirs_time: "2026-09-27T09:00:00Z",
-  theirs_machine: "Mac mini",
-  other_path: null,
-  answer: null,
-  editor_path: null,
-  secret: false,
-  agent_merge: false,
-});
+const differing = (path: string, over: Partial<ConflictFile> = {}): ConflictFile =>
+  makeConflict(path, { reason: "join_differs", agent_mergeable: true, ...over });
 
-let choose: ReturnType<typeof vi.fn>;
+let handoff: ReturnType<typeof vi.fn>;
 const seed = (files: ConflictFile[]) =>
   mocked(hooks.useJoinChoices).mockReturnValue({ data: { files } });
+const show = () =>
+  render(
+    <MemoryRouter>
+      <SyncJoinChoices />
+    </MemoryRouter>,
+  );
 
 beforeEach(() => {
-  choose = vi.fn();
-  mocked(hooks.useChooseJoin).mockReturnValue(idleMutation({ mutate: choose }));
-  mocked(useSyncStatus).mockReturnValue({ data: makeStatus() });
+  handoff = vi.fn(() => Promise.resolve("the prompt"));
+  mocked(hooks.useHandoffRequest).mockReturnValue(handoff);
   seed([differing("knowledge/a.md"), differing("knowledge/b.md")]);
 });
 afterEach(() => vi.clearAllMocks());
 
-const row = (path: string) => within(screen.getByTestId(`join-choice-${path}`));
-
 describe("SyncJoinChoices", () => {
-  test("each row says who edited it when", () => {
-    render(<SyncJoinChoices />);
-    expect(
-      row("knowledge/a.md").getByText(/this Mac edited .* · Mac mini edited/),
-    ).toBeInTheDocument();
+  test("each row says when each Mac edited it and that a version is to be chosen", () => {
+    show();
     expect(screen.getByText("Differ from this Mac")).toBeInTheDocument();
+    const row = screen.getByTestId("join-choice-knowledge/a.md");
+    expect(row).toHaveTextContent(/Knowledge · this Mac .+ · Mac mini /);
+    expect(row).toHaveTextContent("Choose a version");
+    // Each row opens the Resolve page at its file, in join mode.
+    expect(row).toHaveAttribute("href", "/sync/conflicts?mode=join&path=knowledge%2Fa.md");
   });
 
-  test("choices are staged, then applied together", () => {
-    render(<SyncJoinChoices />);
-    const apply = () => screen.getByRole("button", { name: /^Apply \d+ choices?$/ });
-    expect(apply()).toBeDisabled();
-
-    fireEvent.click(row("knowledge/a.md").getByRole("button", { name: "Take Mac mini’s" }));
-    fireEvent.click(row("knowledge/b.md").getByRole("button", { name: "Keep this Mac’s" }));
-    expect(choose).not.toHaveBeenCalled();
-    expect(row("knowledge/a.md").getByRole("button", { name: "Take Mac mini’s" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    fireEvent.click(apply());
-    expect(choose).toHaveBeenCalledWith(
-      [
-        { path: "knowledge/a.md", answer: "theirs" },
-        { path: "knowledge/b.md", answer: "mine" },
-      ],
-      expect.anything(),
+  test("Choose versions opens the Resolve page in join mode", () => {
+    show();
+    expect(screen.getByRole("link", { name: "Choose versions" })).toHaveAttribute(
+      "href",
+      "/sync/conflicts?mode=join",
     );
   });
 
-  test("a file opens from the vault on this Mac", () => {
-    render(<SyncJoinChoices />);
-    fireEvent.click(row("knowledge/a.md").getByRole("button", { name: "Open knowledge/a.md" }));
-    expect(fsApi.open).toHaveBeenCalledWith("/Users/me/.coffer/vault/knowledge/a.md", undefined);
+  test("Ask an agent hands over every file at once, naming the agent", () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
+    expect(hooks.useHandoffRequest).toHaveBeenCalledWith({ join: true });
+    expect(handoff).toHaveBeenCalledWith({ agent: "Claude Code" });
   });
 
-  test("a long list shows four and a way to the rest", () => {
+  test("no file an agent may merge, no Ask an agent", () => {
+    seed([differing("secret/a.enc", { agent_mergeable: false, secret: true })]);
+    show();
+    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+  });
+
+  test("a long list shows five and a way to the rest", () => {
     seed(["a", "b", "c", "d", "e", "f"].map((n) => differing(`knowledge/${n}.md`)));
-    render(<SyncJoinChoices />);
-    expect(screen.queryByTestId("join-choice-knowledge/e.md")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "…and 2 more" }));
-    expect(screen.getByTestId("join-choice-knowledge/f.md")).toBeInTheDocument();
+    show();
+    expect(screen.queryByTestId("join-choice-knowledge/f.md")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 5 of 6")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(
+      within(screen.getByTestId("sync-join-choices")).getByTestId("join-choice-knowledge/f.md"),
+    ).toBeInTheDocument();
   });
 
   test("nothing differing renders nothing", () => {
     seed([]);
-    const { container } = render(<SyncJoinChoices />);
+    const { container } = show();
     expect(container).toBeEmptyDOMElement();
   });
 });

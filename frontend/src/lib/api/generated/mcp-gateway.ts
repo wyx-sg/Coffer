@@ -976,6 +976,7 @@ export interface components {
             duration_ms: number;
             /** Error Message */
             error_message: string | null;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Id */
             id: number;
             /** Resource Name */
@@ -2238,7 +2239,8 @@ export interface operations {
                 limit?: number;
                 /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
                 cursor?: string | null;
-                status?: ("ok" | "error" | "timeout" | "denied") | null;
+                /** @description One outcome, or ``failed`` for every outcome but ``ok`` (an error, a timeout or a denial). */
+                status?: ("ok" | "error" | "timeout" | "denied" | "failed") | null;
                 /** @description Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value. */
                 agent_uid?: string | null;
                 /** @description Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry. */

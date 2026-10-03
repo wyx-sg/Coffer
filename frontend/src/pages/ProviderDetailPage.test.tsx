@@ -208,7 +208,8 @@ describe("ProviderDetailPage", () => {
     );
     expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
     // One column, no tabs: the Models section sits under Used by and Endpoint.
-    expect(screen.queryByRole("tab")).toBeNull();
+    // Only the page header's Providers | Usage tabs: the provider itself has none.
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Providers", "Usage"]);
     expect(screen.getByRole("switch", { name: /gpt-5-codex/ })).toBeInTheDocument();
   });
 

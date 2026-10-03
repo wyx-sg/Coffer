@@ -1,28 +1,27 @@
 // frontend/src/pages/sync/SyncConflictChoices.tsx
 //
-// The two choices for one file (6.5.06, 6.5.24): Keep this Mac's or Take the
+// The two choices for one file (6.4.06, 6.4.34): Keep this Mac's or Take the
 // other Mac's. Picking one records it as the file's answer at once — nothing
 // is written into the vault until the round continues — and what it changes
 // here shows under the cards: the diff from this Mac's version to theirs, or
 // that nothing changes here. A refusal is shown in place.
 //
-// An encrypted secret shows no diff: a one-line note says its contents are not
-// shown. A file an agent may merge carries the "Merge with an agent" block
-// under the choices while it has no answer.
+// An encrypted secret shows no diff: one footnote says its contents are not
+// shown. Every file ends in exactly one footnote.
 import { useTranslation } from "react-i18next";
 
-import type { ConflictAnswer, ConflictFile } from "@/lib/api/sync";
+import type { ConflictFile } from "@/lib/api/sync";
 import { cn } from "@/lib/utils";
 import { SyncConflictDiff } from "./SyncConflictDiff";
-import { SyncConflictMerge } from "./SyncConflictMerge";
 import { otherMachine, refusal, when } from "./syncConflictFormat";
 
 interface Props {
   file: ConflictFile;
-  handoff: string | null;
+  /** A first join's file: nothing is applied until Apply choices. */
+  join: boolean;
   pending: boolean;
   error: unknown;
-  onChoose: (answer: ConflictAnswer) => void;
+  onChoose: (answer: "mine" | "theirs") => void;
 }
 
 function Choice(props: {
@@ -62,7 +61,7 @@ function Choice(props: {
   );
 }
 
-export function SyncConflictChoices({ file, handoff, pending, error, onChoose }: Props) {
+export function SyncConflictChoices({ file, join, pending, error, onChoose }: Props) {
   const { t, i18n } = useTranslation();
   const machine = otherMachine(t, file);
   const mineWhen = when(t, file.ours_time, i18n.language);
@@ -100,23 +99,22 @@ export function SyncConflictChoices({ file, handoff, pending, error, onChoose }:
           {refusal(t, error)}
         </p>
       ) : null}
-      {file.secret ? (
-        <p className={note} data-testid="sync-conflict-secret">
-          {t("sync.resolve.secret")}
-        </p>
-      ) : file.answer === "theirs" ? (
+      {file.secret ? null : file.answer === "theirs" ? (
         <SyncConflictDiff path={file.path} />
       ) : file.answer === "mine" ? (
         <p className="text-sm text-text">{t("sync.resolve.nothingChanges", { machine })}</p>
       ) : null}
-      {file.answer === "edited" ? (
-        <p className={note}>{t("sync.resolve.resolvedInEditor")}</p>
-      ) : (
-        <p className={note}>{t("sync.resolve.flipNote")}</p>
-      )}
-      {file.agent_merge && !file.secret && handoff && file.answer === null ? (
-        <SyncConflictMerge prompt={handoff} />
-      ) : null}
+      <p className={note} data-testid={file.secret ? "sync-conflict-secret" : undefined}>
+        {file.answer === "edited"
+          ? t(
+              file.agent_state === "merged_by_agent"
+                ? "sync.resolve.resolvedByAgent"
+                : "sync.resolve.resolvedInEditor",
+            )
+          : file.secret
+            ? t("sync.resolve.secret")
+            : t(join ? "sync.resolve.flipNoteJoin" : "sync.resolve.flipNote")}
+      </p>
     </>
   );
 }

@@ -56,7 +56,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer memory`](/zh/reference/cli/memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](/zh/reference/cli/provider) | Manage LLM connections and switch agents onto them |
 | [`coffer proxy`](/zh/reference/cli/proxy) | Inspect the local model proxy and its per-agent tokens |
-| [`coffer usage`](/zh/reference/cli/usage) | Model usage through Coffer's proxy, and subscription quota |
+| [`coffer usage`](/zh/reference/cli/usage) | Model usage through Coffer's proxy |
 | [`coffer sync`](/zh/reference/cli/sync) | Keep this vault in step with a git remote you own |
 | [`coffer vault`](/zh/reference/cli/vault) | The vault's history: versions, diffs, restore, and hand edits that were refused. |
 | [`coffer drift`](/zh/reference/cli/drift) | See and repair drift between Coffer and the agents' own files |

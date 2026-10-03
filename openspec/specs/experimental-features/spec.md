@@ -297,8 +297,8 @@ routes. The local model proxy MUST be given an empty state and serve no agent.
 The projection of provider connections into agents' own configuration MUST be
 withdrawn: Coffer's keys MUST be removed from each agent's config files while
 each agent record keeps its connection choice, and switching `models` on MUST
-project them again. Usage ingest, the Codex quota loops and the price-list
-refresh MUST skip their rounds. The routes of `/api/v1/agent-providers` and
+project them again. Usage ingest and the price-list refresh MUST skip their
+rounds. The routes of `/api/v1/agent-providers` and
 `/api/v1/internal-engine-config` stay available.
 
 #### Scenario: models off closes the provider, model, proxy and usage routes
@@ -325,7 +325,7 @@ refresh MUST skip their rounds. The routes of `/api/v1/agent-providers` and
 
 #### Scenario: models off skips usage ingest and the price-list refresh
 - **GIVEN** `models` off
-- **WHEN** the usage ingest, the Codex quota loops and the price-list refresh come due
+- **WHEN** the usage ingest and the price-list refresh come due
 - **THEN** each skips its round
 
 ### Requirement: Keep dependencies between features soft
@@ -388,7 +388,7 @@ Experimental"). The expanded row carries no tag beside its label — the
 Experimental tag stays on the feature's page title and in Settings › Features —
 and an entry no registered feature owns MUST NOT say it at all. The entries owned
 by a feature are Knowledge (`knowledge`), Memory (`memory`), Sync (`sync`), and
-Model providers and Usage (`models`).
+Model providers (`models`), whose page carries Usage as a tab.
 
 #### Scenario: a collapsed rail's tooltip says a feature's entry is experimental
 - **GIVEN** a sidebar entry owned by a registered feature that is switched on

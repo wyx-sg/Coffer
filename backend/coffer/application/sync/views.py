@@ -80,6 +80,10 @@ class SyncStatus:
     #: not, and how many the remote has that this vault does not.
     ahead: int = 0
     behind: int = 0
+    #: Where the vault's files really are (``vault_path`` may be a link to it),
+    #: and the folder "Move the vault" offers.
+    vault_real_path: str | None = None
+    default_vault_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,9 +93,13 @@ class StoppedFile:
     editor_path: str | None = None
     #: An encrypted secret: answered with this machine's or the other's only.
     secret: bool = False
-    #: Whether an agent may merge it (spec vault-sync "Hand a conflict's
-    #: merge to an agent").
-    agent_merge: bool = False
+    #: Whether an agent may merge it (spec vault-sync "Hand conflicting
+    #: files to an agent").
+    agent_mergeable: bool = False
+    #: ``handed_off`` / ``merged_by_agent`` once it was handed to an agent;
+    #: ``merged_at`` is when the agent's merge was saved. Neither is an answer.
+    agent_state: str | None = None
+    merged_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -112,8 +120,6 @@ class StoppedRound:
     #: The machines whose changes raised the stop (incoming), by label.
     machines: tuple[str, ...] = ()
     confirmed: bool = False
-    #: The prompt handing the agent-mergeable files to an agent, or ``None``.
-    handoff: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +136,19 @@ class FileVersions:
     binary: bool = False
     #: The hand-merge copy as saved, once it exists (never for a secret).
     edited: str | None = None
+    #: An agent's merge of it (the saved copy, no marker left), and the diff
+    #: from this machine's version to it.
+    merged: str | None = None
+    merged_diff: str | None = None
+
+
+@dataclass(frozen=True)
+class HandoffResult:
+    """What handing conflicting files to an agent produced: the prompt, and
+    the files it covers."""
+
+    prompt: str
+    paths: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -174,6 +193,7 @@ class RoundPage:
 __all__ = [
     "AreaCounts",
     "FileVersions",
+    "HandoffResult",
     "HoldGroup",
     "MachineView",
     "Problem",

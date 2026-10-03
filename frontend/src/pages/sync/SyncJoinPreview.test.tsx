@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/SyncJoinPreview.test.tsx
 //
-// A join is stated before it is made (6.5.18): what comes down by area, how
+// A join is stated before it is made (6.4.22): what comes down by area, how
 // many files are the same, how many differ (left alone until chosen), what
 // goes up, and that nothing is deleted. A refused join says why and offers no
 // Join button.
@@ -15,8 +15,10 @@ import { SyncJoinPreview } from "./SyncJoinPreview";
 import { idleMutation } from "./syncTestKit";
 
 vi.mock("@/lib/hooks/useSyncStop", () => ({ useJoinPreview: vi.fn(), useJoin: vi.fn() }));
+vi.mock("@/lib/hooks/useApprovals", () => ({ openApprovalsSheet: vi.fn() }));
 
 const hooks = await import("@/lib/hooks/useSyncStop");
+const { openApprovalsSheet } = await import("@/lib/hooks/useApprovals");
 const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 
 function preview(over: Partial<JoinPreview> = {}): JoinPreview {
@@ -127,7 +129,7 @@ describe("SyncJoinPreview", () => {
     expect(join).toHaveBeenCalled();
   });
 
-  test("a push token waiting for approval says so, offers Secrets, and checks again", () => {
+  test("a push token waiting for approval says so, Review opens the approvals dialog, and checks again", () => {
     const refetch = vi.fn();
     mocked(hooks.useJoinPreview).mockReturnValue({
       data: undefined,
@@ -142,7 +144,8 @@ describe("SyncJoinPreview", () => {
     );
     const waiting = within(screen.getByTestId("sync-join-waiting"));
     expect(waiting.getByText("The push token is waiting for approval")).toBeInTheDocument();
-    expect(waiting.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
+    fireEvent.click(waiting.getByRole("button", { name: "Review" }));
+    expect(openApprovalsSheet).toHaveBeenCalled();
     expect(screen.queryByTestId("sync-join-preview")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Join and pull" })).toBeDisabled();
     fireEvent.click(waiting.getByRole("button", { name: "Check again" }));

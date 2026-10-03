@@ -23,6 +23,7 @@ const call = (id: number, status: "ok" | "error") => ({
   session_id: null,
   agent_uid: null,
   trace_id: null,
+  handoff: null,
 });
 
 beforeEach(() => vi.mocked(getApiClient).mockReset());
@@ -80,7 +81,10 @@ test("CSV has a header, one row per record and quotes what needs quoting", () =>
   expect(lines[1]).toContain('"refused, ""hard"""');
 });
 
-test("JSON is the records as the daemon sent them, tagged with their log", () => {
-  const parsed = JSON.parse(toJson([fromCall(call(1, "ok"))]));
-  expect(parsed).toEqual([{ source: "mcp_call", ...call(1, "ok") }]);
+test("JSON is the records as the daemon sent them, tagged with their log, without the hand-off prompt", () => {
+  const withPrompt = { ...call(1, "error"), handoff: { prompt: "Please find out why" } };
+  const parsed = JSON.parse(toJson([fromCall(withPrompt)]));
+  const { handoff, ...rest } = call(1, "error");
+  expect(handoff).toBeNull();
+  expect(parsed).toEqual([{ source: "mcp_call", ...rest }]);
 });

@@ -8,6 +8,7 @@ import {
   actionPage,
   itemActionLabelKey,
   itemPage,
+  opensApprovals,
   severityTone,
   sortAttention,
 } from "./attention";
@@ -145,6 +146,34 @@ test("the secret-approval item opens Settings, Security tab", () => {
   expect(itemPage(off)).toBe("/settings/security");
   expect(actionPage(off)).toBe("/settings/security");
   expect(itemActionLabelKey(off)).toBe("overview.actions.turn_on");
+});
+
+test("the two Secrets-page signals lead to /secrets; Review on approvals opens the dialog", () => {
+  const missing = item({
+    kind: "secret",
+    uid: "fp1",
+    title: "Secrets",
+    reason_code: "secret_missing_here",
+    reason: "3 secrets have no value on this Mac.",
+    action: { verb: "open", method: "GET", path: "/api/v1/secrets", body: null },
+  });
+  expect(itemPage(missing)).toBe("/secrets");
+  expect(actionPage(missing)).toBe("/secrets");
+  expect(itemActionLabelKey(missing)).toBe("overview.actions.openSecrets");
+  expect(opensApprovals(missing)).toBe(false);
+
+  const waiting = item({
+    kind: "secret",
+    uid: "fp2",
+    title: "Secret approvals",
+    reason_code: "secret_approvals_pending",
+    severity: "warning",
+    action: { verb: "review", method: "GET", path: "/api/v1/secrets/approvals", body: null },
+  });
+  // The name opens Secrets, where the banner is; the action opens the global dialog instead.
+  expect(itemPage(waiting)).toBe("/secrets");
+  expect(itemActionLabelKey(waiting)).toBe("overview.actions.review");
+  expect(opensApprovals(waiting)).toBe(true);
 });
 
 test("an error is red and anything else amber", () => {

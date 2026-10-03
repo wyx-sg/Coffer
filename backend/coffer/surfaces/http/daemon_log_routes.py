@@ -11,14 +11,33 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 
+from coffer.application.daemon_log_handoff import daemon_error_handoff, is_environment_error
 from coffer.application.log_page import read_log_page
 from coffer.application.log_reader import TAIL_BYTES, at_least, matches_level
 from coffer.domain.pagination import CursorInvalid, decode_cursor, encode_cursor
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.platform.host import machine_label
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.schemas import DaemonLogListOut, DaemonLogRecordOut
 
 router = APIRouter()
+
+
+def _handoff_for(record: dict[str, Any]) -> str | None:
+    """The agent prompt for an error about the environment; None for any other record."""
+    level = _lift(record, "level")
+    message = _lift(record, "event")
+    folded = record.get("continuation")
+    continuation = [str(line) for line in folded] if isinstance(folded, list) else []
+    if not is_environment_error(level, message, continuation):
+        return None
+    return daemon_error_handoff(
+        logger=_lift(record, "logger"),
+        message=message,
+        continuation=continuation,
+        machine=machine_label(),
+    )
 
 
 def _lift(record: dict[str, Any], key: str) -> str | None:
@@ -127,6 +146,7 @@ async def list_daemon_logs(
                 event=_lift(record, "event"),
                 offset=offset,
                 record=record,
+                handoff=handoff_out(_handoff_for(record)),
             )
             for record, offset in zip(page.records, page.offsets, strict=True)
         ],

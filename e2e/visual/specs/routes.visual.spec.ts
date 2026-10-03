@@ -39,7 +39,11 @@ const ROUTES: RouteCase[] = [
   { name: "memory", path: "/memory" },
   { name: "secrets", path: "/secrets" },
   { name: "activity", path: "/activity" },
-  { name: "usage", path: "/usage" },
+  {
+    name: "usage",
+    path: "/model-providers?tab=usage",
+    finalPath: /\/model-providers\?tab=usage$/,
+  },
   { name: "sync", path: "/sync" },
   // Settings is a modal over the page underneath (Overview on a fresh load).
   { name: "settings", path: "/settings", finalPath: /\/settings\/general$/ },

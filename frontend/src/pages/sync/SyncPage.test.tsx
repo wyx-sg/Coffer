@@ -3,7 +3,8 @@
 // Sync is a top-level page with three tabs — Status, Machines and Remote —
 // and it opens on Status, because what a person opens Sync to find out is
 // whether this Mac is in sync. The header says it in one pill beside the
-// title, with the remote under it and the one action on the right. A Mac with
+// title and its Experimental tag, with the remote as the description line and
+// Sync now — always the primary action — on the right. A Mac with
 // no remote, or one not joined yet, has no tabs: it is set up first.
 //
 // The active tab is in the URL, so a link can land on Remote and a reload
@@ -137,7 +138,11 @@ describe("SyncPage — header", () => {
     );
     renderAt();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Sync");
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    // No "?" beside the title.
+    expect(screen.queryByRole("button", { name: "More info" })).toBeNull();
     expect(pill()).toHaveTextContent("In sync");
+    expect(screen.getByText("Keeps this vault in step with")).toBeInTheDocument();
     expect(screen.getByText("git@github.com:me/vault.git")).toBeInTheDocument();
     expect(screen.getByText(/· main · every hour/)).toBeInTheDocument();
     await act(async () => {
@@ -160,12 +165,12 @@ describe("SyncPage — header", () => {
   });
 
   test.each([
-    ["unreachable", "Remote unreachable", "Retry"],
-    ["auth_failed", "Sign-in failed", "Retry"],
-    ["push_failed", "Push failed", "Sync now"],
-    ["cloud_folder", "Paused", "Sync now"],
-    ["git_missing", "Git missing", "Sync now"],
-  ] as const)("a %s problem reads %s, with %s", (kind, word, action) => {
+    ["unreachable", "Remote unreachable"],
+    ["auth_failed", "Sign-in failed"],
+    ["push_failed", "Push failed"],
+    ["cloud_folder", "Paused"],
+    ["git_missing", "Git missing"],
+  ] as const)("a %s problem reads %s, and Sync now stays the one action", (kind, word) => {
     seed(
       makeStatus({
         problem: { kind, message: "", secret_ref: null, since: null, handoff: null, plaintext: [] },
@@ -173,7 +178,7 @@ describe("SyncPage — header", () => {
     );
     renderAt();
     expect(pill()).toHaveTextContent(word);
-    expect(screen.getByRole("button", { name: action })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled();
   });
 
   test("a stopped round counts what it stopped on, and Sync now waits for the answer", () => {

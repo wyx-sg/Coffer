@@ -149,6 +149,7 @@ describe("describeDaemonRecord", () => {
         level: "warning",
         event: "auto_sync_failed",
         offset: 0,
+        handoff: null,
         record: { event: "auto_sync_failed" },
       }),
     ).toBe("auto_sync_failed");
@@ -161,6 +162,7 @@ describe("describeDaemonRecord", () => {
         level: null,
         event: null,
         offset: 0,
+        handoff: null,
         record: { raw: "Traceback (most recent call last):" },
       }),
     ).toBe("Traceback (most recent call last):");
@@ -172,6 +174,7 @@ describe("describeDaemonRecord", () => {
       level: null,
       event: null,
       offset: 0,
+      handoff: null,
       record: {},
     });
     expect(line).not.toBe("");
@@ -201,6 +204,7 @@ describe("daemonLogger", () => {
         level: null,
         event: null,
         offset: 0,
+        handoff: null,
         record: { logger: "coffer.sync" },
       }),
     ).toBe("coffer.sync");
@@ -210,6 +214,7 @@ describe("daemonLogger", () => {
         level: null,
         event: null,
         offset: 0,
+        handoff: null,
         record: { raw: "boom" },
       }),
     ).toBe("");

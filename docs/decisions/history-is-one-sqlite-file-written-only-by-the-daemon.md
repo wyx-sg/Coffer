@@ -8,8 +8,8 @@
 ## Context
 
 Coffer keeps a machine's **history** — the audit log, the MCP invocation log,
-conversations and their messages, channel threads and the outbox, sync rounds,
-usage and quota — in a database on the user's own machine. Configuration is not
+conversations and their messages, channel threads and the outbox, sync rounds
+and usage — in a database on the user's own machine. Configuration is not
 in it: resources, secrets' ciphertext and state documents are files in the
 vault, and what is only true of this machine is small JSON under `local/`
 ([Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md)).

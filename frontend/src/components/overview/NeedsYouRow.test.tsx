@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { readHandoffState } from "@/lib/conversations/handoff";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
+import { OPEN_APPROVALS_EVENT } from "@/lib/hooks/useApprovals";
 import { acceptance } from "@/test/acceptance";
 import { NeedsYouRow } from "./NeedsYouRow";
 
@@ -84,7 +85,8 @@ acceptance("web-ui", "a needs-you row offers the item's hand-off in its menu", a
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
   openMenu();
   fireEvent.click(await screen.findByRole("menuitem", { name: /^Copy prompt/ }));
-  expect(writeText).toHaveBeenCalledWith(PROMPT);
+  // Copying is asynchronous now (it toasts "Prompt copied" afterwards).
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(PROMPT));
 
   openMenu();
   fireEvent.click(await screen.findByRole("menuitem", { name: /^Ask an agent/ }));
@@ -139,4 +141,44 @@ acceptance("web-ui", "a needs-you row's action reads what it does for its kind",
     false,
   );
   expect(screen.getByRole("link", { name: "Review held changes: Vault sync" })).toBeInTheDocument();
+});
+
+test("Review on waiting approvals opens the global dialog instead of leaving Overview", async () => {
+  const opened = vi.fn();
+  window.addEventListener(OPEN_APPROVALS_EVENT, opened);
+  renderRow(
+    item({
+      key: "secret:fp:secret_approvals_pending",
+      kind: "secret",
+      uid: "fp",
+      title: "Secret approvals",
+      reason_code: "secret_approvals_pending",
+      reason: "2 changes waiting for approval.",
+      severity: "warning",
+      action: { verb: "review", method: "GET", path: "/api/v1/secrets/approvals", body: null },
+    }),
+    false,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Review: Secret approvals" }));
+  expect(opened).toHaveBeenCalledTimes(1);
+  // Still on Overview: no link was followed.
+  expect(screen.queryByTestId("draft")).not.toBeInTheDocument();
+  window.removeEventListener(OPEN_APPROVALS_EVENT, opened);
+});
+
+test("a secret that has no value here is opened on the Secrets page", async () => {
+  renderRow(
+    item({
+      key: "secret:fp:secret_missing_here",
+      kind: "secret",
+      uid: "fp",
+      title: "Secrets",
+      reason_code: "secret_missing_here",
+      reason: "3 secrets have no value on this Mac.",
+      action: { verb: "open", method: "GET", path: "/api/v1/secrets", body: null },
+    }),
+    false,
+  );
+  const open = await screen.findByRole("link", { name: "Open Secrets: Secrets" });
+  expect(open).toHaveAttribute("href", "/secrets");
 });

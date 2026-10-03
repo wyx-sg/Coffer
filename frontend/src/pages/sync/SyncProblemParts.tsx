@@ -37,3 +37,8 @@ export function Handoff({ problem }: { problem: SyncProblem }) {
 export function Body({ children }: { children: React.ReactNode }) {
   return <p className="max-w-prose text-sm text-text-muted">{children}</p>;
 }
+
+/** A card's button row, a little apart from the text above it. */
+export function Actions({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-2 pt-1">{children}</div>;
+}

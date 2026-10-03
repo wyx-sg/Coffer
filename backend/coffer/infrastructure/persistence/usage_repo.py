@@ -7,10 +7,6 @@ dedupe_key) DO NOTHING``, and only a row that was actually inserted is added to
 therefore changes nothing — the property the ingest relies on to delete a file
 only after its commit.
 
-:class:`SqlAlchemyQuotaRepo` keeps the latest value per (agent type, window):
-an upsert that overwrites only when the incoming observation is not older than
-the stored one.
-
 SQLite hands ``TIMESTAMP`` columns back naive; every instant written here is
 UTC, so reads re-attach UTC.
 """
@@ -28,14 +24,11 @@ from coffer.application.usage.ports import (
     DailyUsage,
     PricedRecord,
     RequestFilters,
-    StoredQuotaWindow,
     StoredUsage,
 )
-from coffer.domain.usage.quota import QuotaSnapshot
 from coffer.domain.usage.records import UsageRecord
 from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.usage_models import (
-    QuotaSnapshotModel,
     UsageDailyModel,
     UsageRequestModel,
 )
@@ -193,64 +186,4 @@ def _stored(row: UsageRequestModel) -> StoredUsage:
     )
 
 
-class SqlAlchemyQuotaRepo:
-    """``QuotaRepo`` over ``quota_snapshots``."""
-
-    def __init__(self, sm: async_sessionmaker[AsyncSession]) -> None:
-        self._sm = sm
-
-    async def upsert(self, snapshot: QuotaSnapshot) -> None:
-        observed = _utc(snapshot.observed_at)
-        async with self._sm() as session, session.begin():
-            for window in snapshot.windows:
-                stmt = sqlite_insert(QuotaSnapshotModel).values(
-                    agent_type=snapshot.agent_type,
-                    window_key=window.key,
-                    label=window.label,
-                    used_percent=window.used_percent,
-                    window_minutes=window.window_minutes,
-                    resets_at=_maybe_utc(window.resets_at),
-                    source=str(snapshot.source),
-                    observed_at=observed,
-                    plan=snapshot.plan,
-                )
-                await session.execute(
-                    stmt.on_conflict_do_update(
-                        index_elements=["agent_type", "window_key"],
-                        set_={
-                            "label": stmt.excluded.label,
-                            "used_percent": stmt.excluded.used_percent,
-                            "window_minutes": stmt.excluded.window_minutes,
-                            "resets_at": stmt.excluded.resets_at,
-                            "source": stmt.excluded.source,
-                            "observed_at": stmt.excluded.observed_at,
-                            "plan": stmt.excluded.plan,
-                        },
-                        # An observation older than the stored one never wins.
-                        where=QuotaSnapshotModel.observed_at <= stmt.excluded.observed_at,
-                    )
-                )
-
-    async def latest(self) -> list[StoredQuotaWindow]:
-        async with self._sm() as session:
-            stmt = select(QuotaSnapshotModel).order_by(
-                QuotaSnapshotModel.agent_type, QuotaSnapshotModel.window_key
-            )
-            rows = (await session.execute(stmt)).scalars().all()
-        return [
-            StoredQuotaWindow(
-                agent_type=r.agent_type,
-                key=r.window_key,
-                label=r.label,
-                used_percent=r.used_percent,
-                window_minutes=r.window_minutes,
-                resets_at=_maybe_utc(r.resets_at),
-                source=r.source,
-                observed_at=_utc(r.observed_at),
-                plan=r.plan,
-            )
-            for r in rows
-        ]
-
-
-__all__ = ["SqlAlchemyQuotaRepo", "SqlAlchemyUsageRepo"]
+__all__ = ["SqlAlchemyUsageRepo"]

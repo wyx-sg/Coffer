@@ -55,7 +55,7 @@ with no per-tree override, and `coffer path` prints them).
     memory/  skills/coffer-guide/  cache/agent/  sync-conflicts/
     reported-prices.json  genai-prices.json
   runs.db                                  audit_log, mcp_invocations, conversations, chat_messages,
-                                           channel_thread_*, channel_outbox, sync_runs, usage_*, quota_snapshots
+                                           channel_thread_*, channel_outbox, sync_runs, usage_*
 ```
 
 `daemon-config.json` and `daemon.json` stay directly under `~/.coffer`, outside

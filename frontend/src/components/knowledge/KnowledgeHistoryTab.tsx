@@ -18,7 +18,7 @@ import { ChevronDown, ChevronRight, History } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { LoadErrorRow } from "@/components/LoadErrorRow";
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeVersionPanel } from "@/components/knowledge/KnowledgeVersionPanel";
 import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,7 @@ export function KnowledgeHistoryTab({ path, currentBody }: Props) {
             <Button variant="ghost" size="sm" onClick={() => void history.refetch()}>
               {t("knowledge.history.checkAgain")}
             </Button>
-            {prompt ? <AskAgentButton prompt={prompt} /> : null}
+            {prompt ? <AgentHandoff size="sm" help={false} prompt={prompt} /> : null}
           </>
         }
       />

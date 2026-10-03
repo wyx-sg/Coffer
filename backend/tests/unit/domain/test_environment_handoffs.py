@@ -1,13 +1,10 @@
-"""The prompts Coffer hands to an agent for a local runtime, the statusline
-wrapper and git: built from Coffer's own facts, never an install command, and
-always ending with the standing rules (``domain/handoff.py``)."""
+"""The prompts Coffer hands to an agent for a local runtime and git: built from
+Coffer's own facts, never an install command, and always ending with the
+standing rules (``domain/handoff.py``)."""
 
 from __future__ import annotations
 
-import pathlib
-
 from coffer.application.provider.local_runtime_handoff import local_runtime_handoff
-from coffer.application.usage.statusline_handoff import statusline_handoff
 from coffer.domain.git_handoff import git_install_handoff, git_missing_details
 from coffer.domain.handoff import STANDING_RULES
 from coffer.infrastructure.platform.memory import memory_label
@@ -28,16 +25,6 @@ def test_the_local_runtime_prompt_names_the_ports_and_the_memory() -> None:
 
 def test_the_local_runtime_prompt_leaves_unknown_memory_out() -> None:
     assert "This machine: Windows 11, AMD64.\n" in local_runtime_handoff("Windows 11, AMD64", None)
-
-
-def test_the_statusline_prompt_names_the_settings_file() -> None:
-    prompt = statusline_handoff(pathlib.Path("/home/me/.claude-work"))
-    assert prompt.startswith(
-        "Please set up Coffer's status line wrapper for Claude Code in "
-        "/home/me/.claude-work/settings.json"
-    )
-    assert "one quoted argument" in prompt
-    _ends_with_the_standing_rules(prompt)
 
 
 def test_the_git_prompt_rides_on_details() -> None:

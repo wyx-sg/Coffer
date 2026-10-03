@@ -1,11 +1,11 @@
 // frontend/src/pages/sync/SyncConflictEditing.tsx
 //
-// A file open in the person's editor (6.5.07): edit the marked-up copy to the
+// A file open in the person's editor (6.4.07): edit the marked-up copy to the
 // version wanted, save it, then Mark resolved — which answers `edited` from
 // the copy as saved and is refused, with the line, while a conflict marker is
 // left in it. "The file as saved" shows that copy, re-read whenever this
 // window regains focus (the person saves in the editor, then comes back).
-// Back to two choices leaves the editor behind; the copy stays where it is.
+// Back to two choices forgets the copy (and any hand-off or answer) for good.
 import { AlertTriangle, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -19,6 +19,8 @@ import { refusal } from "./syncConflictFormat";
 interface Props {
   file: ConflictFile;
   pending: boolean;
+  /** Back to two choices is in flight. */
+  leaving: boolean;
   error: unknown;
   onResolve: () => void;
   onBack: () => void;
@@ -44,7 +46,7 @@ function Saved({ text }: { text: string }) {
   );
 }
 
-export function SyncConflictEditing({ file, pending, error, onResolve, onBack }: Props) {
+export function SyncConflictEditing({ file, pending, leaving, error, onResolve, onBack }: Props) {
   const { t } = useTranslation();
   const versions = useFileVersions(file.path, true, { live: true });
   const saved = versions.data?.edited ?? null;
@@ -65,10 +67,24 @@ export function SyncConflictEditing({ file, pending, error, onResolve, onBack }:
             </p>
           ) : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" loading={pending} onClick={onResolve}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              loading={pending}
+              disabled={leaving}
+              onClick={onResolve}
+            >
               {t("sync.resolve.editing.markResolved")}
             </Button>
-            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={onBack}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              loading={leaving}
+              disabled={pending}
+              onClick={onBack}
+            >
               {t("sync.resolve.editing.back")}
             </Button>
           </div>

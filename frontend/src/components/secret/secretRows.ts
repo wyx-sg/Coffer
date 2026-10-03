@@ -24,6 +24,25 @@ export function displayName(row: SecretRef): string {
   return standaloneName(row.ref) ?? row.ref;
 }
 
+/** The last path segment of a ref; `postman.AUTHORIZATION` drops its owner's name prefix. This is
+ *  the name the list shows for a resource's own ref (`mcp_server/<uid>/JIRA_TOKEN`). */
+export function shortName(row: SecretRef): string {
+  const segments = row.ref.split("/");
+  const last = segments[segments.length - 1] || row.ref;
+  const dot = last.indexOf(".");
+  if (segments.length === 1 && dot > 0) {
+    const prefix = last.slice(0, dot).toLowerCase();
+    if (row.cited_by.some((c) => c.name.toLowerCase() === prefix)) return last.slice(dot + 1);
+  }
+  return last;
+}
+
+/** The name an approval's secret goes by: the list's short name, else the ref without its namespace. */
+export function approvalSecretName(approval: Approval, rows: readonly SecretRef[]): string {
+  const row = rows.find((r) => r.ref === approval.ref);
+  return row ? shortName(row) : (approval.ref ?? "").replace(SECRET_PREFIX, "");
+}
+
 /** What "Copy reference" copies — the URI a file cites, else the ref a resource cites. */
 export function referenceOf(row: SecretRef): string {
   return row.uri ?? row.ref;
@@ -118,21 +137,5 @@ export function citersFromRefusal(details: unknown): Citer[] {
     if (typeof kind !== "string" || typeof name !== "string") return [];
     const id = typeof uid === "string" ? uid : "";
     return [{ key: `${kind}:${id || name}`, kind, name, href: citerHref(kind, name, id) }];
-  });
-}
-
-/** The dialog's title: the one question, or how many wait. */
-export function approvalsTitle(
-  t: (key: string, vars?: Record<string, unknown>) => string,
-  approvals: Approval[],
-  rows: SecretRef[],
-): string {
-  if (approvals.length !== 1) return t("secrets.approvals.title", { count: approvals.length });
-  const a = approvals[0];
-  const row = rows.find((r) => r.ref === a.ref);
-  const name = row ? displayName(row) : (a.ref ?? "").replace(SECRET_PREFIX, "");
-  return t(`secrets.approvals.question.${a.op}`, {
-    name,
-    destination: a.destination_label ?? "",
   });
 }

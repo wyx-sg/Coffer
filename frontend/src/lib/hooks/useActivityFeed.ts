@@ -5,7 +5,7 @@
 // one's server-side filters from the tab's, merges what they loaded
 // newest-first, applies the client-side half of the filters, and answers the
 // questions the page asks: what to show, how many new records wait behind
-// "↑ N new", how many records each tab holds, and whether older ones exist.
+// "↑ N new", how many records match in all, and whether older ones exist.
 //
 // Merging logs that page separately needs one rule to stay in order: a
 // record is shown only if it is no older than the oldest record loaded from
@@ -14,7 +14,7 @@
 import { useMemo } from "react";
 import type { TFunction } from "i18next";
 
-import type { CallParams, SourceParams } from "@/lib/api/activity";
+import type { SourceParams } from "@/lib/api/activity";
 import {
   mergeNewestFirst,
   recordLogger,
@@ -27,24 +27,13 @@ import {
   matchesFilters,
   singleAgent,
   sourcesFor,
+  totalsExact,
   type ActivityFilters,
   type FilterContext,
 } from "@/lib/activity/filters";
 import { eventTypesMatching } from "@/lib/activity/activityText";
-import { resolveTimeWindow } from "@/lib/timeRange";
-import {
-  useActivityCount,
-  useActivitySource,
-  type ActivityCount,
-  type ActivitySourceState,
-} from "./useActivitySource";
-
-const CALL_STATUSES = ["ok", "error", "timeout", "denied"] as const;
-type CallStatus = (typeof CALL_STATUSES)[number];
-
-function isCallStatus(value: string): value is CallStatus {
-  return (CALL_STATUSES as readonly string[]).includes(value);
-}
+import { resolveRange } from "@/lib/filters/timeRangeValue";
+import { useActivitySource, type ActivitySourceState } from "./useActivitySource";
 
 /** The Everything tab shows the daemon's warnings and errors, not its chatter. */
 const EVERYTHING_DAEMON_FLOOR = "warning";
@@ -66,8 +55,7 @@ function sourceParams(
       source,
       params: {
         since,
-        uid: f.server !== "any" ? f.server : undefined,
-        status: tab === "mcp" && isCallStatus(f.status) ? f.status : undefined,
+        status: tab === "mcp" && f.status !== "all" ? f.status : undefined,
         agentUid: singleAgent(tab, f),
         q,
       },
@@ -79,11 +67,6 @@ function sourceParams(
   };
 }
 
-/** @ui-only A tab's count: a number, a floor ("500+"), or unknown. */
-export type TabCount = ActivityCount;
-
-const NONE: TabCount = { value: 0, floor: false };
-
 /** @ui-only What the page renders from the feed. */
 export interface ActivityFeed {
   /** The rows to show, newest first, filtered. */
@@ -93,10 +76,12 @@ export interface ActivityFeed {
   /** Whether anything waits at all, filtered out or not. */
   hasPending: boolean;
   releaseAll: () => void;
-  /** Each tab's count under the current time window and server-side filters. */
-  counts: Record<ActivityTab, TabCount>;
-  /** How many records are loaded (before client-side filters), and of how many. */
-  loaded: number;
+  /**
+   * How many records match in all (a floor when the daemon log counted a
+   * bounded tail), or undefined when a client-side filter makes the logs'
+   * totals overcount or a total is not known yet.
+   */
+  total: { value: number; floor: boolean } | undefined;
   isLoading: boolean;
   /** The logs of this tab that failed to load. */
   failed: ActivitySourceState[];
@@ -113,13 +98,6 @@ export interface ActivityFeed {
   until: string | undefined;
   /** Every daemon logger among the loaded records, for the logger filter. */
   loggers: string[];
-  /** Every loaded record before the client-side filters, for the pills' counts. */
-  loadedRecords: ActivityRecord[];
-  /**
-   * On the MCP calls tab with no status chosen: how many calls in the window
-   * failed (an error or a timeout) and how many were denied.
-   */
-  callTally: { failed: number; denied: number } | undefined;
   /** The daemon log's file, when this tab reads it. */
   logPath: string | undefined;
 }
@@ -129,31 +107,14 @@ interface Args {
   filters: ActivityFilters;
   t: TFunction;
   agentNames: ReadonlyMap<string, string>;
-  serverNames: ReadonlyMap<string, string>;
 }
 
-function countOf(state: ActivitySourceState): TabCount {
-  return { value: state.total, floor: state.capped };
-}
-
-function sumCounts(parts: TabCount[]): TabCount {
-  if (parts.length === 0) return { value: 0, floor: false };
-  if (parts.some((p) => p.value === undefined)) return { value: undefined, floor: false };
-  return {
-    value: parts.reduce((n, p) => n + (p.value ?? 0), 0),
-    floor: parts.some((p) => p.floor),
-  };
-}
-
-export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Args): ActivityFeed {
-  const { timeRange, from, to } = filters;
+export function useActivityFeed({ tab, filters, t, agentNames }: Args): ActivityFeed {
+  const { range } = filters;
   // Memoised: a rolling preset's `since` is computed from Date.now(), and it
   // is part of every query key — recomputing it per render would refetch
   // every keystroke.
-  const { since, until } = useMemo(
-    () => resolveTimeWindow({ timeRange, from, to }),
-    [timeRange, from, to],
-  );
+  const { since, until } = useMemo(() => resolveRange(range), [range]);
 
   const active = useMemo(() => new Set(sourcesFor(tab, filters)), [tab, filters]);
   // The audit route searches the event code, the resource, the actor and the
@@ -170,10 +131,7 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
   const daemon = useActivitySource(daemonSpec, active.has("daemon"));
 
   const states = [change, call, daemon].filter((s) => active.has(s.source));
-  const ctx: FilterContext = useMemo(
-    () => ({ t, until, agentNames, serverNames }),
-    [t, until, agentNames, serverNames],
-  );
+  const ctx: FilterContext = useMemo(() => ({ t, until, agentNames }), [t, until, agentNames]);
   const keep = useMemo(
     () => (r: ActivityRecord) => matchesFilters(r, tab, filters, ctx),
     [tab, filters, ctx],
@@ -190,84 +148,17 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
   const rows = visible.filter(keep);
   const pendingCount = states.reduce((n, s) => n + s.pending.filter(keep).length, 0);
 
-  // Each tab's count under the same time window. A count whose filters are
-  // those of a log already in front reuses that log's head; any other is one
-  // small read of its own.
-  const specOf = (source: ActivitySource): SourceParams =>
-    source === "change" ? changeSpec : source === "call" ? callSpec : daemonSpec;
-  const sameAs = (spec: SourceParams): ActivitySourceState | undefined => {
-    const wanted = JSON.stringify(spec);
-    return [change, call, daemon].find(
-      (s) => active.has(s.source) && JSON.stringify(specOf(s.source)) === wanted,
-    );
-  };
-  // The counts beside the tabs follow the time window, the server and the
-  // status, not who or what kind: choosing agents or kinds narrows the list,
-  // while the tabs keep saying how much there is (design 6.1.03, 6.1.04).
-  const framing: ActivityFilters = { ...filters, by: [], kinds: [] };
-  const countSpecs = {
-    changes: sourceParams("change", "changes", framing, since, qTypes),
-    callsAll: sourceParams("call", "everything", framing, since, qTypes),
-    callsTab: sourceParams("call", "mcp", framing, since, qTypes),
-    daemonAll: sourceParams("daemon", "everything", framing, since, qTypes),
-    daemonTab: sourceParams("daemon", "daemon", framing, since, qTypes),
-  };
-  const everythingSources = sourcesFor("everything", framing);
-  const reuse = {
-    changes: sameAs(countSpecs.changes),
-    callsAll: sameAs(countSpecs.callsAll),
-    callsTab: sameAs(countSpecs.callsTab),
-    daemonAll: sameAs(countSpecs.daemonAll),
-    daemonTab: sameAs(countSpecs.daemonTab),
-  };
-  const read = {
-    changes: useActivityCount(countSpecs.changes, !reuse.changes),
-    callsAll: useActivityCount(
-      countSpecs.callsAll,
-      !reuse.callsAll && everythingSources.includes("call"),
-    ),
-    callsTab: useActivityCount(countSpecs.callsTab, !reuse.callsTab),
-    daemonAll: useActivityCount(
-      countSpecs.daemonAll,
-      !reuse.daemonAll && everythingSources.includes("daemon"),
-    ),
-    daemonTab: useActivityCount(countSpecs.daemonTab, !reuse.daemonTab),
-  };
-  // The MCP calls tab's line ("182 calls · 7 failed · 1 denied"): one row's
-  // read per outcome, as the tab counts are.
-  const tallyOn = tab === "mcp" && filters.status === "any" && active.has("call");
-  const withStatus = (status: "error" | "timeout" | "denied"): SourceParams => ({
-    source: "call",
-    params: { ...(callSpec.params as CallParams), status },
-  });
-  const errors = useActivityCount(withStatus("error"), tallyOn);
-  const timeouts = useActivityCount(withStatus("timeout"), tallyOn);
-  const denied = useActivityCount(withStatus("denied"), tallyOn);
-  const callTally =
-    tallyOn &&
-    errors.value !== undefined &&
-    timeouts.value !== undefined &&
-    denied.value !== undefined
-      ? { failed: errors.value + timeouts.value, denied: denied.value }
-      : undefined;
-
-  const pick = (name: keyof typeof countSpecs): TabCount => {
-    const state = reuse[name];
-    return state ? countOf(state) : read[name];
-  };
-  const counts: Record<ActivityTab, TabCount> = {
-    everything: sumCounts([
-      ...(everythingSources.includes("change") ? [pick("changes")] : []),
-      ...(everythingSources.includes("call") ? [pick("callsAll")] : []),
-      ...(everythingSources.includes("daemon") ? [pick("daemonAll")] : []),
-    ]),
-    changes: sourcesFor("changes", framing).length ? pick("changes") : NONE,
-    mcp: sourcesFor("mcp", framing).length ? pick("callsTab") : NONE,
-    daemon: sourcesFor("daemon", framing).length ? pick("daemonTab") : NONE,
-  };
-
   // The frontier logs are the ones to page: loading an older page of any
   // other would only fetch rows still hidden behind the frontier.
+  // "of M": the logs' own totals, while they still describe what is shown.
+  const totals = states.map((s) => s.total);
+  const total =
+    totalsExact(filters, tab) && states.length > 0 && totals.every((n) => n !== undefined)
+      ? {
+          value: totals.reduce<number>((n, x) => n + (x ?? 0), 0),
+          floor: states.some((s) => s.capped),
+        }
+      : undefined;
   const pageable = states.filter((s) => s.hasOlder);
   const limiting = pageable.filter((s) => (s.oldestAt ?? 0) >= frontier);
 
@@ -276,8 +167,7 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
     pendingCount,
     hasPending: states.some((s) => s.pending.length > 0),
     releaseAll: () => states.forEach((s) => s.release()),
-    counts,
-    loaded: merged.length,
+    total,
     isLoading: states.some((s) => s.isLoading),
     failed: states.filter((s) => s.error),
     hasOlder: pageable.length > 0,
@@ -288,8 +178,6 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
     keep,
     until,
     loggers: [...new Set(merged.map(recordLogger).filter(Boolean))].sort(),
-    loadedRecords: merged,
-    callTally,
     logPath: active.has("daemon") ? daemon.path : undefined,
   };
 }

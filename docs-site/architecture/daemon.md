@@ -273,7 +273,7 @@ The periodic workers that belong to no single kind start in one place, the HTTP 
 | Reconciler | Every 60 s, sooner on a hint | Converges agents' MCP entries, skill links, provider projections and delivery hooks, and records open drift. |
 | Attention watch | Every 30 s, sooner on a hint | Recomputes the Overview's "needs you" list and publishes changes on `GET /api/v1/events`. |
 | Model proxy supervisor | Every 5 s | Finds or spawns the [local model proxy](/architecture/model-proxy), pushes it its state and restarts it if it dies. |
-| Usage ingest and quota | Ingest every 2 s; Codex quota every 5 min | Empties the proxy's usage spool into `runs.db`, and pulls Codex's subscription quota while a Codex agent is on its own login. |
+| Usage ingest | Every 2 s | Empties the proxy's usage spool into `runs.db`. |
 | Price refresh | First after 60 s, then daily | Refreshes the model price list used to estimate cost. |
 
 The curation, aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart.

@@ -53,6 +53,8 @@ interface Props {
   confirmIcon?: ReactNode;
   /** Visual intent of the confirm button. */
   variant?: "destructive" | "default";
+  /** A wider panel for a dialog that carries a list (the Sync rollback's 640). */
+  width?: "default" | "wide";
   /** Rendered under the description: what the action takes with it — see
    *  `ConfirmFacts` for the label/value list the boards use. Naming them is
    *  the difference between a warning and a question the user can answer. */
@@ -94,6 +96,7 @@ export function ConfirmDialog({
   confirmLabel,
   confirmIcon,
   variant = "destructive",
+  width = "default",
   pending = false,
   pendingLabel,
   confirmDisabled = false,
@@ -151,7 +154,7 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent
-        className="max-w-[420px]"
+        className={width === "wide" ? "max-w-[640px]" : "max-w-[420px]"}
         onEscapeKeyDown={holdWhileBusy}
         onInteractOutside={holdWhileBusy}
       >

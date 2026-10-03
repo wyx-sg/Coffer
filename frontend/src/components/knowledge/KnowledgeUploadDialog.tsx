@@ -26,6 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import type { CollectionOut } from "@/lib/api/knowledge";
+import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useUploadKnowledgeFile } from "@/lib/hooks/useKnowledge";
 import { extensionOf, KINDS, refusalOf, refuseBeforeSending } from "@/lib/knowledge/uploadChecks";
 import { cn, formatBytes } from "@/lib/utils";
@@ -41,6 +42,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
   const { t } = useTranslation();
   const { toast } = useToast();
   const upload = useUploadKnowledgeFile();
+  const modelSet = useCofferModelSet();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [collection, setCollection] = useState("");
@@ -107,7 +109,10 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("knowledge.upload.title")}</DialogTitle>
-          <DialogDescription>{t("knowledge.upload.body")}</DialogDescription>
+          <DialogDescription>
+            {/* With no engine to curate it, the upload is written as a document at once (board 5.1.30). */}
+            {t(modelSet === false ? "knowledge.upload.bodyNoEngine" : "knowledge.upload.body")}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {file ? (

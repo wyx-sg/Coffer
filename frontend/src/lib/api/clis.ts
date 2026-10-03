@@ -16,7 +16,6 @@ export type CliWarning = Schemas["CliWarningOut"];
 export type CliStatus = Cli["status"];
 export type CliAddInput = Schemas["CliAddIn"];
 export type CliEditInput = Schemas["CliEditIn"];
-export type CliPreview = Schemas["CliPreviewOut"];
 
 const one = (command: string) => ({ params: { path: { command } } });
 

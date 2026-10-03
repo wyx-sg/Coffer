@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
+import { ListSelectAll } from "@/components/ListSelectAll";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
@@ -86,17 +87,9 @@ export function SkillLibrary({
   }, [skills, query, clis, drift]);
   const shown = GROUP_ORDER.reduce((n, g) => n + groups[g].length, 0);
 
-  // What select-all covers: the listed skills the filters show, never a built-in one.
+  // The listed skills the filter shows, never a built-in one: the bar's "of M".
   const visibleUids = [...groups.attention, ...groups.inUse, ...groups.off].map((s) => s.uid);
-  const allVisiblePicked = visibleUids.length > 0 && visibleUids.every((u) => picked.has(u));
-  const toggleAll = (on: boolean) => {
-    const next = new Set(picked);
-    for (const u of visibleUids) {
-      if (on) next.add(u);
-      else next.delete(u);
-    }
-    onPickedChange(next);
-  };
+  const setAll = (all: boolean) => onPickedChange(all ? new Set(visibleUids) : new Set());
 
   const toggle = (uid: string, on: boolean) => {
     const next = new Set(picked);
@@ -111,8 +104,7 @@ export function SkillLibrary({
         {selected.length > 0 ? (
           <SkillsBulkBar
             skills={selected}
-            allChecked={allVisiblePicked}
-            onToggleAll={toggleAll}
+            total={visibleUids.length}
             onDone={() => onPickedChange(new Set())}
           />
         ) : (
@@ -142,6 +134,11 @@ export function SkillLibrary({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <ListSelectAll
+          count={visibleUids.filter((u) => picked.has(u)).length}
+          total={visibleUids.length}
+          onChange={setAll}
+        />
         {error ? (
           <ListLoadError kind="skills" error={error} onRetry={() => onRetry?.()} />
         ) : isLoading ? (

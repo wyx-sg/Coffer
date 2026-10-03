@@ -2,8 +2,9 @@
 //
 // The left pane of Resolve conflicts: every file the round stopped on, each
 // with what its answer is so far. An answered file carries a check, an
-// unanswered one a red dot, one open in the editor a pencil.
-import { Check, Pencil } from "lucide-react";
+// unanswered one a red dot, one open in the editor a pencil, an encrypted
+// secret a lock, and one an agent merged a speech bubble: check it.
+import { Check, Lock, MessageSquare, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { ConflictFile } from "@/lib/api/sync";
@@ -20,6 +21,10 @@ interface Props {
 function Mark({ file, editing }: { file: ConflictFile; editing: boolean }) {
   if (file.answer) return <Check className="size-3.5 text-success" aria-hidden />;
   if (editing) return <Pencil className="size-3.5 text-text-subtle" aria-hidden />;
+  if (file.agent_state === "merged_by_agent") {
+    return <MessageSquare className="size-3.5 text-accent" aria-hidden />;
+  }
+  if (file.secret) return <Lock className="size-3.5 text-text-subtle" aria-hidden />;
   return <span aria-hidden className="mx-[3px] size-2 shrink-0 rounded-full bg-danger" />;
 }
 
@@ -31,7 +36,7 @@ export function SyncConflictFileList({ files, selected, editing, onSelect }: Pro
       className="flex w-[300px] shrink-0 flex-col gap-0.5 border-r border-border bg-surface-sidebar px-2 py-3"
     >
       <p className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-[.02em] text-text-muted">
-        {t("sync.resolve.files", { count: files.length })}
+        {t("sync.resolve.files")}
       </p>
       {files.map((file) => {
         const current = file.path === selected;

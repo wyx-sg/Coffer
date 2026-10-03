@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0139"
+HEAD_REVISION = "0140"
 #: The last revision whose tables still hold the pre-vault state: a data test
 #: of an older revision reads them here, before 0136 drops them.
 PRE_LAYOUT_REVISION = "0135"
@@ -242,7 +242,7 @@ PRE_LAYOUT_TABLES = {
     "workflow_node_attempts",
     "workflow_approvals",
     # 0111: what the local model proxy metered, rolled up per day, and the
-    # latest official quota each subscription agent reported.
+    # latest official quota each subscription agent reported (0140 drops it).
     "usage_requests",
     "usage_daily",
     "quota_snapshots",
@@ -277,6 +277,8 @@ MOVED_OUT_TABLES = {
     "secret_boundary_settings",
     "skill_source_status",
     "mcp_tool_reach",
+    # 0140 dropped the subscription quota readings.
+    "quota_snapshots",
     # The sync remote moved to ``local/sync/remote.json``; the pointer and the
     # retry set are retired (ADR sync-applies-clean-merges-and-stops-on-any-conflict).
     "sync_remotes",
@@ -455,6 +457,28 @@ def test_0139_deletes_rounds_recorded_with_the_removed_remote_too_old_status(tmp
         assert [r[0] for r in conn.execute("SELECT status FROM sync_runs")] == ["pulled"]
 
     command.downgrade(cfg, "0138")  # nothing to restore; must not raise
+
+
+def test_0140_drops_the_quota_snapshots_table_and_downgrade_recreates_it_empty(
+    tmp_path, monkeypatch
+):
+    db_path = tmp_path / "quota.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0139")
+
+    def tables() -> set[str]:
+        with sqlite3.connect(db_path) as conn:
+            return {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+
+    assert "quota_snapshots" in tables()
+    command.upgrade(cfg, "0140")
+    assert "quota_snapshots" not in tables()
+    assert {"usage_requests", "usage_daily"} <= tables()
+
+    command.downgrade(cfg, "0139")
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT count(*) FROM quota_snapshots").fetchone() == (0,)
 
 
 def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):

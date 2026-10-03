@@ -1,12 +1,13 @@
 // src/lib/activity/filters.ts — Activity's filters: their state, which logs a tab reads under them, and the client-side predicate.
 //
-// The server-side half of a filter (time window, free text, a call's server, a
-// single agent and status, the daemon's level floor) travels in each log's request
+// The server-side half of a filter (time window, free text, a single agent and
+// status, the daemon's level floor) travels in each log's request
 // (`useActivityFeed.sourceParams`); this module is the half the routes cannot
 // apply and the rules both halves share. Pure functions only.
 //
-// Who and Kind are multi-select (design 6.1.03, 6.1.04): a record passes when
-// it matches any of the chosen values, and choosing none is "Any".
+// By and Kind are multi-select (design 6.2.04, 6.2.05): a record passes when
+// it matches any of the chosen values, and choosing none is "Any". There is no
+// server filter: the search matches a server's name.
 import type { TFunction } from "i18next";
 
 import {
@@ -78,40 +79,47 @@ function actorWho(actor: string): string | null {
   return null;
 }
 
+/** The Everything tab's kinds: the three records, flat. */
+export const RECORD_KINDS = ["calls", "changes", "daemon"] as const;
+
+/** An MCP call status filter: all, ok, or every failure (error, timeout, denied). */
+export type StatusFilter = "all" | "ok" | "failed";
+
 /** @ui-only Every Activity filter; each tab reads the ones its records afford. */
 export interface ActivityFilters {
-  /** A time preset key, or "custom" with from/to. */
-  timeRange: string;
-  from: string;
-  to: string;
+  /** The time range as the URL carries it: a preset id or a custom range. */
+  range: string;
   /** Free text; each log's route applies it (debounced, one request per pause in typing). */
   search: string;
-  /** Who: `agent:<uid>` and `actor:<who group>` values; empty is any. */
+  /** By: `agent:<uid>` and `actor:<who group>` values; empty is any. */
   by: string[];
-  /** An MCP server's uid, or "any". */
-  server: string;
-  /** What: "calls", "daemon", "changes" (every change) and `change:<category>`; empty is any. */
+  /**
+   * Kind: on Everything "calls", "changes" and "daemon"; on Changes the change
+   * categories. Empty is any.
+   */
   kinds: string[];
-  /** An MCP call's status, or "any" (MCP calls tab). */
-  status: string;
+  /** An MCP call's outcome (MCP calls tab). */
+  status: StatusFilter;
   /** Daemon log severity floor; "" is every level (Daemon log tab). */
-  level: string;
-  /** A daemon logger name, or "any" (Daemon log tab). */
-  logger: string;
+  level: "" | "info" | "warning" | "error";
+  /** A daemon logger name (Daemon log tab); null is any. */
+  logger: string | null;
 }
 
 export const DEFAULT_FILTERS: ActivityFilters = {
-  timeRange: "1h",
-  from: "",
-  to: "",
+  range: "1h",
   search: "",
   by: [],
-  server: "any",
   kinds: [],
-  status: "any",
+  status: "all",
   level: "",
-  logger: "any",
+  logger: null,
 };
+
+/** The time range a tab opens on until the reader picks one: the daemon log is sparser. */
+export function defaultRange(tab: ActivityTab): string {
+  return tab === "daemon" ? "24h" : DEFAULT_FILTERS.range;
+}
 
 /** The who values a tab applies: calls only have agents; the daemon log has no who. */
 function byFor(tab: ActivityTab, f: ActivityFilters): string[] {
@@ -120,32 +128,44 @@ function byFor(tab: ActivityTab, f: ActivityFilters): string[] {
   return f.by;
 }
 
-/** The kind values a tab applies: Everything all of them, Changes its categories. */
+/** The kind values a tab applies: Everything the three records, Changes its categories. */
 function kindsFor(tab: ActivityTab, f: ActivityFilters): string[] {
-  if (tab === "everything") return f.kinds;
-  if (tab === "changes") return f.kinds.filter((k) => k.startsWith("change:"));
+  if (tab === "everything")
+    return f.kinds.filter((k) => (RECORD_KINDS as readonly string[]).includes(k));
+  if (tab === "changes") {
+    return f.kinds.filter((k) => (CHANGE_CATEGORIES as readonly string[]).includes(k));
+  }
   return [];
 }
 
 /** The one agent the who filter names, when it names exactly one and nothing else. */
 export function singleAgent(tab: ActivityTab, f: ActivityFilters): string | undefined {
-  const agents = byFor(tab, f).filter((b) => b.startsWith("agent:"));
-  return agents.length === 1 ? agents[0].slice("agent:".length) : undefined;
+  const by = byFor(tab, f);
+  return by.length === 1 && by[0].startsWith("agent:") ? by[0].slice("agent:".length) : undefined;
 }
 
-/** Whether anything narrows the view beyond the default time window. */
+/** Whether anything narrows the view beyond the time range: what "Clear filters" resets. */
 export function filtersNarrow(f: ActivityFilters, tab: ActivityTab): boolean {
   if (f.search.trim() || byFor(tab, f).length || kindsFor(tab, f).length) return true;
-  if (tab !== "daemon" && tab !== "changes" && f.server !== "any") return true;
-  if (tab === "mcp" && f.status !== "any") return true;
-  if (tab === "daemon" && (f.level !== "" || f.logger !== "any")) return true;
+  if (tab === "mcp" && f.status !== "all") return true;
+  if (tab === "daemon" && (f.level !== "" || f.logger !== null)) return true;
   return false;
 }
 
 /**
- * The sources a tab reads once its filters are applied: a kind, a server or a
- * who that only one or two logs can carry drops the others, so they are
- * neither fetched nor counted.
+ * Whether the totals the logs report still describe what is shown: a who
+ * beyond one agent and a logger are applied on the client, so "of M" would
+ * count records the filter hides.
+ */
+export function totalsExact(f: ActivityFilters, tab: ActivityTab): boolean {
+  const by = byFor(tab, f);
+  if (by.length > 0 && singleAgent(tab, f) === undefined) return false;
+  return !(tab === "daemon" && f.logger !== null);
+}
+
+/**
+ * The sources a tab reads once its filters are applied: a kind or a who that
+ * only one or two logs can carry drops the others, so they are not fetched.
  */
 export function sourcesFor(tab: ActivityTab, f: ActivityFilters): ActivitySource[] {
   let sources = [...TAB_SOURCES[tab]];
@@ -156,10 +176,9 @@ export function sourcesFor(tab: ActivityTab, f: ActivityFilters): ActivitySource
         ? kinds.includes("calls")
         : s === "daemon"
           ? kinds.includes("daemon")
-          : kinds.some((k) => k === "changes" || k.startsWith("change:")),
+          : kinds.includes("changes"),
     );
   }
-  if (f.server !== "any") sources = sources.filter((s) => s !== "daemon");
   const by = byFor(tab, f);
   if (by.length) {
     const agents = by.some((b) => b.startsWith("agent:"));
@@ -178,8 +197,6 @@ export interface FilterContext {
   until?: string;
   /** Agent uid → display name, for search and the who filter on changes. */
   agentNames: ReadonlyMap<string, string>;
-  /** MCP server uid → name, for the server filter on changes. */
-  serverNames: ReadonlyMap<string, string>;
 }
 
 /** The agent uid a change was made by, when its actor names one. */
@@ -191,7 +208,7 @@ function changeAgent(entry: AuditEntry, agentNames: ReadonlyMap<string, string>)
 }
 
 /** The who value one record carries — `agent:<uid>` or `actor:<group>` — or null. */
-export function recordWho(
+function recordWho(
   r: ActivityRecord,
   agentNames: ReadonlyMap<string, string>,
 ): string | null {
@@ -203,32 +220,19 @@ export function recordWho(
   return uid ? `agent:${uid}` : null;
 }
 
-/** The kind value one record carries: "calls", "daemon" or `change:<category>`. */
-export function recordKind(r: ActivityRecord): string {
+/** The Everything kind value one record carries: "calls", "changes" or "daemon". */
+function recordKind(r: ActivityRecord): string {
   if (r.source === "call") return "calls";
   if (r.source === "daemon") return "daemon";
-  return `change:${changeCategory(r.entry)}`;
-}
-
-/** How many of `records` carry each value `of` gives them, for the pills' counts. */
-export function tally(
-  records: readonly ActivityRecord[],
-  of: (r: ActivityRecord) => string | null,
-): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const r of records) {
-    const value = of(r);
-    if (value) out.set(value, (out.get(value) ?? 0) + 1);
-  }
-  return out;
+  return "changes";
 }
 
 /**
  * The client-side half of the filters: what the routes cannot narrow by
- * themselves (the custom range's upper bound, who, a change's server, the
- * kinds, a logger). The server-side half — the time window, the free text, a
- * call's server, a single agent and status, the daemon's level floor — is in
- * the request, so a page of results is the first page of what matches.
+ * themselves (the custom range's upper bound, who beyond one agent, a change's
+ * category, a logger). The server-side half — the time window, the free text,
+ * a single agent and status, the daemon's level floor — is in the request, so
+ * a page of results is the first page of what matches.
  */
 export function matchesFilters(
   r: ActivityRecord,
@@ -242,20 +246,12 @@ export function matchesFilters(
     const who = recordWho(r, ctx.agentNames);
     if (!who || !by.includes(who)) return false;
   }
-  if (f.server !== "any") {
-    if (r.source === "daemon") return false;
-    if (r.source === "call" && r.call.resource_uid !== f.server) return false;
-    if (r.source === "change") {
-      const name = ctx.serverNames.get(f.server);
-      if (r.entry.resource_kind !== "mcp_server" || r.entry.resource_name !== name) return false;
-    }
-  }
   const kinds = kindsFor(tab, f);
   if (kinds.length) {
-    const kind = recordKind(r);
-    const allChanges = r.source === "change" && kinds.includes("changes");
-    if (!allChanges && !kinds.includes(kind)) return false;
+    if (tab === "changes") {
+      if (r.source !== "change" || !kinds.includes(changeCategory(r.entry))) return false;
+    } else if (!kinds.includes(recordKind(r))) return false;
   }
-  if (tab === "daemon" && f.logger !== "any" && recordLogger(r) !== f.logger) return false;
+  if (tab === "daemon" && f.logger !== null && recordLogger(r) !== f.logger) return false;
   return true;
 }

@@ -65,13 +65,18 @@ export function KnowledgeDocumentEditor({
             <p className="text-xs text-text-muted">{conflictText}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="outline" onClick={onCompare}>
+            <Button variant="outline" size="sm" onClick={onCompare}>
               {t("knowledge.editor.compare")}
             </Button>
-            <Button variant="outline" onClick={onCopyMine}>
+            <Button variant="outline" size="sm" onClick={onCopyMine}>
               {t("knowledge.editor.copyMine")}
             </Button>
-            <Button variant="ghost" className="text-danger" onClick={() => setConfirmReload(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-danger"
+              onClick={() => setConfirmReload(true)}
+            >
               {t("knowledge.editor.reloadAsk")}
             </Button>
           </div>

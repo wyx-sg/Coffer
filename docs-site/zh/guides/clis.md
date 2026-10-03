@@ -78,10 +78,12 @@ Check with me before running anything that needs sudo or changes system settings
 If a login is needed, tell me how and I will log in myself; do not handle my credentials.
 ```
 
-启动器会额外列出用它启动的服务器（`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``）。版本过旧的命令会得到同样的提示词，只是改为要求更新，并附上找到的版本和位置。提示词不写任何安装命令：选哪个是智能体的事。命令的页面和技能的 **依赖** 标签页提供两种用法：
+启动器会额外列出用它启动的服务器（`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``）。版本过旧的命令会得到同样的提示词，只是改为要求更新，并附上找到的版本和位置。提示词不写任何安装命令：选哪个是智能体的事。命令的页面和技能的 **依赖** 标签页提供一个拆分按钮**交给智能体 ▾**：
 
-- **复制提示词**——粘贴到你用的任何智能体里，终端或 IDE 都行。
-- **交给智能体**——选一个 Coffer 托管的智能体和一个文件夹，就会打开一个新[对话](/zh/guides/chat)，提示词已经填在输入框里。**在你按下发送之前，什么都不会发出去**：托管的智能体以完整权限运行，所以先读一读它将被要求做什么。这台机器上没有托管智能体时，只提供复制提示词。
+- **交给智能体**——打开一个新[对话](/zh/guides/chat)草稿，提示词已经填在输入框里；智能体和文件夹在回复框里选，默认是你上次用的。
+- ▾ 菜单里的**复制提示词**——粘贴到你用的任何智能体里，终端或 IDE 都行。会弹出“已复制提示词”。
+
+前者**在你按下发送之前，什么都不会发出去**：托管的智能体以完整权限运行，所以先读一读它将被要求做什么。这台机器上没有托管智能体时，只提供复制提示词。
 
 智能体完成后，点 **重新检查**。
 

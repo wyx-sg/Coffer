@@ -98,19 +98,26 @@ describe("SkillLibrary", () => {
     expect(group("In use")).toBeNull();
   });
 
-  test("the built-in row has no checkbox; select-all skips it", () => {
+  test("a select-all row appears once a row is ticked and ticks every listed skill, not the built-in one", () => {
+    renderLibrary();
+    expect(screen.queryByRole("checkbox", { name: "Select all" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
+    const all = screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement;
+    expect(all.indeterminate).toBe(true);
+    fireEvent.click(all);
+    expect(screen.getByText("4 of 4 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(screen.queryByRole("region", { name: "Selected skills" })).toBeNull();
+  });
+
+  test("the built-in row has no checkbox and the bar counts the others only", () => {
     renderLibrary();
     expect(screen.queryByRole("checkbox", { name: /coffer-guide/ })).toBeNull();
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: alpha/ }));
     const bar = screen.getByRole("region", { name: "Selected skills" });
     expect(screen.queryByRole("textbox", { name: "Filter skills" })).toBeNull();
-    const all = within(bar).getByRole("checkbox", {
-      name: "Select all shown skills",
-    }) as HTMLInputElement;
-    expect(all.indeterminate).toBe(true);
-    fireEvent.click(all);
-    expect(within(bar).getByText("4 selected")).toBeInTheDocument();
-    expect(all.checked).toBe(true);
+    expect(within(bar).getByText("1 of 4 selected")).toBeInTheDocument();
+    expect(within(bar).queryByRole("checkbox")).toBeNull();
     fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
     expect(screen.queryByRole("region", { name: "Selected skills" })).toBeNull();
     expect(screen.getByRole("textbox", { name: "Filter skills" })).toBeInTheDocument();

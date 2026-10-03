@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
-from coffer.application.chat.ports import AgentAdapter, QuotaObserver
+from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.channel_turn import channel_turn_env
 from coffer.domain.chat.agent_config import AgentConfig
@@ -78,7 +78,6 @@ class ClaudeSdkProvider:
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         is_managed: ManagedCheck | None = None,
-        observe_quota: QuotaObserver | None = None,
         retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
         self._conversations = conversations
@@ -107,9 +106,6 @@ class ClaudeSdkProvider:
         # Whether an enabled agent of this type is managed by Coffer; chat offers
         # and runs managed agents only. ``None`` ⇒ not asked.
         self._is_managed = is_managed
-        # Where Claude Code's ``rate_limit_event`` goes (the usage kind's quota
-        # service, bound at the composition root). ``None`` ⇒ dropped.
-        self._observe_quota = observe_quota
         # A channel turn's per-prompt notes (spec memory "Retrieve the notes a
         # prompt names for a channel turn"). ``None`` ⇒ none.
         self._retrieve_memory = retrieve_memory
@@ -195,7 +191,6 @@ class ClaudeSdkProvider:
             # agent as text rather than a vision/binary block (spec chat
             # "Extract document attachments to text").
             document_extractor=default_document_extractor(),
-            observe_quota=self._observe_quota,
             prompt_memory=bind_prompt_memory(
                 self._retrieve_memory,
                 channel_uid=conv.channel_uid or "",

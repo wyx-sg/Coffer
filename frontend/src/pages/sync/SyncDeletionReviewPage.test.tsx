@@ -3,7 +3,8 @@
 // A held round has two answers, each naming how many files it touches:
 // Delete (asked again, because it destroys, stating the files, who deleted
 // them and the snapshot) and Restore (at once). The files are grouped by
-// folder with each folder's share, so 12 of 20 and 2 of 2 never read alike.
+// folder in bordered lists (four, then Show all); the summary rides in the
+// description line and there is no back link.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -51,18 +52,21 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SyncDeletionReviewPage", () => {
-  test("says who deleted how many, grouped by folder with its share", () => {
+  test("says who deleted how many in the description, files grouped by folder", () => {
     show(makeHeldRound());
     expect(screen.getByRole("heading", { name: "Review held deletions" })).toBeInTheDocument();
     expect(screen.getByText("Round held")).toBeInTheDocument();
-    expect(screen.getByTestId("sync-deletions-summary")).toHaveTextContent(
-      "14 files2 foldersdeleted on Mac mini",
-    );
+    expect(
+      screen.getByText(/14 files in 2 folders, deleted on Mac mini · the rest of what was pulled/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
     const [chat, pdf] = screen.getAllByTestId("sync-held-group");
     expect(within(chat!).getByRole("heading")).toHaveTextContent("Knowledge · archive/chat-bot");
-    // Six paths are listed, the other six counted.
-    expect(within(chat!).getAllByRole("listitem")).toHaveLength(7);
-    expect(chat).toHaveTextContent("…and 6 more");
+    // Four paths are listed, the other eight behind Show all.
+    expect(within(chat!).getAllByRole("listitem")).toHaveLength(4);
+    expect(chat).toHaveTextContent("Showing 4 of 12");
+    fireEvent.click(within(chat!).getByRole("button", { name: "Show all" }));
+    expect(within(chat!).getAllByRole("listitem")).toHaveLength(12);
     expect(within(pdf!).getByRole("heading")).toHaveTextContent("Skills · pdf-tools-old");
     expect(pdf).toHaveTextContent("skills/pdf-tools-old/scripts/extract.py");
   });
@@ -93,7 +97,9 @@ describe("SyncDeletionReviewPage", () => {
 
   test("a hold this Mac would push out is worded for this Mac", () => {
     show(makeHeldRound(makeHold({ direction: "outgoing", machines: ["Laptop"] })));
-    expect(screen.getByTestId("sync-deletions-summary")).toHaveTextContent("deleted on this Mac");
+    expect(
+      screen.getByText(/deleted on this Mac · nothing is pushed until you decide/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Delete on the other Macs too")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete 14 files…" }));
     expect(

@@ -113,7 +113,8 @@ acceptance("web-ui", "the index opens Overview", async () => {
 
 test("an address the app does not answer is page not found", async () => {
   mockApi();
-  for (const path of ["/chat", "/resources", "/audit"]) {
+  // /usage is gone: Usage is a tab of Model providers (no redirect).
+  for (const path of ["/chat", "/resources", "/audit", "/usage"]) {
     const location = renderAt(path);
     expect(await screen.findByText("Nothing lives at this address")).toBeInTheDocument();
     expect(location.pathname).toBe(path);
@@ -135,7 +136,7 @@ test("the Settings addresses land on a live tab", async () => {
 
 test("every page the shell adds resolves to a page of its own", async () => {
   mockApi();
-  for (const path of ["/secrets", "/usage", "/custom-tools", "/clis"]) {
+  for (const path of ["/secrets", "/custom-tools", "/clis"]) {
     const location = renderAt(path);
     // Each page is code-split; wait until it has replaced the fallback.
     await waitFor(() => expect(location.pathname).toBe(path));

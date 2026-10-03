@@ -1,16 +1,16 @@
-// frontend/src/pages/sync/SyncEmptyRemote.tsx — setup, empty remote (6.5.17).
+// frontend/src/pages/sync/SyncEmptyRemote.tsx — setup, empty remote (6.4.21).
 //
 // The repository Check repository found is empty, so this Mac becomes the
 // first machine and the first round pushes the whole vault: said with what
 // that is, from the status's own counts, before anything is saved. Push and
 // start syncing stores the remote and joins it; Back returns to the form.
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, Copy, Lock } from "lucide-react";
+import { Check, Copy, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import type { SyncStatus } from "@/lib/api/sync";
 import { useCopyText } from "@/lib/hooks/useCopyText";
+import { JoinLine } from "./SyncJoinLine";
 
 interface Props {
   status: SyncStatus;
@@ -35,33 +35,25 @@ export function SyncEmptyRemote({ status, url, includeSecret, pending, onPush, o
   ];
 
   return (
-    <Card className="max-w-[680px]" data-testid="sync-setup-empty">
-      <div className="flex flex-col gap-3 p-4">
-        <div className="flex items-start gap-3">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-text">
-            <ArrowUp className="size-4" aria-hidden />
-          </span>
-          <div className="flex flex-col gap-0.5">
-            <h3 className="text-sm font-semibold text-text">{t("sync.setup.empty.title")}</h3>
-            <p className="text-xs text-text-muted">{t("sync.setup.empty.body")}</p>
-          </div>
+    <div className="flex max-w-[680px] flex-col gap-4" data-testid="sync-setup-empty">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-md font-semibold text-text">{t("sync.setup.empty.title")}</h2>
+          <p className="text-xs text-text-muted">{t("sync.setup.empty.body")}</p>
         </div>
-        <ul className="flex flex-col gap-1 rounded-lg bg-surface-sunken px-3 py-2.5">
+        <ul className="overflow-hidden rounded-xl border border-border bg-surface-raised">
           {rows.map((row) => (
-            <li key={row.dir} className="flex items-center justify-between gap-4 text-xs">
-              <span className="font-mono text-text">+ {row.dir}</span>
-              <span className="text-text-muted">{row.label}</span>
-            </li>
+            <JoinLine key={row.dir} mark="+" title={`${row.dir} · ${row.label}`} />
           ))}
         </ul>
         {includeSecret ? null : (
-          <p className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Lock className="size-3.5" aria-hidden />
+          <p className="flex items-start gap-2 text-xs leading-[1.45] text-text-muted">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {t("sync.setup.empty.noSecrets")}
           </p>
         )}
       </div>
-      <div className="flex items-center gap-2 rounded-b-xl border-t border-border-subtle bg-surface-footer px-4 py-3">
+      <div className="flex items-center gap-2">
         <Button type="button" loading={pending} onClick={onPush}>
           {t("sync.setup.empty.push")}
         </Button>
@@ -69,7 +61,7 @@ export function SyncEmptyRemote({ status, url, includeSecret, pending, onPush, o
           {t("sync.setup.back")}
         </Button>
         <span className="ml-auto flex min-w-0 items-center gap-1">
-          <span className="truncate font-mono text-xs text-text-muted">{url}</span>
+          <span className="truncate font-mono text-xs text-text-subtle">{url}</span>
           <Button
             type="button"
             variant="ghost"
@@ -81,6 +73,6 @@ export function SyncEmptyRemote({ status, url, includeSecret, pending, onPush, o
           </Button>
         </span>
       </div>
-    </Card>
+    </div>
   );
 }

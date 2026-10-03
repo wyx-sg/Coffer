@@ -4,10 +4,11 @@
 // Everything merges the audit log, the MCP calls the gateway proxied and the
 // daemon's warnings and errors into one newest-first stream; Changes, MCP
 // calls and Daemon log narrow to one record each, with the columns and
-// filters that record affords. Each tab shows its count.
+// filters that record affords. Tabs carry no counts; one whose log failed to
+// load shows a warning icon. Every filter lives in the URL.
 //
 // Everything opens small: each log the tab reads gives its newest 30 records,
-// and the next 50 load when the list is scrolled to its end (or on "Load
+// and the next 50 load when the list is scrolled to its end (or on "Load 50
 // more"). Search and filters are asked of the logs themselves, never applied
 // over what happens to be loaded.
 //
@@ -16,26 +17,33 @@
 // at the top with nothing open; once they scroll down or open a record,
 // insertion stops and "↑ N new" counts what is waiting. Choosing it — or
 // scrolling back to the top — inserts them. There is no Pause / Resume and no
-// refresh button; the ⋯ menu exports the filtered records.
+// refresh button; Export writes the filtered records.
 //
-// A record opens in a drawer beside the list; on the Daemon log it expands in
-// place under its own line instead (design 6.1.09).
+// A record opens in the shared Drawer; on the Daemon log it expands in place
+// under its own line instead (design 6.2.08). With no records at all the page
+// is the first run: no filter row, no Export (design 6.2.09).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ActivityBody } from "@/components/activity/ActivityBody";
+import { ActivityBody, FirstRun } from "@/components/activity/ActivityBody";
 import { ActivityFilterBar } from "@/components/activity/ActivityFilterBar";
 import { ActivityHeader } from "@/components/activity/ActivityHeader";
 import { NewRecordsStrip, PartialFailure } from "@/components/activity/ActivityNotices";
-import { useTimeRangeLabel } from "@/components/activity/ActivityTimeRange";
-import { DaemonLogLine, DaemonRecordOpen, OpenLogFile } from "@/components/activity/DaemonLogParts";
+import { DaemonLogLine, DaemonRecordOpen } from "@/components/activity/DaemonLogParts";
 import { RecordDrawer } from "@/components/activity/RecordDrawer";
 import { filtersNarrow } from "@/lib/activity/filters";
+import type { ActivityTab } from "@/lib/activity/records";
+import { everyLogFailed } from "@/lib/activity/feedText";
+import { useActivityAnyRecords } from "@/lib/hooks/useActivityAnyRecords";
 import { useActivityFeed } from "@/lib/hooks/useActivityFeed";
 import { useActivityLookups } from "@/lib/hooks/useActivityLookups";
 import { useActivityView } from "@/lib/hooks/useActivityView";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { useSortParam } from "@/lib/hooks/useSortParam";
+
+/** The tab each log belongs to, for the warning icon on a tab whose log failed. */
+const SOURCE_TAB = { change: "changes", call: "mcp", daemon: "daemon" } as const;
 
 /** Within this many pixels of the top counts as "at the top". */
 const TOP_SLACK = 8;
@@ -60,9 +68,8 @@ export function ActivityPage() {
     filters: feedFilters,
     t,
     agentNames: lookups.agentNames,
-    serverNames: lookups.serverNames,
   });
-  const windowLabel = useTimeRangeLabel(filters);
+  const [sort, setSort] = useSortParam();
 
   // A change the daemon announces also wrote an audit entry: read the audit
   // log's head now rather than at the next poll.
@@ -94,56 +101,67 @@ export function ActivityPage() {
   };
 
   const daemon = tab === "daemon";
+  const narrowed = filtersNarrow(filters, tab);
+  const failedTabs = new Set<ActivityTab>(feed.failed.map((f) => SOURCE_TAB[f.source]));
+  // Nothing under the default view: ask whether Coffer has recorded anything at all.
+  const bare =
+    !feed.isLoading &&
+    !everyLogFailed(feed) &&
+    feed.failed.length === 0 &&
+    feed.rows.length === 0 &&
+    !feed.hasOlder &&
+    !narrowed;
+  const firstRun = useActivityAnyRecords(bare) === false && bare;
+
   return (
-    // Full-bleed, like Conversations: the list and the drawer each own a
-    // scroll region, so "at the top" is the list's own scroll position.
-    <div className="relative -mx-6 -my-10 flex h-screen overflow-hidden md:-mx-10">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-col gap-3.5 px-6 pt-6 md:px-8">
-          <ActivityHeader
-            tab={tab}
-            onTab={(next) => setTab(next)}
-            counts={feed.counts}
-            live={streamOpen}
-            specs={feed.specs}
-            keep={feed.keep}
-          />
+    // Full-bleed, like Conversations: the list owns the scroll region, so
+    // "at the top" is the list's own scroll position.
+    <div className="-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden">
+      <div className="flex flex-col gap-4 px-8 pt-4">
+        <ActivityHeader
+          tab={tab}
+          onTab={(next) => setTab(next)}
+          failedTabs={failedTabs}
+          live={streamOpen}
+          empty={firstRun}
+          specs={feed.specs}
+          keep={feed.keep}
+        />
+        {firstRun ? null : (
           <ActivityFilterBar
             tab={tab}
             filters={filters}
             onChange={view.changeFilters}
+            onClear={view.clearFilters}
             agents={lookups.agents}
-            agentNames={lookups.agentNames}
-            servers={lookups.servers}
             loggers={feed.loggers}
-            loaded={feed.loadedRecords}
-            counts={feed.counts}
-            trailing={daemon ? <OpenLogFile path={feed.logPath} /> : null}
           />
-          <PartialFailure feed={feed} />
-          <NewRecordsStrip held={!live} feed={feed} onShowNew={showNew} />
-        </div>
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          data-activity-list
-          className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 md:px-5"
-        >
+        )}
+        {daemon && feed.logPath && !firstRun ? (
+          <DaemonLogLine path={feed.logPath} following={streamOpen && live} />
+        ) : null}
+        <PartialFailure feed={feed} />
+        <NewRecordsStrip held={!live} feed={feed} onShowNew={showNew} />
+      </div>
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        data-activity-list
+        className="mt-3 min-h-0 flex-1 overflow-y-auto px-8 pb-10"
+      >
+        {firstRun ? (
+          <FirstRun />
+        ) : (
           <ActivityBody
             tab={tab}
             feed={feed}
-            narrowed={filtersNarrow(filters, tab)}
+            narrowed={narrowed}
             onClearFilters={view.clearFilters}
             agents={lookups.agentLooks}
             selectedKey={selected?.key ?? null}
             onSelect={view.select}
-            timeRange={filters.timeRange}
-            windowLabel={windowLabel}
-            logLine={
-              daemon && feed.logPath ? (
-                <DaemonLogLine path={feed.logPath} following={streamOpen && live} />
-              ) : null
-            }
+            sort={sort}
+            onSort={setSort}
             renderExpanded={
               daemon
                 ? (r) => (
@@ -155,20 +173,17 @@ export function ActivityPage() {
                 : undefined
             }
           />
-        </div>
+        )}
       </div>
       {selected && !daemon ? (
-        <div className="absolute inset-0 z-10 flex md:static md:z-auto">
-          <RecordDrawer
-            record={selected}
-            rows={feed.rows}
-            agents={lookups.agentLooks}
-            transports={lookups.serverTransports}
-            onSelect={view.setSelectedKey}
-            onClose={() => view.setSelectedKey(null)}
-            onDaemonRecords={(server) => setTab("daemon", { search: server })}
-          />
-        </div>
+        <RecordDrawer
+          record={selected}
+          rows={feed.rows}
+          agents={lookups.agentLooks}
+          transports={lookups.serverTransports}
+          onSelect={view.setSelectedKey}
+          onClose={() => view.setSelectedKey(null)}
+        />
       ) : null}
     </div>
   );

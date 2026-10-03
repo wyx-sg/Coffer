@@ -6,8 +6,10 @@
 // the ticked ones — nothing is written — and shows the secrets it would add
 // and the files it would rewrite; Apply then runs the import. The dialog
 // closes on success, or, when some were skipped, says "Moved 2 of 3 keys",
-// which and why, and offers Try again for a file that could not be rewritten.
-// A scan that finds nothing says how many files it read and where it looked.
+// which and why, and offers Retry for a file that could not be rewritten (and, for a file the
+// OS refuses to write, an agent hand-off). A scan that finds nothing says how many files it read
+// and where it looked. Widths follow the step: scanning or nothing found 480, a result 640, the
+// findings and the review 1060 so the dialog does not jump between them.
 import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +19,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -32,6 +35,9 @@ import { planOf, type ImportPlan } from "./scanPlan";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Limit the findings to files whose path ends with one of these (Sync's
+   *  "Move into secrets…" names the vault files it refused to push). */
+  onlyPaths?: string[];
 }
 
 type Step =
@@ -49,7 +55,7 @@ function Title({ children }: { children: string }) {
   );
 }
 
-export function ScanSecretsDialog({ open, onOpenChange }: Props) {
+export function ScanSecretsDialog({ open, onOpenChange, onlyPaths }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const scan = useSecretScan(open);
@@ -65,7 +71,8 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
     reset();
   }, [open, reset]);
 
-  const findings = scan.data?.findings ?? [];
+  const all = scan.data?.findings ?? [];
+  const findings = onlyPaths ? all.filter((f) => onlyPaths.some((p) => f.path.endsWith(p))) : all;
   // Every finding starts ticked, once the scan is in.
   const chosen = ticked ?? new Set(findings.map((f) => f.id));
   const close = () => onOpenChange(false);
@@ -102,7 +109,9 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
   };
 
   let body;
+  let width = "max-w-[480px]";
   if (step.name === "done") {
+    width = "max-w-[640px]";
     body = (
       <ScanResultStep
         result={step.result}
@@ -112,6 +121,7 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
       />
     );
   } else if (step.name === "preview") {
+    width = "max-w-[1060px]";
     body = (
       <ScanPreviewStep
         plan={step.plan}
@@ -129,6 +139,11 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-2/3" />
         </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={close}>
+            {t("common.cancel")}
+          </Button>
+        </DialogFooter>
       </>
     );
   } else if (scan.error) {
@@ -138,11 +153,11 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
         <p role="alert" className="text-xs text-danger">
           {translateApiError(t, scan.error)}
         </p>
-        <div className="flex justify-end">
+        <DialogFooter>
           <Button variant="outline" onClick={() => void scan.refetch()}>
             <RotateCcw aria-hidden /> {t("common.retry")}
           </Button>
-        </div>
+        </DialogFooter>
       </>
     );
   } else if (findings.length === 0) {
@@ -156,15 +171,16 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
           <dt className="text-text-muted">{t("secrets.scan.checked")}</dt>
           <dd className="font-mono text-text">{t("secrets.scan.checkedWhere")}</dd>
         </dl>
-        <div className="flex justify-end">
+        <DialogFooter>
           <Button onClick={close}>{t("common.done")}</Button>
-        </div>
+        </DialogFooter>
       </>
     );
   } else {
+    width = "max-w-[1060px]";
     body = (
       <ScanFindingsStep
-        scan={scan.data}
+        scan={{ ...scan.data, findings }}
         ticked={chosen}
         onToggle={toggle}
         onToggleAll={(all) => setTicked(new Set(all ? findings.map((f) => f.id) : []))}
@@ -177,7 +193,7 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !importer.isPending && onOpenChange(next)}>
-      <DialogContent className="max-w-[640px] grid-cols-[minmax(0,1fr)]">{body}</DialogContent>
+      <DialogContent className={`${width} grid-cols-[minmax(0,1fr)]`}>{body}</DialogContent>
     </Dialog>
   );
 }

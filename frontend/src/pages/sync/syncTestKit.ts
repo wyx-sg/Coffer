@@ -61,6 +61,8 @@ export function makeStatus(over: Partial<SyncStatus> = {}): SyncStatus {
     join_choices: 0,
     ahead: 0,
     behind: 0,
+    vault_real_path: "/Users/me/.coffer/vault",
+    default_vault_path: "/Users/me/.coffer/vault",
     ...over,
   };
 }

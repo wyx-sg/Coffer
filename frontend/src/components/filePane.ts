@@ -29,12 +29,6 @@
 // the grid's two rows split the same height between tree and preview.
 import { useCallback, useLayoutEffect, useState, type CSSProperties } from "react";
 
-/** The two-pane grid: stacked below `md` (tree above preview, sharing the
- *  height), side by side from `md` up. Callers add their own
- *  `md:grid-cols-[…]`. */
-export const FILE_PANE_GRID =
-  "grid gap-4 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] md:grid-rows-[minmax(0,1fr)]";
-
 /** One column of that grid: fixed rows on top, one scrolling region below. */
 export const FILE_PANE_COLUMN = "flex min-h-0 min-w-0 flex-col gap-2";
 

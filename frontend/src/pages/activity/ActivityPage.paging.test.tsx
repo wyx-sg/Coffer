@@ -138,13 +138,13 @@ test("it opens on one small page: 30 rows of the open tab, and the rest of the l
   const pages = queries(get, "/audit").filter((q) => q.limit === 30);
   expect(pages).toHaveLength(1);
   expect(pages[0].cursor).toBeUndefined();
-  // The other logs are not read for their rows (a one-row read is a tab's count).
-  expect(queries(get, "/mcp/invocations").every((q) => q.limit === 1)).toBe(true);
-  expect(queries(get, "/daemon/logs").every((q) => q.limit === 1)).toBe(true);
-  expect(screen.getAllByText(/30 loaded/).length).toBeGreaterThan(0);
+  // The other logs are not read at all: tabs carry no counts.
+  expect(queries(get, "/mcp/invocations")).toHaveLength(0);
+  expect(queries(get, "/daemon/logs")).toHaveLength(0);
+  expect(screen.getByText(/Showing 30 of 100/)).toBeInTheDocument();
 });
 
-test("scrolling to the end loads the next 50 by cursor, with 'N loaded' under the rows", async () => {
+test("scrolling to the end loads the next 50 by cursor, with 'Showing N of M' in the box's footer", async () => {
   const get = mockApi();
   render(wrap());
   await waitFor(() => expect(rows()).toBe(30));
@@ -152,19 +152,17 @@ test("scrolling to the end loads the next 50 by cursor, with 'N loaded' under th
   await waitFor(() => expect(rows()).toBe(80));
   const next = queries(get, "/audit").find((q) => q.cursor !== undefined);
   expect(next).toMatchObject({ limit: 50, cursor: "30" });
-  expect(screen.getAllByText(/80 loaded/).length).toBeGreaterThan(0);
+  expect(screen.getByText(/Showing 80 of 100/)).toBeInTheDocument();
   await scrollToEnd();
   await waitFor(() => expect(rows()).toBe(100));
-  await waitFor(() =>
-    expect(screen.getByText(/everything in this time range/)).toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.getByText(/That's everything kept/)).toBeInTheDocument());
 });
 
-test("'Load more' does the same by hand, for a reader who cannot scroll", async () => {
+test("'Load 50 more' does the same by hand, for a reader who cannot scroll", async () => {
   mockApi();
   render(wrap());
   await waitFor(() => expect(rows()).toBe(30));
-  fireEvent.click(screen.getByRole("button", { name: "Load older" }));
+  fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
   await waitFor(() => expect(rows()).toBe(80));
 });
 
@@ -173,7 +171,7 @@ test("search is the route's: debounced into one request, and the stale one is ab
   const get = mockApi({ hang: (q) => q.q === "server-1" });
   render(wrap());
   await waitFor(() => expect(rows()).toBe(30));
-  const box = screen.getByLabelText("Filter records");
+  const box = screen.getByLabelText("Filter changes");
   fireEvent.change(box, { target: { value: "server-1" } });
   await waitFor(() => expect(queries(get, "/audit").some((q) => q.q === "server-1")).toBe(true));
   const stale = get.mock.calls.find(

@@ -1,13 +1,11 @@
-// src/lib/usage/format.test.ts — the Usage page's number, money, clock and day formats in en and zh.
+// src/lib/usage/format.test.ts — the Usage page's number, money and day formats in en and zh.
 import { describe, expect, test } from "vitest";
 
 import {
   allUnpriced,
-  formatClock,
   formatCost,
   formatCount,
   formatDay,
-  formatMoment,
   formatTokens,
   niceTicks,
   splitDuration,
@@ -48,21 +46,10 @@ describe("formatCount and formatCost", () => {
 
 describe("dates and times", () => {
   const at = new Date(2026, 8, 23, 14, 2);
-  test("clock time is 24-hour", () => {
-    expect(formatClock(at, "en")).toBe("14:02");
-    expect(formatClock(new Date(2026, 8, 23, 9, 5), "zh")).toBe("09:05");
-  });
-  test("days read day-first in English", () => {
+  test("days read month-first in English", () => {
     expect(formatDay(at, "en", "short")).toBe("Wed 23");
-    expect(formatDay(at, "en", "long")).toBe("Wed 23 Sep");
-    expect(formatDay(at, "en", "date")).toBe("23 Sep 2026");
-  });
-  test("a reset today shows only its time; a later one its day too", () => {
-    const now = new Date(2026, 8, 23, 12, 0);
-    expect(formatMoment(new Date(2026, 8, 23, 16, 30).toISOString(), now, "en")).toBe("16:30");
-    expect(formatMoment(new Date(2026, 9, 1, 9, 0).toISOString(), now, "en")).toBe(
-      "Thu 1 Oct 09:00",
-    );
+    expect(formatDay(at, "en", "long")).toBe("Wed Sep 23");
+    expect(formatDay(at, "en", "month")).toBe("Sep 23");
   });
   test("durations split into days, hours and minutes", () => {
     expect(splitDuration((2 * 60 + 24) * 60_000)).toEqual({ days: 0, hours: 2, minutes: 24 });

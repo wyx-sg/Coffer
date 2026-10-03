@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { SearchInput } from "@/components/SearchInput";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
+import { ListSelectAll } from "@/components/ListSelectAll";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
@@ -79,6 +80,8 @@ export function McpServerList({
     (query.trim() === "" ||
       `${builtin.name} ${builtin.url}`.toLowerCase().includes(query.trim().toLowerCase()));
 
+  // The listed servers the search shows (never the built-in one): the bar's "of M".
+  const visibleUids = [...groups.values()].flat().map((i) => servers[i].uid);
   const selected = servers.filter((s) => picked.has(s.uid));
   const toggle = (uid: string, on: boolean) => {
     const next = new Set(picked);
@@ -92,7 +95,11 @@ export function McpServerList({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-2.5 px-3 pb-2.5 pt-3.5">
         {selected.length > 0 ? (
-          <McpServersBulkBar servers={selected} onDone={() => onPickedChange(new Set())} />
+          <McpServersBulkBar
+            servers={selected}
+            total={visibleUids.length}
+            onDone={() => onPickedChange(new Set())}
+          />
         ) : (
           <SearchInput
             value={query}
@@ -103,6 +110,11 @@ export function McpServerList({
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <ListSelectAll
+          count={visibleUids.filter((u) => picked.has(u)).length}
+          total={visibleUids.length}
+          onChange={(all) => onPickedChange(all ? new Set(visibleUids) : new Set())}
+        />
         {error ? (
           <ListLoadError kind="mcp" error={error} onRetry={() => onRetry?.()} />
         ) : isLoading ? (

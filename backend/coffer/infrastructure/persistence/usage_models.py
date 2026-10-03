@@ -1,7 +1,7 @@
-"""ORM models for usage metering and subscription quota (migration 0111; ADR
+"""ORM models for usage metering (migration 0111; ADR
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
-Three tables:
+Two tables:
 
 * ``usage_requests`` — one row per upstream attempt the proxy spooled: every
   :class:`~coffer.domain.usage.records.UsageRecord` field plus the cost computed
@@ -13,8 +13,6 @@ Three tables:
   insert, and only when that insert added a row. The grouping columns store
   ``''`` for "none" rather than NULL, because SQLite treats NULLs in a UNIQUE
   constraint as distinct and an upsert would never find the row. Kept 365 days.
-* ``quota_snapshots`` — the latest value of each (agent type, window) any
-  official feed reported, with when it was observed.
 """
 
 from __future__ import annotations
@@ -116,23 +114,4 @@ class UsageDailyModel(Base):
     )
 
 
-class QuotaSnapshotModel(Base):
-    __tablename__ = "quota_snapshots"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    agent_type: Mapped[str] = mapped_column(String, nullable=False)
-    window_key: Mapped[str] = mapped_column(String, nullable=False)
-    label: Mapped[str] = mapped_column(String, nullable=False)
-    used_percent: Mapped[float] = mapped_column(Float, nullable=False)
-    window_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    resets_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    source: Mapped[str] = mapped_column(String, nullable=False)
-    observed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    plan: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint("agent_type", "window_key", name="uq_quota_snapshots_window"),
-    )
-
-
-__all__ = ["QuotaSnapshotModel", "UsageDailyModel", "UsageRequestModel"]
+__all__ = ["UsageDailyModel", "UsageRequestModel"]

@@ -99,13 +99,13 @@ describe("McpServerList", () => {
     expect(checkboxSlot(other).className).not.toContain("hidden");
   });
 
-  test("ticking a row puts the selection bar at the top: N selected, Reach, Delete, ×", () => {
+  test("ticking a row puts the selection bar at the top: N of M selected, Reach, Delete, ×", () => {
     renderList();
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: github/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Select row: linear/ }));
     const bar = screen.getByRole("region", { name: "Selected MCP servers" });
     expect(screen.queryByRole("textbox", { name: "Filter servers" })).toBeNull();
-    expect(within(bar).getByText("2 selected")).toBeInTheDocument();
+    expect(within(bar).getByText("2 of 2 selected")).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: /Reach/ })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "Delete" })).toBeInTheDocument();
     expect(within(bar).queryByRole("checkbox")).toBeNull();
@@ -114,10 +114,26 @@ describe("McpServerList", () => {
     expect(screen.getByRole("textbox", { name: "Filter servers" })).toBeInTheDocument();
   });
 
-  test("the built-in server has no checkbox", () => {
+  test("a select-all row appears once a row is ticked and ticks every listed row, not the built-in one", () => {
+    renderList();
+    expect(screen.queryByRole("checkbox", { name: "Select all" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: github/ }));
+    const all = screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement;
+    expect(all.indeterminate).toBe(true);
+    fireEvent.click(all);
+    expect(screen.getByText("2 of 2 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(screen.queryByRole("region", { name: "Selected MCP servers" })).toBeNull();
+  });
+
+  test("the built-in server has no checkbox and is not counted; Esc clears the selection", () => {
     renderList();
     const group = screen.getByRole("region", { name: "Built-in" });
     expect(within(group).queryByRole("checkbox")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select row: github/ }));
+    expect(screen.getByText("1 of 2 selected")).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryByRole("region", { name: "Selected MCP servers" })).toBeNull();
   });
 
   test("the search hides the built-in group when it does not match", () => {

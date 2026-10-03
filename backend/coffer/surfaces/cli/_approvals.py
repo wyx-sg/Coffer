@@ -84,7 +84,7 @@ def settle(
     for a in refused:
         typer.echo(
             f"{REFUSED}: {a.get('description', a['id'])} (approval {a['id']}); "
-            "ask again from the Secrets page in the Coffer app",
+            "it stays refused until the destination changes",
             err=True,
         )
     if refused and not approvals:

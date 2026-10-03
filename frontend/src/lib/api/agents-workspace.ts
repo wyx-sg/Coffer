@@ -45,8 +45,6 @@ export type PluginsResponse = Schemas["PluginsOut"];
  * contributes. */
 export type PluginDetailOut = Schemas["PluginDetailOut"];
 
-export type PluginComponentOut = Schemas["PluginComponentOut"];
-
 /** `location` is the scan location the entry was found in — `skills` is
  * `<config_dir>/skills`, `agents_dir` the agent product's secondary standard
  * location. Taken from the contract, so it is the two names and not `string`. */

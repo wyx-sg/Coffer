@@ -1,9 +1,9 @@
 """Ports the usage services depend on, and the rows they pass across them (ADR
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
-The application layer never imports infrastructure: the SQLAlchemy repos, the
-spool reader and the ``codex app-server`` rate-limit reader adapt these
-Protocols, and ``surfaces/http/usage_wiring.py`` composes them.
+The application layer never imports infrastructure: the SQLAlchemy repo and
+the spool reader adapt these Protocols, and ``surfaces/http/usage_wiring.py``
+composes them.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from coffer.domain.usage.pricing import ResolvedPrice
-from coffer.domain.usage.quota import QuotaSnapshot, QuotaSource
 from coffer.domain.usage.records import UsageRecord
 
 # -- rows ----------------------------------------------------------------------
@@ -107,21 +106,6 @@ class RequestFilters:
 
 
 @dataclass(frozen=True)
-class StoredQuotaWindow:
-    """The latest stored value of one (agent type, window)."""
-
-    agent_type: str
-    key: str
-    label: str
-    used_percent: float
-    window_minutes: int | None
-    resets_at: datetime | None
-    source: QuotaSource | str
-    observed_at: datetime
-    plan: str | None
-
-
-@dataclass(frozen=True)
 class SpoolBatch:
     """The parsed lines of one spool file; ``malformed`` lines were skipped."""
 
@@ -153,15 +137,6 @@ class UsageRepo(Protocol):
         """Detail rows newest first (``started_at`` desc, ``id`` desc),
         strictly after ``after`` in that order."""
         ...
-
-
-class QuotaRepo(Protocol):
-    async def upsert(self, snapshot: QuotaSnapshot) -> None:
-        """Store each window of ``snapshot`` as the latest for its (agent type,
-        key), unless a newer observation of that window is already stored."""
-        ...
-
-    async def latest(self) -> list[StoredQuotaWindow]: ...
 
 
 class SpoolReader(Protocol):
@@ -197,13 +172,6 @@ class ConnectionNames(Protocol):
         ...
 
 
-class CodexRateLimitReader(Protocol):
-    async def read(self) -> dict[str, Any] | None:
-        """One ``account/rateLimits/read`` result, or ``None`` when Codex is
-        absent or not signed in with a ChatGPT plan."""
-        ...
-
-
 class Clock(Protocol):
     def now(self) -> datetime: ...
 
@@ -217,18 +185,15 @@ class SystemClock:
 
 __all__ = [
     "Clock",
-    "CodexRateLimitReader",
     "ConnectionNames",
     "ConnectionPriceLookup",
     "DailyUsage",
     "FailoverEvent",
     "FailoverLog",
     "PricedRecord",
-    "QuotaRepo",
     "RequestFilters",
     "SpoolBatch",
     "SpoolReader",
-    "StoredQuotaWindow",
     "StoredUsage",
     "SystemClock",
     "UsageRepo",

@@ -146,29 +146,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/secrets/approvals/{approval_id}/ask-again": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ask Again
-         * @description Lift a refusal so the same binding is put to a person again.
-         *
-         *     Asking widens nothing: the new approval still waits for a presence grant.
-         *     Answers what now waits for the refused binding's destination.
-         */
-        post: operations["ask_again_api_v1_secrets_approvals__approval_id__ask_again_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/secrets/approvals/{approval_id}/reject": {
         parameters: {
             query?: never;
@@ -1212,49 +1189,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ask_again_api_v1_secrets_approvals__approval_id__ask_again_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                approval_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

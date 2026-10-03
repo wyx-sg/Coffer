@@ -14,18 +14,28 @@ One item per situation, each with the action that answers it:
 - ``sync_plaintext_found`` — a file the round would push holds a plaintext
   secret, so nothing was pushed;
 - ``sync_paused`` — the vault is inside a folder another tool synchronises;
-- ``sync_layout`` — the remote is at a newer layout than this build's.
+- ``sync_layout`` — the remote is at a newer layout than this build's;
+- ``sync_unreachable`` — the remote cannot be reached;
+- ``sync_git_missing`` — no ``git`` on this machine, so nothing can sync.
+
+Ignoring is by the item's key (kind, uid, reason). The uid is a fingerprint of
+the situation — which files conflict and against which commits, which files a
+hold or a join left, which plaintext values a round found, which remote
+failed — so an item ignored on the Overview or on the Sync page stays ignored
+for as long as it is the same situation, and comes back as a new item when the
+situation changes (principle: an ignored item is not a hidden one).
 
 Read off the round state and the last recorded round, only while a remote is
 configured. A conflict an agent can merge, a refused sign-in, a refused push
 and a plaintext secret carry the hand-off prompt the Sync page offers (spec
-vault-sync "Hand a conflict's merge to an agent", "Hand a remote's failure to
+vault-sync "Hand conflicting files to an agent", "Hand a remote's failure to
 an agent", "Refuse to push a plaintext secret").
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import hashlib
+from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -47,6 +57,19 @@ class SyncStatePort(Protocol):
     async def last_round(self) -> RoundRecord | None: ...
     async def conflict_handoff(self) -> str | None: ...
     def plaintext_handoff(self, last: RoundRecord) -> str | None: ...
+    def git_missing_handoff(self) -> str | None: ...
+
+
+def fingerprint(*parts: str | Iterable[str]) -> str:
+    """A short, stable name for one situation: the same facts give the same
+    uid, other facts another."""
+    h = hashlib.sha256()
+    for part in parts:
+        for piece in [part] if isinstance(part, str) else sorted(part):
+            h.update(piece.encode("utf-8"))
+            h.update(b"\0")
+        h.update(b"\1")
+    return h.hexdigest()[:12]
 
 
 def _item(
@@ -57,10 +80,11 @@ def _item(
     since: str | None,
     verb: str = "review",
     handoff: str | None = None,
+    uid: str | None = None,
 ) -> AttentionItem:
     return AttentionItem(
         kind=KIND,
-        uid=None,
+        uid=uid,
         title=_TITLE,
         reason_code=code,
         reason=reason,
@@ -98,6 +122,7 @@ class SyncAttentionSource:
                     "/api/v1/sync/stop",
                     stop.raised_at,
                     handoff=await self._sync.conflict_handoff(),
+                    uid=fingerprint(stop.local, stop.remote, (c.path for c in stop.conflicts)),
                 )
             )
         elif stop is not None and stop.hold is not None:
@@ -109,6 +134,7 @@ class SyncAttentionSource:
                     Severity.WARNING,
                     "/api/v1/sync/stop",
                     stop.raised_at,
+                    uid=fingerprint(stop.local, stop.remote, stop.hold.paths),
                 )
             )
         choices = await self._sync.join_choices()
@@ -121,10 +147,23 @@ class SyncAttentionSource:
                     Severity.WARNING,
                     "/api/v1/sync/join-choices",
                     None,
+                    uid=fingerprint(c.path for c in choices),
+                )
+            )
+        no_git = self._sync.git_missing_handoff()
+        if no_git is not None:
+            out.append(
+                _item(
+                    "sync_git_missing",
+                    "Sync cannot run: git is not installed on this machine.",
+                    Severity.ERROR,
+                    "/api/v1/sync/status",
+                    None,
+                    handoff=no_git,
                 )
             )
         last = await self._sync.last_round()
-        if last is not None:
+        if last is not None and no_git is None:
             found = _problem_item(last, remote, self._sync.plaintext_handoff)
             if found is not None:
                 out.append(found)
@@ -146,6 +185,8 @@ def _problem_item(
     last: RoundRecord, remote: SyncRemote, plaintext: Callable[[RoundRecord], str | None]
 ) -> AttentionItem | None:
     detail = scrub_git_text(last.detail or "")
+    # The same failing remote is one situation however many rounds repeat it.
+    uid = fingerprint(remote.url, remote.branch)
     if last.status is RoundStatus.PLAINTEXT_FOUND:
         files = sorted({f"{f.path}:{f.line}" for f in last.plaintext if f.current})
         return _item(
@@ -158,6 +199,7 @@ def _problem_item(
             "/api/v1/sync/status",
             last.finished_at,
             handoff=plaintext(last),
+            uid=fingerprint(f"{f.path}:{f.line}:{f.key}" for f in last.plaintext if f.current),
         )
     if last.status is RoundStatus.AUTH_FAILED and APPROVAL_WAIT in detail:
         return _item(
@@ -166,6 +208,7 @@ def _problem_item(
             Severity.WARNING,
             "/api/v1/secrets",
             last.finished_at,
+            uid=uid,
         )
     if last.status is RoundStatus.AUTH_FAILED:
         return _item(
@@ -175,6 +218,7 @@ def _problem_item(
             "/api/v1/sync/remote",
             last.finished_at,
             handoff=_handoff("auth_failed", detail, remote),
+            uid=uid,
         )
     if last.status is RoundStatus.PUSH_FAILED:
         return _item(
@@ -184,6 +228,17 @@ def _problem_item(
             "/api/v1/sync/status",
             last.finished_at,
             handoff=_handoff("push_failed", detail, remote),
+            uid=uid,
+        )
+    if last.status is RoundStatus.UNREACHABLE:
+        return _item(
+            "sync_unreachable",
+            f"Sync cannot reach the remote. {detail}".strip(),
+            Severity.WARNING,
+            "/api/v1/sync/status",
+            last.finished_at,
+            handoff=_handoff("unreachable", detail, remote),
+            uid=uid,
         )
     if last.status is RoundStatus.PAUSED_CLOUD_FOLDER:
         return _item(
@@ -193,9 +248,17 @@ def _problem_item(
             Severity.ERROR,
             "/api/v1/sync/status",
             last.finished_at,
+            uid=uid,
         )
     if last.status is RoundStatus.REMOTE_TOO_NEW:
-        return _item("sync_layout", detail, Severity.ERROR, "/api/v1/sync/status", last.finished_at)
+        return _item(
+            "sync_layout",
+            detail,
+            Severity.ERROR,
+            "/api/v1/sync/status",
+            last.finished_at,
+            uid=uid,
+        )
     return None
 
 

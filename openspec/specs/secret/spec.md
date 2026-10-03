@@ -430,8 +430,7 @@ HTTP URL, a git URL, a channel's platform and app) before it resolves a secret,
 and MUST inject nothing into a target no person approved: the attempt answers
 `SECRET_BINDING_PENDING` (409) naming the pending approvals, or
 `SECRET_BINDING_REJECTED` (409) naming a refused one (nothing waits, and it
-stays refused for that target until the destination changes or
-`POST /api/v1/secrets/approvals/{id}/ask-again` supersedes the refusal). Citing an existing
+stays refused for that target until the destination changes). Citing an existing
 secret from a destination that did not cite it, and changing the target of one
 that did, each record a pending approval, once per target; a later target
 supersedes the approval for the earlier one. A binding already approved for
@@ -443,7 +442,7 @@ destination is registered") — or while the protection is switched off.
 Approving MUST
 take a presence grant (`POST /api/v1/secrets/approvals/{id}/approve`, or several at once
 under "Approve several bindings in one confirmation");
-refusing (`POST .../reject`) MUST NOT. `GET /api/v1/secrets/approvals`
+refusing (`POST .../reject`) MUST NOT, and records its audit event. `GET /api/v1/secrets/approvals`
 lists approvals, having first evaluated every current destination, and marks
 superseded those nothing asks for any more.
 
@@ -453,11 +452,11 @@ superseded those nothing asks for any more.
 - **THEN** the second server is not spawned with the secret, the attempt answers `SECRET_BINDING_PENDING`, and one pending approval names the ref, the new server and its command line
 - **AND** the first server keeps receiving the secret
 
-#### Scenario: a refused binding says it was refused and can be asked about again
+#### Scenario: a refused binding stays refused until its target changes
 - **GIVEN** a pending approval for a server's secret that a person rejects
-- **WHEN** the server is next started or listed, and then the refusal is asked about again with `POST /api/v1/secrets/approvals/{id}/ask-again`
+- **WHEN** the server is next started or listed, and then its target changes
 - **THEN** the first answers `SECRET_BINDING_REJECTED` (409, a refusal, not a wait) and a command that saved the server prints that it was refused and exits with the conflict code instead of `9`
-- **AND** asking again supersedes the refusal, and a fresh pending approval for the same target waits for a person; a target that has changed since drops the old refusal without being asked
+- **AND** until then checking again raises no fresh approval for the same target; the changed target drops the old refusal and a fresh pending approval for it waits for a person
 
 #### Scenario: an approval that cannot be applied stays pending
 - **GIVEN** a pending replacement whose sealed value the current master key cannot open
@@ -722,10 +721,17 @@ master key cannot open as `locked`, found by checking each token's signature
 against the key without decrypting any value and without an audit entry. The
 Secrets page MUST show every row this Mac has no value for — cited but not
 stored, or `locked` — as **Missing on this Mac**, with an **Add value** action
-in place of its last use, and a banner counting them ("N secrets have no value
-on this Mac") whose **Import master key…** opens Settings › Security. Adding the
-value MUST be an ordinary write of the ref, subject to the same approvals as any
-other write, and reveal MUST be unavailable for such a row.
+in place of its last use, and a banner counting them and naming the first of
+them ("N secrets have no value on this Mac · linear, SeaTalk and sentry can’t
+start until they have a value") whose **Add values** opens one dialog with a
+field per missing secret, where a field left empty stays missing and **Save N
+values** stores the rest. The banner offers no master-key import: importing a
+key replaces this Mac's own, so it lives in the sync join flow and in Settings ›
+Security. Adding a value MUST be an ordinary write of the ref, subject to the
+same approvals as any other write, and reveal MUST be unavailable for such a
+row. The same set is listed on Overview (see "List secrets with no value here
+and waiting approvals on Overview"), and the banner's × ignores it exactly as
+Ignore does there.
 
 #### Scenario: a ciphertext from another Mac's key is listed as locked
 - **GIVEN** a stored standalone secret encrypted with another Mac's master key, and one stored on this Mac
@@ -742,7 +748,7 @@ other write, and reveal MUST be unavailable for such a row.
 #### Scenario: a secret this Mac cannot open is missing on this Mac
 - **GIVEN** a locked secret and a cited secret the store does not hold
 - **WHEN** the user opens `/secrets`
-- **THEN** both rows read "Missing on this Mac" with Add value, and a banner says 2 secrets have no value on this Mac and links Import master key… to `/settings/security`
+- **THEN** both rows read "Missing on this Mac" with Add value, and a banner says 2 secrets have no value on this Mac and offers Add values, with no link to import a master key
 - **AND** Reveal is unavailable for the locked row, and Add value posts the new value for its ref
 
 ### Requirement: Hold a new standalone secret until a person approves it
@@ -802,14 +808,17 @@ approving is the desktop app's.
 In the desktop app the shell, not the page, decides what is covered: it reads
 each selected approval from the daemon, keeps those still waiting, names the
 first few in its own operating-system prompt and counts the rest, and signs over
-that list. The web UI MUST show, once two or more approvals wait, a checkbox on
-each, **Select all**, **Approve selected (N)…** and **Reject selected (N)**, with
-nothing selected to begin with. **Approve selected** opens a review that lists
-every change the confirmation covers — each as secret → destination (slot) and
-the target that receives it — and only its confirm button runs the shell's
-check; afterwards the same rows say, per change, approved or skipped and why.
-In a browser Approve selected MUST be disabled, naming the desktop app, while
-Reject selected stays available.
+that list. The web UI MUST show the pending approvals as one table in a dialog: a row per
+change with its kind, the secret, where it goes (what uses it, or the target
+that receives it), who asked and when. Once two or more wait, a header checkbox
+selects rows, nothing is selected to begin with, and the buttons read **Reject
+all** and **Approve all N…** until rows are selected, then **Reject N** and
+**Approve N…** beside "N of M selected". **Approve…** runs the shell's presence
+check directly, over exactly the rows it covers; there is no second review step,
+because the table already is the review. Afterwards the same rows say, per
+change, approved or skipped and why. Rejecting shows a toast and keeps no list
+of refused changes. In a browser Approve MUST be disabled, naming the desktop
+app, while Reject stays available.
 
 #### Scenario: one confirmation approves every binding shown
 - **GIVEN** three pending approvals for three destinations that cite one secret
@@ -838,8 +847,8 @@ Reject selected stays available.
 
 #### Scenario: approving several waits for a review of every change
 - **GIVEN** three changes waiting, in the desktop app
-- **WHEN** the person ticks **Select all** and chooses **Approve selected (3)…**
-- **THEN** none is ticked to begin with, the review lists all three with their destinations and targets, and nothing is approved until the review's confirm button runs the presence check
+- **WHEN** the person opens the approvals dialog
+- **THEN** the table lists all three with their destinations and targets and none is ticked to begin with, and nothing is approved until **Approve…** runs the presence check over the rows it covers
 
 ### Requirement: Store every secret only as a ciphertext file
 The system MUST persist every secret only as Fernet ciphertext
@@ -876,3 +885,34 @@ person here has just supplied (see "Hold a secret for a new destination until a 
 - **WHEN** a binding is approved, an approval is asked and the protection switch is set
 - **THEN** `bindings.json`, `approvals.json` and `settings.json` exist under `~/.coffer/local/secret-boundary/`, each with mode `0600`
 - **AND** nothing was written into the vault
+
+### Requirement: List secrets with no value here and waiting approvals on Overview
+The secret kind MUST contribute to the attention list ([resource-framework](../resource-framework/spec.md)
+"Report what needs a person across every kind") one item for the **set** of
+secrets that have no value on this Mac — cited by a resource but not stored
+here, or stored under another Mac's master key and so unopenable (see "Show a
+secret this Mac cannot open as missing on this Mac") — and one for the **set**
+of approvals still pending. The first MUST read `secret_missing_here`, severity
+`error`, with the reason "N secrets have no value on this Mac." ("1 secret has no
+value on this Mac.") and the action `open` as a `GET` of `/api/v1/secrets`; the
+second MUST read `secret_approvals_pending`, severity `warning`, with the reason
+"N changes waiting for approval." and the action `review` as a `GET` of
+`/api/v1/secrets/approvals?status=pending`. A `GET` action is a navigation: the
+page it opens is the client's to choose. Each item's `uid` MUST be a short,
+order-independent fingerprint of the set's members (the refs, the approval ids),
+so its attention key identifies exactly that set: ignoring the item ignores that
+set, and a secret going missing, a value being added, or an approval arriving or
+being decided changes the key and brings the item back. Both count toward the
+per-kind counts the sidebar badges and the menu bar read, and neither is listed
+when its set is empty.
+
+#### Scenario: secrets with no value on this Mac are listed on Overview
+- **GIVEN** one secret cited by a resource but not stored here, and one stored under another Mac's key
+- **WHEN** the attention list is read
+- **THEN** it carries one `secret_missing_here` item, severity `error`, with the reason "2 secrets have no value on this Mac." and the action `open`, and the per-kind count for `secret` includes it
+- **AND** with a pending approval it also carries one `secret_approvals_pending` item, severity `warning`, whose action is `review`
+
+#### Scenario: an ignored secret item returns when the situation changes
+- **GIVEN** the `secret_missing_here` item ignored by its key
+- **WHEN** another secret goes missing
+- **THEN** the item is listed again under a new key, and the earlier key still lists nothing

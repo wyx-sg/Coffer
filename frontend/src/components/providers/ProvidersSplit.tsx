@@ -10,11 +10,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Box, Plus } from "lucide-react";
+import { ArrowLeft, Box } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
-import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +27,7 @@ import type { PresetId } from "@/lib/providers/presets";
 import { authStatusOf, probeStatus } from "@/lib/providers/probeStatus";
 import { providerUsedBy } from "@/lib/providers/usedBy";
 import { AddProviderDialog } from "./AddProviderDialog";
+import { ProvidersHeader } from "./ProvidersHeader";
 import { ProviderDetail } from "./ProviderDetail";
 import { ProviderList } from "./ProviderList";
 import { ProviderWelcome } from "./ProviderWelcome";
@@ -66,18 +66,6 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
     pending: endpoint.isPending || endpoint.isFetching,
   });
   const rejected = status === "keyRejected" ? (authStatusOf(endpoint.data?.message) ?? "") : null;
-
-  const header = (
-    <PageHeader
-      title={t("providers.title")}
-      subtitle={t("providers.subtitle")}
-      actions={
-        <Button onClick={() => setAdding("anthropic")}>
-          <Plus aria-hidden /> {t("providers.add.open")}
-        </Button>
-      }
-    />
-  );
 
   let body;
   let split = false;
@@ -166,14 +154,16 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
   return split ? (
     <>
       <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-        <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">{header}</div>
+        <div className="shrink-0 px-6 pt-5">
+          <ProvidersHeader tab="providers" onAdd={() => setAdding("anthropic")} bleed />
+        </div>
         {body}
       </div>
       {dialog}
     </>
   ) : (
     <div className="flex flex-col gap-4">
-      {header}
+      <ProvidersHeader tab="providers" onAdd={() => setAdding("anthropic")} />
       {body}
       {dialog}
     </div>
