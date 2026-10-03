@@ -328,7 +328,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         ignores=SqlAlchemyAttentionIgnoreRepo(sm),
         audit=audit,
     )
-    attention_watch_task = await start_attention_watch(events, attention)
+    attention_watch_task = await start_attention_watch(events, attention, kinds.mcp.auth_monitor)
 
     # Reap /mcp sessions that have been idle past the threshold. Without this
     # a downstream client that never closes its SSE stream would leak its

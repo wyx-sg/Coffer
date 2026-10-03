@@ -32,11 +32,13 @@ from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
+from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.runtime import correlation
 from coffer.domain.errors import (
     CofferError,
     InvalidPrefix,
     ToolDisabled,
+    UpstreamAuthRejected,
     UpstreamTimeout,
 )
 from coffer.domain.mcp.capability import CapabilityType, MCPInvocation
@@ -181,6 +183,7 @@ async def _invoke(
     on_evict: Callable[[str], None] | None = None,
     session_agent_uid: str | None = None,
     tool_reach: ToolReachRepoPort | None = None,
+    auth_monitor: UpstreamAuthMonitor | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
@@ -278,6 +281,11 @@ async def _invoke(
         requested = True
         result = await conn.request(spec.method, spec.build_request(original, params))
         coerced = spec.coerce(result)
+        # The upstream answered, so whatever key rejection was recorded is over
+        # (an ``isError`` result below is still an answer).
+        if auth_monitor is not None:
+            with contextlib.suppress(Exception):
+                await auth_monitor.answered(resource.uid)
         # An in-band tool error (CallToolResult.isError) does not raise — the
         # connection is healthy, but the tool failed. Record an honest `error`
         # status so the invocation log distinguishes success from failure. The
@@ -296,6 +304,11 @@ async def _invoke(
         raise
     except Exception as e:
         status = "error"
+        if auth_monitor is not None and isinstance(e, UpstreamAuthRejected):
+            # A 401/403 from the upstream endpoint, not a tool-level error:
+            # the key is refused, which the Overview offers to replace.
+            with contextlib.suppress(Exception):
+                await auth_monitor.rejected(resource.uid)
         # Only self-heal on a transport/process failure. A well-formed MCPError
         # means the tool ran and returned an error result over a healthy
         # connection — evicting it would needlessly kill+respawn a good server.

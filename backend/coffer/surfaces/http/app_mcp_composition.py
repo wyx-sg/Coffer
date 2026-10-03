@@ -34,6 +34,7 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.supervisor_failures import UpstreamFailureLedger
+from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_registry import (
     PrunableRegistry,
@@ -100,6 +101,9 @@ class McpWiring:
     process_supervisor: SubprocessSupervisor
     session_supervisors: dict[str, SubprocessSupervisor]
     invocation_repo: MCPInvocationRepo
+    #: Writes a rejected key from a real call into the server's health; the
+    #: lifespan points its ``on_change`` at the attention watcher.
+    auth_monitor: UpstreamAuthMonitor
 
 
 def wire_mcp_kind(
@@ -121,6 +125,7 @@ def wire_mcp_kind(
     prefs_repo.documents.add_owner_listener(vault.resources.announce)
     inv_repo = MCPInvocationRepo(sm, name_of=names)
     health_repo = MCPServerHealthRepo(vault.derived_sm)
+    auth_monitor = UpstreamAuthMonitor(health_repo)
     # Custom tools' reach overrides: machine-local, beside reach.json.
     tool_reach = MCPToolReachStore()
 
@@ -199,6 +204,7 @@ def wire_mcp_kind(
             on_dispose=_drop_supervisor,
             builtin_tools=builtin_tools,
             tool_reach=tool_reach,
+            auth_monitor=auth_monitor,
         )
 
     # 6. Set ALL the MCP dependency providers
@@ -212,6 +218,7 @@ def wire_mcp_kind(
         process_supervisor=process_supervisor,
         session_supervisors=session_supervisors,
         invocation_repo=inv_repo,
+        auth_monitor=auth_monitor,
     )
 
 

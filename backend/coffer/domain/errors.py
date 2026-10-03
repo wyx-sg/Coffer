@@ -106,6 +106,11 @@ class UpstreamUnavailable(CofferError):  # noqa: N818
     code = "UPSTREAM_UNAVAILABLE"
 
 
+class UpstreamAuthRejected(UpstreamUnavailable):
+    """The upstream HTTP endpoint answered 401 or 403: the key it was given is
+    refused. Reaches callers as the same ``UPSTREAM_UNAVAILABLE`` envelope."""
+
+
 class UpstreamTimeout(CofferError):  # noqa: N818
     code = "UPSTREAM_TIMEOUT"
 
