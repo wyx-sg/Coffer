@@ -84,8 +84,6 @@ pub struct TrayText {
     pub start_daemon: &'static str,
     pub quit: &'static str,
     pub tooltip: &'static str,
-    pub tooltip_attention: &'static str,
-    pub tooltip_offline: &'static str,
 }
 
 /// English, in the design canvas's words (1.3 Menu bar).
@@ -100,8 +98,6 @@ const EN: TrayText = TrayText {
     start_daemon: "Start daemon",
     quit: "Quit Coffer",
     tooltip: "Coffer",
-    tooltip_attention: "Coffer — something needs you",
-    tooltip_offline: "Coffer — daemon offline",
 };
 
 /// Chinese, in the web UI's own terms (`zh.json`: 守护进程).
@@ -116,8 +112,6 @@ const ZH: TrayText = TrayText {
     start_daemon: "启动守护进程",
     quit: "退出 Coffer",
     tooltip: "Coffer",
-    tooltip_attention: "Coffer — 有事需要你处理",
-    tooltip_offline: "Coffer — 守护进程离线",
 };
 
 pub fn tray_text(lang: Lang) -> &'static TrayText {
@@ -181,8 +175,6 @@ mod tests {
                 t.start_daemon,
                 t.quit,
                 t.tooltip,
-                t.tooltip_attention,
-                t.tooltip_offline,
             ] {
                 assert!(!label.trim().is_empty(), "{lang:?}");
             }

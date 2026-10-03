@@ -220,7 +220,7 @@ its approval sheet opens.
 - **THEN** it raises one notification for it, and none for an approval it already announced
 
 ### Requirement: Show the daemon and what needs the user in the menu bar
-The shell MUST keep an item in the macOS menu bar whose icon is the Stroke C mark as a monochrome template image, so macOS tints it for a light or a dark menu bar, dimmed and struck through while no daemon is serving. While anything needs the user, the icon MUST carry that count beside it as a number, "9+" past nine; the count is the length of the Overview's attention list, which leaves out what the user has ignored. Its menu MUST offer, in this order, and nothing more: a status line naming the daemon's port and version while it runs, or that it is offline, which cannot be chosen; an entry "N things need you" ("1 thing needs you" for one) — shown only when something does, directly under the status line, and opening Overview; a separator; Open Coffer; Restart daemon, which reads Start daemon while none is serving and runs the one restart (see "Restart by stopping the running daemon first"); a separator; and Quit Coffer (⌘Q). While no daemon is serving the attention entry and the count MUST be absent. What the menu bar says MUST follow the daemon without the user opening the window: a daemon that stops answering MUST read as offline within one poll, and a launching app MUST allow a cold daemon a few polls before calling it offline.
+The shell MUST keep an item in the macOS menu bar whose icon is the Stroke C mark as a monochrome template image, so macOS tints it for a light or a dark menu bar, dimmed and struck through while no daemon is serving. While anything needs the user, the icon MUST carry that count beside it as a number, "9+" past nine; the count is the length of the Overview's attention list, which leaves out what the user has ignored. Its menu MUST offer, in this order, and nothing more: a status line naming the daemon's port and version while it runs, or that it is offline, which cannot be chosen; an entry "N things need you" ("1 thing needs you" for one) — shown only when something does, directly under the status line, and opening Overview; a separator; Open Coffer; Restart daemon, which reads Start daemon while none is serving and runs the one restart (see "Restart by stopping the running daemon first"); a separator; and Quit Coffer (⌘Q). The icon's tooltip MUST read "Coffer · N things need you" ("Coffer · 1 thing needs you" for one) while something needs the user, and plain "Coffer" otherwise, offline included. While no daemon is serving the attention entry and the count MUST be absent. What the menu bar says MUST follow the daemon without the user opening the window: a daemon that stops answering MUST read as offline within one poll, and a launching app MUST allow a cold daemon a few polls before calling it offline.
 
 #### Scenario: the menu bar says whether the daemon is running
 - **GIVEN** a daemon serving on port 8000 at version 1.0.0 and nothing that needs the user
@@ -238,6 +238,12 @@ The shell MUST keep an item in the macOS menu bar whose icon is the Stroke C mar
 - **GIVEN** a daemon whose attention list holds ten items
 - **WHEN** the menu bar polls it
 - **THEN** the icon carries "9+" beside it and the menu line reads "10 things need you"
+
+#### Scenario: the icon tooltip carries the count
+- **GIVEN** a daemon whose attention list holds nine items
+- **WHEN** the user hovers the menu bar icon
+- **THEN** the tooltip reads "Coffer · 9 things need you"
+- **AND** with nothing needing the user, or no daemon serving, it reads "Coffer"
 
 #### Scenario: an offline daemon offers to start
 - **GIVEN** the menu bar item of an app whose daemon has stopped
