@@ -3017,7 +3017,8 @@
       "noTextAnyTitle": "没有找到文字",
       "noTextAnyBody": "Coffer 在这个文件里读不到任何文字。没有任何内容进入收件箱。",
       "unsupportedTitle": "{{kind}} 文件无法转换",
-      "failedTitle": "无法上传这个文件"
+      "failedTitle": "无法上传这个文件",
+      "bodyNoEngine": "Coffer 会把它转换成 Markdown，作为一篇文档加入知识集。原始文件不会保留。"
     },
     "curate": {
       "now": "立即整理",

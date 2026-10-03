@@ -116,7 +116,7 @@ coffer knowledge write --collection payments \
 
 ### Upload a document
 
-Upload converts a file to Markdown and submits the text as an item. Neither the original file nor the extracted text is kept as a file of its own; what is new in it is folded into the collection's documents.
+Upload converts a file to Markdown and submits the text as an item. Neither the original file nor the extracted text is kept as a file of its own; what is new in it is folded into the collection's documents. With Coffer's engine not set there is nothing to curate with, so the upload is added to the collection as a document straight away, and the Upload dialog says so.
 
 ::: code-group
 
