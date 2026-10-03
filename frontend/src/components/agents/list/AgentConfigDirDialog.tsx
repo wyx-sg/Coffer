@@ -22,9 +22,10 @@ import {
 } from "@/components/ui/dialog";
 import { connectionFiles } from "@/lib/agents/connectionPlan";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import type { AgentTypeOut } from "@/lib/api/agents";
+import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
-import { usePatchAgent, useRegisterAgent } from "@/lib/hooks/useAgents";
+import { useAgentConnection, usePatchAgent, useRegisterAgent } from "@/lib/hooks/useAgents";
+import { AgentConfigDirReview } from "./AgentConfigDirReview";
 import { keptEntries, useFolderListing } from "./useFolderListing";
 
 interface Props {
@@ -83,6 +84,16 @@ export function AgentConfigDirDialog({ row, open, onOpenChange }: Props) {
   const patch = usePatchAgent();
   const register = useRegisterAgent();
   const [path, setPath] = useState<string | null>(row.config_dir);
+  // The review of a move; it keeps the parts Coffer had written when it opened,
+  // because the connection read changes under the steps it runs.
+  const [reviewing, setReviewing] = useState<{
+    parts: CofferConnection["parts"];
+    dir: string;
+  } | null>(null);
+  const connection = useAgentConnection(row.uid ?? "").data;
+  // Coffer's lines are in the agent's folder: moving it is a change to review.
+  const parts = connection?.parts ?? [];
+  const carriesCoffer = !!row.uid && parts.some((p) => p.installed);
   const mutation = row.uid ? patch : register;
 
   const { reset: resetPatch } = patch;
@@ -93,6 +104,11 @@ export function AgentConfigDirDialog({ row, open, onOpenChange }: Props) {
     resetPatch();
     resetRegister();
   }, [open, row.config_dir, resetPatch, resetRegister]);
+
+  // A fresh opening starts at the form, not in the review.
+  useEffect(() => {
+    if (open) setReviewing(null);
+  }, [open]);
 
   const chosen = path?.trim() || null;
   const apply = async () => {
@@ -107,56 +123,76 @@ export function AgentConfigDirDialog({ row, open, onOpenChange }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
-      <DialogContent className="max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>{t("agents.configDirDialog.title")}</DialogTitle>
-          <DialogDescription>
-            {t("agents.configDirDialog.subtitle", {
-              name: agentTypeLabel(row.type),
-              standard: abbreviateHomePath(row.standard_config_dir),
-            })}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="agent-config-dir" className="text-xs font-label text-text">
-              {t("agents.configDirDialog.field")}
-            </label>
-            <FolderPickerField
-              inputId="agent-config-dir"
-              value={path}
-              onChange={setPath}
-              typeable
-            />
-            <p className="text-xs text-text-muted">
-              {t("agents.configDirDialog.hint", { name: row.name })}
-            </p>
-          </div>
-          {chosen ? (
-            <div className="flex flex-col gap-2">
-              <span className={LABEL}>{t("agents.configDirDialog.foundThere")}</span>
-              <FoundThere row={row} path={chosen} />
+    <>
+      <Dialog
+        open={open && !reviewing}
+        onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}
+      >
+        <DialogContent className="max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{t("agents.configDirDialog.title")}</DialogTitle>
+            <DialogDescription>
+              {t("agents.configDirDialog.subtitle", {
+                name: agentTypeLabel(row.type),
+                standard: abbreviateHomePath(row.standard_config_dir),
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="agent-config-dir" className="text-xs font-label text-text">
+                {t("agents.configDirDialog.field")}
+              </label>
+              <FolderPickerField
+                inputId="agent-config-dir"
+                value={path}
+                onChange={setPath}
+                typeable
+              />
+              <p className="text-xs text-text-muted">{t("agents.configDirDialog.hint")}</p>
             </div>
-          ) : null}
-          {mutation.error ? (
-            <p role="alert" className="text-xs text-danger">
-              {translateApiError(t, mutation.error)}
-            </p>
-          ) : null}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => void apply()}
-            disabled={!chosen || chosen === row.config_dir || mutation.isPending}
-          >
-            {t("agents.configDirDialog.apply")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {chosen ? (
+              <div className="flex flex-col gap-2">
+                <span className={LABEL}>{t("agents.configDirDialog.foundThere")}</span>
+                <FoundThere row={row} path={chosen} />
+              </div>
+            ) : null}
+            {mutation.error ? (
+              <p role="alert" className="text-xs text-danger">
+                {translateApiError(t, mutation.error)}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={() =>
+                carriesCoffer && chosen ? setReviewing({ parts, dir: chosen }) : void apply()
+              }
+              disabled={!chosen || chosen === row.config_dir || mutation.isPending}
+            >
+              {t(carriesCoffer ? "agents.configDirDialog.review" : "agents.configDirDialog.apply")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {reviewing && row.uid ? (
+        <AgentConfigDirReview
+          row={row}
+          uid={row.uid}
+          parts={reviewing.parts}
+          newDir={reviewing.dir}
+          open={open}
+          onOpenChange={(next) => {
+            if (!next) {
+              setReviewing(null);
+              onOpenChange(false);
+            }
+          }}
+        />
+      ) : null}
+    </>
   );
 }

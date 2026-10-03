@@ -80,9 +80,7 @@ describe("AgentConnectionChangeDialog", () => {
     );
     const dialog = await screen.findByRole("dialog");
     await waitFor(() =>
-      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent(
-        "2 changes in 1 agent",
-      ),
+      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 2"),
     );
     expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("~/.codex/hooks.json").length).toBeGreaterThan(0);
