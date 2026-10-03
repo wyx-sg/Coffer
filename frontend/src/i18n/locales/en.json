@@ -3017,7 +3017,8 @@
       "noTextAnyTitle": "No text found",
       "noTextAnyBody": "Coffer could not read any text in this file. Nothing was added to the Inbox.",
       "unsupportedTitle": "{{kind}} files can't be converted",
-      "failedTitle": "Couldn't upload this file"
+      "failedTitle": "Couldn't upload this file",
+      "bodyNoEngine": "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept."
     },
     "curate": {
       "now": "Curate now",

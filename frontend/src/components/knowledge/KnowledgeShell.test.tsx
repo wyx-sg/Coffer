@@ -207,4 +207,16 @@ describe("the Upload dialog", () => {
     expect(signal?.aborted).toBe(true);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
+
+  test("with Coffer's engine not set it says the file becomes a document", async () => {
+    answerFromFixtures({ modelSet: false });
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
