@@ -92,14 +92,15 @@ A local file that does not parse is moved aside as `<name>.unreadable-<n>` and r
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `content/channel-media/` | Attachments received over Telegram and SeaTalk, saved so the agent can open them. Files older than the attachments retention window (30 days by default) are pruned. | daemon | No | Yes. |
-| `content/chat-media/` | Files attached on the Conversations page: each upload's bytes (`<id><ext>`) beside a small `<id>.json` record of its name, type and size. Files older than the attachments retention window (30 days by default) are pruned. | daemon | No | Yes. A conversation keeps showing the file's chip, but a later turn can no longer open it. |
 | `content/workspace/` | The default working directory for a chat when you pick none. | daemon | No | Only if no chat uses it. |
+
+An earlier version also kept `content/chat-media/` (files attached on the Conversations page). Nothing writes it any more; delete the folder by hand if it is still there.
 
 ### History and keys
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `runs.db` | History: audit log, MCP invocation log, conversations and messages, channel threads and outbox, sync rounds and usage. `COFFER_DB_URL` names another database. | daemon | Never | You lose history, not configuration. Stop the daemon first. |
+| `runs.db` | History: audit log, MCP invocation log, the conversation index (titles and session ids, no text), channel threads, sync rounds and usage. `COFFER_DB_URL` names another database. | daemon | Never | You lose history, not configuration. Stop the daemon first. |
 | `runs.db-wal`, `runs.db-shm` | SQLite write-ahead log and shared-memory index. The WAL can hold committed data not yet folded into `runs.db`. | daemon | No | **No**, and never copy `runs.db` without them while the daemon runs. |
 | `runs.db.pre-<revision>` (+ `-wal`, `-shm`) | A copy taken just before a migration changes the schema. Only the newest three are kept. | daemon | No | Yes, once the upgraded daemon works. |
 | `master.key` | The Fernet key that decrypts stored secrets, mode `0600`. Absent when the key lives in the OS keychain (service `coffer`, entry `master-key`). | daemon | **Never.** Back it up in the desktop app and install it on another machine from **Settings › Security › Import a master key**. | **No.** Without it every stored secret is unreadable. |
@@ -113,7 +114,6 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 | --- | --- | --- |
 | `derived/derived.db` | MCP server health, which skill copies were delivered into which agent, when each upstream capability was first and last seen. Recreated when its schema version differs. | Health checks, skill delivery, the gateway |
 | `derived/memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/`, `RETIRED.md` (what was retired and why), hidden `.raw/` (what aggregation read, verbatim). `.source_state.json` at the root records what the last aggregation read. | Aggregation and distil (retirement decisions in `RETIRED.md` and your edits to notes are lost) |
-| `derived/cache/agent/.transcript_summaries.json` | What the transcript reader already parsed. | The next read, slowly |
 | `derived/resources/` | Derived resource files: memory partitions, and `skill/coffer-guide.json`. | The daemon at start |
 | `derived/skills/coffer-guide/` | Coffer's own guide skill, rendered from this build. | The daemon at start |
 | `derived/sync-conflicts/` | Marked-up copies of a stopped round's conflicting files, for a hand merge. | Opening the file in an editor again |
@@ -168,6 +168,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `vendor/` | Where you place the SeaTalk WebSocket SDK (`seatalk_oapi_sdk`). Coffer only reads it. | you | No | Yes, if you do not use SeaTalk. |
+| `tmp/handoff/` | The prompt of a session started in a terminal from Coffer, one file per start, mode `0600`; the command that reads it removes it. A leftover from a terminal that never ran the command can be deleted. | daemon | No | Yes. |
 | `eval-capture.jsonl` | Captured `coffer__search_tools` calls, only when `COFFER_EVAL_CAPTURE` is set. | daemon | No | Yes. |
 
 ## Outside ~/.coffer

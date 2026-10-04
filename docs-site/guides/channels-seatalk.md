@@ -76,7 +76,7 @@ Check the connection: the **SeaTalk connection** badge on the channel's status l
 
 SeaTalk has no start links, so you type the code. It is single-use, expires after one hour, and is invalidated after 10 wrong guesses.
 
-Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page with the source badge `SeaTalk · DM`.
+Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page with the channel `SeaTalk · DM`.
 
 ## Connection states
 

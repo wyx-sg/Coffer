@@ -1,54 +1,55 @@
 ---
 title: Chat and turns
-description: How Coffer runs a turn on Claude Code or Codex, streams it to every surface watching, and lets IM channels drive the same conversations as the web Conversations page.
+description: How Coffer runs a turn on Claude Code or Codex for an IM channel, streams it to the channel, keeps only an index of the conversation, and hands a session to your terminal.
 ---
 
 # Chat and turns
 
-This page explains Coffer's turn platform: the conversation model, the orchestrator that runs one turn at a time per conversation, the adapters that drive Claude Code and Codex, the event bus that streams a turn to every surface watching it, and how IM channels plug in as a second client. It is written for engineers who want to understand the mechanism and the reasons behind it. For day-to-day use, see the [Chat guide](/guides/chat) and the [Channels guide](/guides/channels).
+This page explains Coffer's turn platform: the conversation index, the orchestrator that runs one turn at a time per conversation, the adapters that drive Claude Code and Codex, the in-memory event bus that streams a turn to the channel that asked for it, how IM channels plug in, and how the Conversations and Sessions lists hand a session to your terminal. It is written for engineers who want to understand the mechanism and the reasons behind it. For day-to-day use, see the [Conversations guide](/guides/chat) and the [Channels guide](/guides/channels).
 
 ## The problem
 
-The owner of a vault wants to talk to their coding agents from more than one place: a phone (through Telegram or SeaTalk) and a desktop browser. Both need the same guarantees. A turn has to reach an agent the same way whoever asked for it. A turn started on the phone has to be visible, interruptible and continuable from the browser. And no turn may end silently, including when the daemon dies halfway through a reply.
+The owner of a vault wants to reach their coding agents from a phone (through Telegram or SeaTalk) while the agents run on the desktop. A turn has to reach an agent the same way whoever asked for it, it has to be interruptible and continuable from the chat, and no turn may end silently, including when the daemon dies halfway through a reply. Coffer also has to stay out of the agents' way: the agents already have their own session records and their own interfaces (the Claude desktop app, the Codex app, a terminal), so Coffer does not rebuild a chat client or keep a second copy of what was said.
 
 There is also a cost constraint. Coffer drives two agents and two IM platforms, and both sets are meant to grow. If each channel had to know about each agent, the integration cost would be N × M. The design keeps it at N + M.
 
 ## Design decisions
 
-**One turn platform, several surfaces.** Conversations, the pending queue, the turn lifecycle and the event stream belong to one platform. The web Conversations page and every channel are clients of it. Once a message reaches the orchestrator, nothing downstream knows which surface it came from, and an agent cannot tell a phone turn from a browser turn.
+**One turn platform, channels as its clients.** Conversations, the pending queue, the turn lifecycle and the event stream belong to one platform. Every channel is a client of it. Once a message reaches the orchestrator, nothing downstream knows which channel it came from, and an agent cannot tell a SeaTalk turn from a Telegram turn.
 
-**Single owner, one timeline, two screens.** Channels are owner-paired: the "IM peer" is always the vault's owner on their phone. So watching a phone conversation from the browser is continuity for one person, not multi-user collaboration. Coffer has no peer-identity model, no per-user visibility rules and no question of who may interrupt whom. The web page shows every conversation, including the ones a channel opened, with a badge naming the channel it is also reachable on.
+**The agent's own session is the record.** Coffer keeps an index row per conversation (which channel thread, which agent, which directory, which native session id) and nothing that was said. The agent resumes its own session on every turn, so the context lives where the agent keeps it. A person who wants to read or continue a conversation does it in the agent's own interface; Coffer's web UI lists the conversations and opens the row in the terminal.
 
-**Starting a turn is separate from watching it.** `POST .../messages` starts or queues a turn and returns `202` immediately. All output flows through one subscription, `GET .../events`. The sender is not a special case: "the turn I started" and "the turn my phone started" travel the same path, and a replay buffer ensures the sender misses no early events.
+**Send freely; queue, never reject.** A message sent while a turn is running joins a per-conversation FIFO pending queue. Each queued message becomes its own turn. Messages are not merged. A channel tells each waiting message its place ("⏳ Queued (n)") and accepts up to ten pending messages per conversation; the eleventh is dropped with the reason (see [the inbound pipeline](#the-inbound-pipeline)).
 
-**Send freely; queue, never reject.** A message sent while a turn is running joins a per-conversation FIFO pending queue. Each queued message becomes its own turn. Messages are not merged. The web composer never locks. A channel tells each waiting message its place ("⏳ Queued (n)") and accepts up to ten pending messages per conversation; the eleventh is dropped with the reason (see [the inbound pipeline](#the-inbound-pipeline)).
+**One session runs in one place.** A session open in a terminal and a channel turn writing to the same session would fork it. Before a turn resumes a session, the daemon looks for a terminal that has it open and, if one does, the channel is told so instead of starting the turn (see [One session, one place](#one-session-one-place)).
 
-**The adapter is self-contained.** The orchestrator gives an adapter the conversation history and the turn's attachments, and nothing else. The adapter brings its own model, tools and configuration. Adding a third agent means registering one provider and one adapter. The conversation schema, the orchestrator and the clients do not change.
+**The adapter is self-contained.** The orchestrator gives an adapter the turn's prompt and attachments, and nothing else. The adapter brings its own model, tools and configuration. Adding a third agent means registering one provider and one adapter. The conversation index, the orchestrator and the channels do not change.
 
 **Full permissions, owner pairing as the gate.** Both agents run without per-tool approval (`bypassPermissions` for Claude Code; `never` ask with `danger-full-access` for Codex). The trust boundary is the paired owner driving the conversation, not a tool-by-tool prompt that nobody is present to answer on a phone.
 
 ## Conversation model
 
-A conversation is not a [resource](/architecture/resource-framework). It is a row in its own SQLite table of conversations, with its messages in a sibling table of chat messages. Chat state does not sync between machines.
+A conversation is not a [resource](/architecture/resource-framework). It is a row in its own SQLite table of conversations, an index into the agent's own sessions. There is no table of messages: Coffer stores no conversation text. Chat state does not sync between machines.
 
 | Field | Meaning |
 | --- | --- |
 | `id` | Opaque conversation id. |
 | `agent_key` | The agent the conversation belongs to (`claude_code` or `codex`). There is no storage default: every writer names the agent explicitly. |
-| `agent_config` | Provider-owned JSON: `cwd`, `session_id` (the upstream session to resume), and `model`. |
-| `title` | Starts as a placeholder. It is replaced by the first user message's text unless the owner has already renamed the conversation. |
-| `archived_at` | `null` while the conversation is active. |
-| `channel_uid`, `peer_chat_id` | The optional channel binding: the return address for relaying output to an IM chat. It stores the channel's immutable uid, so it survives a rename. |
+| `agent_config` | Provider-owned JSON: `cwd`, `session_id` (the agent's own session, to resume) and `model`. |
+| `title` | Starts as a placeholder. It is replaced by the first user message's text unless the owner has already renamed the conversation. Renaming also renames the native session. |
+| `channel_uid`, `peer_chat_id` | The channel thread that owns the conversation. It stores the channel's immutable uid, so it survives a rename. Every row has one. |
 
-A message stores its `role`, an ordered list of content blocks (`text`, `tool_use`, `tool_result`, `attachment`), a `status` (`streaming`, `complete` or `failed`), and, for assistant messages, the `model_id` and token usage when the agent reports them.
+What a turn streams is the typed event union, which is a wire contract and not storage. The agent's own session holds the messages, tool calls and results, and the Sessions list reads them from the agent. Turns are deliberately **not** written to the [audit log](/architecture/observability) either: a turn is not irreversible, not security-sensitive and not invisible afterwards, since the agent's session shows it.
 
-The conversation's timeline is the record of what an agent did. Turns are deliberately **not** written to the [audit log](/architecture/observability). A turn is not irreversible, not security-sensitive and not invisible afterwards, so an audit row per turn would only duplicate the timeline.
+::: warning Old sessions disappear with the agent's clean-up
+Because Coffer keeps no copy, a conversation lasts as long as the agent's session does. Claude Code deletes sessions after `cleanupPeriodDays` (about 30 days by default). A channel conversation whose session was cleaned up continues as a fresh session. See [Conversations](/guides/chat#chat-and-the-agent-s-own-sessions) for how to change the setting.
+:::
 
 ### Working directory and session
 
 Each turn runs in the conversation's `cwd`. If none was supplied, it runs in the Coffer-managed workspace `~/.coffer/content/workspace`, which is created on first use. An explicitly supplied `cwd` must be an existing directory, or conversation creation fails before anything is written.
 
-The upstream session id is written back to `agent_config.session_id` after each turn, so the next turn resumes the same Claude Code session or Codex thread. Because the agent's own session already holds the conversation, the platform passes only the most recent **200** messages as history. That history is what a fresh session needs. A conversation with thousands of messages is never loaded in full.
+The upstream session id is written back to `agent_config.session_id` after each turn, so the next turn resumes the same Claude Code session or Codex thread. The platform passes the agent only the new prompt and its attachments, never a history, because the resumed session already holds it. A fresh session (the first turn, or the retry below) starts without history.
 
 If the agent no longer recognises a stored session id, the turn is retried **once** as a fresh session. Only a second failure becomes a turn error. Without this retry, a stale id would make the conversation permanently unusable instead of merely discontinuous.
 
@@ -58,7 +59,7 @@ A turn runs against the config directory of the one registered agent of its type
 
 ## The turn orchestrator
 
-The turn orchestrator is the one entry point for a message, from the web `POST` and from a channel alike. It knows the agent-provider registry and nothing about any specific agent.
+The turn orchestrator is the one entry point for a message, which always comes from a channel. It knows the agent-provider registry and nothing about any specific agent.
 
 Per-conversation state lives in one record: the event bus, the in-flight turn, the pending queue and a paused flag. The state is process-global and single-daemon by design. It exists only while something needs it (a turn in flight, a queued message or an attached subscriber) and is evicted otherwise, so a daemon that has served ten thousand conversations does not hold ten thousand buses.
 
@@ -69,9 +70,9 @@ Per-conversation state lives in one record: the event bus, the in-flight turn, t
 3. Otherwise append a pending entry (text, attachments, title hint and an optional start hook, which a channel uses to render the turn) to the queue and broadcast `queue_changed`.
 4. Sending a message clears the paused flag, so a plain send after an interrupt resumes the held queue.
 
-Starting a turn reserves the conversation's slot synchronously, before the orchestrator yields to anything else, so two concurrent sends cannot both start a turn. It then asks the registry for the conversation's provider, has it build an adapter, commits the user message (a text block plus references to its attachments) and spawns the detached turn task. When that task finishes, the orchestrator pops the head of the queue and starts its turn.
+Starting a turn reserves the conversation's slot synchronously, before the orchestrator yields to anything else, so two concurrent sends cannot both start a turn. It then asks the registry for the conversation's provider, has it build an adapter and spawns the detached turn task. When that task finishes, the orchestrator pops the head of the queue and starts its turn.
 
-A queued turn that fails to **start** is neither lost nor retried in a loop. The message goes back to the head of the queue, the queue is paused, and a `turn_error` is published to the subscribers attached at that moment. The error belongs to no turn, so it is not kept in the replay buffer: a page opened or reconnected later sees the held queue, not a failure it cannot act on. For a channel message, the orchestrator also hands the channel's renderer a stream that carries the failure and then ends, because a phone has no queue chips to look at.
+A queued turn that fails to **start** is neither lost nor retried in a loop. The message goes back to the head of the queue, the queue is paused, and a `turn_error` is published to the subscribers attached at that moment. The error belongs to no turn, so it is not kept in the replay buffer. The orchestrator also hands the channel's renderer a stream that carries the failure and then ends, because a phone has no queue chips to look at.
 
 ### Interrupt, delete and shutdown
 
@@ -79,58 +80,48 @@ The ways a turn can end early are told apart by marks on the in-flight turn, set
 
 | Cause | How it is signalled | Outcome |
 | --- | --- | --- |
-| Owner interrupt (`POST .../interrupt`, `/stop` in a channel) | The turn is marked interrupted; the queue is paused | `turn_done` with `stop_reason: "interrupted"`; the partial reply is kept as `complete`. |
-| Conversation deleted | The turn is marked discarded | The placeholder row is deleted; the bus closes every subscriber. |
-| Daemon shutdown | Neither mark | `turn_error` `daemon_stopped`; the partial reply is kept as `failed`. |
+| Owner interrupt (`POST .../interrupt`, `/stop` in a channel, **Stop** in the list) | The turn is marked interrupted; the queue is paused | `turn_done` with `stop_reason: "interrupted"`; the output so far is delivered to the channel as events. |
+| Conversation deleted | The turn is marked discarded | The turn is cancelled; the bus closes every subscriber. |
+| Daemon shutdown | Neither mark | `turn_error` `daemon_stopped`. |
 
-Stopping every turn is a step of the daemon's teardown and runs before the database closes. It closes the door first (no turn may start afterwards and every queue is paused, so a cancelled turn's end does not start the next one), cancels every running turn, and waits up to five seconds for their writes. A turn that does not settle in time is left to the startup sweep.
+Stopping every turn is a step of the daemon's teardown and runs before the database closes. It closes the door first (no turn may start afterwards and every queue is paused, so a cancelled turn's end does not start the next one), cancels every running turn, and waits up to five seconds for them. A daemon that dies outright leaves nothing behind to clean up: the next channel message resumes the agent's session.
 
 ## The turn task
 
-The turn task drives one adapter to completion. It is a detached background task, so it outlives the HTTP request or channel callback that started it. This is why a reply still completes and persists when the browser tab that sent it is closed.
+The turn task drives one adapter to completion. It is a detached background task, so it outlives the channel callback that started it.
 
 ```mermaid
 sequenceDiagram
-    participant UI as Web Conversations page
-    participant API as Turn routes
+    participant CH as Channel
     participant O as Turn orchestrator
     participant R as Turn task
     participant A as Agent adapter
-    participant DB as Message store
     participant Bus as Conversation bus
 
-    UI->>API: GET .../events (SSE)
-    API->>Bus: subscribe (replay buffer + queue snapshot)
-    UI->>API: POST .../messages
-    API->>O: enqueue the message
-    O->>DB: append user message
+    CH->>O: enqueue the message (with a render hook)
     O->>R: start detached task
-    API-->>UI: 202 {queued: false}
-    R->>DB: append assistant row, status streaming
-    R->>A: run the turn (history, attachments)
+    R->>A: run the turn (prompt, attachments)
     loop each event
         A-->>R: turn_start / text_delta / tool_call / tool_result
         R->>Bus: publish
-        Bus-->>UI: SSE event
-        R->>DB: flush partial (at most once per second)
+        Bus-->>CH: event to the renderer
     end
     A-->>R: turn_done
-    R->>DB: finalise row, status complete
     R->>Bus: end the turn (drop replay buffer)
     R->>O: task finished, advance queue
 ```
 
 What the task guarantees:
 
-- **A placeholder row before the first event.** An assistant row with status `streaming` is written before the adapter produces anything and is finalised in place when the turn ends: one row, never a duplicate. When the daemon starts, a sweep flips every lingering `streaming` row (created before this daemon started, so a turn begun after it came up is never touched) to `failed`. No conversation reopens showing a reply that will never arrive.
-- **Throttled partial saves.** The accumulated blocks are written onto the `streaming` row at most once per second. If an event is skipped by the throttle, a trailing write is scheduled for when the interval is up. So text streamed just before a long tool run is on disk within about a second. A daemon killed outright keeps what was streamed up to the last save.
+- **Nothing is written for the turn.** The task records the session id the agent reports and bumps the conversation's `updated_at` at the start and at the end. The reply itself exists only as events, and in the agent's own session.
 - **An idle watchdog.** An agent can wedge without dying: a hung tool, or a CLI waiting on a prompt nobody will answer. If no event arrives for `COFFER_TURN_IDLE_TIMEOUT_SECONDS` (default `300`; `0` disables it), the wait is cancelled inside the adapter's event stream. This runs the adapter's own cancellation path, which interrupts and terminates the subprocess. The turn then ends with `turn_error` `turn_timeout`.
 - **No silent completion.** If the adapter's stream ends without `turn_done` or `turn_error`, the task emits `turn_error` `stream_ended` itself. It does not rely on the adapter to do so, because a tick on a reply cut mid-sentence would be a lie.
-- **Exactly one terminal event.** A cancellation that lands after a terminal event, for example during the final write, re-runs the finalise shielded from further cancellation and emits nothing more.
+- **Exactly one terminal event.** A cancellation that lands after a terminal event re-runs the finalise shielded from further cancellation and emits nothing more.
+- **Partial output is delivered, not stored.** An interrupted or failed turn delivers what was produced so far to the channel as events, followed by the terminal event.
 
 Three turn error codes belong to the platform rather than to an agent: `stream_ended`, `turn_timeout` and `daemon_stopped`.
 
-### Turn and message states
+### Turn states
 
 ```mermaid
 stateDiagram-v2
@@ -141,16 +132,14 @@ stateDiagram-v2
     Running --> Idle: turn_done or turn_error, queue empty
     Running --> Running: turn ends, next queued message starts
     Running --> Paused: interrupt
-    Paused --> Running: any send or PUT pending
+    Paused --> Running: any send
     Running --> [*]: conversation deleted
     Paused --> [*]: conversation deleted
 ```
 
-The assistant row a turn writes has its own lifecycle: `streaming` → `complete` (normal end or owner interrupt), or `streaming` → `failed` (adapter error, `stream_ended`, `turn_timeout`, `daemon_stopped`, or the startup sweep after a crash).
+## Events
 
-## Events and the live mirror
-
-A turn is a sequence of typed events. Each event's `type` is also its SSE event name on the wire, so clients dispatch on one vocabulary with no translation table:
+A turn is a sequence of typed events. Each event's `type` is its name on the wire, so consumers dispatch on one vocabulary with no translation table:
 
 | Event | Payload | Emitted by |
 | --- | --- | --- |
@@ -162,31 +151,27 @@ A turn is a sequence of typed events. Each event's `type` is also its SSE event 
 | `turn_error` | `code`, `message` | adapter or turn task |
 | `queue_changed` | `pending` (ordered texts) | orchestrator only |
 
-The conversation bus fans each event out to every subscriber queue and keeps two things for late subscribers:
+The conversation bus fans each event out to every subscriber queue, in memory only, and keeps two things for a late subscriber:
 
-- a **replay buffer** of the current turn's events. It is cleared when a turn begins and dropped when the turn ends, because from then on the content is persisted and a late subscriber loads it from history. Replaying it as well would render the turn twice.
+- a **replay buffer** of the current turn's events, cleared when a turn begins and dropped when it ends. Nothing is stored from it, so once a turn is over there is nothing to replay.
 - the **latest** `queue_changed` snapshot only, not its history, because the queue is a conversation-level state and not turn content.
 
-When a client subscribes, the buffer and snapshot are enqueued synchronously before its queue joins the subscriber set. Because a concurrent publish can only run on a later event-loop tick, no live event can arrive ahead of the replay.
-
-The SSE route stays open across turns. With no turn running, it holds the connection open and delivers the next turn from whichever surface starts it. It ends when the conversation is deleted (the bus sends an end-of-stream marker) or the client disconnects. The web client re-subscribes whenever the stream drops, whether the connection closed cleanly or a read or fetch threw, and whether or not a turn was mid-flight, with linear backoff and a bounded number of attempts. After that it surfaces the error rather than hammering the endpoint.
+When a subscriber attaches, the buffer and snapshot are enqueued synchronously before its queue joins the subscriber set. Because a concurrent publish can only run on a later event-loop tick, no live event can arrive ahead of the replay. The web UI does not subscribe: its lists read `running` and `needs_you` from the turn state and refresh on the change feed.
 
 ### Routes
 
 | Route | Purpose |
 | --- | --- |
-| `POST /api/v1/chat/conversations/{id}/messages` | Start or queue a turn. `202 {queued}`; carries no output. |
-| `GET /api/v1/chat/conversations/{id}/events` | SSE subscription: replay the in-flight turn, then follow live. |
-| `PUT /api/v1/chat/conversations/{id}/pending` | Replace the pending queue (reorder, drop, resume). Unpauses. |
+| `GET /api/v1/chat/conversations` | List channel conversations by latest activity. `q` searches title and directory; `source` takes channel uids; each row carries `running`, `needs_you`, `cwd` and `has_session`. |
+| `GET\|PATCH\|DELETE /api/v1/chat/conversations/{id}` | Read one; rename (the agent renames its session first); delete (the agent deletes its session first). |
 | `POST /api/v1/chat/conversations/{id}/interrupt` | Stop the running turn and pause the queue. `204`. |
-| `GET\|PATCH /api/v1/chat/conversations/{id}/agent-config` | Read or set the model; preserves `cwd` and the session id. |
 | `GET /api/v1/agent-providers` | Registered agents with display name and availability. |
 | `GET /api/v1/agent-providers/{agent_key}/models` | Models offered for an agent; 404 for an unknown key. |
 
-Replacing the queue with `PUT .../pending` reconciles the new texts against the existing entries: each text reuses the first unused entry with the same text. A queue reordered from the browser therefore keeps each channel message's attachments and its channel renderer. Only a text that was not queued before becomes a new, bare entry.
+Chat has no route that creates a conversation or sends a message: a message enters through a channel, in-process. The sessions of an agent are listed under `GET /api/v1/agents/{uid}/sessions` (see [Native sessions](#native-sessions)).
 
 ::: info No CLI
-Conversations are driven from the web page and from channels, over REST. The CLI has no chat commands, because it carries only what needs it ([chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)).
+Conversations are driven from channels. The CLI has no chat commands, because it carries only what needs it ([chat spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)).
 :::
 
 ## Agent adapters
@@ -194,7 +179,7 @@ Conversations are driven from the web page and from channels, over REST. The CLI
 The platform seam is two contracts:
 
 - An **agent provider**, one per agent type. It validates and stores a new conversation's `agent_config`, builds a configured adapter for one turn, tears down agent state when a conversation is deleted, and reports availability: whether the agent's binary resolves on the user's `PATH` (the login shell's `PATH` merged with the daemon's inherited one) **and** an agent of that type is registered with Coffer. Chat talks to managed agents only, so an unavailable agent is listed but cannot be selected, and a turn for a type with no registered agent is refused (`AGENT_CONFIG_REJECTED`, reason `agent_not_managed`) rather than run against the CLI's default config directory.
-- An **agent adapter**, one per turn. Given the history and the attachments, it produces an asynchronous stream of events. The adapter must end with a terminal event and must clean up and re-raise on cancellation. It may expose a `model_id`, which it learns while the turn streams (the Claude CLI names it on its assistant messages, the Codex app-server in its thread result). The turn task reads it when it finalises the reply and records it on the assistant message.
+- An **agent adapter**, one per turn. Given the prompt and the attachments, it produces an asynchronous stream of events. The adapter must end with a terminal event and must clean up and re-raise on cancellation. It may expose a `model_id`, which it learns while the turn streams (the Claude CLI names it on its assistant messages, the Codex app-server in its thread result). The turn task reads it when it finalises the reply and records it on the assistant message.
 
 A registry holds the providers. They are registered at the composition root. No surface names a provider directly.
 
@@ -228,37 +213,25 @@ The appends an agent receives on top of its own system prompt are composed in on
 2. For a channel-driven conversation, the [memory](/architecture/memory) index. The composition root builds the memory composer and hands it to both providers, beside the per-prompt retriever that adds the notes a channel turn's message names to its prompt. It returns nothing when the index is empty, or when the tree cannot be read. See [Channel turns](/architecture/memory#channel-turns).
 3. On every turn, a model note naming the model Coffer put the agent on, or saying the agent's own default is in use, with a few alternatives. An agent cannot see Coffer's choice and invents one when asked, so the note says it outranks the agent's own guess.
 
-A turn from the web Conversations page, like a session you start yourself in a terminal, gets memory through the agent's own memory hook, when the agent is connected to Coffer. No turn gets it both ways.
+A session you resume from the Conversations page runs in your terminal, like one you start yourself, and gets memory through the agent's own memory hook, when the agent is connected to Coffer. No turn gets it both ways.
 
 ## Attachments and document extraction
 
-Attachments enter a conversation two ways. A channel downloads each file under `~/.coffer/content/channel-media` and hands the orchestrator an attachment (path, mime type, file name). The web composer uploads each file first, to `POST /api/v1/chat/attachments`, and sends the ids it gets back in `attachment_ids` on `POST …/messages`; the route resolves them to the same attachment values and calls the same orchestrator entry point, with the same attachments argument, that a channel calls. From there the two are one code path. Either way the chat database holds only a reference (an attachment block: `path`, `mime`, `filename`) inside the user message, never the bytes.
-
-### Web uploads
-
-A chat attachment service owns the upload's bounds and the send-time resolution; a file-backed media store holds the files.
-
-- **Bounds.** One file per call, at most 20 MB (`ATTACHMENT_TOO_LARGE`, 413, naming the limit). The HTTP framework spools a multipart body to a temporary file while parsing it, so the upload route acts first: it checks the token, refuses a declared `Content-Length` over the limit plus a 64 KiB multipart allowance with the same 413 before reading the body, and parses the form accepting one file and a handful of fields. A body sent without a declared length is parsed and then refused by the same ceiling on the file's bytes. The type is decided by one rule: a declared image, audio or document type is kept, then a fixed extension table is consulted, and anything whose bytes are UTF-8 without a NUL is text. Anything else is `ATTACHMENT_TYPE_UNSUPPORTED` (415). An image's type is then replaced by what its magic bytes prove (PNG, JPEG, GIF, WEBP); one whose bytes are none of those is stored as `application/octet-stream`, never as an image. The table is fixed rather than the Python standard library's mime lookup, which reads the host's mime files.
-- **Storage.** Each upload is two flat files under `~/.coffer/content/chat-media`: the bytes as `<id><ext>`, so a path-native agent still sees the extension, and `<id>.json` with the display name, type, size and stored file name, written after the bytes. The id is 32 random hex characters; the store joins nothing into a path that is not an id of that shape.
-- **Send.** A message carries text, up to ten `attachment_ids`, or both. An id that names no stored file is `ATTACHMENT_NOT_FOUND` (422) and nothing is persisted or queued. A message with files and no text persists the stand-in text a channel's uncaptioned photo gets, because an agent request cannot hold an empty text block, and a conversation it opens is named after the files.
-- **Resend.** The page's Retry calls `POST …/messages/{message_id}/resend`: the chat service finds the user row (`MESSAGE_NOT_FOUND`, 404, otherwise), the attachment service rebuilds its text and attachment values from the row's blocks, and the route enqueues them like a send, so a retry carries the original's files whether they came from the page or a channel. A referenced file the media sweep has deleted is `ATTACHMENT_EXPIRED` (410) and nothing is persisted or queued. Before the failed prompt's row has landed, the page instead re-sends its optimistic echo, which keeps the files' upload ids.
-- **Retention.** `~/.coffer/content/chat-media` is pruned together with `channel-media` by the `attachments` retention policy: a file is deleted when its mtime is older than the policy's window (30 days by default; the user can change it or keep attachments forever under Settings → Data → Local content). The age rule is one kind-agnostic rule, the retention service runs one sweep per directory with the policy's window, and a prune reports the files removed from both under one key, `attachments`.
-
-The page keeps each composer file's state (uploading, ready, failed), uploads through the shared API client, and holds **Send** while any file is uploading or failed. The optimistic echo of a sent message carries the files' names and types, so its chips show before the row lands, and an attachment-only echo is matched to its row by those names. There is no image preview: that would need a route serving the bytes back, and the path stays inside the daemon. The decision is recorded in [Chat Attachment Uploads](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md).
+A channel downloads each file under `~/.coffer/content/channel-media` and hands the orchestrator an attachment (path, mime type, file name). The attachment travels with the turn as a reference; nothing is stored in a message, and the bytes never leave the disk. There is no web upload: the Conversations page does not send messages. The `attachments` retention policy prunes `channel-media` by age (30 days by default; adjustable, or keep forever, under Settings → Data → Local content).
 
 ### Materialisation
 
-The turn task does not receive attachments as a parameter. It reads them back from the last user message in the persisted history. That reference is the single source of truth, so it survives a daemon restart and matches what the page shows. The path never reaches the wire: only the adapter, which reads the bytes, sees it.
+The attachment is handed to the adapter with the turn rather than re-read from history, so only the adapter, which reads the bytes, sees the path. It never reaches the wire.
 
 Each adapter then materialises attachments in its own shape, in this order:
 
 1. **Audio** is transcribed and folded into the prompt, when a speech-to-text connection has been designated (see [internal engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)). This is off by default. It is the one place user content may leave the machine for transcription. With no connection, or on any failure, the audio is handed over as an ordinary file.
 2. **Documents** (PDF, Word, PowerPoint, Excel and similar) are converted to text by a document extractor, which lazily imports the optional `markitdown` library. If the library is missing or extraction fails, the document degrades to a file attachment.
-3. **Everything else:** Claude Code receives an image inline, as a base64 image block, only when it passes the inline check: its bytes sniff as PNG, JPEG, GIF or WEBP, and it is at most 5 MB once base64-encoded (the Messages API's per-image ceiling). The block's media type is the sniffed type, not the stored one, so a mislabelled channel photo is not rejected as "image does not match media type". Any other file, including an image that fails either check, becomes a text note naming the saved path. The rule is applied at send time, so channel media and web uploads share it. Codex, which is path-native over the app-server protocol, always receives the path note, so it has no inline ceiling to respect.
+3. **Everything else:** Claude Code receives an image inline, as a base64 image block, only when it passes the inline check: its bytes sniff as PNG, JPEG, GIF or WEBP, and it is at most 5 MB once base64-encoded (the Messages API's per-image ceiling). The block's media type is the sniffed type, not the stored one, so a mislabelled channel photo is not rejected as "image does not match media type". Any other file, including an image that fails either check, becomes a text note naming the saved path. Codex, which is path-native over the app-server protocol, always receives the path note, so it has no inline ceiling to respect.
 
 ## Channels as a second surface
 
-A channel is a [resource](/architecture/resource-framework) of kind `channel`: a Telegram bot or SeaTalk app bound to the vault, with secret references, a default agent, an inverted agent scope (the agents this channel may drive), and `runs_on`, the machine whose daemon runs its adapter. The channel layer reaches the turn platform through exactly two seams, the chat service for conversations and the orchestrator's enqueue entry point for turns, in-process, just as the web page does over HTTP.
+A channel is a [resource](/architecture/resource-framework) of kind `channel`: a Telegram bot or SeaTalk app bound to the vault, with secret references, a default agent, an inverted agent scope (the agents this channel may drive), and `runs_on`, the machine whose daemon runs its adapter. The channel layer reaches the turn platform through exactly two seams, the chat service for conversations and the orchestrator's enqueue entry point for turns, in-process.
 
 ### Thin adapters over a shared core
 
@@ -332,13 +305,9 @@ The commands a phone can send are a small, closed vocabulary: `/new [agent]`, `/
 - **Group main chat on SeaTalk.** A SeaTalk @mention in a group's main chat roots a new thread, so a setting sent there would configure a thread nobody continues. The transport marks such a message as the group's main chat, and a command there writes the group's defaults instead; `/stop` there interrupts every turn in the group.
 - **Cards carry actions.** `/status` and `/help` are cards with Stop, New, Model, Resume and Dir buttons. A button carries the command's name, and a tap runs exactly what typing it runs, through the same owner gate as a message.
 
-### Mirroring a web reply
+### Where a conversation goes after the chat
 
-A conversation a channel opened is one conversation with two screens, so a reply typed on the Conversations page must reach the phone too. Chat must not import the channel kind, so the dependency points the other way: **chat declares a mirror port** — "is this conversation mirrored, where to, and deliver this reply" — and **the channel kind implements it**, wired together at the composition root.
-
-- **Where a reply may go.** The conversation is located through the per-thread history: its channel, chat, thread and chat kind. A direct chat, its threads and a group thread are deliverable. A group's main chat is not: it is the room's shared space, and a reply typed at a desk, followed by an answer nobody in the room asked for, does not belong there. Such a reply stays in Coffer. The conversation's view names the target (platform and thread mark) so the page can say where a reply will go before it is sent.
-- **What is sent.** The reply is posted to that chat or thread under a first line `<your name> · from Coffer`, and the turn is queued with the same render hook a channel-driven turn gets, so the agent's answer reaches the chat exactly as it would have.
-- **An outbox, never a drop.** When the channel is not running on this machine or the platform refuses the send, the reply is written to an outbox as pending, and the answer's final text is collected behind it. Nothing is discarded on failure. The channel reconciler's tick flushes a running channel's pending entries in order, backing off after a failure, and marks them delivered; until then the conversation lists them as not delivered. Only the send route mirrors, so a Retry on the page never posts a reply twice.
+A conversation a channel opened is listed on the Conversations page, but the page never sends into the chat: there is no web reply and no mirror port. What the person does there is open the session (see [Opening a session in a terminal](#opening-a-session-in-a-terminal)) or stop, rename or delete it. A rename or delete goes to the agent's own session first and then to the index row; after a delete the channel's next message opens a fresh conversation.
 
 ### Rendering
 
@@ -351,7 +320,25 @@ When the channel's message reaches the head of the queue, the orchestrator calls
 
 A clean success sends no trailing summary, because the reply is the completion signal. A failed, interrupted or limit-hit turn sends one, and a long one's ping carries the same facts in its place.
 
-The web page watches the same turn on the bus at the same time. This is how the live mirror works for channel conversations: the channel keeps only its renderer hook and never a buffer of its own, and a message queued from the browser behind a phone-started turn runs when that turn ends.
+The channel keeps only its renderer hook and never a buffer of its own. A message sent from the chat behind a running turn queues and runs when that turn ends.
+
+## Native sessions and the terminal {#native-sessions}
+
+Coffer reads and changes an agent's own sessions through the agent, never by parsing its files. The hand-written transcript parser, its summary cache and its warm worker are gone.
+
+### Listing, renaming and deleting
+
+A native-session service in the agent kind talks to a small adapter per agent type: Claude Code through the Agent SDK's session functions (`list_sessions`, `rename_session`, `delete_session`), Codex through a short-lived `codex app-server` (`thread/list` over every source kind, so the sessions Coffer's channels ran are listed too, `thread/name/set`, `thread/delete`). When the registered agent's config directory is not the standard one, the Claude adapter points the SDK at it for the call. The routes are `GET /api/v1/agents/{uid}/sessions` (with `q`, `limit` and a cursor; search matches title and directory), and `PATCH` and `DELETE` on `.../sessions/{session_id}`. A row carries the session id, title, directory and times, and, when a conversation uses the session, its id, `running`, `needs_you` and channel, so both lists share one row and one dialog. Deleting a session that a conversation points at removes the conversation's index row with it. Errors are `AGENT_TYPE_UNSUPPORTED`, `NATIVE_SESSION_NOT_FOUND` and `NATIVE_SESSION_INVALID`.
+
+Chat may not import the agent kind, so the chat routes reach rename and delete through a port published at the composition root.
+
+### Opening a session in a terminal
+
+`POST /api/v1/fs/terminal` takes the terminal, the agent, the directory and either a session to resume or a prompt for a new session. `GET /api/v1/fs/terminals` lists the terminals found on the machine, reading nothing but presence, like `/fs/editors`. The client never sends a command line: the daemon builds `cd '<cwd>' && claude --resume <id>` or `codex resume <id>` itself, after checking that the session id is made only of letters, digits and hyphens. A prompt travels in a `0600` file under `~/.coffer/tmp/handoff/` that the command reads and removes, so its text never appears on a command line or in shell history. One small adapter per terminal starts it, with an argument vector and no shell in the daemon: Terminal and iTerm through `osascript`, Warp through a launch configuration, Orca through its CLI, the Linux terminals through their commands, and a custom template split into arguments with `{cwd}` and `{command}` substituted.
+
+### One session, one place {#one-session-one-place}
+
+From the web, a row whose turn is running or waits on a question opens a dialog first: answer in the channel, or stop the turn (the ordinary interrupt, which also cancels the question) and then open the terminal. In the other direction, before a channel turn resumes a native session, the turn platform asks whether a process outside the daemon's own tree carries the session id in its arguments. If one does, the turn does not start and the chat is told the session is open in a terminal; Codex's own "active writer" refusal is mapped to the same reply. A session opened by picking it inside the agent's own list has no id in its arguments and is not seen; Codex's writer lock still protects Codex.
 
 ## Concurrency rules
 
@@ -359,11 +346,11 @@ The web page watches the same turn on the bus at the same time. This is how the 
 - **Many conversations in parallel.** Turns on different conversations, including different threads of one group, run concurrently as independent tasks.
 - **Single daemon.** Turn state, queues and buses are in-process. There is no cross-process fan-out, and the pending queue is lost on restart. That is consistent with an in-flight turn being marked failed on restart: an uncommitted message was never a row.
 - **Ownership-checked release.** A finishing turn clears only its own in-flight record, so a start that raced it is never evicted.
-- **Retention.** The framework's [retention worker](/architecture/observability#retention) archives conversations idle for 7 days (`conversations_archive`) and deletes archived conversations with their messages 30 days after archiving (`conversations`), unless the conversation has been written to within that window (an archived thread resumed from a phone is not deleted mid-use). Both windows are tunable like any other retained table.
+- **Retention.** Conversations have no retention policy. The index row lives until the person deletes the conversation or its session, or the channel is deleted; the agent's own clean-up decides how long its session lasts.
 
 ## Trade-offs and alternatives
 
-**One subscription versus a streaming POST.** A POST that streams its own turn, plus a subscription for everyone else, would be two event paths with races between them. The single subscription makes the sender an ordinary subscriber, at the cost of a replay buffer per active conversation.
+**Events to the channel only versus a general subscription.** A streaming route for the web page would be a second event path with races between it and the channel's. With no page that watches a turn, the channel renderer is the only consumer, and the replay buffer exists so that a renderer attached at the start misses nothing.
 
 **Sequential FIFO versus coalescing.** Merging all pending messages into one next turn would give the agent fuller context and use fewer turns. Coffer processes them one by one because the result is predictable, and each queued row maps to exactly one turn.
 
@@ -379,16 +366,18 @@ The web page watches the same turn on the bus at the same time. This is how the 
 
 | Package | Responsibility |
 | --- | --- |
-| `backend/coffer/domain/chat/` | Conversations, messages and their blocks, agent config, attachments, event types, errors |
-| `backend/coffer/application/chat/` | The orchestrator, the turn task and its watchdog, per-conversation state, partial saves, the bus, the adapter contracts and registry, attachment handling |
-| `backend/coffer/infrastructure/chat/` | Claude SDK and Codex app-server adapters, system-context composition, persistence, document extraction, transcription, the media store |
-| `backend/coffer/surfaces/http/` | Conversation, turn (SSE), attachment and agent-provider routes, and the composition that wires repositories, registry, orchestrator, startup sweep and idle timeout |
+| `backend/coffer/domain/chat/` | Conversations, agent config, attachments, event types, errors |
+| `backend/coffer/application/chat/` | The orchestrator, the turn task and its watchdog, per-conversation state, the bus, the adapter contracts and registry |
+| `backend/coffer/infrastructure/chat/` | Claude SDK and Codex app-server adapters, system-context composition, the conversation index, document extraction, transcription |
+| `backend/coffer/application/agent/`, `infrastructure/agent/` | The native-session service and its per-agent adapters |
+| `backend/coffer/application/fs/` | Opening an agent session in a terminal, the terminal adapters |
+| `backend/coffer/surfaces/http/` | Conversation, interrupt, agent-provider, agent-session and `/fs/terminal` routes, and the composition that wires them |
 | `backend/coffer/application/channel/` | Inbound pipeline, pairing, commands, turn driver, renderer, runtime reconciler |
 | `backend/coffer/infrastructure/channel/` | Telegram and SeaTalk transports, live-text surfaces, Markdown rendering, media |
-| `frontend/` | The Conversations page, its event subscription and bounded reconnect |
+| `frontend/` | The Conversations and Sessions lists and the terminal hand-off |
 
 ## Related
 
 - Specs: [chat](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md), [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md), [channels/telegram](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/telegram/spec.md), [channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)
-- Decisions: [Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md), [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md), [The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md), [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
+- Decisions: [Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md), [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md), [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
 - Pages: [Daemon and processes](/architecture/daemon), [Persistence](/architecture/persistence), [Memory](/architecture/memory), [Security model](/architecture/security), [Chat guide](/guides/chat), [Channels guide](/guides/channels)

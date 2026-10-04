@@ -1,5 +1,7 @@
 # Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The attachment is no longer persisted in a message and re-materialised from history: it travels with the turn as a reference from the channel's media directory (spec channels "Hand inbound attachments to the turn as references"). The web Chat page entrance and its `chat-media` sibling directory are gone; the bytes-on-disk, per-agent materialisation and `channel-media` retention decisions stand. Citations of "Persist inbound attachments as references" and "Re-materialise attachments from persisted history" are history.
+
 **Status**: Accepted
 **Date**: 2026-07-09
 **Deciders**: Yuxing Wu

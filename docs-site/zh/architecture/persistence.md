@@ -54,7 +54,7 @@ flowchart LR
 | **local** | `local/` | 本机专属资源（智能体）、生效范围、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
 | **content** | `content/` | 聊天和消息渠道的附件、聊天工作目录。 | 暂不 | 无 | 否：这是你唯一的副本 |
 | **runs** | `runs.db`（以及 `skill-data/`、`config-backups/`） | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次和用量；`skill-data/` 里是 skill 脚本写的日志、操作记录和临时文件；`config-backups/` 里是每次改写前留下的智能体配置文件副本。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
-| **derived** | `derived/` | `derived.db`、记忆树、智能体会话记录缓存、Coffer 自己的指南技能、同步冲突的编辑器副本。 | 从不 | 无 | 是：会被重建 |
+| **derived** | `derived/` | `derived.db`、记忆树、Coffer 自己的指南技能、同步冲突的编辑器副本。 | 从不 | 无 | 是：会被重建 |
 
 一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
 
@@ -120,7 +120,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 
 ### 内容 {#content}
 
-`content/chat-media/`（在对话页面附加的文件）、`content/channel-media/`（从聊天平台下载的附件）和 `content/workspace/`（聊天轮次的默认工作目录）。两个媒体目录都按时间清理，由 `attachments` 保留策略决定（默认 30 天；可调整，或永久保留）。内容是你唯一的副本，不同步。
+`content/channel-media/`（从聊天平台下载的附件）和 `content/workspace/`（聊天轮次的默认工作目录）。媒体目录按时间清理，由 `attachments` 保留策略决定（默认 30 天；可调整，或永久保留）。内容是你唯一的副本，不同步。
 
 ### runs.db {#runs-db}
 
@@ -130,7 +130,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | --- | --- |
 | `audit_log` | 每一次生命周期变更：时间、事件类型、操作者、资源的 uid 及其当时的类型和名字、脱敏后的 details。 |
 | `mcp_invocations` | 经网关的每次工具调用一行，由批量写入器写入。默认 30 天后清理。 |
-| `conversations`、`chat_messages` | 对话页面和每个消息渠道的对话元数据和消息历史。默认闲置 7 天的对话会归档，归档 30 天后删除。 |
+| `conversations` | 对话索引：标题、智能体、目录、智能体的会话 id，以及拥有它的消息渠道线程。不含对话文本：文本留在智能体自己的会话里。随对话（或它的会话）一起删除；没有保留策略。 |
 | `channel_thread_conversations`、`channel_thread_history` | IM 线程对应哪个对话，以及一个线程开过的每个对话。 |
 | `channel_outbox` | Coffer 欠某个聊天、还没送达的回复。 |
 | `sync_runs` | 这台机器跑过的每一轮同步。默认 90 天后清理。 |
@@ -158,7 +158,6 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ~/.coffer/derived/
 ├── derived.db                   MCP server health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
-├── cache/agent/                 agent transcript cache
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
 └── sync-conflicts/              editor copies of a stopped round's conflicting files
@@ -219,6 +218,8 @@ flowchart TB
 ## 不属于任何类别的设置 {#settings-that-live-outside-every-class}
 
 `~/.coffer` 下直接放着两个小 JSON 文件。`daemon.json` 是守护进程启动时写、退出时删的运行时状态（pid、端口、令牌）：每个使用方都靠读它来找到守护进程。`daemon-config.json` 是守护进程绑定端口之前读取的配置：固定端口、模型代理的端口、机器名和 id，以及实验功能开关。它必须在任何升级运行之前就能读取，所以它既不是保险库也不是本地状态。两者都以 `0600` 权限原子写入。它们的内容见[守护进程与进程](/zh/architecture/daemon#two-files-configuration-in-runtime-state-out)，逐键说明见[配置](/zh/reference/configuration#daemon-config-json)。
+
+还有一个短命的目录也在这些类别之外：`~/.coffer/tmp/handoff/` 存放从 Coffer 在终端里启动的会话的提示词，每次启动一个 `0600` 文件，由读取它的命令删除（见[原生会话与终端](/zh/architecture/chat#native-sessions)）。那里的东西不需要备份。
 
 ## 权衡 {#trade-offs}
 

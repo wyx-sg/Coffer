@@ -59,7 +59,7 @@ Send the bot a message, for example `list the files in my home directory`. You s
 3. the final reply, formatted, with the status removed;
 4. a 👌 reaction on your message when the turn finished — 😢 if it failed, 🤷 if it was stopped. Telegram lets a bot react with a fixed list of emoji only, and these are on it.
 
-Open **Conversations** in the web UI and the same conversation is there, its source badge reading `Telegram · DM` (hover it for the channel's name).
+Open **Conversations** in the web UI and the same conversation is there, its channel reading `Telegram · DM` (hover it for the channel's name).
 
 ## How replies look
 

@@ -215,20 +215,18 @@ Coffer 自身工作的设置是保险库中的一个文档 `state/settings/inter
 
 保留策略决定各类行保留多久。保留任务在启动时清理一次，之后每 6 小时一次。策略只属于本机，保存在 `~/.coffer/local/retention.json`。
 
-窗口在**设置 → 数据 → 历史记录**里设置，那里显示四项策略（**附件**在**本地内容**下）；另外两项保持默认值，只能通过 REST（`/api/v1/retention/policies`）修改。
+窗口在**设置 → 数据 → 历史记录**里设置，那里显示四项策略（**附件**在**本地内容**下）；另外一项 `sync_runs` 保持默认值，只能通过 REST（`/api/v1/retention/policies`）修改。
 
 | 策略 | 键 | 默认值 | 作用 |
 | --- | --- | --- | --- |
 | **改动** | `audit_log` | 365 天 | 删除早于窗口的审计条目。 |
 | **MCP 调用** | `mcp_invocations` | 30 天 | 删除网关调用日志行。 |
-| **对话** | `conversations` | 30 天 | 在归档后这么久删除已归档的对话及其消息。 |
 | **配置备份** | `config_backups` | 30 天 | 删除 `~/.coffer/config-backups` 下最后修改时间早于窗口的文件，但每个配置文件最新的一份备份始终保留，以便撤销最近一次写入；清空后的文件夹一并删除。 |
 | **Skill 临时数据** | `skill_data` | 30 天 | 删除 `~/.coffer/skill-data` 下任意位置最后修改时间早于窗口的文件，再删除因此清空的文件夹（`skill-data` 本身不删）。 |
-| **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
+| **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
 | 仅 REST | `sync_runs` | 90 天 | 删除同步轮次的历史。 |
-| 仅 REST | `conversations_archive` | 7 天 | 归档这么久没有新消息的对话。 |
 
-两条聊天策略都作用于 `conversations` 表。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除超过 7 天的旧 shim 日志和上游日志。
+对话没有保留策略：Coffer 不保存对话文本，智能体自己的会话由智能体自己的清理机制处理（见[对话](/zh/guides/chat#chat-and-the-agent-s-own-sessions)）。旧版本留在 `retention.json` 里的 `conversations` 或 `conversations_archive` 条目会在守护进程启动时被丢弃。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除超过 7 天的旧 shim 日志和上游日志。
 
 ### 设置 → 安全 {#settings-→-security}
 

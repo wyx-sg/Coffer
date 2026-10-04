@@ -92,14 +92,15 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `content/channel-media/` | 通过 Telegram 和 SeaTalk 收到的附件，保存下来让智能体能打开。超过附件保留期（默认 30 天）的文件会被清理。 | 守护进程 | 否 | 可以。 |
-| `content/chat-media/` | 在对话页面上附加的文件：每次上传的字节（`<id><ext>`），旁边是一个记录名称、类型和大小的小文件 `<id>.json`。超过附件保留期（默认 30 天）的文件会被清理。 | 守护进程 | 否 | 可以。对话里仍显示文件标签，但之后的轮次再也打不开它。 |
 | `content/workspace/` | 没选工作目录时，对话默认使用的工作目录。 | 守护进程 | 否 | 仅在没有对话使用它时可以。 |
+
+早期版本还在 `content/chat-media/` 保存对话页面上附加的文件。现在没有任何东西再写入它；如果它还在，可以手动删除。
 
 ### 历史与密钥 {#history-and-keys}
 
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
-| `runs.db` | 历史：审计日志、MCP 调用日志、对话和消息、消息渠道的线程与发件箱、同步轮次与用量。`COFFER_DB_URL` 可以指定另一个数据库。 | 守护进程 | 从不 | 丢的是历史，不是配置。先停守护进程。 |
+| `runs.db` | 历史：审计日志、MCP 调用日志、对话索引（标题和会话 id，没有文字）、消息渠道的线程、同步轮次与用量。`COFFER_DB_URL` 可以指定另一个数据库。 | 守护进程 | 从不 | 丢的是历史，不是配置。先停守护进程。 |
 | `runs.db-wal`、`runs.db-shm` | SQLite 预写日志和共享内存索引。WAL 里可能有已提交但还没合并进 `runs.db` 的数据。 | 守护进程 | 否 | **不能**，而且守护进程运行时，绝不要只复制 `runs.db` 而不带上它们。 |
 | `runs.db.pre-<revision>`（及 `-wal`、`-shm`） | 迁移修改表结构之前做的副本。只保留最新三份。 | 守护进程 | 否 | 升级后的守护进程工作正常后可以。 |
 | `master.key` | 解密已存密钥的 Fernet 主密钥，权限 `0600`。主密钥存放在操作系统钥匙串中时（服务 `coffer`，条目 `master-key`）不存在这个文件。 | 守护进程 | **从不。** 在桌面应用中备份，再通过**设置 › 安全 › 导入主密钥**装到另一台机器上。 | **不能。** 没有它，所有已存密钥都无法读取。 |
@@ -113,7 +114,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- |
 | `derived/derived.db` | MCP 服务器健康状态、哪些技能副本投递到了哪些智能体、每项上游能力首次和最近一次被看到的时间。表结构版本不一致时会重建。 | 健康检查、技能投递、网关 |
 | `derived/memory/<partition>/` | `global` 或某个仓库的派生记忆：`MEMORY.md`（索引）、`notes/`、`RETIRED.md`（退役了什么、为什么），以及隐藏的 `.raw/`（聚合读到的原文）。根目录的 `.source_state.json` 记录上一次聚合读了什么。 | 聚合与提炼（`RETIRED.md` 中的退役决定和你对笔记的编辑会丢失） |
-| `derived/cache/agent/.transcript_summaries.json` | 对话记录读取器已经解析过的内容。 | 下一次读取，会比较慢 |
 | `derived/resources/` | 派生的资源文件：记忆分区，以及 `skill/coffer-guide.json`。 | 守护进程启动时 |
 | `derived/skills/coffer-guide/` | Coffer 自带的指南技能，由当前构建渲染。 | 守护进程启动时 |
 | `derived/sync-conflicts/` | 停下的同步轮次中冲突文件的标注副本，供手工合并。 | 在编辑器里重新打开该文件 |
@@ -168,6 +168,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `vendor/` | 你放 SeaTalk WebSocket SDK（`seatalk_oapi_sdk`）的地方。Coffer 只读取它。 | 你 | 否 | 不用 SeaTalk 就可以。 |
+| `tmp/handoff/` | 从 Coffer 在终端里启动的会话的提示词，每次启动一个文件，权限 `0600`；读取它的命令会把它删除。终端从未运行该命令时留下的文件可以删除。 | 守护进程 | 否 | 可以。 |
 | `eval-capture.jsonl` | 捕获的 `coffer__search_tools` 调用，仅在设置了 `COFFER_EVAL_CAPTURE` 时存在。 | 守护进程 | 否 | 可以。 |
 
 ## ~/.coffer 之外 {#outside-coffer}

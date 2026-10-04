@@ -1,5 +1,7 @@
 # The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The Conversations page is now a list of channel conversations that opens a row in the person's terminal; it has no reply box, no "Coffer" source and no web-reply mirroring. The grouping of the sidebar this ADR decides is unchanged.
+
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
@@ -20,11 +22,10 @@ spec web-ui "List only shipped surfaces in the sidebar",
 spec web-ui "Call a surface by one name everywhere",
 spec web-ui "Manage stored secrets on the Secrets page",
 spec web-ui "Open Settings as a modal from the sidebar footer",
-spec chat "Show every conversation on the Conversations page",
+spec chat "Show channel conversations on the Conversations page",
 spec provider-switching "Offer every connection operation over REST and in the web UI",
 spec secret "Refuse to delete a secret still in use",
 spec web-ui "Show what needs the user and each area's health on Overview",
-spec chat "Mirror a web reply into the channel it came from",
 the change `openspec/changes/archive/2026-10-01-revise-web-ui-ia/`
 
 ## Context
@@ -208,8 +209,7 @@ moving the groups one level down, where they cost more to use.
 **Conversations and Channels are two entries, and history lives in Conversations.** Conversations
 is the daily page: every conversation Coffer runs — from SeaTalk, Telegram and Coffer's own UI,
 which is modelled as a built-in "Coffer" source — in one list with a source badge and filters, each
-opening on its full exchange with a reply box that continues it (spec chat "Show every
-conversation on the Conversations page"). Channels is setup only: pairing a bot, choosing its
+opening on its full exchange with a reply box that continues it (the chat spec's Conversations list at the time). Channels is setup only: pairing a bot, choosing its
 default agent, checking its connection — done once per bot and revisited rarely — with a link to
 Conversations filtered to that channel. A survey made while the rebuild was designed (OpenClaw,
 Hermes Agent, cc-connect, claude-code-telegram, kimaki, Claude Code Channels, Happy, Omnara,
@@ -222,8 +222,7 @@ beside a channel history (Hermes's split) was the weaker pattern, because it put
 places; so the entry is named Conversations, not Chat, and Coffer's own UI is a source, not a
 second kind of conversation. They share a group because both are how work with an agent happens;
 they are two entries because the user comes to each for a different reason. A reply sent from
-Coffer into a channel-opened conversation is also delivered back to that channel (spec chat
-"Mirror a web reply into the channel it came from").
+Coffer into a channel-opened conversation is also delivered back to that channel (a behaviour since removed).
 
 **Model providers belongs with Agents.** A provider is the endpoint and key an agent's model is
 served from, and a connection and model are chosen per agent, on that agent's page (spec

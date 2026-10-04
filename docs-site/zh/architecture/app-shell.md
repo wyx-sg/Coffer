@@ -111,7 +111,7 @@ Web 界面每 30 秒轮询一次守护进程状态。框架里有一个部件盯
 
 未知的标签页片段会回退到不带后缀的地址。知识集的窗格也按同样方式寻址——某篇文档的“历史”是 `/knowledge/<uid>/history?file=<document>`——记忆分区的“投递内容”标签页是 `/memory/<uid>/delivered`。没有详情页可嵌套的列表页，比如同步和活动，改用 `?tab=` 携带标签页；默认标签页就是不带后缀的地址。
 
-列表的筛选条件也是查询参数，因为筛选后的列表是你会去链接的东西。最需要这一点的是对话列表：`/conversations?source=coffer,<渠道 uid>&agent=codex&q=sentry` 按来源、智能体和搜索文字筛选，消息渠道则以 `/conversations?source=<uid>` 链接到自己的对话。打开一个对话时，筛选条件仍留在地址上（`/conversations/<id>?source=<uid>`）；**新建对话**打开的草稿是 `/conversations/new`——它是一个地方，但还不是一个对话：第一次发送时才创建这一行，并把地址换成它的 id。
+列表的筛选条件也是查询参数，因为筛选后的列表是你会去链接的东西。最需要这一点的是对话列表：`/conversations?source=coffer,<渠道 uid>&agent=codex&q=sentry` 按消息渠道、智能体和搜索文字（标题和目录）筛选，消息渠道则以 `/conversations?source=<uid>` 链接到自己的对话。这个页面只是列表：一行在终端里打开，没有自己的地址。
 
 ## 相关页面 {#related}
 

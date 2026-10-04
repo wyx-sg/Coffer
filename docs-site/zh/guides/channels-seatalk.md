@@ -76,7 +76,7 @@ Channels → Add channel
 
 SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一次，一小时后过期，猜错 10 次后作废。
 
-给机器人发一条消息。输入中提示会立刻出现，回复流式写进一条消息，对话会出现在 Web 的[对话](/zh/guides/chat)页面上，来源标记为 `SeaTalk · DM`。
+给机器人发一条消息。输入中提示会立刻出现，回复流式写进一条消息，对话会出现在 Web 的[对话](/zh/guides/chat)页面上，消息渠道显示为 `SeaTalk · DM`。
 
 ## 连接状态 {#connection-states}
 

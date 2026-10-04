@@ -170,7 +170,7 @@ The line under the **Models** title says once where most prices come from — "b
 
 An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer. The one exception is a connection with a selection: if a client asks it for a model outside that selection (the Codex desktop app under a workspace model policy does this on every new thread), Coffer's proxy substitutes the agent's default model for that request and logs the swap.
 
-What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, and a channel's `/model` card:
+What a model picker offers for an agent is decided in one place and served to every surface that offers a model choice, such as a channel's `/model` card:
 
 - when the provider the agent runs on curates **text** models, exactly those, in your order;
 - otherwise, the agent's own catalogue (see [Agents](/guides/agents#models)).

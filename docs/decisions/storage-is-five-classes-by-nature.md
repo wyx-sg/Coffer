@@ -1,5 +1,7 @@
 # Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The `runs` class no longer holds `chat_messages` or `chat_reply_files`; `conversations` is an index of channel conversations with no text. The five-class decision is unchanged.
+
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu

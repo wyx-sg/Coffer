@@ -54,7 +54,7 @@ flowchart LR
 | **local** | `local/` | Machine-local resources (agents), reach, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` (and `skill-data/`, `config-backups/`) | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage; in `skill-data/`, the logs, journals and temp files skill scripts write; in `config-backups/`, the copies of agent config files made before each rewrite. | Never | It *is* history | You lose history |
-| **derived** | `derived/` | `derived.db`, the memory tree, the agent transcript cache, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
+| **derived** | `derived/` | `derived.db`, the memory tree, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
 
 Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
 
@@ -120,7 +120,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 
 ### Content
 
-`content/chat-media/` (files attached on the Conversations page), `content/channel-media/` (attachments downloaded from chat platforms) and `content/workspace/` (the default working directory for chat turns). Both media folders are pruned by age, on the `attachments` retention policy (30 days by default; adjustable, or keep forever). Content is your only copy and does not sync.
+`content/channel-media/` (attachments downloaded from chat platforms) and `content/workspace/` (the default working directory for chat turns). The media folder is pruned by age, on the `attachments` retention policy (30 days by default; adjustable, or keep forever). Content is your only copy and does not sync.
 
 ### runs.db
 
@@ -130,7 +130,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | --- | --- |
 | `audit_log` | Every lifecycle change: time, event type, actor, the resource's uid and its kind and name at the time, redacted details. |
 | `mcp_invocations` | One row per tool call through the gateway, written by a batched writer. Pruned after 30 days by default. |
-| `conversations`, `chat_messages` | Conversation metadata and message history for the Conversations page and every channel. Idle conversations are archived after 7 days and archived ones deleted after 30, by default. |
+| `conversations` | The conversation index: title, agent, directory, the agent's session id and the channel thread that owns it. No conversation text: that stays in the agent's own session. Deleted with the conversation (or its session); there is no retention policy. |
 | `channel_thread_conversations`, `channel_thread_history` | Which conversation an IM thread maps to, and every conversation a thread has opened. |
 | `channel_outbox` | Replies Coffer owes a chat and has not delivered yet. |
 | `sync_runs` | Every sync round this machine has run. Pruned after 90 days by default. |
@@ -158,7 +158,6 @@ Every connection runs this pragma suite:
 ~/.coffer/derived/
 ├── derived.db                   MCP server health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
-├── cache/agent/                 agent transcript cache
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
 └── sync-conflicts/              editor copies of a stopped round's conflicting files
@@ -219,6 +218,8 @@ A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and 
 ## Settings that live outside every class
 
 Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime state the daemon writes at start and removes at exit (pid, port, token): the rendezvous every surface reads to find the daemon. `daemon-config.json` is configuration the daemon reads before it binds: the fixed port, the model proxy's port, the machine name and id, and the experimental-feature switches. It must be readable before any upgrade runs, so it is neither vault nor local state. Both are written atomically at mode `0600`. Their contents are described in [Daemon and processes](/architecture/daemon#two-files-configuration-in-runtime-state-out) and, key by key, in [Configuration](/reference/configuration#daemon-config-json).
+
+One short-lived directory sits outside the classes too: `~/.coffer/tmp/handoff/` holds the prompt of a session started in a terminal from Coffer, one `0600` file per start, removed by the command that reads it (see [Native sessions and the terminal](/architecture/chat#native-sessions)). Nothing there needs a backup.
 
 ## Trade-offs
 

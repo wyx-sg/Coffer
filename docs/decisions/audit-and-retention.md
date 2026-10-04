@@ -1,5 +1,7 @@
 # Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table
 
+> **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The conversation retention entries and the `content/chat-media/` sweep are gone; the retention registry, the `local/retention.json` policy file and the `channel-media` attachments sweep stand.
+
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu

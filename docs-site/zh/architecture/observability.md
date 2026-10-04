@@ -235,23 +235,18 @@ sequenceDiagram
 | `audit_log` | `audit_log` | `timestamp` | 365 天 | delete |
 | `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 天 | delete |
 | `sync_runs` | `sync_runs` | `finished_at` | 90 天 | delete |
-| `conversations_archive` | `conversations` | `updated_at` | 7 天 | archive（设置 `archived_at`） |
-| `conversations` | `conversations` | `archived_at` | 30 天 | delete（连同消息） |
-
-聊天对话采用两阶段形式：闲置的对话先归档，归档的对话之后再删除。
 
 ```mermaid
 flowchart LR
     W["保留 worker（每 6 小时）"] --> S["清理"]
     S --> R["已注册的可清理表"]
     R --> T1["删除超出窗口的行"]
-    R --> T2["归档闲置对话"]
     S --> M["清扫消息渠道媒体目录"]
     W --> F["日志文件清理：超过 7 天的 shim 和上游日志"]
     S --> P["local/retention.json：last_pruned_at、rows"]
 ```
 
-- 保留服务在启动时为每张已注册的表在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。
+- 保留服务在启动时为每张已注册的表在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。文件里属于已不再注册的策略的条目，例如已移除的对话策略，会在启动时被丢弃。
 - 保留 worker 在启动时立即执行一次清理（补跑），之后每 6 小时一次。清理失败会记日志，worker 继续运行。
 - 完整的清理还会清扫消息渠道的媒体目录，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
 - 窗口设为 “none” 会关闭该表的清理。修改窗口会在审计日志里记一条 `retention_updated`。

@@ -1,6 +1,6 @@
 ---
 title: Agents
-description: Register Claude Code and Codex with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and transcripts.
+description: Register Claude Code and Codex with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and sessions.
 ---
 
 # Agents
@@ -14,7 +14,7 @@ Everything Coffer shares — MCP servers, skills, knowledge, memory, model provi
 - write a `coffer` MCP entry into it, so the agent reaches every upstream MCP server through [one gateway](/guides/mcp-servers);
 - link [skills](/guides/skills) into its `skills/` folder;
 - project a [model provider](/guides/providers) into its native config;
-- show you its config files, MCP entries, plugins, native memory and conversation transcripts in one place.
+- show you its config files, MCP entries, plugins, native memory and sessions in one place.
 
 Coffer supports two agent types:
 
@@ -32,7 +32,7 @@ A machine has at most one registered agent of each type, and the agent's name **
 Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
 
 ::: info The agent's files are the source of truth
-Coffer never copies an agent's configuration into its own store. Config files, MCP entries, plugins, native memory and transcripts are read from disk every time you look at them. The agent record itself holds only the type, the config directory and the model binding.
+Coffer never copies an agent's configuration into its own store. Config files, MCP entries, plugins and native memory are read from disk every time you look at them, and sessions are listed by the agent itself. The agent record itself holds only the type, the config directory and the model binding.
 :::
 
 ## Register an agent
@@ -165,7 +165,7 @@ Coffer touches an agent's files through a short list of documented surfaces:
 | Plugins | inventory and enabled state | the enabled switch; uninstall by the type's own strategy |
 | Model provider keys | yes (checked on every reconcile pass) | when you switch a [provider](/guides/providers), and to bring a projection whose values went stale back in line |
 | Native memory stores | yes | never |
-| Transcripts | yes | never |
+| Sessions (the agent's own conversation records) | yes, through the agent | rename and delete, through the agent, when you ask |
 | Codex `auth.json` | never | never |
 
 Every write:
@@ -311,11 +311,17 @@ The **Memory** tab lists the agent's own memory stores, read-only:
 
 Opening a row shows the store's files in a file tree with a read-only preview. While the Memory [experimental feature](/guides/experimental-features) is on, the tab opens with **Coffer's memory** — Coffer's memory hook for this agent, when it last fired and what it delivers, with a link to the [Memory](/guides/memory) page and **Repair** when the hook is out of date or missing — and the agent's own stores follow.
 
-The **Sessions** tab lists the agent's own CLI sessions — its local transcripts (`<config_dir>/projects/**/*.jsonl` for Claude Code, `<config_dir>/sessions/**/*.jsonl` for Codex) with title, project, message count and activity times, searchable and sortable. Choosing one opens it beside the list as a conversation, read-only; the harness's own injected blocks are folded under **Harness context**, so your words lead each turn. Your turns are right-aligned accent bubbles, as in Chat, and the agent's replies sit unboxed on the left under its mark, so the two sides read apart at a glance. The **Project** filter has a search box that matches the full project path, and the divider between the list and the reader can be dragged (Coffer remembers the width). A session's title is its first real prompt; attachment placeholders such as `[Image: source: …]` are left out of it, and a session that opens with nothing but an image reads as an untitled session. A session that cannot be loaded says so in the reader, with **Retry**.
+The **Sessions** tab lists the agent's own sessions — the ones you ran in a terminal or an app, and the ones a [channel](/guides/channels) started — with title, agent, working directory and last activity. Coffer asks the agent itself for the list (Claude Code's session listing, Codex's `thread/list`) and does not parse the agent's files. Search matches the title and the directory. A session that belongs to a channel conversation also shows its channel, **Running** while its turn runs and **Needs you** while it waits for an answer, with an inline **Stop**.
+
+Opening a row resumes the session in your preferred terminal, in the session's directory: `claude --resume <id>` for Claude Code, `codex resume <id>` for Codex. The split button's **Copy command** is the alternative for a terminal Coffer does not know. A running turn or a waiting question asks first: answer in the channel, or stop the turn and continue in the terminal. Choose the terminal under **Settings › General › Preferred terminal**; see [Conversations](/guides/chat#open-in-terminal).
+
+The **⋯** menu has **Rename** and **Delete…**, both done by the agent on its own session (Claude Code's `rename_session` and `delete_session`, Codex's `thread/name/set` and `thread/delete`). Delete asks first and is permanent. Deleting a session that a channel conversation uses removes that conversation's row too, and the channel's next message starts a fresh one. If the session was already gone, the error is `NATIVE_SESSION_NOT_FOUND`; refresh the list. An agent type that cannot list sessions answers `AGENT_TYPE_UNSUPPORTED`.
+
+Claude Code deletes sessions it has not touched for `cleanupPeriodDays` (about 30 days by default), and a session that is gone drops off this list. Raise it in Claude Code's `settings.json` to keep sessions longer; see [Conversations](/guides/chat#chat-and-the-agent-s-own-sessions).
 
 Native memory stores are plain files; the **Memory** tab shows each store's folder, and you can read the files with your own tools.
 
-Transcript text is secret-scrubbed before it is shown, long turns are cut and flagged, and a session is read in windows of turns. Coffer never writes, stores or sends transcripts or native memory anywhere.
+Coffer shows no session text: the agent's own interface is where a session is read. Coffer never writes, stores or sends sessions or native memory anywhere.
 
 ## Skills on an agent
 

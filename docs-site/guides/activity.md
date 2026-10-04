@@ -166,12 +166,10 @@ A background worker prunes on daemon start and every six hours after. Each recor
 | `audit_log` | 365 days | Deletes older audit entries. |
 | `mcp_invocations` | 30 days | Deletes older invocation rows. |
 | `sync_runs` | 90 days | Deletes older sync-round history. |
-| `conversations_archive` | 7 days | Archives chats with no new message for this long. |
-| `conversations` | 30 days | Deletes archived chats (with their messages) this long after archival. |
 
 Set each window in **Settings → Data → History**.
 
-A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **Tool calls** (`mcp_invocations`) and **Conversations** (`conversations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
+A number of days must be at least 1. The web UI's **History** block shows the two a person usually tunes — **Changes** (`audit_log`) and **Tool calls** (`mcp_invocations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
 
 The daemon log is a file, not a table, so it has no policy: `daemon.log` rotates at 10 MB and keeps three rotations. Per-process shim logs and rolled-aside upstream logs in `~/.coffer/logs/` are deleted after seven days.
 

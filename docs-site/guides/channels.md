@@ -16,7 +16,7 @@ A channel is a registered resource of kind `channel`. It holds:
 - a **default agent** — the agent a new conversation on this channel starts on;
 - `runs_on` — the one machine whose daemon runs the channel's adapter.
 
-A message from you becomes a turn in an ordinary Coffer conversation, and the agent's reply goes back to the IM chat. The conversation is the same one the web [Conversations](/guides/chat) page lists, with a **via** badge naming the channel, so you can start a task on your phone and watch or continue it in the browser. A reply you type there is also sent to the chat it came from, and the agent's answer follows it (see [Replying to a channel's conversation](/guides/chat#replying-to-a-channel-s-conversation)).
+A message from you becomes a turn in an ordinary Coffer conversation, and the agent's reply goes back to the IM chat. The web [Conversations](/guides/chat) page lists it, with the channel it came from, so you can start a task on your phone and pick it up at your desk: opening the row resumes the agent's session in your terminal (see [Open a conversation in your terminal](/guides/chat#open-in-terminal)). The page is a list; there is no reply box, and nothing you do there is sent into the chat.
 
 One bot drives every managed agent. You switch between Claude Code and Codex from the chat with `/new <agent>`, and different threads of one group can run different agents at the same time.
 
@@ -93,7 +93,7 @@ When the agent needs a yes or a choice before it goes on — a change it is abou
 
 A question that allows several options shows them as toggles: each tap puts a `✓` on that button, and **Submit** sends the ticked ones (Submit with nothing ticked does nothing). When one ask holds several questions, the next card goes out only after you answer the previous one. In a group, only the channel's owner can answer; anyone else's tap is refused and the question stays open. On a platform without buttons the options are listed in the message and you type the answer.
 
-Once the question is answered — here or on the Conversations page — or the turn is stopped, its card is rewritten in place to `✓ Answered: Yes · 11:42` (`✓ Answered in Coffer: …` when you answered on the Conversations page, `⏹ Stopped` after a stop) and its buttons go away; where the platform cannot rewrite the message, that line is sent as a reply instead.
+Questions are answered here, in the chat; the Conversations page has no answer card. Once the question is answered, or the turn is stopped, its card is rewritten in place to `✓ Answered: Yes · 11:42` (`⏹ Stopped` after a stop) and its buttons go away; where the platform cannot rewrite the message, that line is sent as a reply instead.
 
 ### When a long turn finishes
 
@@ -108,15 +108,15 @@ Messages sent in quick succession are one question. The channel waits for a shor
 
 Both pauses are per-channel settings: on the channel's **Settings** tab under **Message batching** (**Wait after a text message** and **Wait after a forward or files**). Each takes 0 to 60 seconds; 0 answers every such message on its own.
 
-Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Conversations page shows. A burst sent during a turn joins the queue as one entry. Each message that waits is answered "⏳ Queued (n)", n being how many now wait. Up to 10 may wait; a message sent while 10 already wait is dropped, and the bot says so and why.
+Messages you send while a turn is running wait in the conversation's queue and run in order — one queue per conversation, shared by everything that sends to it. A burst sent during a turn joins the queue as one entry. Each message that waits is answered "⏳ Queued (n)", n being how many now wait. Up to 10 may wait; a message sent while 10 already wait is dropped, and the bot says so and why.
 
 ### When a chat has been quiet
 
-A conversation that nobody has touched for a day is rarely the one you mean to continue. When your next message reaches a chat whose conversation has been idle longer than the channel's idle period (24 hours by default), Coffer opens a new conversation instead of continuing the old one, and says so in one line before the answer: `🆕 Started a new conversation after 24 h idle.` The old conversation stays in the conversation list, untouched. The chat's agent, model and directory carry over, as they do after `/new`. The rule applies to each conversation a channel keeps: the direct chat's, and each group thread's or parallel thread's own.
+A conversation that nobody has touched for a day is rarely the one you mean to continue. When your next message reaches a chat whose conversation has been idle longer than the channel's idle period (24 hours by default), Coffer opens a new conversation instead of continuing the old one, and says so in one line before the answer: `🆕 Started a new conversation after 24 h idle.` The old conversation stays in the Conversations list, untouched. The chat's agent, model and directory carry over, as they do after `/new`. The rule applies to each conversation a channel keeps: the direct chat's, and each group thread's or parallel thread's own.
 
 Set the period on the channel's **Settings** tab under **Conversations** (**Start a new conversation after**, in hours; 0 never starts a new one).
 
-A conversation you archived on the Conversations page is never continued by a message from a chat: the next message opens a new conversation, without a line about it, and the archived one stays archived.
+A conversation you delete on the Conversations page (or whose session you delete under **Agents › Sessions**) is gone: the next message from its chat opens a new conversation, without a line about it. The same happens when the agent has cleaned up the conversation's session — Claude Code does after `cleanupPeriodDays`, about 30 days by default — except that the conversation then continues as a fresh session, without the earlier context (see [Where the conversation lives](/guides/chat#chat-and-the-agent-s-own-sessions)).
 
 ### Parallel conversations
 
