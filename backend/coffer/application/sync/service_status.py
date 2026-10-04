@@ -19,18 +19,21 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coffer.application.sync import round_diff
 from coffer.application.sync.round_merge import MERGED_BY_AGENT, merge_diff, merge_info
 from coffer.application.sync.views import (
     AreaCounts,
     FileVersions,
     HoldGroup,
     Problem,
+    RoundFileDiff,
     StoppedFile,
     StoppedRound,
     SyncStatus,
     WaitingCommit,
 )
 from coffer.domain.git_handoff import git_install_handoff
+from coffer.domain.sync.errors import SyncRoundNotFound
 from coffer.domain.sync.handoffs import (
     agent_mergeable,
     is_secret_file,
@@ -248,6 +251,13 @@ class StatusMixin:
                 )
             )
         return tuple(out)
+
+    async def round_file_diff(self, round_id: int, path: str, side: str) -> RoundFileDiff:
+        """One file a round applied or pushed, line by line (nothing stored)."""
+        record = await self._history.get(round_id)
+        if record is None:
+            raise SyncRoundNotFound(round_id)
+        return await asyncio.to_thread(round_diff.file_diff, self._engine.d, record, path, side)
 
     async def join_files(self) -> tuple[StoppedFile, ...]:
         """A join's differing files, in the shape a stopped round's are."""

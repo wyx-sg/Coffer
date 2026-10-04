@@ -10,57 +10,11 @@ import { useTranslation } from "react-i18next";
 
 import { LineCounts } from "@/components/change-preview/LineCounts";
 import { OpChip } from "@/components/change-preview/OpChip";
-import type { DiffLine } from "@/lib/changePreview/changeCounts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useFileVersions } from "@/lib/hooks/useSyncStop";
-import { cn } from "@/lib/utils";
 import { parseUnifiedDiff } from "./syncConflictFormat";
-
-const GUTTER = "pr-2 text-right text-2xs leading-5 text-text-subtle";
-const TONE: Record<DiffLine["kind"], string> = {
-  context: "",
-  hunk: "",
-  add: "bg-success-soft",
-  remove: "bg-danger-soft",
-};
-const SIGN: Record<DiffLine["kind"], [string, string]> = {
-  context: ["", "text-text-subtle"],
-  hunk: ["", "text-text-subtle"],
-  add: ["+", "text-success"],
-  remove: ["−", "text-danger"],
-};
-
-function Row({ line, first }: { line: DiffLine; first: boolean }) {
-  if (line.kind === "hunk") {
-    return (
-      <div
-        className={cn(
-          "truncate whitespace-nowrap border-b border-border-subtle bg-surface-sunken px-3 py-0.5 text-2xs leading-5 text-text-subtle",
-          !first && "border-t",
-        )}
-      >
-        {line.text}
-      </div>
-    );
-  }
-  const [symbol, tone] = SIGN[line.kind];
-  return (
-    <div
-      data-line={line.kind}
-      className={cn("grid grid-cols-[34px_34px_16px_minmax(0,1fr)]", TONE[line.kind])}
-    >
-      <span className={GUTTER}>{line.oldNo ?? ""}</span>
-      <span className={cn(GUTTER, "border-r border-border-subtle")}>{line.newNo ?? ""}</span>
-      <span aria-hidden className={cn("text-center", tone)}>
-        {symbol}
-      </span>
-      <span className="overflow-hidden text-ellipsis whitespace-pre pr-2.5 text-text">
-        {line.text}
-      </span>
-    </div>
-  );
-}
+import { DiffTable } from "./SyncDiffTable";
 
 export function SyncConflictDiff({
   path,
@@ -97,16 +51,7 @@ export function SyncConflictDiff({
   else if (!diff || diff.lines.length === 0) {
     body = <p className="text-xs text-text-muted">{t("sync.resolve.noDiff")}</p>;
   } else {
-    body = (
-      <div
-        className="overflow-hidden rounded-lg border border-border bg-surface-raised font-mono text-xs leading-5"
-        data-testid="sync-conflict-diff"
-      >
-        {diff.lines.map((line, i) => (
-          <Row key={i} line={line} first={i === 0} />
-        ))}
-      </div>
-    );
+    body = <DiffTable lines={diff.lines} />;
   }
 
   return (

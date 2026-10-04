@@ -155,6 +155,10 @@ A file a new machine's join left different is settled per file or all at once: *
 
 Treating a returning machine as new looks conservative and is a data-loss bug: a union has no base to disagree with, so every deletion the fleet made while the machine was away comes back. That is why the descriptor records the last converged commit.
 
+## File diffs in the round drawer
+
+A file the round listed as applied or pushed opens to its line-by-line diff in the drawer. Nothing is stored for it: `GET /api/v1/sync/runs/{id}/diff?path=&side=applied|pushed` reads two commits the round record already holds. `applied` compares `from_commit` with `to_commit`; `pushed` compares the remote tip the push went on top of (the newest commit the round pulled, or `from_commit` for a round that only pushed) with `to_commit`. The path must be one the round lists for that side (`SYNC_ROUND_FILE_NOT_LISTED`), so the route never reads an arbitrary vault file. A file under `secret/` answers `kind: "secret"` with no content, a non-text file `binary`, one over 200 KB or a diff over 2000 lines `too_large`; commits that are gone answer `SYNC_ROUND_DIFF_UNAVAILABLE`.
+
 ## Rollback
 
 **Roll back to before this round** in the round's drawer puts back what one round changed, from its snapshot, as a new `user` commit on this machine that the next round pushes. Only the paths that round changed are touched, and a file edited since the round is kept and listed. The plan is shown first. A round that applied nothing, and a rollback itself, cannot be rolled back.

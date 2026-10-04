@@ -33,6 +33,9 @@ export type SyncRound = Schemas["RoundOut"];
 /** One file a round changed, in one direction. */
 export type SyncChange = Schemas["SyncChangeOut"];
 
+/** One file a round applied or pushed, line by line (`GET /sync/runs/{id}/diff`). */
+export type RoundFileDiff = Schemas["RoundFileDiffOut"];
+
 /** `GET /sync/runs` — rounds, newest first. */
 export type SyncRunList = Schemas["SyncRunListOut"];
 
@@ -173,6 +176,14 @@ export const syncApi = {
   restoreHold: (): Promise<SyncRound> => unwrap(api().POST("/sync/hold/restore")),
   /** "I checked it, push anyway" for a round that found a plaintext secret. */
   pushAnyway: (): Promise<SyncRound> => unwrap(api().POST("/sync/plaintext/push-anyway")),
+
+  /** The line-by-line diff of a file the round listed; computed from history, nothing stored. */
+  runDiff: (runId: number, path: string, side: "applied" | "pushed"): Promise<RoundFileDiff> =>
+    unwrap(
+      api().GET("/sync/runs/{run_id}/diff", {
+        params: { path: { run_id: runId }, query: { path, side } },
+      }),
+    ),
 
   rollbackPlan: (runId: number): Promise<RollbackPlan> =>
     unwrap(api().GET("/sync/runs/{run_id}/rollback-plan", { params: { path: { run_id: runId } } })),

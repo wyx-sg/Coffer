@@ -15,6 +15,8 @@ whose key a file holds before anything is replaced.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import Query
 
 from coffer.domain.sync.remote import SyncRemote
@@ -33,6 +35,7 @@ from coffer.surfaces.http.sync_schemas import (
     MachineRenameIn,
     RemoteCheckIn,
     RemoteCheckOut,
+    RoundFileDiffOut,
     RoundOut,
     SyncRemoteClearedOut,
     SyncRemoteIn,
@@ -80,6 +83,28 @@ async def list_runs(
 @router.get("/runs/{run_id}", response_model=RoundOut)
 async def get_run(run_id: int) -> RoundOut:
     return round_out(await get_sync_service().round(run_id))
+
+
+@router.get("/runs/{run_id}/diff", response_model=RoundFileDiffOut)
+async def get_run_file_diff(
+    run_id: int,
+    path: str = Query(description="A file the round listed on that side; else 404."),
+    side: Literal["applied", "pushed"] = Query(description="Which list the path is in."),
+) -> RoundFileDiffOut:
+    """One file a round applied here or pushed, line by line, computed from the
+    vault's history (nothing stored). A secret, a binary file and one over the
+    size cap carry a ``kind`` and no content. 404 ``SYNC_ROUND_FILE_NOT_LISTED``
+    for a path the round did not list, 409 ``SYNC_ROUND_DIFF_UNAVAILABLE`` when
+    its commits are gone."""
+    found = await get_sync_service().round_file_diff(run_id, path, side)
+    return RoundFileDiffOut(
+        path=found.path,
+        side=side,
+        kind=found.kind,  # type: ignore[arg-type]
+        diff=found.diff,
+        added=found.added,
+        removed=found.removed,
+    )
 
 
 # --- the remote -------------------------------------------------------------------

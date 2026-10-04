@@ -33,10 +33,10 @@ describe("saving a stored remote again", () => {
   });
 
   acceptance("vault-sync", "reconfiguring a remote changes only what it names", () => {
-    const sent = toRemoteInput({ ...formFromRemote(stored), intervalSeconds: 600 }, stored);
+    const sent = toRemoteInput({ ...formFromRemote(stored), intervalSeconds: 600 });
     expect(sent).toEqual({ ...stored, interval_seconds: 600 });
 
-    const off = toRemoteInput({ ...formFromRemote(stored), includeSecret: false }, stored);
+    const off = toRemoteInput({ ...formFromRemote(stored), includeSecret: false });
     expect(off).toEqual({ ...stored, include_secret: false });
   });
 });

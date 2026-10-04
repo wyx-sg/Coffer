@@ -475,6 +475,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/runs/{run_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run File Diff
+         * @description One file a round applied here or pushed, line by line, computed from the
+         *     vault's history (nothing stored). A secret, a binary file and one over the
+         *     size cap carry a ``kind`` and no content. 404 ``SYNC_ROUND_FILE_NOT_LISTED``
+         *     for a path the round did not list, 409 ``SYNC_ROUND_DIFF_UNAVAILABLE`` when
+         *     its commits are gone.
+         */
+        get: operations["get_run_file_diff_api_v1_sync_runs__run_id__diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/runs/{run_id}/rollback": {
         parameters: {
             query?: never;
@@ -1125,6 +1149,38 @@ export interface components {
             snapshot_commit: string;
             /** Snapshot Time */
             snapshot_time: string | null;
+        };
+        /**
+         * RoundFileDiffOut
+         * @description One file a round applied or pushed. ``text`` carries the unified
+         *     ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
+         *     carry no content at all (never ciphertext).
+         */
+        RoundFileDiffOut: {
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /** Diff */
+            diff: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "secret" | "binary" | "too_large";
+            /** Path */
+            path: string;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "applied" | "pushed";
         };
         /**
          * RoundOut
@@ -2456,6 +2512,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_run_file_diff_api_v1_sync_runs__run_id__diff_get: {
+        parameters: {
+            query: {
+                /** @description A file the round listed on that side; else 404. */
+                path: string;
+                /** @description Which list the path is in. */
+                side: "applied" | "pushed";
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundFileDiffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

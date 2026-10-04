@@ -143,6 +143,20 @@ class FileVersions:
 
 
 @dataclass(frozen=True)
+class RoundFileDiff:
+    """One file a round changed, as a line-by-line diff. ``kind`` is ``text``
+    (``diff`` and the counts are set), ``secret`` (nothing is shown),
+    ``binary`` or ``too_large``."""
+
+    path: str
+    side: str
+    kind: str
+    diff: str | None = None
+    added: int = 0
+    removed: int = 0
+
+
+@dataclass(frozen=True)
 class HandoffResult:
     """What handing conflicting files to an agent produced: the prompt, and
     the files it covers."""

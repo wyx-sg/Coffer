@@ -20,6 +20,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useSyncRuns: vi.fn(),
   useRollbackPlan: vi.fn(),
   useRollbackRound: vi.fn(),
+  useRoundFileDiff: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
 }));
 vi.mock("@/lib/hooks/useSyncStop", () => ({
   useSyncStop: vi.fn(),
