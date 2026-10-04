@@ -5,8 +5,7 @@
 // brings. Answer first: a failed call leads with its error and how its server
 // has been doing, a change with who made it and what it touched, then its
 // before and after as a diff (design 6.2.01). A change whose event
-// this page has no words for — a new kind of record, such as a model
-// failover — still reads through the same facts and diff.
+// this page has no words for — a new kind of record — still reads through the same facts and diff.
 import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
 import { AlertCircle, AlertTriangle, Info, ShieldCheck } from "lucide-react";

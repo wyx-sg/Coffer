@@ -92,9 +92,6 @@ class ProviderPatch(BaseModel):
     secret_value: str | None = Field(default=None, max_length=8192)
     models: list[ProviderModel] | None = None
     description: str | None = None
-    #: "Use as fallback for other providers": whether another provider's
-    #: request may fail over here. ``None`` leaves it alone.
-    fallback: bool | None = None
 
 
 class ProviderOut(BaseModel):
@@ -144,23 +141,13 @@ class ProviderOut(BaseModel):
     created_at: datetime
     #: The local runtime this connection points at, or ``None`` for a remote one.
     local_runtime: LocalRuntime | None = None
-    #: "Use as fallback for other providers" (default on). A local runtime is
-    #: never a fallback whatever this says.
-    fallback: bool = True
     updated_at: datetime
 
 
 class ProviderListOut(BaseModel):
-    """Every connection in Model providers list order — which is also the
-    order the model proxy tries fallbacks in."""
+    """Every connection, by name."""
 
     providers: list[ProviderOut]
-
-
-class ProviderOrderIn(BaseModel):
-    """The new list order: every connection's uid, exactly once."""
-
-    uids: list[str] = Field(min_length=1, max_length=500)
 
 
 class ModelPricesIn(BaseModel):

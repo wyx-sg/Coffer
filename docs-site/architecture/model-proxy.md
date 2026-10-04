@@ -1,6 +1,6 @@
 ---
 title: The local model proxy
-description: How an agent on an API-key or local connection reaches its model — a small supervised process on loopback that relays each request byte for byte, injects the real key, fails over only before the first content byte, and meters every request without recording what was said.
+description: How an agent on an API-key or local connection reaches its model — a small supervised process on loopback that relays each request byte for byte, injects the real key, returns the upstream's own errors unchanged, and meters every request without recording what was said.
 ---
 
 # The local model proxy
@@ -11,10 +11,9 @@ The decisions and the options weighed are in two ADRs: [API-Key Providers Are Re
 
 ## Why a proxy at all
 
-Before the proxy, Coffer wrote the connection's endpoint straight into each agent's config. Claude Code also got a helper command that printed the real key, and Codex got the real key in its environment. That arrangement could not do three things:
+Before the proxy, Coffer wrote the connection's endpoint straight into each agent's config. Claude Code also got a helper command that printed the real key, and Codex got the real key in its environment. That arrangement could not do two things:
 
 - **Meter.** Nothing Coffer ran saw the requests, so it could not say what an agent spent.
-- **Fail over.** Nothing was in the request path to move a failing request somewhere healthy.
 - **Keep the key away from the agent.** A prompt-injected agent could run the helper, or `env`, and read the key.
 
 With the proxy in the path, the agent holds only a **local token** that unlocks the loopback proxy and nothing else. The real key stays with Coffer.
@@ -81,23 +80,17 @@ Before anything is forwarded, the proxy refuses:
 - any request that carries an `Origin` header, with 403. No browser page is a client of the proxy;
 - a request without a Coffer token, with 401 in the wire's own error shape. That includes a claude.ai OAuth token (`sk-ant-oat…`) and a real provider key. The proxy never forwards a client's credential.
 
-## Failover
+## One connection, one upstream
 
-A request can fail over only **before the first content byte** reaches the agent. The proxy holds a streamed response until its first content event — `content_block_start` on the Anthropic wire, the first output item or delta on the Responses wire — bounded to 64 KiB and 5 seconds, so an error that arrives first can still be retried invisibly. Past either bound the proxy stops holding and relays what it has. After the first content byte the proxy never switches. The error or truncation goes to the agent, and the agent's own retry lands on a healthy member, because the failure has marked this one.
+An agent's requests go to exactly one connection: the one the agent is switched onto. The proxy never moves a request to another connection, and it never changes the model the agent asked for.
 
-- **What fails over:** a connect, TLS or DNS error; a 5xx, 529 or 429 status; 401 or 403 (the key is at fault, not the request); a first-byte timeout; an error event before the first content event.
-- **What never fails over:** 400, 404 and 413. The request is at fault, so a retry elsewhere would fail the same way.
-- **Where it goes:** the next member of the agent's route. The agent's own connection is first. After it come the other enabled connections that reach the same agent type, speak the same protocol, have **Use as a fallback** switched on, and list the requested model among their curated models — in the order of the Model providers list, which the user sets. Failover never changes the model. A local runtime has no fallback members and is never one, so a prompt meant for a local model never leaves the machine by failing over.
-- **Where it is recorded:** each usage record carries a `relay_id` shared by every attempt at one request. On ingest the daemon files a `provider_failover` audit row for each attempt that failed over, naming the provider the request went to next, and Activity shows it. Usage is metered on the provider that answered.
-- **No retry storms:** one pass over the pool per request, and never the same member twice. Both agents already retry on their own.
-- **Member health:** a 429 with `retry-after` cools that member for that long. 401 or 403 disables it until its key changes. Other failures cool it briefly.
-- **Session affinity:** a session (`x-claude-code-session-id`, Codex's `session_id`) stays on one member until that member fails, which keeps the prompt cache warm.
-
-When every member has failed, the last upstream response is relayed verbatim. When none answered at all, the agent gets a 502 in its wire's own error shape.
+- **Errors reach the agent as sent.** Whatever the upstream answers — a 429, a 5xx, a rejected key — is relayed with its status, headers and body, so the agent sees what its vendor said and its own recovery logic acts on it. Both agents already retry transient errors on their own.
+- **When nothing answers.** If the upstream cannot be reached at all (a connect, TLS or DNS error, or a first-byte timeout), the agent gets a 502 in its wire's own error shape.
+- **Where a route points.** An agent's requests go to the provider it is on. The agent's Overview › Model shows only that the route is through Coffer's proxy, with a **Test** button.
 
 ## Metering
 
-A usage reader consumes a copy of the bytes beside the relay. If the reader fails, the relay is unaffected. The proxy writes one record per upstream attempt, failed-over attempts included:
+A usage reader consumes a copy of the bytes beside the relay. If the reader fails, the relay is unaffected. The proxy writes one record per request:
 
 - **Who:** the agent (from its token), the session and request class where the agent sends them, and the connection.
 - **What:** the endpoint and the requested model.
@@ -110,10 +103,10 @@ The proxy opens no database. It appends records to spool files under `~/.coffer/
 
 ## What it records, and what it never does
 
-The proxy's logs and records carry metadata only: the usage record above, and each failover decision. It never records a body, a prompt, a completion or a secret.
+The proxy's logs and records carry metadata only: the usage record above. It never records a body, a prompt, a completion or a secret.
 
 The daemon decrypts the keys of the connections the proxy serves and pushes them over the proxy's authenticated loopback control route, on spawn, on re-attach, after every reconcile pass, and as soon as a secret approval is applied in the desktop app. A connection whose key waits for approval — a new key for one in use, or a base URL the key has not gone to before — is left out of the pushed state, so the proxy keeps sending the old key, or sends nothing to the new URL, until you approve; the next request after the approval uses the new key or URL, with no restart of the daemon or the proxy. The proxy holds the keys in memory only. It never writes them to disk, argv, the environment or a log, and it never holds the master key.
 
 ## Local model runtimes
 
-A connection to a runtime on this machine goes through the proxy like any other. Ollama, LM Studio, vLLM and llama.cpp's `llama-server` all qualify, each speaking its native protocol. Such a connection carries no key, or an optional one, and has no fallback members. Every mainstream runtime now serves both Anthropic Messages and OpenAI Responses itself, so no translation is needed. A runtime that speaks only Chat Completions (`mlx_lm.server`) is not a supported upstream; use LM Studio's MLX engine instead. Detection and setup are in [Model providers](/guides/providers#local-model-runtimes).
+A connection to a runtime on this machine goes through the proxy like any other. Ollama, LM Studio, vLLM and llama.cpp's `llama-server` all qualify, each speaking its native protocol. Such a connection carries no key, or an optional one. Every mainstream runtime now serves both Anthropic Messages and OpenAI Responses itself, so no translation is needed. A runtime that speaks only Chat Completions (`mlx_lm.server`) is not a supported upstream; use LM Studio's MLX engine instead. Detection and setup are in [Model providers](/guides/providers#local-model-runtimes).

@@ -126,9 +126,6 @@ export const providersApi = {
   remove: (uid: string) =>
     unwrapVoid(getApiClient().DELETE("/providers/{uid}", { params: { path: { uid } } })),
 
-  /** Put the providers in this order — fallback priority. Every uid once. */
-  reorder: (uids: string[]) => unwrap(getApiClient().PUT("/providers/order", { body: { uids } })),
-
   /** The price list in use (bundled or refreshed) and its daily refresh. */
   priceList: () => unwrap(getApiClient().GET("/providers/price-list")),
 

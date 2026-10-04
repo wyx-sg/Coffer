@@ -68,7 +68,6 @@ class UsageRequestOut(BaseModel):
     stream: bool
     status: int | None
     outcome: str
-    failed_over: bool
     ttft_ms: int | None
     duration_ms: int
     usage_known: bool

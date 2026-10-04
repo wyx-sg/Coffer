@@ -1,7 +1,7 @@
 """The state the daemon pushes to the model proxy over its control route.
 
 The proxy holds no database and reads no secret store: everything it needs
-— which local token belongs to which agent, and which upstream members serve
+— which local token belongs to which agent, and which upstream serves
 each agent — arrives in one :class:`ProxyState`, pushed on spawn, on re-attach
 and whenever a connection or an agent changes. Provider keys travel in it and
 are held only in the proxy's memory; ``repr`` never shows them.
@@ -21,7 +21,7 @@ from coffer.domain.usage.records import Wire
 
 
 class UpstreamAuth(StrEnum):
-    """How the proxy presents a member's key upstream."""
+    """How the proxy presents a connection's key upstream."""
 
     #: Anthropic wire: ``x-api-key`` and ``Authorization: Bearer`` — the pair
     #: Claude Code's own ``apiKeyHelper`` sends, which every Anthropic-shaped
@@ -34,7 +34,7 @@ class UpstreamAuth(StrEnum):
 
 
 class ProxyMember(BaseModel):
-    """One upstream a route may send a request to: a connection's endpoint."""
+    """The upstream a route sends its requests to: a connection's endpoint."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -46,23 +46,18 @@ class ProxyMember(BaseModel):
     upstream_root: str
     auth: UpstreamAuth
     key: str | None = Field(default=None, repr=False)
-    #: The connection's curated text model ids; empty means it serves any model.
-    #: A fallback member is eligible for a request only when it lists the
-    #: requested model (failover never changes the model).
-    models: list[str] = Field(default_factory=list)
-    #: A loopback runtime: no failover, no key.
+    #: A model runtime on this machine: reached without the user's proxy, no key.
     local: bool = False
 
 
 class ProxyRoute(BaseModel):
-    """Where one agent's requests on one wire go: the active connection first,
-    then the other connections in the agent's reach that serve the same model."""
+    """Where one agent's requests on one wire go: the connection it is on."""
 
     model_config = ConfigDict(extra="forbid")
 
     agent_uid: str
     wire: Wire
-    members: list[ProxyMember]
+    member: ProxyMember
 
 
 class ProxyAgent(BaseModel):

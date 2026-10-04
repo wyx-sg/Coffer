@@ -14,7 +14,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from coffer.domain.model_proxy.state import ProxyMember
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.proxy_dependencies import ProxyFacade, get_proxy_facade
 
@@ -59,27 +58,6 @@ class ProxyTokenHintOut(BaseModel):
     last4: str
 
 
-class ProxyRouteMemberOut(BaseModel):
-    connection_uid: str
-    name: str
-    #: A model runtime on this machine: it never fails over.
-    local: bool
-
-
-class ProxyRouteOut(BaseModel):
-    """Where an agent's requests go (spec provider-switching "Order providers,
-    and fail over in that order"): its provider, and the providers tried next,
-    in order, when it fails before the first byte. ``primary`` is ``None``
-    while the agent runs on its own built-in login, which bypasses the proxy.
-    With ``model``, ``fallbacks`` holds only the providers that offer it —
-    failover never changes the model."""
-
-    agent_uid: str
-    model: str | None
-    primary: ProxyRouteMemberOut | None
-    fallbacks: list[ProxyRouteMemberOut]
-
-
 async def _known(facade: ProxyFacade, agent_uid: str) -> str:
     """The name of the agent with this uid — what its token is kept under —
     or 404 for an agent this machine does not have."""
@@ -121,31 +99,6 @@ async def proxy_token_hint(
     agent = await _known(facade, agent_uid)
     token = await facade.tokens.token_for(agent)
     return ProxyTokenHintOut(agent_uid=agent_uid, last4=token[-4:])
-
-
-@router.get("/routes/{agent_uid}", response_model=ProxyRouteOut)
-async def proxy_route(
-    agent_uid: str,
-    model: str | None = None,
-    facade: ProxyFacade = Depends(get_proxy_facade),  # noqa: B008
-) -> ProxyRouteOut:
-    """The agent's provider and its fallbacks, as the proxy would be served now."""
-    await _known(facade, agent_uid)
-    state = await facade.state()
-    route = next((r for r in state.routes if r.agent_uid == agent_uid), None)
-    if route is None or not route.members:
-        return ProxyRouteOut(agent_uid=agent_uid, model=model, primary=None, fallbacks=[])
-    first, *rest = route.members
-
-    def out(m: ProxyMember) -> ProxyRouteMemberOut:
-        return ProxyRouteMemberOut(
-            connection_uid=m.connection_uid, name=m.connection_name, local=m.local
-        )
-
-    fallbacks = [] if first.local else [m for m in rest if model is None or model in m.models]
-    return ProxyRouteOut(
-        agent_uid=agent_uid, model=model, primary=out(first), fallbacks=[out(m) for m in fallbacks]
-    )
 
 
 @router.post("/tokens/{agent_uid}/rotate", response_model=ProxyTokenRotatedOut)

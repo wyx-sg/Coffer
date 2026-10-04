@@ -133,7 +133,7 @@ async def test_supervisor_spawns_attaches_restarts_and_drains(
     pushed: list[ProxyState] = []
 
     async def provider() -> ProxyState:
-        st = state([member(server, "a")], revision=len(pushed) + 1)
+        st = state(member(server, "a"), revision=len(pushed) + 1)
         pushed.append(st)
         return st
 

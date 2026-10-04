@@ -1,8 +1,8 @@
-"""The pieces of one upstream attempt the relay tracks, and the usage record
+"""The pieces of one upstream request the relay tracks, and the usage record
 it turns into.
 
 Split from :mod:`.relay` so the relay reads as control flow: here is only the
-data — the request as the app hands it over, the per-attempt accounting
+data — the request as the app hands it over, the per-request accounting
 (status, outcome, time to first content, the usage reader fed beside the
 relay) and the one function that turns that accounting into the
 :class:`~coffer.domain.usage.records.UsageRecord` the spool writes. The record
@@ -29,10 +29,6 @@ class RelayConfig:
     #: own stream watchdogs are 300 s, so anything shorter would cut a slow
     #: but healthy answer.
     read_timeout: float = 300.0
-    commit_max_bytes: int = 64 * 1024
-    commit_max_seconds: float = 5.0
-    #: How much of an error body is kept while failing over.
-    error_body_cap: int = 1024 * 1024
     #: How much of a non-streamed body is copied for the usage reader.
     reader_body_cap: int = 32 * 1024 * 1024
 
@@ -49,15 +45,7 @@ class RelayRequest:
     agent: ProxyAgent
     route: ProxyRoute
     metered: bool
-    primary_only: bool = False
     relay_id: str = field(default_factory=lambda: uuid.uuid4().hex)
-
-
-@dataclass
-class Held:
-    status: int
-    headers: w.RawHeaders
-    body: bytes
 
 
 @dataclass
@@ -67,7 +55,6 @@ class Attempt:
     model: str | None
     stream: bool
     session_id: str | None
-    more: bool
     reader: UsageReader | None
     attempt_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -75,7 +62,6 @@ class Attempt:
     status: int | None = None
     request_id: str | None = None
     outcome: Outcome = Outcome.CONNECT_ERROR
-    failed_over: bool = False
     ttft_ms: int | None = None
 
     def feed(self, chunk: bytes) -> None:
@@ -115,7 +101,6 @@ def usage_record(a: Attempt) -> UsageRecord:
         stream=a.stream,
         status=a.status,
         outcome=a.outcome,
-        failed_over=a.failed_over,
         ttft_ms=a.ttft_ms,
         duration_ms=int((time.monotonic() - a.t0) * 1000),
         usage_known=usage is not None,
@@ -132,4 +117,4 @@ def usage_record(a: Attempt) -> UsageRecord:
     )
 
 
-__all__ = ["Attempt", "Held", "RelayConfig", "RelayRequest", "ok_status", "usage_record"]
+__all__ = ["Attempt", "RelayConfig", "RelayRequest", "ok_status", "usage_record"]

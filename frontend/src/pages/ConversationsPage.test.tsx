@@ -53,7 +53,6 @@ vi.mock("@/lib/hooks/useProviders", () => ({
         compatible_agents: ["claude_code"],
         internal_default: false,
         transcribe_default: false,
-        fallback: true,
         enabled: true,
         description: null,
         created_at: "",

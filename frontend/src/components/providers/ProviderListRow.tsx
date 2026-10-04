@@ -5,7 +5,6 @@
 // for an Ollama-protocol provider, which reaches no agent. The marks at the
 // end are the agents running on it (the Used-by rule) and the Coffer badges.
 // The row links to the provider by uid; the open one is highlighted.
-import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -26,8 +25,6 @@ interface Props {
   selected: boolean;
   /** Set on the open row when its probe found a problem: the sub-line says so, in red. */
   problem?: "keyRejected" | "unreachable" | null;
-  /** The drag handle: a quiet grip at the row's start (list order is fallback priority). */
-  handle?: ReactNode;
 }
 
 function useOfferLabel(provider: Provider): string {
@@ -45,12 +42,12 @@ function useKindLabel(provider: Provider): string {
     : t(PROTOCOL_LABEL_KEY[provider.protocol]);
 }
 
-export function ProviderListRow({ provider, use, selected, problem, handle }: Props) {
+export function ProviderListRow({ provider, use, selected, problem }: Props) {
   const { t } = useTranslation();
   const offer = useOfferLabel(provider);
   const kind = useKindLabel(provider);
   const sub = problem ? t(`providers.status.${problem}`) : `${kind} · ${offer}`;
-  const link = (
+  return (
     <Link
       to={`/model-providers/${encodeURIComponent(provider.uid)}`}
       aria-current={selected ? "page" : undefined}
@@ -58,7 +55,6 @@ export function ProviderListRow({ provider, use, selected, problem, handle }: Pr
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-text no-underline outline-none",
         "transition-colors duration-fast hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
-        handle && "pl-6",
         selected && "bg-surface-selected hover:bg-surface-selected",
       )}
     >
@@ -78,14 +74,5 @@ export function ProviderListRow({ provider, use, selected, problem, handle }: Pr
         {use.transcribe ? <CofferUseBadge use="transcribe" /> : null}
       </span>
     </Link>
-  );
-  if (!handle) return link;
-  return (
-    <div className="group relative">
-      {link}
-      <span className="absolute left-1 top-1/2 -translate-y-1/2 opacity-60 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
-        {handle}
-      </span>
-    </div>
   );
 }

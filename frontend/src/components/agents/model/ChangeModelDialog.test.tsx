@@ -38,7 +38,6 @@ const PROVIDER = {
   base_url: "https://gw.example",
   secret_ref: "ref",
   enabled: true,
-  fallback: true,
   internal_default: false,
   transcribe_default: false,
   description: null,

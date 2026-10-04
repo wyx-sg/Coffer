@@ -14,11 +14,7 @@ the daemon — the only writer — ingests them here. Per completed file:
 3. write the detail rows and their daily rollup in ONE transaction, the rollup
    counting only the rows that were new — so a file ingested twice (a crash
    between commit and delete) writes nothing twice;
-4. delete the file, only after that commit;
-5. tell the failover log about every attempt that failed over, naming the
-   connection the same request went to next when the file carries it (spec
-   provider-switching "Log every failover in Activity"). A replayed file does
-   this too; the log drops what it already has.
+4. delete the file, only after that commit.
 """
 
 from __future__ import annotations
@@ -32,8 +28,6 @@ from datetime import datetime, tzinfo
 
 from coffer.application.usage.ports import (
     ConnectionPriceLookup,
-    FailoverEvent,
-    FailoverLog,
     PricedRecord,
     SpoolReader,
     UsageRepo,
@@ -71,7 +65,6 @@ class UsageIngestService:
         repo: UsageRepo,
         spool: SpoolReader,
         prices: ConnectionPriceLookup,
-        failovers: FailoverLog | None = None,
         tz: tzinfo | None = None,
         is_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
@@ -81,8 +74,7 @@ class UsageIngestService:
         self._repo = repo
         self._spool = spool
         self._prices = prices
-        self._failovers = failovers
-        # The rollup is keyed by the LOCAL day an attempt started on, so the
+        # The rollup is keyed by the LOCAL day a request started on, so the
         # Usage page's "today" is the user's today.
         self._tz = tz or local_tz()
         self._stop = asyncio.Event()
@@ -105,38 +97,6 @@ class UsageIngestService:
         cost = estimate_cost(TokenCounts.of(record), resolved.price)
         return PricedRecord(record, day, cost, resolved.label, False)
 
-    async def _log_failovers(self, records: list[UsageRecord]) -> None:
-        """One failover event per attempt that moved on, naming the next
-        attempt of the same request when this batch holds it."""
-        if self._failovers is None:
-            return
-        by_relay: dict[str, list[UsageRecord]] = {}
-        for r in records:
-            if r.relay_id:
-                by_relay.setdefault(r.relay_id, []).append(r)
-        for r in records:
-            if not r.failed_over:
-                continue
-            siblings = sorted(by_relay.get(r.relay_id or "", []), key=lambda x: x.started_at)
-            later = [x for x in siblings if x.started_at >= r.started_at and x is not r]
-            nxt = later[0] if later else None
-            reason = f"status {r.status}" if r.status else r.outcome.value
-            event = FailoverEvent(
-                at=r.started_at,
-                agent_uid=r.agent_uid,
-                agent_type=r.agent_type,
-                model=r.model,
-                from_uid=r.connection_uid,
-                from_name=r.member,
-                reason=reason,
-                to_uid=nxt.connection_uid if nxt else None,
-                to_name=nxt.member if nxt else None,
-            )
-            try:
-                await self._failovers.failed_over(event)
-            except Exception:
-                _logger.warning("usage.ingest.failover_log_failed", exc_info=True)
-
     async def ingest_once(self) -> IngestResult:
         """Ingest every completed spool file present now."""
         async with self._lock:
@@ -154,11 +114,6 @@ class UsageIngestService:
                     )
                 rows = [await self.price(r) for r in batch.records]
                 new = await self._repo.ingest(rows) if rows else 0
-                # Every ingest hands its failovers to the log, a replayed file's
-                # too: a daemon that died between the commit and this line would
-                # otherwise lose them for good, and the log itself skips one it
-                # already holds (``FailoverLog`` implementations are idempotent).
-                await self._log_failovers(batch.records)
                 # Only now — the rows are committed — may the file go.
                 try:
                     self._spool.delete(path)

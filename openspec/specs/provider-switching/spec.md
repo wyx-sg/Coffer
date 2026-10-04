@@ -31,8 +31,8 @@ projection write goes through. What the flagged connections are used for — the
 speech-to-text model, the unattended passes and the rule that drops a model when a flag moves — is
 [internal-engine](../internal-engine/spec.md)'s. Coffer is a single-user tool, so no access control
 applies beyond the daemon's `X-Coffer-Token` gate. It also owns the local model proxy every
-API-key and local connection is reached through — the per-agent proxy tokens, failover between
-connections that serve the same model, and usage metering. Out of scope: hot-switching a running
+API-key and local connection is reached through — the per-agent proxy tokens, the relay to
+each agent's one connection, and usage metering. Out of scope: hot-switching a running
 Claude Code or Codex process mid-session; restoring native config beyond the `.bak` copies
 projection leaves; anthropic↔openai protocol translation (a connection reaches an agent only
 because the user routed it there, and the endpoint must really speak what that agent sends — the
@@ -58,7 +58,7 @@ kind declares `supports_scope`, and its `enabled` switch is the framework's.
 
 ### Requirement: Validate connection config against the provider schema
 The system MUST validate a connection's config against a kind-specific schema over
-`{protocol, base_url, secret_ref, models, internal_default, transcribe_default, local_runtime, fallback, position}`,
+`{protocol, base_url, secret_ref, models, internal_default, transcribe_default, local_runtime}`,
 rejecting any other key. The config MUST NOT carry a model the connection runs (no `model`, no
 `fast_model`), nor the agents it reaches — reach is the resource row's per-agent `scope` — nor a
 manually chosen wire format or a `wire_api`: Codex loads only `responses`, so the Codex block writes that
@@ -830,7 +830,7 @@ injects the connection's key for the upstream (`x-api-key` and `Authorization: B
 Anthropic wire, `Authorization: Bearer` on the Responses wire), and none for a keyless local runtime.
 Status, headers and body chunks go back as received — pings and comments included, error bodies
 verbatim, never buffered and never compressed. What the proxy logs or stores is metadata only: no
-body, prompt, completion or secret. Everything else it is asked for is 404. The decision is
+body, prompt, completion or secret. Each agent's requests go to exactly one connection, the one the agent is on; the proxy never moves a request to another connection. When that upstream answers, whatever it answers — an error status included — reaches the agent as sent, so the agent's own retries handle transient errors; when it cannot be reached the proxy answers 502. The agent's Overview › Model shows only that its route is through Coffer's proxy, with **Test**; the agent's own proxy token is replaced from **Rotate proxy token** in the agent page's ⋯ menu, offered only while the agent runs on a provider. Everything else it is asked for is 404. The decision is
 [API-Key Providers Are Reached Through a Separate Local Model Proxy](../../../docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md);
 how it works is [The local model proxy](../../../docs-site/architecture/model-proxy.md).
 
@@ -848,6 +848,21 @@ how it works is [The local model proxy](../../../docs-site/architecture/model-pr
 - **GIVEN** an agent on a local runtime connection that carries no key
 - **WHEN** the agent sends a request through the proxy
 - **THEN** the upstream receives no `authorization` and no `x-api-key` header
+
+#### Scenario: an upstream error reaches the agent as sent
+- **GIVEN** an agent on a connection whose upstream answers 503
+- **WHEN** the agent sends a request
+- **THEN** the agent receives the 503 and its body unchanged, and no other connection is contacted
+
+#### Scenario: an unreachable upstream is answered with 502
+- **GIVEN** an agent on a connection whose endpoint cannot be reached
+- **WHEN** the agent sends a request
+- **THEN** the proxy answers 502
+
+#### Scenario: Rotate proxy token is offered only while the agent routes through the proxy
+- **GIVEN** an agent on a connection and an agent on its built-in login
+- **WHEN** each agent's page menu is opened
+- **THEN** the first offers Rotate proxy token and the second does not, and choosing it replaces the first agent's token
 
 ### Requirement: Authenticate each agent to the proxy with its own local token
 Each managed agent MUST have its own random 256-bit local proxy token, minted by Coffer on first
@@ -894,39 +909,6 @@ arrived on, and any request that carries an `Origin` header — no browser page 
 - **GIVEN** the proxy running
 - **WHEN** a request names a foreign `Host`, or carries any `Origin`
 - **THEN** it is refused with 403 before authentication, and nothing is forwarded
-
-### Requirement: Fail over only before the first content byte
-When a request fails before the first content byte reaches the agent — a connect, TLS or DNS
-error, a 5xx, 529 or 429 status, a 401 or 403, a first-byte timeout, or an error event before the
-first content event (the proxy holds the response until then, bounded to 64 KiB and 5 seconds) — the proxy MUST move it to the next member of the agent's route: another enabled
-connection that reaches the same agent type, speaks the same protocol, is switched on as a fallback
-and lists the requested model among its curated models, tried in the Model providers list order
-(see "Order providers, and fail over in that order"). Failover MUST never change the model, never
-try the same member twice for one request, and never happen after the first content byte: an error
-or truncation after it goes to the agent, whose own retry lands on a healthy member. A 429 with
-`retry-after` cools that member for that long; 401 or 403 disables it until its key changes; 400,
-404 and 413 are relayed and never fail over. A local runtime connection has no fallback members and
-is never a fallback. A session stays on one member until that member fails.
-
-#### Scenario: a failure before the first byte moves to another connection serving the model
-- **GIVEN** an agent's connection answering 503, and another connection reaching the agent that lists the requested model
-- **WHEN** the agent sends a request
-- **THEN** the agent receives the second connection's response and never sees the 503
-
-#### Scenario: an error after the first content byte is passed to the agent
-- **GIVEN** a connection an agent runs on whose stream fails after its first content event
-- **WHEN** the agent sends a streaming request
-- **THEN** the agent receives the partial stream and the error, and no other connection is tried
-
-#### Scenario: a request problem is never failed over
-- **GIVEN** a connection an agent runs on answering 400
-- **WHEN** the agent sends a request
-- **THEN** the 400 and its body reach the agent unchanged and no other connection is tried
-
-#### Scenario: failover never changes the model
-- **GIVEN** a connection an agent runs on answering 529, a second connection that does not list the requested model, and a third that does
-- **WHEN** the agent sends a request
-- **THEN** the second connection is never tried, and the third receives the request with the model the agent asked for
 
 ### Requirement: Configure a local model connection
 A local model connection — one whose endpoint is a model runtime on this machine (Ollama, LM
@@ -1014,8 +996,8 @@ answered, and keep typing the address of a runtime that is already running.
 - **AND** the dialog says nothing answered, keeps typing a running runtime's address as the other way, and offers Copy prompt with that prompt
 
 ### Requirement: Meter every proxied request
-The local model proxy MUST record one usage record per upstream attempt of a Messages or Responses
-request, failed-over attempts included: when it started, the agent (from its local token), the
+The local model proxy MUST record one usage record per Messages or Responses
+request: when it started, the agent (from its local token), the
 session and request class where the agent sends them, the connection, the endpoint, the requested
 model, the status, the outcome (`completed`, `error_event`, `truncated`, `client_cancel`,
 `upstream_error`, `connect_error`), the time to first token, the duration, and the tokens in
@@ -1174,55 +1156,6 @@ restart of the daemon or the proxy.
 - **WHEN** the key is replaced, then approved in the desktop app, and the connection's base URL is then moved and that change approved too
 - **THEN** until each approval the proxy keeps sending the old key and sends nothing to the new URL
 - **AND** after each approval the next requests carry the new key and reach the new URL, with neither process restarted
-
-### Requirement: Order providers, and fail over in that order
-The Model providers list MUST have an order the user sets, and that order MUST be the order the
-proxy tries fallbacks in: the agent's own connection first, then the other eligible connections in
-list order. The order is saved as each connection's position (`PUT /api/v1/providers/order` with
-every connection's uid exactly once, else 422); a connection never placed sorts after the placed ones, by name. The list offers a drag
-handle on each row, moves with the keyboard, and explains in its help that order is fallback
-priority. Each connection MUST carry **Use as fallback for other providers** (`fallback`, on by
-default; `PATCH /api/v1/providers/{uid}`): switched
-off, it is never tried for another connection's request, though its own agents still fail over from
-it. A local runtime is never a fallback and its detail says so. Where an agent's requests go is read from
-`GET /api/v1/proxy/routes/{agent_uid}?model=<model>`, and the agent's Overview › Model shows only that its route is through Coffer's proxy, with **Test**; the agent's own proxy token is replaced
-from **Rotate proxy token** in the agent page's ⋯ menu, offered only while the agent routes through the proxy. Usage is metered on the
-connection that actually answered.
-
-#### Scenario: fallbacks are tried in the Model providers list order
-- **GIVEN** an agent on connection A and connections B and C that also offer its model, listed C, A, B
-- **WHEN** the proxy's route for the agent is built
-- **THEN** it tries A, then C, then B
-
-#### Scenario: a provider switched off as a fallback is never failed over to
-- **GIVEN** an agent on connection A and connection B offering the same model with Use as fallback for other providers switched off
-- **WHEN** the proxy's route for the agent is built
-- **THEN** it holds A only
-
-#### Scenario: Rotate proxy token is offered only while the agent routes through the proxy
-- **GIVEN** an agent on a connection and an agent on its built-in login
-- **WHEN** each agent's page menu is opened
-- **THEN** the first offers Rotate proxy token and the second does not, and choosing it replaces the first agent's token
-
-### Requirement: Log every failover in Activity
-Every attempt the proxy moves off a connection before the first byte MUST be recorded in the audit
-log as `provider_failover`, filed against the connection it left, with the agent, the model, the
-reason (the status or the failure) and — when the same request's next attempt is in the same spool
-file — the connection it went to. The Activity page shows it as a sentence. A spool file ingested a
-second time hands its failovers to the log again, so a daemon that died between committing the usage
-rows and logging them loses none, and the log writes nothing it already holds, so none is logged twice.
-Reordering the list is recorded as `provider_reordered`.
-
-#### Scenario: a failover is logged with where the request went
-- **GIVEN** a request whose first attempt failed over with 503 and whose second attempt was answered by another connection
-- **WHEN** the daemon ingests the spool file
-- **THEN** one `provider_failover` names the connection it left, the one that answered, the model and the status
-- **AND** the answering connection's attempt carries the request's usage and cost
-
-#### Scenario: a failover whose logging was lost is logged when the spool file is replayed
-- **GIVEN** a spool file whose usage rows were committed but whose failover was never logged
-- **WHEN** the file is ingested again
-- **THEN** no usage row is written twice and the failover is logged once
 
 ### Requirement: Refresh the bundled price list in the background
 Besides the snapshot shipped in the build, the daemon MUST refresh the model price list from the
@@ -1403,14 +1336,14 @@ not used).
 - **AND** `config.toml` carries no `model_reasoning_effort` written by Coffer
 
 ### Requirement: Offer every connection operation over REST and in the web UI
-Create, switch, revert-to-built-in, rename, edit, enable and disable, scope, order and delete MUST be
+Create, switch, revert-to-built-in, rename, edit, enable and disable, scope and delete MUST be
 available via (a) the REST API and (b) the web surfaces — the Model providers library for create and
 delete, the Agent detail page for the switch and the revert, the connection's own page for the
 rename, the edit, the scope control and the enabled switch (see "Rename a connection without moving
 anything else"). Coffer has no `provider` command group: the list carries no Active column, and a
 connection's lifecycle verbs are the ones every kind's page offers. Editing a connection MUST be
 available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `models`,
-`secret_value`, `description`, `fallback`) and from its detail page, including correcting the wire.
+`secret_value`, `description`) and from its detail page, including correcting the wire.
 Creating one (`POST /api/v1/providers` with a name, a protocol, a base URL and an inline secret, a
 secret ref or the `local_runtime` detection) takes no model; a local runtime connection is created
 without a key (see "Configure a local model connection"). No route returns a provider's key: the
@@ -1428,7 +1361,7 @@ The web surfaces:
   one page under one header — the title, an Experimental tag, a one-line description and the page's one primary button, **Add provider** — over two tabs, **Providers** and **Usage** ("Show metered usage on a Usage tab of Model providers"). Providers is the connection library: a list of connections beside the open one. It has no view of which agent runs on what and no Coffer's model tab, because an agent's connection is shown and changed in that agent's Overview › Model and Coffer's own is chosen in Settings › General. The page opens on the first connection, and with none it is a welcome panel. Each row shows
   the connection's vendor mark, its name, its protocol and what it offers (its curated model count,
   or all models), and the marks of the agents running on it, read from the agents' `connection_uid`; a filter narrows the list over name,
-  title, endpoint and description, and the list's order is the fallback order, labelled "Fallback order" with a help tip (see "Order providers, and fail over in that order"). It has no per-row switch, because activation is per agent, and no
+  title, endpoint and description, and the list is sorted by name, with no order heading and no drag handle on a row. It has no per-row switch, because activation is per agent, and no
   per-row reach or delete: both are on the open connection's header. A row MUST say what Coffer
   ITSELF uses the connection for: the `internal_default` connection carries a "Coffer · background
   model" badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with
@@ -1450,7 +1383,7 @@ The web surfaces:
   when the connection is flagged for them, each reading "Settings › General" and opening it. Used by carries no
   switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing).
 - Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and, with the `models` feature on, carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that reach that agent and narrowed by `enabled`: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
-  other model setting — no output-limit, subagent, fallback, thinking or fast-mode
+  other model setting — no output-limit, subagent, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
   the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied and names a model. The built-in login needs no model. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
@@ -1489,7 +1422,7 @@ The web surfaces:
 - **GIVEN** a Claude Code agent on a non-Claude connection, and a Codex agent on a connection
 - **WHEN** each agent's Change model dialog renders
 - **THEN** Claude Code's shows Provider, Model and Model per tier, and Codex's shows Provider and Model
-- **AND** neither shows an effort, output-limit, subagent, fallback, thinking or fast-mode control
+- **AND** neither shows an effort, output-limit, subagent, thinking or fast-mode control
 
 ### Requirement: Record a context window with each curated model
 Each curated model of a connection (see "Store a modality with each curated model") MUST be able to

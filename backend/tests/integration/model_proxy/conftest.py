@@ -33,7 +33,6 @@ def member(
     up: ServerThread | str,
     uid: str,
     *,
-    models: list[str] | None = None,
     auth: UpstreamAuth = UpstreamAuth.ANTHROPIC,
     key: str | None = None,
     local: bool = False,
@@ -45,23 +44,22 @@ def member(
         upstream_root=root,
         auth=auth,
         key=key if key is not None or auth is UpstreamAuth.NONE else f"sk-real-{uid}",
-        models=models or [],
         local=local,
     )
 
 
 def state(
-    anthropic: list[ProxyMember] | None = None,
-    openai: list[ProxyMember] | None = None,
+    anthropic: ProxyMember | None = None,
+    openai: ProxyMember | None = None,
     *,
     revision: int = 1,
     claude_token: str = CLAUDE_TOKEN,
 ) -> ProxyState:
     routes = []
     if anthropic is not None:
-        routes.append(ProxyRoute(agent_uid="agent-claude", wire=Wire.ANTHROPIC, members=anthropic))
+        routes.append(ProxyRoute(agent_uid="agent-claude", wire=Wire.ANTHROPIC, member=anthropic))
     if openai is not None:
-        routes.append(ProxyRoute(agent_uid="agent-codex", wire=Wire.OPENAI, members=openai))
+        routes.append(ProxyRoute(agent_uid="agent-codex", wire=Wire.OPENAI, member=openai))
     return ProxyState(
         revision=revision,
         agents=[

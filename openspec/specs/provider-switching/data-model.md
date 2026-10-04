@@ -22,8 +22,6 @@ model is chosen at the point of use.
 | `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `local_runtime` | `LocalRuntime \| None` | Set when the endpoint is a model runtime on this machine (see "Local runtime" below); absent otherwise. |
-| `fallback` | `bool` | Whether the model proxy may send another provider's request here when that provider fails before its first byte. Default `true`; a local runtime is never a fallback. |
-| `position` | `int \| None` | Where the connection sits in the Model providers list, which is also the order fallbacks are tried in; `None` sorts after every placed one, by name. |
 | `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Declared in the kind's `exclusive_flags`, so the vault validator refuses any commit — an API write, a hand edit, a sync merge — that would leave two flagged connections. |
 | `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Declared in the kind's `exclusive_flags` like `internal_default`, so the vault validator refuses a second one, and a direct write that would make one is refused with `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN`. |
 
@@ -314,7 +312,7 @@ kind declares no redactor because its config holds no secret).
 | `delete(uid)` | Guard the owned secret via `find_secret_citations`, remove it when unowned elsewhere, delete the resource. |
 | `activate(uid, agent_type) -> ActivateResult` | Validate the connection reaches the agent, project into that agent's file, set its `connection_uid`, emit `provider_switched`; a failure puts the file back and leaves the record. |
 | `deactivate(agent_type) -> DeactivateResult` | Revert that agent to its built-in login: de-project its file and clear its `connection_uid`; idempotent; touches no other agent. |
-| `_key_of` -> `build_proxy_state(service, tokens) -> ProxyState` (`application/provider/proxy_state.py`) | What the local model proxy serves: each agent's token digest and, for each agent whose `connection_for_agent` is a connection, the ordered members that may serve it. The key is decrypted by the private `_key_of` through the secret boundary, and only while the state is built; it is the only consumer of a connection's key. |
+| `_key_of` -> `build_proxy_state(service, tokens) -> ProxyState` (`application/provider/proxy_state.py`) | What the local model proxy serves: each agent's token digest and, for each agent whose `connection_for_agent` is a connection, the one connection that serves it. The key is decrypted by the private `_key_of` through the secret boundary, and only while the state is built; it is the only consumer of a connection's key. |
 | `ProxyTokenService.token_for(agent_uid)` / `rotate` / `revoke` (`application/provider/proxy_tokens.py`) | The agent's local proxy token, minted on first ask; `rotate` replaces it; `revoke` deletes it when the agent is removed. |
 | `set_internal_default(uid) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
 | `set_transcribe_default(uid) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |
@@ -414,7 +412,7 @@ omitted from the stored document while unknown. The retired `effort_levels` and 
 
 ### Usage (`usage_requests`, `usage_daily` in `runs.db`)
 
-- `usage_requests` — one row per proxied upstream attempt: every field of
+- `usage_requests` — one row per proxied request: every field of
   `UsageRecord` (`domain/usage/records.py`) plus `cost_usd`, `price_version`
   (`snapshot:<version>` or `override:<connection uid>`) and `unpriced`;
   `UNIQUE(source, dedupe_key)`. Retention follows `mcp_invocations`.

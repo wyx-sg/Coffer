@@ -22,7 +22,7 @@ description: 你的智能体在 API 密钥提供商和本地提供商上花了�
 
 ### 统计什么 {#what-is-counted}
 
-中转对它发往上游的每个请求——包括故障切换的尝试——记录一行，内容有：
+中转为每个请求记录一行，内容有：
 
 - 智能体（来自它的本地中转令牌）、会话和提供商；
 - 智能体请求的模型、状态码，以及请求如何结束（`completed`、`error_event`、`truncated`、`client_cancel`、`upstream_error`、`connect_error`）；
