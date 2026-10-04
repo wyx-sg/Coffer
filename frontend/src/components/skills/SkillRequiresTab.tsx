@@ -24,8 +24,10 @@ import type { SkillOut } from "@/lib/api/skills";
 import { cliTone, oldestCheck, relativeTime } from "@/lib/clis/format";
 import { useCheckClis, useClis } from "@/lib/hooks/useClis";
 import { joinNames } from "@/lib/skills/names";
+import { requireColumns } from "@/lib/skills/requireColumns";
 import { toolHref } from "@/lib/skills/toolLinks";
 import type { StatusTone } from "@/lib/statusTone";
+import { cn } from "@/lib/utils";
 
 interface Props {
   skill: SkillOut;
@@ -55,8 +57,11 @@ function Group({
   intro,
   actions,
   testId,
+  withKind = false,
   children,
 }: {
+  /** The group's rows carry a Kind column (tools). */
+  withKind?: boolean;
   title: string;
   intro: React.ReactNode;
   actions?: React.ReactNode;
@@ -72,7 +77,7 @@ function Group({
       className="mt-8 first:mt-0"
     >
       <p className="text-xs text-text-muted">{intro}</p>
-      <ul className="mt-1.5">{children}</ul>
+      <ul className={cn("mt-1.5", requireColumns(withKind))}>{children}</ul>
     </Section>
   );
 }
@@ -167,6 +172,7 @@ export function SkillRequiresTab({ skill }: Props) {
         <Group
           title={t("skills.requires.toolsTitle")}
           testId="skill-requires-tools"
+          withKind
           intro={<Trans i18nKey="skills.requires.toolsIntro" components={{ code }} />}
         >
           {tools.map((tool) => (

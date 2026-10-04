@@ -1421,7 +1421,8 @@ library beside a reading pane. The library MUST group skills under **Needs
 attention**, **In use**, **Off** and **Built-in**, without counts in the group
 titles; a row MUST show, in place of its description, the one thing that needs the
 reader, and an Off row carries no reach word. The library offers a search, which
-applies to the built-in skills too, and no filter by reach or by kind. Rows ticked
+applies to the built-in skills too, and a reach filter — all skills, or the skills
+that reach one chosen agent — but no filter by kind. Rows ticked
 for bulk actions MUST show the selection as a bar above the list ("N of M
 selected", Reach, Delete, ×) and in the reading pane, which names the selected
 skills, says the built-in skill can't be selected and offers only what the bar does
@@ -1443,7 +1444,8 @@ each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
 "Declare the secrets a skill requires"), **Tools** — the MCP servers and
 custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
 the tools a skill requires"), each with its state and a link to its page — and
-**Skills** it needs. **Check again** re-checks the commands. The rows carry no
+**Skills** it needs. A row's name is shown in full, never cut short: a group's
+name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
 secret that is not set MUST read "secret <name> is not set" and open the Secrets
@@ -1478,10 +1480,10 @@ validates its source inline and MUST carry the Available to reach control.
 - **WHEN** the user ticks the two skills
 - **THEN** the bar above the list reads "2 skills selected", the reading pane names both, says the built-in skill can't be selected and offers Check copies of 2 skills, and the one Delete button deletes both after one confirmation
 
-#### Scenario: the library has no reach filter and groups skills by what they need
-- **GIVEN** a skill that is on, one that is off and one needing attention
-- **WHEN** the user opens the Skills page
-- **THEN** they sit under Needs attention, In use and Off, and the list offers a search and no reach or kind filter
+#### Scenario: the library filters by reach and groups skills by what they need
+- **GIVEN** a skill that is on for every agent, one that is off and one limited to Claude Code
+- **WHEN** the user opens the Skills page and chooses Codex in the Reach filter
+- **THEN** the skills first sit under In use and Off, the list offers a search and a Reach filter but no kind filter, and with Codex chosen only the skill on for every agent is listed and the address carries `?agent=<Codex's uid>`
 
 #### Scenario: a skill file changed on disk refuses the save and keeps the text
 - **GIVEN** a skill file open for editing

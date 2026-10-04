@@ -2600,6 +2600,10 @@
     "title": "Skills",
     "add": "Add skill",
     "searchPlaceholder": "Filter skills",
+    "reachFilter": {
+      "label": "Reach",
+      "all": "All"
+    },
     "group": {
       "attention": "Needs attention",
       "inUse": "In use",

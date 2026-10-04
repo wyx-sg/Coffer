@@ -11,7 +11,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { AgentOut } from "@/lib/api/agents";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { acceptance } from "@/test/acceptance";
-import { BUILTIN_SKILL, makeAgent, makeSkill, renderSkillsPage } from "@/test/skillsPageKit";
+import { BUILTIN_SKILL, makeAgent, makeSkill, renderSkillsPage, where } from "@/test/skillsPageKit";
 
 const h = vi.hoisted(() => ({
   skills: [] as SkillOut[],
@@ -92,7 +92,7 @@ async function libraryRows() {
 
 acceptance(
   "web-ui",
-  "the library has no reach filter and groups skills by what they need",
+  "the library filters by reach and groups skills by what they need",
   async () => {
     h.skills = [
       makeSkill({ uid: "sk-1", name: "everywhere-skill" }),
@@ -101,11 +101,18 @@ acceptance(
     ];
     renderSkillsPage("/skills");
     expect(await libraryRows()).toHaveLength(3);
-    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
     const off = within(screen.getByRole("region", { name: "Off" }));
     expect(off.getByRole("link", { name: /off-skill/ })).toBeInTheDocument();
     const inUse = within(screen.getByRole("region", { name: "In use" }));
     expect(inUse.getAllByRole("link")).toHaveLength(2);
+
+    // Radix Select opens from the keyboard in jsdom (no PointerEvent).
+    const reach = screen.getByRole("combobox", { name: "Reach" });
+    fireEvent.keyDown(reach, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
+    await waitFor(() => expect(where.url).toBe(`/skills?agent=${CODEX.uid}`));
+    const rows = await libraryRows();
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining("everywhere-skill")]);
   },
 );
 
