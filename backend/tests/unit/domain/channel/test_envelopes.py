@@ -77,6 +77,9 @@ def test_channel_capabilities_carries_strategy_fields():
         "renders_tables",
         "max_inline_code_lines",
         "collapses_details",
+        "withdraw_window_hours",
+        "withdraw_removes",
+        "streams_in_groups",
     }
 
 

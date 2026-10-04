@@ -107,6 +107,7 @@ describe("SecretBoundaryCard", () => {
     state(false);
     vi.mocked(secretsApi.setSecretBoundary).mockResolvedValue({
       require_approval: true,
+      default_on: false,
       pending_approval_id: null,
     });
     renderCard();
@@ -122,6 +123,7 @@ describe("SecretBoundaryCard", () => {
     state(true);
     vi.mocked(secretsApi.setSecretBoundary).mockResolvedValue({
       require_approval: true,
+      default_on: false,
       pending_approval_id: "d1",
     });
     presence.approvePending.mockResolvedValue({});
@@ -144,6 +146,7 @@ describe("SecretBoundaryCard", () => {
     state(true);
     vi.mocked(secretsApi.setSecretBoundary).mockResolvedValue({
       require_approval: true,
+      default_on: false,
       pending_approval_id: "d2",
     });
     vi.mocked(secretsApi.rejectApproval).mockResolvedValue({} as never);
