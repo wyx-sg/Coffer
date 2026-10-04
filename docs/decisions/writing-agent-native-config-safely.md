@@ -69,7 +69,7 @@ composition root injects into every writer:
    directory, is `fsync`ed, and replaces the target with `os.replace`. A crash
    leaves either the old file or the new one, never a truncated one.
 5. **Backups in Coffer's folder.** Before the replace, the existing file is
-   copied to `~/.coffer/config-backups/<file>-<hash>/<UTC time>.<ext>`, a
+   copied to `~/.coffer/config-backups/<file>-<hash>/<name>.coffer-backup-<UTC time>`, a
    machine-local folder outside the vault; nothing is written next to the
    agent's file. Every write keeps its own copy, and the `config_backups`
    retention policy (30 days by default) deletes old ones while always keeping

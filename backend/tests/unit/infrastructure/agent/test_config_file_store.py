@@ -164,7 +164,10 @@ def test_backups_land_in_coffers_folder_one_timestamped_file_per_write(
     assert folder.name.startswith("config.toml-")
     backups = sorted(folder.iterdir())
     assert [b.read_text(encoding="utf-8") for b in backups] == ["v0\n", "v1\n", "v2\n", "v3\n"]
-    assert all(re.fullmatch(r"\d{8}T\d{12}Z(-\d+)?\.toml", b.name) for b in backups)
+    # Each name says it is Coffer's backup of config.toml, and when it was taken.
+    assert all(
+        re.fullmatch(r"config\.toml\.coffer-backup-\d{8}T\d{12}Z(-\d+)?", b.name) for b in backups
+    )
     latest = store.latest_backup(p)
     assert latest == backups[-1]
     assert latest.read_text(encoding="utf-8") == "v3\n"

@@ -79,7 +79,7 @@ def skill_data_dir(home: Path | None = None) -> Path:
 def config_backups_dir(home: Path | None = None) -> Path:
     """Where Coffer keeps the prior content of an agent's config file it rewrites.
 
-    ``config-backups/<file-key>/<UTC time>.<ext>``, outside the vault so it never
+    ``config-backups/<file-key>/<name>.coffer-backup-<UTC time>``, outside the vault so it never
     syncs, and pruned by the ``config_backups`` retention policy (the runs class).
     """
     return coffer_home(home) / "config-backups"

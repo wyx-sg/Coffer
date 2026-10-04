@@ -151,7 +151,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `config-backups/<file>-<hash>/<UTC time>.<ext>` | The previous content of an agent's config file (`~/.codex/config.toml`, `~/.claude/settings.json`, `~/.claude.json`, a memory or subagent file), copied here before Coffer rewrites or deletes it. One folder per file, named for the file and a short hash of its full path; each backup is named by the UTC time it was taken. It sits outside the vault, so none of it syncs. Backups older than the **Config backups** retention window (30 days by default) are deleted, except that **the newest backup of each file is always kept**, so the last write can always be undone. | daemon (the config writer); daemon prunes | No | Yes, but you lose the undo. |
+| `config-backups/<file>-<hash>/<name>.coffer-backup-<UTC time>` | The previous content of an agent's config file (`~/.codex/config.toml`, `~/.claude/settings.json`, `~/.claude.json`, a memory or subagent file), copied here before Coffer rewrites or deletes it. One folder per file, named for the file and a short hash of its full path; each backup is named by the UTC time it was taken. It sits outside the vault, so none of it syncs. Backups older than the **Config backups** retention window (30 days by default) are deleted, except that **the newest backup of each file is always kept**, so the last write can always be undone. | daemon (the config writer); daemon prunes | No | Yes, but you lose the undo. |
 
 ### Logs
 

@@ -519,7 +519,7 @@ import infrastructure directly).
 - `stat(path) -> FileStat | None` — size + mtime, or `None` when absent.
 - `write_text_atomic(path, text) -> None` — temp file + `os.replace`; if the
   target exists, copy it first to a new timestamped file in its own folder under
-  `~/.coffer/config-backups/<name>-<hash>/` (`<UTC time>.<ext>`, one per write,
+  `~/.coffer/config-backups/<name>-<hash>/` (`<name>.coffer-backup-<UTC time>`, one per write,
   nothing next to the file; the `config_backups` retention policy keeps each
   file's newest); create parent dirs as needed.
 - `latest_backup(path) -> Path | None` — the newest backup of `path`, what an

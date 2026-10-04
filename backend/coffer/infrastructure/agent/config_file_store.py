@@ -2,11 +2,13 @@
 
 Implements `coffer.application.agent.config_file_service.ConfigFileStorePort`.
 All writes are atomic (temp file + ``os.replace``) and first copy the prior
-content to Coffer's own folder, ``~/.coffer/config-backups/<file-key>/<UTC
-time>.<ext>``, so a bad edit — or a run of them — is always recoverable. Nothing
-is written next to the agent's file; the ``config_backups`` retention policy
-bounds the folder and always keeps each file's newest backup (spec agent-registry
-"Write config files atomically with a backup and an audit entry").
+content to Coffer's own folder,
+``~/.coffer/config-backups/<file-key>/<name>.coffer-backup-<UTC time>`` — the
+name says it is Coffer's wherever the copy ends up — so a bad edit, or a run of
+them, is always recoverable. Nothing is written next to the agent's file; the
+``config_backups`` retention policy bounds the folder and always keeps each
+file's newest backup (spec agent-registry "Write config files atomically with a
+backup and an audit entry").
 
 A write may carry the fingerprint of the content the caller read before
 deciding what to write. The store then refuses (``ConfigFileStale``) when the
@@ -29,6 +31,8 @@ from coffer.domain.workspace_errors import ConfigFileStale
 from coffer.infrastructure.vault.home import config_backups_dir
 
 _STAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
+#: In every backup's name, so a copy found anywhere says Coffer made it.
+BACKUP_MARK = ".coffer-backup-"
 
 
 def backup_dir_for(path: pathlib.Path) -> pathlib.Path:
@@ -75,11 +79,11 @@ class ConfigFileStore:
         folder = backup_dir_for(path)
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         stamp = datetime.now(tz=UTC).strftime(_STAMP_FORMAT)
-        dest = folder / f"{stamp}{path.suffix}"
+        dest = folder / f"{path.name}{BACKUP_MARK}{stamp}"
         n = 0
         while dest.exists():
             n += 1
-            dest = folder / f"{stamp}-{n}{path.suffix}"
+            dest = folder / f"{path.name}{BACKUP_MARK}{stamp}-{n}"
         shutil.copyfile(path, dest)
         dest.chmod(0o600)
         return dest
@@ -89,8 +93,9 @@ class ConfigFileStore:
         folder = backup_dir_for(pathlib.Path(path))
         if not folder.is_dir():
             return None
-        # Names are UTC timestamps, so the greatest name is the newest.
-        names = sorted(p for p in folder.iterdir() if p.is_file())
+        # Names end in a UTC timestamp, so the greatest name is the newest.
+        prefix = f"{pathlib.Path(path).name}{BACKUP_MARK}"
+        names = sorted(p for p in folder.iterdir() if p.is_file() and p.name.startswith(prefix))
         return names[-1] if names else None
 
     def write_text_atomic(
