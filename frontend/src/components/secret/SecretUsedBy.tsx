@@ -14,7 +14,7 @@ import type { SecretRef } from "@/lib/api/secret";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { kindMeta } from "@/lib/overview/kinds";
 import { cn } from "@/lib/utils";
-import { citersOf, displayName, referenceOf, type Citer } from "./secretRows";
+import { citersOf, displayName, referenceOf, shortName, type Citer } from "./secretRows";
 import { useKindLabel } from "./useKindLabel";
 
 /** Names the cell spells out before "+N". */
@@ -79,6 +79,8 @@ export function SecretUsedBy({ row }: { row: SecretRef }) {
   if (citers.length === 0) {
     return <span className="text-xs text-text-muted">{t("secrets.usedBy.nothing")}</span>;
   }
+  // The trigger is named like the row's menu (by the full ref); the popover's
+  // header shows the name the list shows, since a resource's ref runs long.
   const name = displayName(row);
   const needle = q.trim().toLowerCase();
   const shown = needle ? sorted.filter((c) => c.name.toLowerCase().includes(needle)) : sorted;
@@ -104,8 +106,8 @@ export function SecretUsedBy({ row }: { row: SecretRef }) {
       </PopoverTrigger>
       <PopoverContent className="w-[300px] space-y-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-xs font-semibold text-text">{t("secrets.usedBy.title")}</p>
-          <p className="truncate font-mono text-xs text-text-muted">{name}</p>
+          <p className="shrink-0 text-xs font-semibold text-text">{t("secrets.usedBy.title")}</p>
+          <p className="min-w-0 truncate font-mono text-xs text-text-muted">{shortName(row)}</p>
         </div>
         <Input
           autoFocus
@@ -120,7 +122,8 @@ export function SecretUsedBy({ row }: { row: SecretRef }) {
             <CiterRow key={citer.key} citer={citer} kindLabel={kindLabel(citer.kind)} />
           ))}
         </ul>
-        <p className="border-t border-border-subtle pt-2 text-xs text-text-muted">
+        {/* The reference has no spaces to wrap at: break it anywhere rather than overflow. */}
+        <p className="break-all border-t border-border-subtle pt-2 text-xs text-text-muted">
           {t("secrets.usedBy.note", { reference: referenceOf(row) })}
         </p>
       </PopoverContent>

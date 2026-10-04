@@ -231,7 +231,7 @@ def _revoke_token_on_agent_delete(app: FastAPI, proxy: ModelProxyWiring) -> None
     async def on_delete(agent: Resource) -> None:
         if previous is not None:
             await previous(agent)
-        await proxy.tokens.revoke(agent.uid)
+        await proxy.tokens.revoke(agent.name)
 
     app.state.kinds["agent"] = dataclasses.replace(kind, on_delete=on_delete)
 

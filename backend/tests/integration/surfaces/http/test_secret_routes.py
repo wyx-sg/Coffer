@@ -320,6 +320,26 @@ async def test_list_reports_every_cited_ref_with_its_presence() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="secret", scenario="an agent's model-proxy token is not listed")
+async def test_list_leaves_out_agents_model_proxy_tokens() -> None:
+    """An agent's ``proxy-token/<agent name>`` is Coffer's own: it mints it and
+    the agent fetches it, so the list a person manages does not show it.
+    """
+    fake = _FakeSecretStore()
+    fake.store["proxy-token/codex"] = "cfr_token"
+    fake.store["secret/github"] = "ghp_secret"
+    transport = ASGITransport(_build_app(fake, resources=_FakeResourceService()))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.get("/api/v1/secrets")
+    assert r.status_code == 200
+    assert [row["ref"] for row in r.json()["refs"]] == ["secret/github"]
+
+
+@pytest.mark.asyncio
 async def test_delete_unreferenced_secret_still_returns_204() -> None:
     """The in-use guard must not regress the happy path: an unreferenced
     secret still deletes with 204 and is audited.

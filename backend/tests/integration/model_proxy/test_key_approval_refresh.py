@@ -144,8 +144,10 @@ def test_removing_an_agent_deletes_its_proxy_token(daemon: BoundaryDaemon) -> No
     uid = agent.json()["uid"]
     tokens = get_proxy_facade().tokens
     assert daemon.client.get(f"/api/v1/proxy/tokens/{uid}").status_code == 200
-    assert tokens._secrets.get(token_ref(uid))  # type: ignore[attr-defined]
+    # Kept under the agent's name, so the ref reads as whose token it is.
+    assert token_ref("claude-code") == "proxy-token/claude-code"
+    assert tokens._secrets.get(token_ref("claude-code"))  # type: ignore[attr-defined]
 
     assert daemon.client.delete(f"/api/v1/agents/{uid}").status_code in (200, 204)
 
-    assert tokens._secrets.get(token_ref(uid)) is None  # type: ignore[attr-defined]
+    assert tokens._secrets.get(token_ref("claude-code")) is None  # type: ignore[attr-defined]

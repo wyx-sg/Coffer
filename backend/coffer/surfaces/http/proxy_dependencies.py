@@ -22,7 +22,9 @@ class ProxyFacade:
     tokens: ProxyTokenService
     status: Callable[[], dict[str, Any]]
     refresh: Callable[[], Awaitable[None]]
-    agent_exists: Callable[[str], Awaitable[bool]]
+    #: The name of the agent with this uid (what its token is kept under), or
+    #: None for an agent this machine does not have.
+    agent_name: Callable[[str], Awaitable[str | None]]
     #: The state the proxy would be pushed now (what the supervisor pushes).
     state: Callable[[], Awaitable[ProxyState]]
 

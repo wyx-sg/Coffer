@@ -653,7 +653,9 @@ stored (`created_at`) and when a consumer last had it decrypted on this Mac
 nothing references it (`unreferenced`), the destinations it is approved for or
 waits on, and whether another process of this user can read the value where
 Coffer puts it (a standalone secret, or a stdio MCP server's environment). The
-listing decrypts nothing and records no audit entry. A delete MUST also be
+listing decrypts nothing and records no audit entry. It MUST leave out an
+agent's model-proxy token (`proxy-token/<agent name>`): Coffer mints it and the
+agent fetches it itself, so no person enters, replaces or cites it. A delete MUST also be
 refused with `SECRET_IN_USE` while a skill in the master store cites a
 standalone secret's URI, naming that skill, and a delete that removes a ref
 MUST forget its approved destinations.
@@ -675,6 +677,11 @@ MUST forget its approved destinations.
 - **WHEN** the secrets are listed, then `coffer run` resolves it, then they are listed again
 - **THEN** the first listing carries its `created_at` and no `last_used_at`
 - **AND** the second carries a `last_used_at` no later than now
+
+#### Scenario: an agent's model-proxy token is not listed
+- **GIVEN** a stored agent model-proxy token and a stored standalone secret
+- **WHEN** the secrets are listed
+- **THEN** only the standalone secret is listed
 
 ### Requirement: Keep the master key behind a storage port chosen by the build
 Where the master key lives MUST be decided by how the build was made, never by

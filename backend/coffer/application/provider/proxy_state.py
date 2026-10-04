@@ -92,7 +92,10 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
             enabled.append((row, AgentConfig.model_validate(row.config)))
         except Exception:
             continue
-    digests = await tokens.digests(row.uid for row, _ in enabled)
+    # A token is kept under its agent's name; one no agent goes by any more
+    # (a removed agent's) is deleted here, where every agent is in hand.
+    await tokens.prune(row.name for row in agents)
+    digests = await tokens.digests(row.name for row, _ in enabled)
     # Already in list order — the order fallbacks are tried in.
     connections = await service.list()
 
@@ -124,7 +127,7 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
     return ProxyState(
         revision=next(_revisions),
         agents=[
-            ProxyAgent(agent_uid=row.uid, agent_type=cfg.type.value, token_sha256=digests[row.uid])
+            ProxyAgent(agent_uid=row.uid, agent_type=cfg.type.value, token_sha256=digests[row.name])
             for row, cfg in enabled
         ],
         routes=routes,

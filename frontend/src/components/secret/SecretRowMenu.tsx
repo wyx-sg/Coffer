@@ -2,13 +2,12 @@
 //
 // Replace value… (not on a secret missing on this Mac: the row's Add value
 // button is that) · Reveal value…
-// · Copy reference (<reference>) · Show in Activity · Delete….
+// · Copy reference (<reference>) · Delete….
 // Reveal exists only in the desktop app (spec secret "Release plaintext
 // only to a present human in the desktop app"): a browser shows it disabled,
 // naming the app. Delete stays offered while something uses the secret: the
 // dialog it opens then says what still uses it instead of deleting (spec
 // secret "Refuse to delete a secret still in use").
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
@@ -27,7 +26,6 @@ interface Props {
 export function SecretRowMenu({ row, onAction }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const inApp = presenceAvailable();
   const reference = referenceOf(row);
   const missing = isMissingHere(row);
@@ -57,11 +55,6 @@ export function SecretRowMenu({ row, onAction }: Props) {
       onSelect: () => onAction("reveal", row),
     },
     { key: "copy", label: t("secrets.menu.copyRef", { reference }), onSelect: copyReference },
-    {
-      key: "activity",
-      label: t("secrets.menu.activity"),
-      onSelect: () => navigate("/activity?tab=changes"),
-    },
     {
       key: "delete",
       label: t("secrets.menu.delete"),

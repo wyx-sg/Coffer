@@ -175,7 +175,7 @@ them ([A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopb
 **Local token per agent.** Each managed agent has its own random 256-bit
 token, compared in constant time, accepted as `Authorization: Bearer` or
 `x-api-key`. It is kept as Fernet ciphertext in the secret store under the
-machine-local ref `proxy-token/<agent_uid>`, which vault sync skips, and the proxy
+machine-local ref `proxy-token/<agent name>` (an agent's name is fixed), which vault sync skips, and the proxy
 receives only its SHA-256 digest. It unlocks the loopback proxy and nothing else,
 and it tells the proxy which agent is calling, which is how usage is attributed. A request
 carrying any other credential — a claude.ai OAuth bearer such as
