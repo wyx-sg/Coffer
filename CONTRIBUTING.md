@@ -48,7 +48,9 @@ make verify-integration   # the longest tier, several minutes (CI runs it as fou
 make verify-contract      # about 15 s
 make verify-e2e           # both Playwright projects (see below)
 
-make verify               # lint + unit + integration + contract + acceptance audit
+make docs-build           # the docs site's VitePress build: about 15 s
+
+make verify               # lint + docs build + unit + integration + contract + acceptance audit
 make verify-all           # verify + e2e
 ```
 

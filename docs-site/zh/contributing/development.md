@@ -138,7 +138,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make install-e2e-browsers` | 下载 Playwright 的 Chromium 构建 |
 | `make hooks` | 安装 pre-commit 和 commit-msg 两个 git Hook（行尾空白、YAML/TOML/JSON 检查、ruff、prettier、commitlint） |
 | `make dev` | 同时运行守护进程和 Vite（见上文） |
-| `make verify` | 依次运行 `lint`、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`，打印每个阶段的耗时，然后记录一个新鲜度戳。这是开 PR 前的门禁 |
+| `make verify` | 依次运行 `lint`、`docs-build`、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`，打印每个阶段的耗时，然后记录一个新鲜度戳。这是开 PR 前的门禁 |
 | `make verify-all` | `verify` 加上 `verify-e2e` |
 | `make verify-unit` | 单元测试纯度检查、后端单元测试，然后是前端 Vitest 套件 |
 | `make verify-integration` | 后端集成测试 |
@@ -161,7 +161,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make contracts` | 从后端模型重新生成每项能力的传输契约，再从这些契约生成前端类型 |
 | `make frontend-codegen` | 只从签入的契约重新生成前端的 TypeScript API 类型 |
 | `make docs-reference` | 重新生成本站的 CLI 参考页面（英文和中文） |
-| `make docs-build` | 按 Pages 工作流的方式构建本站；有失效的内部链接就会失败 |
+| `make docs-build` | 按 Pages 工作流的方式构建本站；有失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
 | `make refresh-prices` | 刷新内置的模型价格表（需要联网；不在 `verify` 中） |
 | `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 冻结到 `dist/` |
 | `make desktop` | 构建未签名的 `Coffer.app` 和 `.dmg`（很慢，见下文） |

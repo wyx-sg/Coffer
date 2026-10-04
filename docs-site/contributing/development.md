@@ -138,7 +138,7 @@ Run `make help` for the same list.
 | `make install-e2e-browsers` | Download Playwright's Chromium build |
 | `make hooks` | Install the pre-commit and commit-msg git hooks (trailing whitespace, YAML/TOML/JSON checks, ruff, prettier, commitlint) |
 | `make dev` | Run the daemon and Vite together (see above) |
-| `make verify` | `lint`, `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance` in order, printing each stage's time, then record a freshness stamp. The pre-PR gate |
+| `make verify` | `lint`, `docs-build`, `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance` in order, printing each stage's time, then record a freshness stamp. The pre-PR gate |
 | `make verify-all` | `verify` plus `verify-e2e` |
 | `make verify-unit` | The unit-purity check, backend unit tests, then the frontend Vitest suite |
 | `make verify-integration` | Backend integration tests |
@@ -161,7 +161,7 @@ Run `make help` for the same list.
 | `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
 | `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
 | `make docs-reference` | Regenerate the CLI reference pages of this site (English and Chinese) |
-| `make docs-build` | Build this site the way the Pages workflow does; fails on a dead internal link |
+| `make docs-build` | Build this site the way the Pages workflow does; fails on a dead internal link. The second stage of `make verify` |
 | `make refresh-prices` | Refresh the bundled model price list (needs the network; not in `verify`) |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |
 | `make desktop` | Build the unsigned `Coffer.app` and `.dmg` (slow: see below) |
