@@ -654,9 +654,12 @@ The attention list's sync items MUST be named by their situation, so ignoring on
 or from the Sync page, which share the key — hides that situation and no other: the conflicts item
 by the commits and files in conflict, a hold's by its commits and files, a join's by its files, a
 plaintext secret's by what was found, and a remote's failure by the remote. A situation that
-changes is a new item. The list MUST also carry an item while `git` is missing
-(`sync_git_missing`) and while the remote is unreachable (`sync_unreachable`), each with its
-hand-off, so every problem the Sync page shows can be ignored.
+changes is a new item. The list MUST also carry an item while the remote is unreachable
+(`sync_unreachable`), with its hand-off, so that problem the Sync page shows can be ignored. A
+missing `git` MUST raise no sync item: it is reported by the CLIs item for `git`
+([skill-manager](../skill-manager/spec.md) "List the commands Coffer itself runs"), which names the
+vault's history as well as sync, and the Sync page's own `git_missing` problem has no ignore.
+While `git` is missing the last round's problem MUST NOT be raised either.
 
 The status MUST also say how far this vault and the remote (as last fetched) have drifted: `ahead`, the commits this vault has that the remote lacks, and `behind`, the commits the remote has that this vault lacks. The Overview's Sync tile words them as "1 behind · 0 ahead".
 

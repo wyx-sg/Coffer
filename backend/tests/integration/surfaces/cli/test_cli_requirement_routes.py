@@ -340,9 +340,18 @@ def test_git_is_needed_by_coffer(
             "Coffer itself uses it to keep the vault's history and to sync the vault."
             in (git["handoff"]["prompt"])
         )
-        # Sync's own git_missing item reports it; no second item here.
+        # Overview carries one CLIs item for it, saying what Coffer can't do.
         items = daemon.client.get("/attention").json()["items"]
-        assert not [i for i in items if i["kind"] == "cli"]
+        (item,) = [i for i in items if i["kind"] == "cli"]
+        assert item["uid"] == "git" and item["reason_code"] == "cli_missing"
+        assert item["severity"] == "error"
+        assert item["reason"] == (
+            "git is not on the agent's PATH; Coffer needs it to keep the vault's history "
+            "and to sync the vault."
+        )
+        assert item["handoff"] is not None
         probe.commands["git"] = FakeCommand("2.50.1")
         ready = daemon.client.post("/clis/git/check").json()
         assert ready["status"] == "ready" and ready["handoff"] is None
+        items = daemon.client.get("/attention").json()["items"]
+        assert not [i for i in items if i["kind"] == "cli"]

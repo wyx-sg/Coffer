@@ -1014,11 +1014,13 @@ one entry with any skill, server or hand-added declaration of the same name
 `needed_by_coffer`, the uses Coffer runs it for (`vault_history`, `sync`), empty
 when Coffer does not run it; `coffer cli list` names those uses, and the
 hand-off prompt for a missing or outdated one says what Coffer itself uses it
-for. A command only Coffer needs MUST NOT raise a `cli_*` attention item: the
-feature that needs it reports its own (sync's `sync_git_missing`).
+for. A command Coffer needs MUST raise the same `cli_*` attention item as one a
+skill requires, whether or not a skill needs it too: its reason says what Coffer
+cannot do without it, and a missing one is an error rather than a warning, because
+the vault's history stops. Sync raises no item of its own for a missing `git`.
 
 #### Scenario: git is listed as needed by Coffer itself
 - **GIVEN** no skill, MCP server or hand-added tool requiring `git`, and no `git` on the agent's `PATH`
 - **WHEN** the user reads `GET /api/v1/clis/git`
 - **THEN** it is `missing`, titled Git, with `needed_by_coffer` `vault_history` and `sync` and no skills or servers, and its hand-off prompt says Coffer itself uses it to keep the vault's history and to sync the vault
-- **AND** the attention list carries no `cli` item for it, and once `git` is installed a check reports it `ready` with no prompt
+- **AND** the attention list carries exactly one `cli` item for it, an error whose reason says Coffer needs it to keep the vault's history and to sync the vault, and once `git` is installed a check reports it `ready` with no prompt

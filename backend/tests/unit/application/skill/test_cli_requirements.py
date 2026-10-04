@@ -123,6 +123,21 @@ async def test_attention_items_one_per_problem() -> None:
     assert items[1].severity.value == "warning"
 
 
+async def test_a_command_coffer_and_a_skill_both_need_names_both() -> None:
+    svc = CliRequirementService(
+        skills=_Skills({"history": _md("history", "  - git\n")}),
+        probe=FakeCommandProbe(),
+        machine=lambda: FAKE_MACHINE,
+        coffer=COFFER_NEEDS,
+    )
+    (item,) = await CliAttentionSource(svc).items()
+    assert item.severity.value == "error"
+    assert item.reason == (
+        "git is not on the agent's PATH; Coffer needs it to keep the vault's history "
+        "and to sync the vault, and it is needed by history."
+    )
+
+
 class _Servers:
     def __init__(self, *launchers: tuple[str, str]) -> None:
         self.launchers = [ServerLauncher(f"uid-{name}", name, cmd) for name, cmd in launchers]

@@ -136,19 +136,16 @@ def test_an_attention_item_is_named_by_its_situation(pair: tuple[Box, Box]) -> N
     assert fingerprint("a", ["x"]) != fingerprint("a", ["x", "y"])
 
 
-def test_git_missing_and_an_unreachable_remote_have_their_own_items(tmp_path: Path) -> None:
+def test_a_missing_git_raises_no_sync_item_and_an_unreachable_remote_has_its_own(
+    tmp_path: Path,
+) -> None:
     (mac,) = joined(tmp_path, "Mac")
     mac.service._git_available = lambda: False
     items = mac.run(SyncAttentionSource(sync=mac.service).items())
-    (item,) = [i for i in items if i.reason_code == "sync_git_missing"]
-    assert item.handoff and "git" in item.handoff.lower()
-    # Asking again after git is installed is just asking: the item is gone.
+    # The CLIs attention source reports a missing git; sync raises no item of
+    # its own for it.
+    assert not [i for i in items if i.reason_code == "sync_git_missing"]
     mac.service._git_available = lambda: True
-    assert not [
-        i
-        for i in mac.run(SyncAttentionSource(sync=mac.service).items())
-        if i.reason_code == "sync_git_missing"
-    ]
 
     later = datetime.now(tz=UTC) + timedelta(minutes=5)
     mac.run(

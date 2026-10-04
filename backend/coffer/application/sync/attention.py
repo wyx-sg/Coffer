@@ -15,8 +15,12 @@ One item per situation, each with the action that answers it:
   secret, so nothing was pushed;
 - ``sync_paused`` — the vault is inside a folder another tool synchronises;
 - ``sync_layout`` — the remote is at a newer layout than this build's;
-- ``sync_unreachable`` — the remote cannot be reached;
-- ``sync_git_missing`` — no ``git`` on this machine, so nothing can sync.
+- ``sync_unreachable`` — the remote cannot be reached.
+
+A missing ``git`` raises no sync item: the CLIs attention source reports it
+(``cli_missing`` for ``git``, which Coffer needs for the vault's history as
+well as for sync), and while it is missing the last round's problem is not
+raised either. The Sync page still shows its own in-page problem.
 
 Ignoring is by the item's key (kind, uid, reason). The uid is a fingerprint of
 the situation — which files conflict and against which commits, which files a
@@ -150,20 +154,10 @@ class SyncAttentionSource:
                     uid=fingerprint(c.path for c in choices),
                 )
             )
-        no_git = self._sync.git_missing_handoff()
-        if no_git is not None:
-            out.append(
-                _item(
-                    "sync_git_missing",
-                    "Sync cannot run: git is not installed on this machine.",
-                    Severity.ERROR,
-                    "/api/v1/sync/status",
-                    None,
-                    handoff=no_git,
-                )
-            )
+        # A missing ``git`` is the CLIs source's item (Coffer needs it for the
+        # vault's history too); the last round's problem would only repeat it.
         last = await self._sync.last_round()
-        if last is not None and no_git is None:
+        if last is not None and self._sync.git_missing_handoff() is None:
             found = _problem_item(last, remote, self._sync.plaintext_handoff)
             if found is not None:
                 out.append(found)

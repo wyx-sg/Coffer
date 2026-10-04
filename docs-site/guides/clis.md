@@ -44,7 +44,7 @@ Coffer reads `requires:` from the skill's folder every time it checks, so an edi
 
 ## Commands Coffer runs itself
 
-Coffer needs one command of its own: `git`, which keeps the vault's history and syncs it. It is always listed, titled Git, with **Coffer** under **Needed by** naming what it is used for (Vault history · Sync), whether or not any skill or server needs it too. If `git` is missing, its banner says what Coffer can't do without it and offers the same hand-off as any other command. Overview does not list it a second time as a CLI: sync's own "git is not installed" item already reports it.
+Coffer needs one command of its own: `git`, which keeps the vault's history and syncs it. It is always listed, titled Git, with **Coffer** under **Needed by** naming what it is used for (Vault history · Sync), whether or not any skill or server needs it too. If `git` is missing, its banner says what Coffer can't do without it and offers the same hand-off as any other command. Overview lists it too, as a CLI that needs you, saying what Coffer can't do without it (keep the vault's history, sync the vault); a missing `git` is an error there because the vault's history stops. The Sync page shows its own **git missing** card as well.
 
 ## Launchers your MCP servers start with
 

@@ -9,7 +9,8 @@ import { useAttention } from "@/lib/hooks/useAttention";
 import { useIgnoreAttention } from "@/lib/hooks/useAttentionIgnore";
 import type { SyncProblem } from "@/lib/api/sync";
 
-/** The attention reason each kind of sync problem is reported under. */
+/** The attention reason each kind of sync problem is reported under. A missing
+ * Git is the CLIs page's item (`cli_missing`), so it has no Ignore here. */
 export const PROBLEM_REASON: Partial<Record<SyncProblem["kind"], string>> = {
   push_failed: "sync_push_failed",
   plaintext_found: "sync_plaintext_found",
@@ -17,7 +18,6 @@ export const PROBLEM_REASON: Partial<Record<SyncProblem["kind"], string>> = {
   auth_failed: "sync_auth_failed",
   waiting_approval: "sync_waiting_approval",
   cloud_folder: "sync_paused",
-  git_missing: "sync_git_missing",
   layout: "sync_layout",
 };
 

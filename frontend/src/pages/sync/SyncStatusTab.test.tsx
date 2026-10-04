@@ -441,6 +441,8 @@ describe("SyncStatusTab — problems", () => {
     const card = screen.getByTestId("sync-problem");
     expect(card).toHaveTextContent("Git isn’t installed on this Mac");
     expect(within(card).getByTestId("handoff")).toHaveTextContent("install git");
+    // Overview reports a missing Git under the CLIs page, so this card has no Ignore.
+    expect(within(card).queryByRole("button", { name: "Ignore" })).toBeNull();
     fireEvent.click(within(card).getByRole("button", { name: "Check again" }));
     expect(onRecheck).toHaveBeenCalled();
   });
