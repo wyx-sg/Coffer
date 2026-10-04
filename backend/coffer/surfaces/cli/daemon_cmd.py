@@ -33,7 +33,7 @@ def _wait_until_serving(proc: Any, timeout: float = START_TIMEOUT_SECONDS) -> st
     """Wait for the spawned daemon to answer its status call.
 
     Returns ``"serving"``, ``"exited"`` (the child ended first — it refused to
-    start, e.g. a vault migration is required or git is too old) or
+    start, e.g. git is too old) or
     ``"timeout"``. ``daemon.json`` is no evidence of either: the daemon
     publishes it before uvicorn and the lifespan run, and a file left by a
     crash is there before the child has done anything.

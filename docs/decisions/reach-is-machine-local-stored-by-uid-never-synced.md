@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [A Channel Answers Only Its Paired Owner, and Fails Closed in Groups](channel-owner-gate.md), [A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), spec resource-framework "Carry a per-agent reach on every resource", spec vault-sync "Keep reach machine-local", spec vault-sync "Scope names agents only", spec vault-sync "Remove the machine axis without widening reach", spec channels "Limit the agents a channel may drive to its scope", spec channels "Bind each channel to the one machine that runs it", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Take the agent identity from the handshake", research note [multi-machine sync](../research/multi-machine-sync.md), PRs #296, #381, #382
+**Related**: [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [A Channel Answers Only Its Paired Owner, and Fails Closed in Groups](channel-owner-gate.md), [A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), spec resource-framework "Carry a per-agent reach on every resource", spec vault-sync "Keep reach machine-local", spec vault-sync "Scope names agents only", spec channels "Limit the agents a channel may drive to its scope", spec channels "Bind each channel to the one machine that runs it", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Take the agent identity from the handshake", research note [multi-machine sync](../research/multi-machine-sync.md), PRs #296, #381, #382
 
 ## Context
 
@@ -94,8 +94,7 @@ Tried twice. PR #296 (2026-07) shipped a machine × agent matrix in `scope`; PR
 - **Why it loses.** PR #382 removed the axis the following day. The removal
   resolved each stored row against the machine id the daemon was actually
   using and took dormant whenever it could not tell, so it narrowed rather than
-  widened (spec vault-sync "Remove the machine axis without widening reach"),
-  and the scope's wire schema refuses a payload that still carries a
+  widened, and the scope's wire schema refuses a payload that still carries a
   `machines` key with a 422 rather than storing what is left, which would read
   as every agent.
 

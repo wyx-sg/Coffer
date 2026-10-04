@@ -57,7 +57,7 @@ changing the identifier.
 
 Once the name is fixed, the question is whether these kinds need a second,
 editable label beside it. Coffer tried one: an optional `title` on every
-resource (migration 0106), shown in place of the name. Two names for one thing
+resource, shown in place of the name. Two names for one thing
 made every surface decide which to show, and hid the name the user types in the
 CLI and the agent quotes in its permission rules. The title has no reader
 outside Coffer, and what it was for — saying what the thing is — is already

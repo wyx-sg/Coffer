@@ -236,7 +236,7 @@ flowchart LR
 
 ## 相关内容 {#related}
 
-- [手动编辑保险库](/zh/guides/vault-files) · [升级已有的 Coffer](/zh/guides/upgrading)
+- [手动编辑保险库](/zh/guides/vault-files)
 - [密钥存储](/zh/guides/secret-store) · [密钥](/zh/guides/secrets) · [消息渠道](/zh/guides/channels) · [知识](/zh/guides/knowledge)
 - [命令行参考](/zh/reference/cli)
 - 规格：[vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) · 决策：[同步只拉取和推送保险库仓库](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md)、[按智能体划分的资源范围](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)

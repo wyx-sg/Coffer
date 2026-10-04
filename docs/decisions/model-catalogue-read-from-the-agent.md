@@ -112,8 +112,7 @@ Pros: sidesteps entitlement, because the user knows what their account can run.
 Cons: the curation needs an owner. It lived on the agent record, which
 narrowed the list for every audience at once, then on each channel, which was
 one more place to keep in step with a catalogue that changes by itself. Both
-were removed (the agent field by migration 0063, the channel's by migration
-0068). Aliases made curation unnecessary: the list is short and every entry
+were removed. Aliases made curation unnecessary: the list is short and every entry
 works.
 
 ### Option E — The full versioned catalogue, filtered by the CLI's retirement table

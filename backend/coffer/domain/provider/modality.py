@@ -7,10 +7,10 @@ instead of offering every id to every surface (a chat dropdown narrows to
 ``text``). This describes what the ENDPOINT serves; Coffer itself embeds
 nothing, so no Coffer surface asks for ``embedding``.
 
-The stored modality is the TRUTH. :func:`infer_modality` exists for the two
-moments where nobody has said yet — the one-shot migration that converted the
-plain-string sets, and endpoint introspection, which pre-fills a value the user
-then corrects. Nothing infers at load time: a stored entry is taken as written.
+The stored modality is the TRUTH. :func:`infer_modality` exists for the one
+moment where nobody has said yet — endpoint introspection, which pre-fills a
+value the user then corrects. Nothing infers at load time: a stored entry is
+taken as written.
 """
 
 from __future__ import annotations

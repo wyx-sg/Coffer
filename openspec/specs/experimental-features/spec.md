@@ -52,12 +52,6 @@ anything. A `features` object a person already holds is kept as it is.
 - **WHEN** the daemon starts and the features and the daemon status are read
 - **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
 
-#### Scenario: leaving the registry strips its stored setting
-- **GIVEN** a daemon config whose `features` object holds a key of a feature that has left the registry and one other key
-- **WHEN** the upgrade's migrations run
-- **THEN** the `features` object holds only the other key, and the rest of the file is unchanged
-- **AND** a missing or unreadable daemon config is left alone
-
 ### Requirement: Decide a feature's state per machine
 A feature's state MUST be decided in this order: a pin in `COFFER_FEATURES`,
 then the machine's own setting in `~/.coffer/daemon-config.json`, then the

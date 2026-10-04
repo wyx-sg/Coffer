@@ -612,18 +612,10 @@ envelopes, and inbound carries the sender's identity for this gate.
 - **WHEN** a different account messages the bot
 - **THEN** no reply is sent and no turn or conversation is created
 
-### Requirement: Backfill DM sender ids in the vault upgrade
-The vault upgrade MUST set, once, the `sender_id` of every direct-chat pairing
-that carries an empty one to the pairing's `chat_id` — a direct chat's id is the
-person's id on Telegram and on SeaTalk. At runtime the owner gate MUST refuse a
-message whose sender id is empty and MUST NOT complete or repair a pairing from
-an inbound message: no legacy reader is kept.
-
-#### Scenario: the vault upgrade backfills a DM pairing's sender id
-- **GIVEN** a vault holding a direct-chat pairing whose `sender_id` is empty
-- **WHEN** the vault upgrade runs
-- **THEN** the pairing's `sender_id` equals its `chat_id`
-- **AND** a second run changes nothing
+### Requirement: Refuse a message with an empty sender id
+The owner gate MUST refuse a message whose sender id is empty and MUST NOT
+complete or repair a pairing from an inbound message: a pairing records the
+sender id when it is made, and no reader of a pairing without one is kept.
 
 #### Scenario: a message with an empty sender id is refused
 - **GIVEN** an inbound message whose sender id is empty
@@ -959,9 +951,7 @@ the one machine that runs it"), for a reason scope cannot satisfy: scope is
 reach, reach is machine-local and never travels, and the machine that runs a
 channel is one answer the machines must share.
 
-- An unrestricted scope MUST mean every registered agent. That is the pre-scope
-  behaviour and what every existing channel carries, so no channel needs a data
-  migration.
+- An unrestricted scope MUST mean every registered agent.
 - `agents: [<agent>, …]` MUST narrow `/new <agent>` at every surface that
   names an agent: the list of valid names an unknown one is answered with, and
   the validation of a chosen name. They MUST read one narrowed set — a list that
@@ -1100,17 +1090,9 @@ this.
   Starting a channel on the grounds that nobody else claims it would be the
   rival-consumer failure arriving by the back door: every machine that cannot
   resolve the id would reason identically and they would all start.
-- A `runs_on` that **cannot be a machine id**, found when an existing vault is
-  upgraded, MUST NOT be honoured as a binding. A channel's configuration is a bag
-  the system has written other things into before — the retired machine axis put
-  ULIDs under this very key — so a value of the wrong shape names no machine that
-  has ever existed and is a fossil, not a decision. The upgrade MUST bind such a
-  channel to this machine, the answer it would have given had the key been
-  absent. This is the one case where an existing value is overwritten, and it is
-  the one case where leaving it would silently stop a working bot on upgrade.
-  Past the upgrade a value is written only by the surfaces, and they
-  refuse an id the machine registry does not hold; whatever else ends up
-  there fails closed and is reported as a binding to an unknown machine.
+- A `runs_on` value is written only by the surfaces, and they refuse an id the
+  machine registry does not hold; whatever else ends up there (a hand edit, say)
+  fails closed and is reported as a binding to an unknown machine.
 - Rebinding MUST converge without a restart and without a command that reaches
   another machine: changing `runs_on` is an ordinary configuration edit. The
   losing machine MUST stop its adapter within one reconcile tick of seeing the

@@ -14,8 +14,7 @@ class RetentionPolicy:
     `retention_days`:
         - None → keep forever (no auto-prune)
         - positive int → keep N days, prune older entries
-        - 0 is forbidden at the application layer; CHECK constraint in
-          the migration also rejects it.
+        - 0 is forbidden at the application layer.
     """
 
     table_name: str

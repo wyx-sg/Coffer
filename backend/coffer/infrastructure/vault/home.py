@@ -8,8 +8,8 @@ directory is its owner's business (``knowledge/paths.py``, ``memory/paths.py``
 …), reached from the root this module returns.
 
 Every path is resolved from ``HOME`` at the moment it is asked for, never
-cached, so a test (or a rehearsal of the migration in a throwaway home) that
-repoints ``HOME`` moves every class with it. There is deliberately no per-tree
+cached, so a test that repoints ``HOME`` moves every class with it. There is
+deliberately no per-tree
 override: the knowledge collections and the skill master folders are inside
 the vault repository, and a tree outside it would be a tree git cannot see.
 The overrides that do exist (``COFFER_LOG_DIR``, ``COFFER_PROXY_SPOOL_DIR``,

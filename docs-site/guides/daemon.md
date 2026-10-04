@@ -167,7 +167,7 @@ To roll back to the previous build:
    cd ~/.coffer/bin
    for b in coffer coffer-daemon coffer-mcp-shim; do ln -sfn 0.1.1/$b $b; done
    ```
-3. If the newer build migrated the history database, restore the copy it took first (next section). Otherwise the older build refuses to open it. Rolling back across the one-time vault upgrade is different: see [Upgrading an existing Coffer](/guides/upgrading#roll-it-back).
+3. If the newer build migrated the history database, restore the copy it took first (next section). Otherwise the older build refuses to open it.
 4. Start again: `coffer daemon start`.
 
 ## Database migrations and automatic backups
@@ -180,7 +180,7 @@ To go back to a pre-migration copy:
 coffer daemon stop
 cd ~/.coffer
 mv runs.db runs.db.broken
-cp runs.db.pre-0136 runs.db          # and the -wal / -shm files, if present
+cp runs.db.pre-<revision> runs.db          # and the -wal / -shm files, if present
 ```
 
 Then start the build that matches that schema.
@@ -190,12 +190,11 @@ Then start the build that matches that schema.
 If the database was migrated by a newer build, or by a development branch whose migrations this build does not ship, the daemon stops at startup with:
 
 ```text
-database schema revision '0118' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
+database schema revision '0147' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
 ```
 
 Install the newer build again, or restore the `runs.db.pre-*` copy taken before that build migrated it.
 
-A home that still keeps its state in `coffer.db`, from a Coffer before the vault layout, is not migrated by the daemon: it refuses to start and names `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Back up a vault
 

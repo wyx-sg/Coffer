@@ -43,14 +43,14 @@ coffer daemon restart
 tail -n 50 ~/.coffer/logs/daemon.log
 ```
 
-最常见的条目是端口被占用（见上文）、数据库由更新的版本写出，以及 home 目录还需要做一次性升级（见下文）。MCP shim 遇到同样的情况会报告为 `coffer-mcp-shim: daemon did not come up within 10s; check ~/.coffer/logs/daemon.log`。
+最常见的条目是端口被占用（见上文）以及数据库由更新的版本写出（见下文）。MCP shim 遇到同样的情况会报告为 `coffer-mcp-shim: daemon did not come up within 10s; check ~/.coffer/logs/daemon.log`。
 
 ### 数据库 schema 太新 {#the-database-schema-is-too-new}
 
 **症状。** 守护进程在启动时停下，日志写着：
 
 ```text
-database schema revision '0118' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
+database schema revision '0147' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
 ```
 
 错误码是 `DB_SCHEMA_TOO_NEW`。
@@ -58,14 +58,6 @@ database schema revision '0118' is newer than this Coffer build understands — 
 **原因。** 一个更新的版本，或者一个带有当前版本没有的迁移的开发版本，迁移了历史数据库 `runs.db`。这通常发生在回滚一次升级之后，或者在不同的源码检出之间切换之后。
 
 **解决办法。** 重新运行那个更新的版本。如果要留在当前版本，停掉守护进程，恢复那次迁移之前留下的副本 `~/.coffer/runs.db.pre-<revision>`（见[数据库迁移与自动备份](/zh/guides/daemon#database-migrations-and-automatic-backups)）。
-
-### 守护进程要求运行 `coffer migrate` {#the-daemon-asks-for-coffer-migrate}
-
-**症状。** 守护进程拒绝启动，并提到 `coffer migrate`（`VAULT_MIGRATION_REQUIRED`），或提到 `coffer migrate --resume`（`VAULT_MIGRATION_ON_HOLD`）。
-
-**原因。** 这个 home 是由采用保险库布局之前的 Coffer 写出的，仍然把状态放在 `coffer.db` 里；或者一次升级回滚留下了它的暂停标记。
-
-**解决办法。** 停掉守护进程，然后运行 `coffer migrate --rehearse` 和 `coffer migrate`；回滚之后，先运行 `coffer migrate --resume`。见[升级已有的 Coffer](/zh/guides/upgrading)。
 
 ### 命令警告守护进程是另一个版本 {#a-command-warns-that-the-daemon-is-a-different-version}
 

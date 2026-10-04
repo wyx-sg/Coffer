@@ -188,23 +188,3 @@ a conversation id. That pointer is **soft**: there is no foreign key, chat does
 not maintain it, and it may dangle after a conversation is deleted. The table is
 channels' (spec [channels](../channels/spec.md)); this note records only that
 chat does not treat an inbound pointer as a reason to keep a row alive.
-
-## Migration lineage
-
-`20260612_0012_chat_tables` created both tables;
-`20260612_0013_conversation_archive` added `archived_at`;
-`20260612_0018_conversation_agent_config` added the JSON column;
-`20260613_0020_conversation_retention_reset` re-seeded the retention defaults;
-`20260614_0021_conversation_origin` added the channel return address, and
-`20260621_0034_drop_conversation_origin_peer_display` dropped what it did not
-need; `20260621_0036_chat_models_to_provider_resources` moved model state out of
-the conversation; `20260916_0083_drop_conversation_model_id` removed the last of
-it, leaving the model on the message that ran (`model_id`) and on
-`agent_config` as an override — one column answering one question each.
-`20260918_0091_conversation_owner` added `owner` and `idx_conversations_owner`, and
-`20261002_0138_drop_conversation_owner` dropped both again: no surface ever set it;
-`20260918_0096_cross_references_point_at_uids` renamed `channel_name` to
-`channel_uid` and rewrote each stored channel name into that channel's uid;
-`20260923_0102_conversation_agent_key_has_no_default` dropped the `builtin`
-server default from `agent_key`, rebuilding the table with its rows, `NOT NULL`
-and indexes unchanged.

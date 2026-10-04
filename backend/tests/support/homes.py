@@ -58,7 +58,7 @@ class IsolatedHome:
 
     @property
     def db_path(self) -> pathlib.Path:
-        return self.coffer_dir / "coffer.db"
+        return self.coffer_dir / "runs.db"
 
     @property
     def knowledge_root(self) -> pathlib.Path:

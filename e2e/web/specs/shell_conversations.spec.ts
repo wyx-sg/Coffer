@@ -90,7 +90,7 @@ c.execute(
 )
 c.commit()
 `;
-  execFileSync(PYTHON, ["-c", script, path.join(home(), "coffer.db"), conversationId, channelUid]);
+  execFileSync(PYTHON, ["-c", script, path.join(home(), "runs.db"), conversationId, channelUid]);
 }
 
 test.describe("Conversations page", () => {

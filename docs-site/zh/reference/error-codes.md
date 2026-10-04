@@ -272,9 +272,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `DB_SCHEMA_TOO_NEW` | 409 | `~/.coffer/runs.db` 被更新或不同的 Coffer 构建迁移过。万一出现在响应中，就使用这个状态码。 | 升级 Coffer，或恢复数据库迁移前的备份。见[文件与目录](/zh/reference/filesystem)。 |
-| `VAULT_MIGRATION_REQUIRED` | 409 | 该 home 仍把状态保存在 `coffer.db` 中，来自保险库布局之前的 Coffer。 | 停止守护进程并运行 `coffer migrate`。见[升级现有的 Coffer](/zh/guides/upgrading)。 |
-| `VAULT_MIGRATION_ON_HOLD` | 409 | `coffer migrate --rollback` 已把 home 恢复原状，并留下了暂停标记。 | 运行之前的构建，或先运行 `coffer migrate --resume` 再运行 `coffer migrate`。 |
-| `VAULT_MIGRATION_REFUSED` | 409 | `coffer migrate` 不会处理当前状态的 home，例如一次中途停下的升级。 | 按消息操作；升级做到一半时，先运行 `coffer migrate --rollback`。 |
 | `GIT_MISSING` | 500 | 保险库需要 `git`，但没有找到。需要 git 的路由也会返回它。 | 按适合这台机器的方式安装 git；错误的 `details.handoff` 是给你的智能体的提示词。 |
 
 `MASTER_KEY_MISSING` 也可能让启动失败；见[密钥](#secrets)。低于 2.40 的 `git` 也会让守护进程停下，但没有错误码：日志会给出找到的版本，并附上一段可以交给你的智能体、让它升级 git 的提示词。

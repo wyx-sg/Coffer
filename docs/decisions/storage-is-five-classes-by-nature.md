@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Secrets; Single SQLite writer), [Persistence](../../docs-site/architecture/persistence.md), spec vault-sync "Keep machine-local state out of the repository", spec vault-storage "Store state in five classes by nature", spec vault-storage "Move an existing home into the vault layout once, on request, reversibly", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec memory "Keep the memory tree derived and local"
+**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Secrets; Single SQLite writer), [Persistence](../../docs-site/architecture/persistence.md), spec vault-sync "Keep machine-local state out of the repository", spec vault-storage "Store state in five classes by nature", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec memory "Keep the memory tree derived and local"
 
 ## Context
 
@@ -108,23 +108,13 @@ Rules that come with the classes:
 - **`runs.db` keeps the single-writer rule** of
   [History Is One SQLite File](history-is-one-sqlite-file-written-only-by-the-daemon.md):
   WAL, one Alembic lineage, the daemon the only process that opens it.
-- **A home in the previous layout is moved once, on request.** The daemon
-  refuses a home that still holds `coffer.db` (`VAULT_MIGRATION_REQUIRED`) and
-  names `coffer migrate`, which the person runs with the daemon stopped. It
-  backs up `coffer.db.pre-vault` and `~/.coffer/pre-vault/` first, records every
-  move in `local/migration.json`, can be rehearsed on a copy (`--rehearse`) and
-  rolled back byte for byte (`--rollback`, which leaves a hold marker that
-  `--resume` lifts); the rules are in
-  [Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md).
-  No other code reads the old layout.
 
 Pros: backup, retention, cleanup and sync each get one answer per class;
 sync stops translating (the vault already *is* files); "machine-local" and
 "rebuildable" become properties a reader can see in the directory listing;
 Settings › Data can clear the rebuildable caches as the safe action it is.
 
-Cons: one migration that moved every table and tree of a running product, with
-a rollback that had to be rehearsed; the vault loses the database's
+Cons: the vault loses the database's
 transactions and foreign keys, so cross-file references by uid are checked by
 validation rather than by SQLite; two engines (git files and SQLite) instead of
 one.

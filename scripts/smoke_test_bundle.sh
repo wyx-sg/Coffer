@@ -287,9 +287,9 @@ esac
 # Step 1c: the bundled CLI
 #
 # The CLI is frozen from its own spec with its own excludes, and none of the
-# steps above run it — a CLI that cannot import at all (as happened when
-# coffer.spec excluded a package `coffer migrate` imports at start) shipped
-# with every other check green. `coffer daemon status` imports the whole
+# steps above run it — a CLI that cannot import at all (as happens when
+# coffer.spec excludes a package the CLI imports at start) ships with every
+# other check green. `coffer daemon status` imports the whole
 # command tree and talks to the daemon started above.
 # ---------------------------------------------------------------------------
 

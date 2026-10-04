@@ -236,7 +236,7 @@ The round's steps, the breaker, joining and the reasons behind each are in [Vaul
 
 ## Related
 
-- [Editing the vault by hand](/guides/vault-files) · [Upgrading an existing Coffer](/guides/upgrading)
+- [Editing the vault by hand](/guides/vault-files)
 - [Secret store](/guides/secret-store) · [Secrets](/guides/secrets) · [Channels](/guides/channels) · [Knowledge](/guides/knowledge)
 - [CLI reference](/reference/cli)
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) · Decisions: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
