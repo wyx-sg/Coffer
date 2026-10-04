@@ -6490,7 +6490,6 @@
   "handoff": {
     "copyPrompt": "复制提示词",
     "copyPromptHint": "用于 Coffer 外部的智能体",
-    "askAgentHint": "在 Coffer 内的对话里处理，点发送后才会执行",
     "moreOptions": "更多选项",
     "askAgent": "交给智能体",
     "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。",

@@ -1,4 +1,4 @@
-// src/components/overview/NeedsYouRow.test.tsx — every row's ⋯ menu offers the item's hand-off and Ignore.
+// src/components/overview/NeedsYouRow.test.tsx — every row offers the item's hand-off as a split button and a ⋯ menu with Ignore.
 //
 // Real QueryClientProvider and router; only the agent-providers api is mocked.
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -83,23 +83,21 @@ function openMenu() {
 acceptance("web-ui", "a needs-you row offers the item's hand-off in its menu", async () => {
   renderRow(item(), true);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
-  openMenu();
+  fireEvent.click(await screen.findByRole("button", { name: "More options" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /^Copy prompt/ }));
   // Copying is asynchronous now (it toasts "Prompt copied" afterwards).
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(PROMPT));
 
-  openMenu();
-  fireEvent.click(await screen.findByRole("menuitem", { name: /^Ask an agent/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(await screen.findByTestId("draft")).toHaveTextContent(PROMPT);
 });
 
-test("with no managed agent available the menu offers Copy prompt only", async () => {
+test("with no managed agent available the row offers a Copy prompt button only", async () => {
   renderRow(item(), false);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
-  openMenu();
-  expect(await screen.findByRole("menuitem", { name: /^Copy prompt/ })).toBeInTheDocument();
-  expect(screen.queryByRole("menuitem", { name: /^Ask an agent/ })).not.toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: /^Copy prompt/ })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Ask an agent" })).not.toBeInTheDocument();
 });
 
 test("every row's menu ends with Ignore", async () => {

@@ -4,14 +4,15 @@
 // reason as one sentence, when it started, and exactly one action opening the
 // page — or the tab — where the person deals with it: a missing secret on
 // Secrets, a memory hook changed by hand in the agent's settings on that
-// agent's Hooks tab (lib/overview/attention). Every row carries a ⋯ — Copy prompt and, with a managed agent available, Ask
-// an agent (the daemon gives every item a hand-off prompt), then Ignore, which
+// agent's Hooks tab (lib/overview/attention). Every row carries the hand-off
+// split button, Ask an agent ▾ with Copy prompt behind it (AgentHandoff; the
+// daemon gives every item a hand-off prompt), and a ⋯ holding Ignore, which
 // takes the item off the Overview, the sidebar badges and the menu-bar count
 // whatever its severity (Overview boards 1.2.01 / 1.2.09). The button reads
 // what it does for that kind and reason ("Reconnect channel", "Review held
 // changes", lib/overview/attention itemActionLabelKey) behind a 14px icon for
 // its verb; the reason may wrap to two lines, the full text on hover; the row
-// takes the hover surface; the ⋯ menu items carry 15px icons.
+// takes the hover surface; the ⋯ menu item carries a 15px icon.
 //
 // The action runs in place when it is a non-GET call into Coffer's own state
 // that needs no preview — testing an MCP server again, probing a command
@@ -22,11 +23,11 @@
 // and every other verb keep their link: those write outside Coffer's own
 // state or need input, and their page holds the preview. Review on "N changes waiting for approval"
 // opens the global approvals dialog, wherever the person is.
-import { Copy, EyeOff, MessageSquarePlus } from "lucide-react";
+import { EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { useAgentHandoff } from "@/components/handoff/useAgentHandoff";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { StatusDot } from "@/components/status/StatusDot";
 import { Button } from "@/components/ui/button";
@@ -46,9 +47,9 @@ import { describeSince } from "@/lib/overview/time";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { cn } from "@/lib/utils";
 
-/** Dot · name 168 · reason · since 96 · action 212, 14 apart (board 1.2.09). */
+/** Dot · name 168 · reason · since 96 · action 340, 14 apart (board 1.2.09). */
 const ROW_GRID =
-  "grid min-h-[54px] grid-cols-[8px_minmax(0,1fr)] items-center gap-x-[14px] gap-y-1 px-4 py-2 transition-colors duration-fast hover:bg-surface-hover md:grid-cols-[8px_168px_minmax(0,1fr)_96px_212px]";
+  "grid min-h-[54px] grid-cols-[8px_minmax(0,1fr)] items-center gap-x-[14px] gap-y-1 px-4 py-2 transition-colors duration-fast hover:bg-surface-hover md:grid-cols-[8px_168px_minmax(0,1fr)_96px_340px]";
 // On a phone everything after the dot stacks in the second column.
 const CELL = "col-start-2 md:col-start-auto";
 
@@ -74,31 +75,9 @@ export function NeedsYouRow({ item, agentType, onIgnore, onRun, running = false 
   const action = t(itemActionLabelKey(item));
   const verb = inPlaceVerb(item);
   const ActionIcon = actionIcon(item.action.verb);
-  const handoff = useAgentHandoff(item.handoff.prompt);
   const menu: MenuAction[] = [
-    {
-      key: "copy-prompt",
-      label: t("handoff.copyPrompt"),
-      icon: Copy,
-      description: t("handoff.copyPromptHint"),
-      onSelect: handoff.copy,
-    },
+    { key: "ignore", label: t("overview.needsYou.ignore"), icon: EyeOff, onSelect: onIgnore },
   ];
-  if (handoff.canAsk)
-    menu.push({
-      key: "ask-agent",
-      label: t("handoff.askAgent"),
-      icon: MessageSquarePlus,
-      description: t("handoff.askAgentHint"),
-      onSelect: handoff.ask,
-    });
-  menu.push({
-    key: "ignore",
-    label: t("overview.needsYou.ignore"),
-    icon: EyeOff,
-    onSelect: onIgnore,
-    separated: true,
-  });
   return (
     <li className={ROW_GRID}>
       <span
@@ -175,6 +154,7 @@ export function NeedsYouRow({ item, agentType, onIgnore, onRun, running = false 
             </Link>
           </Button>
         )}
+        <AgentHandoff prompt={item.handoff.prompt} help={false} />
         <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
       </div>
     </li>

@@ -6490,7 +6490,6 @@
   "handoff": {
     "copyPrompt": "Copy prompt",
     "copyPromptHint": "For an agent outside Coffer",
-    "askAgentHint": "Handle it in a Coffer conversation; nothing runs until you press Send",
     "moreOptions": "More options",
     "askAgent": "Ask an agent",
     "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine.",
