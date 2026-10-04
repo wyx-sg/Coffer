@@ -7,8 +7,7 @@ control exactly when each turn starts and finishes — no sleeps.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
-from typing import Any
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -17,12 +16,10 @@ from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.channel.envelopes import InboundStop
 from coffer.domain.chat.events import (
     AgentEvent,
-    QueueChanged,
     TextDelta,
     TurnDone,
     TurnStarted,
 )
-from coffer.domain.chat.message import Message, Role, TextBlock
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, uid_of, wait_until
 
@@ -37,11 +34,8 @@ class GatedAdapter:
         self.release = asyncio.Event()
         self.runs: list[str] = []
 
-    async def run_turn(
-        self, *, history: Sequence[Message], **_: object
-    ) -> AsyncIterator[AgentEvent]:
-        last = history[-1]
-        text = turn_body("".join(b.text for b in last.content if isinstance(b, TextBlock)))
+    async def run_turn(self, prompt: str, attachments: object = ()) -> AsyncIterator[AgentEvent]:
+        text = turn_body(prompt)
 
         async def gen() -> AsyncIterator[AgentEvent]:
             self.runs.append(text)
@@ -71,7 +65,7 @@ async def test_new_command_switches_to_a_fresh_conversation(env: ChannelEnv) -> 
     fresh = await env.active_conversation(resource)
     assert fresh is not None
     assert fresh != old_conversation
-    listed = [c.id for c in await env.chat.list_conversations()]
+    listed = [c.id for c in await env.conversations()]
     assert old_conversation in listed  # the old thread stays in history
     assert fresh in listed
 
@@ -196,14 +190,7 @@ async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: Cha
     # All three turns landed in the thread's single conversation, in order.
     conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
-    messages = await env.chat.list_messages(conversation_id)
-    user_texts = [
-        turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
-        for m in messages
-        if m.role == Role.USER
-    ]
-    assert user_texts == ["A", "B", "C"]
-    assert len(messages) == 6  # user/assistant interleaved
+    assert env.user_texts(conversation_id) == ["A", "B", "C"]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="the queue is bounded and overflow is reported")
@@ -253,23 +240,19 @@ async def test_channel_messages_queued_mid_turn_ride_the_conversation_queue(
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
     conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
-    observer = env.orchestrator.subscribe(conversation_id)  # a web tab
     await env.send(inbound("tg", "owner", "B"))
-    await env.orchestrator.enqueue_message(conversation_id, "C from the web")
+    await env.orchestrator.enqueue_message(conversation_id, "C from the side")
     await env.send(inbound("tg", "owner", "D"))
 
     pending = env.orchestrator.pending(conversation_id)
-    assert [turn_body(t) for t in pending] == ["B", "C from the web", "D"]
-    chips = [e.pending for e in _drain_now(observer) if isinstance(e, QueueChanged)]
-    assert [turn_body(t) for t in chips[-1]] == ["B", "C from the web", "D"]
+    assert [turn_body(t) for t in pending] == ["B", "C from the side", "D"]
 
     gated.release.set()
     await wait_until(lambda: "echo:D" in adapter.texts())
-    assert gated.runs == ["A", "B", "C from the web", "D"]
-    # The web send ran in its slot but was not the channel's to render.
+    assert gated.runs == ["A", "B", "C from the side", "D"]
+    # The side send ran in its slot but was not the channel's to render.
     assert [t for t in adapter.texts() if t.startswith("echo:")] == ["echo:A", "echo:B", "echo:D"]
     assert env.orchestrator.pending(conversation_id) == []
-    env.orchestrator.unsubscribe(conversation_id, observer)
 
 
 @pytest.mark.acceptance(spec="chat", scenario="a stop from the chat holds the queued messages")
@@ -298,13 +281,6 @@ async def test_stop_holds_the_queued_messages_until_the_next_message(env: Channe
     await env.send(inbound("tg", "owner", "C"))
     await wait_until(lambda: "echo:C" in adapter.texts())
     assert gated.runs == ["A", "B", "C"]
-
-
-def _drain_now(queue: asyncio.Queue[Any]) -> list[Any]:
-    out: list[Any] = []
-    while not queue.empty():
-        out.append(queue.get_nowait())
-    return out
 
 
 # -- the platform's own stop control ------------------------------------------

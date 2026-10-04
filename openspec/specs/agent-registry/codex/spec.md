@@ -101,14 +101,6 @@ The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own na
 - **WHEN** the user scans the agent's native memory
 - **THEN** Coffer parses the single global document into one store row per distinct routed cwd — `project`/`path` the cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store — read-only and emitting no audit event; with no `memories/MEMORY.md` the list is empty
 
-### Requirement: Read Codex transcripts from the sessions directory
-The transcript location of [agent-registry](../spec.md) "List an agent's transcript sessions read-only" for this type MUST be `<config_dir>/sessions/**/*.jsonl`.
-
-#### Scenario: list Codex sessions from the sessions directory
-- **GIVEN** a registered `codex` agent with a session `.jsonl` nested under `<config_dir>/sessions/`
-- **WHEN** the user lists the agent's transcripts
-- **THEN** that session is listed with its file's absolute path as `source_path`
-
 ### Requirement: Leave Codex's internal-state tables untouched
 The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` — are the Codex side of the parent's "internal state files are read as inputs and never written". They MUST be read where a facet needs them ("Read Codex plugins from config.toml and the cache directory" reads the marketplaces) and MUST be byte-identical before and after every write Coffer makes to that file; every such write also preserves the user's comments and key ordering.
 

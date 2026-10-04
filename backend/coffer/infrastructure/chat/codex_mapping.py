@@ -27,7 +27,7 @@ Exactly one terminal (``TurnDone``/``TurnError``) is emitted per turn: once
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from coffer.domain.chat.events import (
@@ -38,7 +38,6 @@ from coffer.domain.chat.events import (
     TurnDone,
     TurnError,
 )
-from coffer.infrastructure.chat.codex_reply_files import CodexReplyFiles
 
 
 @dataclass
@@ -52,9 +51,6 @@ class CodexParseState:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     terminal_emitted: bool = False
-    #: The diffs the turn's file-change items carried (spec chat "Record what each
-    #: reply changed in each file").
-    reply_files: CodexReplyFiles = field(default_factory=CodexReplyFiles)
 
 
 def map_codex_notification(
@@ -155,8 +151,6 @@ def _file_change(item: dict[str, Any], state: CodexParseState) -> list[AgentEven
     changes = item.get("changes") or []
     status = item.get("status")
     is_error = status == "failed"
-    if not is_error:
-        state.reply_files.add(changes)
     call = ToolCall(
         tool_use_id=item_id,
         tool_name="file_change",

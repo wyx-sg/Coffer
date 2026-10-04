@@ -1,11 +1,10 @@
-"""Integration test: interrupting a turn stops it, keeping its partial output.
+"""Integration test: interrupting a turn stops it.
 
 A turn streams partial text and then blocks; ``TurnOrchestrator.interrupt_turn``
 stops it. The stream closes with a terminal ``TurnDone`` (stop reason
-``interrupted``) and the partial assistant message is persisted — distinct from
-discarding the conversation, which throws the turn away. A channel reaches this
-through ``ChannelTurnDriver``'s ``TurnPort.interrupt_turn``; it used to also be
-reachable over HTTP, and the behaviour is the platform's, not the surface's.
+``interrupted``) — distinct from discarding the conversation, which ends the turn
+silently. A channel reaches this through ``ChannelTurnDriver``'s
+``TurnPort.interrupt_turn``, the web through ``POST .../interrupt``.
 """
 
 from __future__ import annotations
@@ -18,7 +17,6 @@ import pytest
 
 from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
-from coffer.domain.chat.message import Role, TextBlock
 from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
 
@@ -28,7 +26,7 @@ class _BlockingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TurnStarted()
             yield TextDelta(text="partial answer")
@@ -39,7 +37,7 @@ class _BlockingAdapter:
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="chat", scenario="stop a running turn")
-async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
+async def test_interrupt_stops_the_turn() -> None:
     chat_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")
     )
@@ -63,11 +61,3 @@ async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
         rest.append(item)
     assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in rest)
     assert conv.id not in active_turns()
-
-    # The partial assistant message was persisted (status stopped).
-    msgs = await chat_svc.list_messages(conv.id)
-    assistant = next(m for m in msgs if m.role == Role.ASSISTANT)
-    assert assistant.status == "stopped"
-    assert assistant.finished_at is not None
-    text = "".join(b.text for b in assistant.content if isinstance(b, TextBlock))
-    assert "partial answer" in text

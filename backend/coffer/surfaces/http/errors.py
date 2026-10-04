@@ -92,6 +92,11 @@ _STATUS: dict[str, int] = {
     "HOST_NOT_ALLOWED": 403,
     "ORIGIN_NOT_ALLOWED": 403,
     "BAD_REQUEST": 400,
+    # An agent's own sessions (spec agent-registry "List an agent's native
+    # sessions through the agent").
+    "AGENT_TYPE_UNSUPPORTED": 400,
+    "NATIVE_SESSION_NOT_FOUND": 404,
+    "NATIVE_SESSION_INVALID": 400,
     # A paging cursor that does not decode, or names another list or other
     # filters (spec resource-framework "Page growing lists by an opaque cursor").
     "CURSOR_INVALID": 400,
@@ -159,22 +164,6 @@ _STATUS: dict[str, int] = {
     "CONVERSATION_NOT_FOUND": 404,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
-    # web composer uploads (spec chat "Upload a file for a web message",
-    # "Send uploaded files with a web message"). The ceiling is 413 and the
-    # refused type 415, the honest statuses; an id in a send body that names no
-    # upload is a bad body, not a missing path.
-    "ATTACHMENT_TOO_LARGE": 413,
-    "ATTACHMENT_TYPE_UNSUPPORTED": 415,
-    "ATTACHMENT_NOT_FOUND": 422,
-    # resending a message (spec chat "Show a failed turn as one inline banner
-    # with Retry"): its row is a missing subresource; a file the media sweep
-    # deleted since is gone for good, which is what 410 says.
-    "MESSAGE_NOT_FOUND": 404,
-    "ATTACHMENT_EXPIRED": 410,
-    # the thread's thumbnail of a file that is not this conversation's, or was pruned
-    "ATTACHMENT_UNAVAILABLE": 404,
-    # a changed file's diff under a path the reply did not record
-    "REPLY_FILE_NOT_FOUND": 404,
     # a question the agent asked the owner (spec chat "Pause a turn on a question
     # for the owner"): a second answer to a closed question conflicts with the
     # first; an answer that does not fit its question is a bad body.

@@ -41,7 +41,7 @@ give the status each code is actually sent with.
 | `HOST_NOT_ALLOWED` | 403 | The request's `Host` header does not name `127.0.0.1`, `localhost` or `[::1]` with the daemon's port. Defends against DNS rebinding. | Call `127.0.0.1:<port>` or `localhost:<port>` directly, not through a proxy or another hostname. |
 | `ORIGIN_NOT_ALLOWED` | 403 | The request carries an `Origin` that is not one of Coffer's own: the daemon's web origin, the desktop app, or an opted-in dev origin. Defends against requests from other sites. | Open the UI from the daemon or the desktop app. To serve it from a dev origin, start the daemon with `COFFER_DEV_CORS=1` or list the origin in `COFFER_CORS_ORIGINS`. |
 | `BAD_REQUEST` | 400 | A route rejected the request (for example an invalid `X-Coffer-Actor` value or malformed JSON on `/mcp`). | Read `message`; fix the request. |
-| `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's transcript sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
+| `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's native sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json` to a caller with the token. |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
 | `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
@@ -140,6 +140,9 @@ give the status each code is actually sent with.
 | `PLUGIN_UNINSTALL_FAILED` | 422 | The agent's own uninstall command failed. | Read `message`; run the uninstall yourself. |
 | `FS_PATH_NOT_BROWSABLE` | 400 | A folder-picker path is missing, not a directory, or unreadable. | Pick another folder. |
 | `FS_PATH_NOT_OPENABLE` | 400 | An open or reveal target is not absolute, does not exist, or the launch failed. | Check the path and the preferred editor setting. |
+| `AGENT_TYPE_UNSUPPORTED` | 400 | This agent type has no native sessions Coffer can list, rename or delete. | None for this agent; open its sessions in the agent itself. |
+| `NATIVE_SESSION_NOT_FOUND` | 404 | The agent lists no session with that id. Nothing changed. | Refresh the Sessions tab; the session may already be deleted. |
+| `NATIVE_SESSION_INVALID` | 400 | The session id is not shaped like one, the new title is empty, or the agent refused the operation as malformed. Nothing changed. | Read `message`; pick a session from the list and give a non-empty title. |
 
 ## Skills
 
@@ -195,15 +198,8 @@ give the status each code is actually sent with.
 | `CONVERSATION_NOT_FOUND` | 404 | No conversation with that id. | Refresh the conversation list. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
 | `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add the agent on the Agents page. |
-| `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation, or a request for the files a reply changed named no assistant reply of it. | Refresh the conversation; retry the message shown there. |
-| `REPLY_FILE_NOT_FOUND` | 404 | The diff of a changed file was asked for under a path the reply did not record. | Reopen the reply's changed files and pick one from the list. |
 | `QUESTION_CLOSED` | 409 | An answer to a question the agent asked that is no longer waiting: it was already answered (the first answer wins), cancelled, or its turn ended. Nothing changed. | Refresh the conversation; the card shows the answer that was taken. |
-| `ATTACHMENT_UNAVAILABLE` | 404 | The file attached to a message is not available: the id is not referenced by a message of that conversation, or the file was pruned by retention. | Nothing to do; the thread shows the attachment without its preview. |
 | `QUESTION_ANSWER_INVALID` | 422 | An answer that does not fit its question: an option the question does not offer, several options on a single-choice question, or no answer at all. | Choose from the options, or type an answer. |
-| `ATTACHMENT_EXPIRED` | 410 | A message being sent again (Retry) carried a file the attachments retention sweep has since deleted; nothing was sent. | Attach the file again and send a new message. |
-| `ATTACHMENT_NOT_FOUND` | 422 | A message names an attachment no upload stored: it was never uploaded, or its file was pruned. Nothing was sent. | Upload the file again. |
-| `ATTACHMENT_TOO_LARGE` | 413 | An upload from the web composer is over the per-file limit the message names. | Attach a smaller file. |
-| `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | No agent can use a file of that type from a turn (video, archives, executables and other binaries). | Attach an image, a document, audio or a text file. |
 | `CHANNEL_NOT_PAIRED` | 409 | The channel has no paired chat to send to. | Pair it from the channel's page. See [Channels](/guides/channels). |
 | `CHANNEL_PERSON_NOT_FOUND` | 404 | No paired person on the channel matches the one named. | List the people on the channel's page and use one of their ids. |
 | `CHANNEL_NOT_RUNNING` | 409 | The channel's adapter is not running (disabled or still starting). | Enable the channel and wait for it to connect. |

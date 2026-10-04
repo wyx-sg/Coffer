@@ -30,7 +30,6 @@ from coffer.domain.channel_turn import CHANNEL_TURN_ENV
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
-from coffer.domain.chat.message import Message, Role, TextBlock
 from coffer.infrastructure.chat.claude_sdk_agent import ClaudeSdkAgentAdapter
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo
@@ -131,25 +130,12 @@ def _conv(agent_key: str = "claude_code", *, channel_uid: str | None = None) -> 
     )
 
 
-def _user_turn(text: str, conv_id: str = "c1") -> list[Message]:
-    return [
-        Message(
-            id=uuid.uuid4().hex,
-            conversation_id=conv_id,
-            seq=0,
-            role=Role.USER,
-            content=[TextBlock(text=text)],
-            status="complete",
-            model_id=None,
-            prompt_tokens=None,
-            completion_tokens=None,
-            created_at=datetime.now(tz=UTC),
-        )
-    ]
+def _user_turn(text: str, conv_id: str = "c1") -> str:
+    return text
 
 
-async def _collect(adapter: ClaudeSdkAgentAdapter, history: list[Message]) -> list[Any]:
-    stream = await adapter.run_turn(history=history)
+async def _collect(adapter: ClaudeSdkAgentAdapter, prompt: str) -> list[Any]:
+    stream = await adapter.run_turn(prompt)
     return [ev async for ev in stream]
 
 

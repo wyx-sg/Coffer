@@ -10,16 +10,14 @@ from __future__ import annotations
 import pytest
 
 from coffer.domain.channel.rich_content import ForwardedItem
-from coffer.domain.chat.message import Role, TextBlock
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, wait_until
 
 
 async def _user_turn(env: ChannelEnv) -> str:
-    conversations = await env.chat.list_conversations()
-    messages = await env.chat.list_messages(conversations[0].id)
-    (user,) = [m for m in messages if m.role == Role.USER]
-    return "".join(b.text for b in user.content if isinstance(b, TextBlock))
+    conversations = await env.conversations()
+    (prompt,) = env.raw_prompts(conversations[0].id)
+    return prompt
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a quoted message is folded into the turn")

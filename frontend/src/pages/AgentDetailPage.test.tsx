@@ -179,7 +179,7 @@ describe("AgentDetailPage", () => {
     expect(screen.queryByText(/v2\.1\.281/)).not.toBeInTheDocument();
   });
 
-  acceptance("agent-registry", "the header carries one status pill and a fixed action pair", () => {
+  test("the header carries one status pill and a fixed action pair", () => {
     // The header never turns into a fix button: Connect, Repair and Check again are the Overview's.
     for (const [rowState, word] of [
       ["not_connected", "Not connected"],

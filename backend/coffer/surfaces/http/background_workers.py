@@ -1,8 +1,8 @@
 """Start the daemon's background workers, in one place.
 
-Six timers that outlive a request: retention pruning, the vault sync
+Five timers that outlive a request: retention pruning, the vault sync
 round, the knowledge sweep, the memory distil pass, the memory
-aggregate pass, and the transcript summary cache warm-up. They are gathered
+aggregate pass. They are gathered
 here rather than inlined in the lifespan because each needs a different slice
 of the graph, and reading which worker gets what is the only reason to look at
 this code at all.
@@ -16,7 +16,6 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from coffer.application.agent.transcript_warm_worker import TranscriptWarmWorker
 from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
@@ -28,7 +27,6 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.application.sync.worker import SyncWorker
-from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
 from coffer.infrastructure.logging.files import prune_log_dir
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
@@ -37,7 +35,6 @@ from coffer.surfaces.http.knowledge_sweep_wiring import start_knowledge_sweep
 from coffer.surfaces.http.memory.distil_state import DistilRunner
 from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_sync, start_sync_worker
-from coffer.surfaces.http.transcript_warm_wiring import start_transcript_warm_worker
 
 
 @dataclass(frozen=True)
@@ -51,8 +48,6 @@ class BackgroundWorkers:
     knowledge_sweep_task: asyncio.Task[None]
     distil_task: asyncio.Task[None]
     aggregate_task: asyncio.Task[None]
-    warm_worker: TranscriptWarmWorker
-    warm_task: asyncio.Task[None]
 
 
 def start_background_workers(
@@ -62,7 +57,6 @@ def start_background_workers(
     guide: BuiltinGuide,
     distil: DistilRunner,
     memory_service: MemoryService,
-    transcript_reader: FileTranscriptReader,
     resource_svc: ResourceService,
     audit: AuditService,
     engine_config: InternalEngineConfigService,
@@ -98,9 +92,6 @@ def start_background_workers(
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
     aggregate_task = start_aggregate_worker(memory_service, engine_config, features)
-    # The transcript summary cache's warm pass, so the first visit to an
-    # agent's Conversations tab is never the one that pays the cold read.
-    warm_worker, warm_task = start_transcript_warm_worker(transcript_reader, resource_svc)
 
     return BackgroundWorkers(
         retention_worker=retention_worker,
@@ -110,6 +101,4 @@ def start_background_workers(
         knowledge_sweep_task=knowledge_sweep_task,
         distil_task=distil_task,
         aggregate_task=aggregate_task,
-        warm_worker=warm_worker,
-        warm_task=warm_task,
     )

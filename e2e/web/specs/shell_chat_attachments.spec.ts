@@ -10,7 +10,7 @@
 // the user message — text plus the attachment reference — is persisted before
 // the turn runs either way, which is what the reload reads back.
 
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { acceptance } from "./_acceptance";
 import {
   beforeEachInjectToken,
@@ -94,7 +94,7 @@ acceptance(
   },
 );
 
-acceptance("chat", "an attached file is shown in the thread after a reload", async ({ page }) => {
+test("an attached file is shown in the thread after a reload", async ({ page }) => {
   const codex = await registerManagedCodex();
   const id = await createConversation(page);
   try {

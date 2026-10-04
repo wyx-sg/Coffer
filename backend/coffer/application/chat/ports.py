@@ -14,10 +14,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any, Protocol, TypeVar
 
-from coffer.domain.chat.attachment import Attachment, UploadedAttachment
+from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.channel_place import ChannelPlaceView
 from coffer.domain.chat.events import AgentEvent
-from coffer.domain.chat.message import Message
-from coffer.domain.chat.mirror import ChannelPlaceView, MirrorResult, MirrorView
 
 
 class AgentAdapter(Protocol):
@@ -25,31 +24,31 @@ class AgentAdapter(Protocol):
 
     The adapter is **self-contained**: it carries its own model, tools, and
     configuration, injected by its ``AgentProvider`` when the adapter is built.
-    ``run_turn`` is given only the conversation history and yields a stream of
-    ``AgentEvent``s.
+    ``run_turn`` is given the turn's prompt and attachments — the agent's own
+    session (resumed by the adapter) holds the conversation — and yields a
+    stream of ``AgentEvent``s.
 
     It MUST yield a terminal ``TurnDone`` or ``TurnError`` before the iterator
     ends (unless cancelled), and on ``asyncio.CancelledError`` it MUST clean up
     and re-raise.
 
     An adapter MAY additionally expose a ``model_id: str`` attribute naming the
-    model the turn ran on; the orchestrator records it on the assistant message
-    when present. It is optional — adapters that bring no Coffer-registered
-    model simply omit it — so it is not part of this frozen Protocol.
+    model the turn ran on. It is optional, so it is not part of this frozen
+    Protocol.
     """
 
     async def run_turn(
         self,
-        *,
-        history: Sequence[Message],
+        prompt: str,
         attachments: Sequence[Attachment] = (),
     ) -> AsyncIterator[AgentEvent]:
         """Run one turn and yield its events.
 
-        ``attachments`` are files supplied with this turn (channel media). An
-        adapter materialises them in its own native shape — a vision agent inlines
-        image/document content blocks; a path-native agent uses the paths. An
-        adapter that ignores them still satisfies the seam (default empty)."""
+        ``prompt`` is the text the person sent. ``attachments`` are files supplied
+        with this turn (channel media). An adapter materialises them in its own
+        native shape — a vision agent inlines image/document content blocks; a
+        path-native agent uses the paths. An adapter that ignores them still
+        satisfies the seam (default empty)."""
         ...
 
 
@@ -145,48 +144,14 @@ class ModelCatalogPort(Protocol):
     async def native_default_model(self, agent_key: str) -> str | None: ...
 
 
-class ChatMediaStore(Protocol):
-    """Where the web composer's uploads live until — and after — they are sent.
-
-    The bytes stay on disk beside a record of their display name and type; the
-    id handed back is opaque, and only :meth:`resolve` turns it into the
-    ``Attachment`` (with its local path) a turn persists as a reference. The
-    file-backed store is ``coffer.infrastructure.chat.media_store``.
-    """
-
-    async def save(self, *, data: bytes, filename: str, mime: str) -> UploadedAttachment:
-        """Store one upload and return its id, name, type and size."""
-        ...
-
-    async def resolve(self, attachment_id: str) -> Attachment | None:
-        """The stored file an id names, or ``None`` when there is none (never
-        uploaded, or pruned)."""
-        ...
-
-    async def present(self, attachment: Attachment) -> bool:
-        """Whether a persisted reference's bytes are still on disk — a web
-        upload's or a channel's, which the same 30-day sweep ages out."""
-        ...
-
-
-class ChannelMirrorPort(Protocol):
-    """A reply typed on the web into a conversation a channel opened, also sent
-    to that channel's chat (spec chat "Mirror a web reply into the channel it
-    came from").
+class ChannelPlacesPort(Protocol):
+    """Where in its channel each conversation of a listing lives (spec chat
+    "Show every conversation on the Conversations page").
 
     Declared here, by the kind that consumes it; the channel kind satisfies it
     and the composition root wires the two, so chat never imports channel code.
-    Absent (``None``) when no channel kind is wired — chat works without it."""
-
-    async def describe(self, conversation_id: str, channel_uid: str) -> MirrorView:
-        """Where a reply on this conversation would also go, and what is still
-        waiting to get there."""
-        ...
-
-    async def mirror(self, conversation_id: str, channel_uid: str, text: str) -> MirrorResult:
-        """Send ``text`` to the chat now, or keep it for later; the result's
-        ``on_start`` is what the reply's turn is queued with."""
-        ...
+    Absent (``None``) when no channel kind is wired — the list then shows no
+    place."""
 
     async def places(self, conversation_ids: Sequence[str]) -> Mapping[str, ChannelPlaceView]:
         """Where in its channel each of ``conversation_ids`` lives, for the ones

@@ -36,7 +36,7 @@ async def test_require_mention_on_drops_unaddressed_group_message(env: ChannelEn
     )
 
     assert adapter.sent == []
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
     assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
@@ -115,7 +115,7 @@ async def test_ignore_other_mentions_drops_message_mentioning_a_human(env: Chann
     )
 
     assert adapter.sent == []
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []
     assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 

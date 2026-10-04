@@ -34,7 +34,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `HOST_NOT_ALLOWED` | 403 | 请求的 `Host` 请求头不是带着守护进程端口的 `127.0.0.1`、`localhost` 或 `[::1]`。用于防御 DNS 重绑定。 | 直接访问 `127.0.0.1:<port>` 或 `localhost:<port>`，不要经过代理或其他主机名。 |
 | `ORIGIN_NOT_ALLOWED` | 403 | 请求带有的 `Origin` 不属于 Coffer 自己：守护进程的 Web 源、桌面应用，或显式开启的开发源。用于防御来自其他网站的请求。 | 从守护进程或桌面应用打开界面。要从开发源提供界面，用 `COFFER_DEV_CORS=1` 启动守护进程，或把该源列入 `COFFER_CORS_ORIGINS`。 |
 | `BAD_REQUEST` | 400 | 某个路由拒绝了请求（例如无效的 `X-Coffer-Actor` 值，或发到 `/mcp` 的 JSON 格式错误）。 | 阅读 `message`；修正请求。 |
-| `CURSOR_INVALID` | 400 | 发给分页列表（审计日志、MCP 调用日志、智能体的对话记录会话、聊天对话）的 `cursor` 无法解码，或者是为另一个列表或另一组筛选条件签发的。 | 去掉 `cursor` 重新读第一页，或发送同一列表、同样筛选条件返回的 `next_cursor`。 |
+| `CURSOR_INVALID` | 400 | 发给分页列表（审计日志、MCP 调用日志、智能体的原生会话、聊天对话）的 `cursor` 无法解码，或者是为另一个列表或另一组筛选条件签发的。 | 去掉 `cursor` 重新读第一页，或发送同一列表、同样筛选条件返回的 `next_cursor`。 |
 | `NOT_FOUND` | 404 | 没有这个路由或对象，由路由抛出而非领域错误。 | 检查路径；守护进程在 `/api/v1/openapi.json` 向带令牌的调用方提供实时的路由列表。 |
 | `FORBIDDEN` | 403 | 路由拒绝了该操作。 | 阅读 `message`。 |
 | `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
@@ -133,6 +133,9 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `PLUGIN_UNINSTALL_FAILED` | 422 | 智能体自己的卸载命令失败了。 | 阅读 `message`；自己运行卸载。 |
 | `FS_PATH_NOT_BROWSABLE` | 400 | 文件夹选择器的路径不存在、不是目录或不可读。 | 选另一个文件夹。 |
 | `FS_PATH_NOT_OPENABLE` | 400 | 要打开或显示的目标不是绝对路径、不存在，或启动失败。 | 检查路径和首选编辑器设置。 |
+| `AGENT_TYPE_UNSUPPORTED` | 400 | 这个类型的智能体没有 Coffer 能列出、重命名或删除的原生会话。 | 无；请在该智能体自己的界面里打开它的会话。 |
+| `NATIVE_SESSION_NOT_FOUND` | 404 | 该智能体没有列出这个 id 的会话。没有任何改动。 | 刷新「会话」标签页；该会话可能已被删除。 |
+| `NATIVE_SESSION_INVALID` | 400 | 会话 id 的格式不对、新标题为空，或智能体把该操作当作格式错误拒绝了。没有任何改动。 | 阅读 `message`；从列表中选一个会话，并给出非空标题。 |
 
 ## 技能 {#skills}
 
@@ -188,15 +191,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CONVERSATION_NOT_FOUND` | 404 | 没有这个 id 的对话。 | 刷新对话列表。 |
 | `UNKNOWN_AGENT` | 400 | 对话所用的智能体没有注册智能体提供方。 | 从 `GET /api/v1/agent-providers` 中选择一个智能体。 |
 | `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加该智能体。 |
-| `MESSAGE_NOT_FOUND` | 404 | 重发时指定的用户消息不属于该对话，或查询某条回复改动的文件时指定的助手回复不属于该对话。 | 刷新对话；重试那里显示的消息。 |
-| `REPLY_FILE_NOT_FOUND` | 404 | 请求某个改动文件的 diff 时，该回复没有记录这个路径。 | 重新打开该回复的改动文件，从列表里选一个。 |
 | `QUESTION_CLOSED` | 409 | 对智能体所提问题的回答来晚了：该问题已被回答（先到的回答生效）、已取消，或其任务已结束。没有任何改动。 | 刷新对话；卡片会显示已采用的回答。 |
-| `ATTACHMENT_UNAVAILABLE` | 404 | 消息里的附件已不可用：该对话的消息没有引用这个 id，或文件已按保留策略清理。 | 无需处理；对话里照常显示该附件，只是没有预览。 |
 | `QUESTION_ANSWER_INVALID` | 422 | 回答与问题不符：选了问题没有的选项、单选问题选了多个选项，或根本没有回答。 | 从选项中选择，或输入回答。 |
-| `ATTACHMENT_EXPIRED` | 410 | 再次发送（重试）的消息带有一个已被附件保留清理删除的文件；什么都没发送。 | 重新附上文件，发送一条新消息。 |
-| `ATTACHMENT_NOT_FOUND` | 422 | 消息引用了一个没有存储过的附件：从未上传，或其文件已被清理。什么都没发送。 | 重新上传该文件。 |
-| `ATTACHMENT_TOO_LARGE` | 413 | 网页输入框上传的文件超过了消息中给出的单文件上限。 | 附上更小的文件。 |
-| `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | 没有智能体能在一轮对话中使用这种类型的文件（视频、压缩包、可执行文件和其他二进制文件）。 | 附上图片、文档、音频或文本文件。 |
 | `CHANNEL_NOT_PAIRED` | 409 | 该消息渠道没有可发送的已配对聊天。 | 在消息渠道的页面上配对它。见[消息渠道](/zh/guides/channels)。 |
 | `CHANNEL_PERSON_NOT_FOUND` | 404 | 该消息渠道上没有与所指名字匹配的已配对的人。 | 在消息渠道的页面上列出已配对的人，再用其中一个的 id。 |
 | `CHANNEL_NOT_RUNNING` | 409 | 该消息渠道的适配器没有运行（已禁用或仍在启动）。 | 启用该渠道并等待它连上。 |

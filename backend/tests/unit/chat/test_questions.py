@@ -4,7 +4,7 @@ question for the owner").
 Driven through the real turn orchestrator with scripted adapters: an adapter
 asks through ``asker_for`` exactly as the Claude Code hook and the
 ``coffer__ask`` gateway path do, and the owner answers through the one
-``answer_question`` function the REST route and the channels share.
+``answer_question`` function the channels call.
 """
 
 from __future__ import annotations
@@ -34,13 +34,11 @@ from coffer.domain.chat.events import (
 from coffer.domain.chat.events import (
     QuestionClosed as QuestionClosedEvent,
 )
-from coffer.domain.chat.message import Role, TextBlock, ToolResultBlock, ToolUseBlock
 from coffer.domain.chat.question import QuestionBlock, check_answer, parse_ask_input
 from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import (
     FakeAgentProvider,
     FakeConversationRepo,
-    FakeMessageRepo,
     make_registry,
 )
 
@@ -94,7 +92,7 @@ class AskingAdapter:
         self.as_tool = as_tool
         self.outcome: QuestionOutcome | None = None
 
-    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
         return self._gen()
 
     async def _gen(self) -> AsyncIterator[AgentEvent]:
@@ -130,12 +128,8 @@ def _make(
 ) -> tuple[TurnOrchestrator, ChatService, _AskingProvider]:
     provider = _AskingProvider(ask_input, as_tool=as_tool)
     registry, _ = make_registry(provider=provider)
-    chat = ChatService(
-        conversations=FakeConversationRepo(), messages=FakeMessageRepo(), registry=registry
-    )
-    orchestrator = TurnOrchestrator(
-        chat_service=chat, registry=registry, idle_timeout=idle_timeout, flush_interval=None
-    )
+    chat = ChatService(conversations=FakeConversationRepo(), registry=registry)
+    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, idle_timeout=idle_timeout)
     return orchestrator, chat, provider
 
 
@@ -220,9 +214,9 @@ async def test_a_question_pauses_the_turn_and_the_answer_goes_back_to_the_agent(
     assert provider.adapters[0].outcome is None  # the turn is waiting, not running on
 
     answered = await questions.answer_question(
-        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="web", by="ui"
+        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="chan-uid", by="ui"
     )
-    assert answered.status == "answered" and answered.answered_via == "web"
+    assert answered.status == "answered" and answered.answered_via == "chan-uid"
     events = await _drain(queue)
 
     outcome = provider.adapters[0].outcome
@@ -234,17 +228,9 @@ async def test_a_question_pauses_the_turn_and_the_answer_goes_back_to_the_agent(
     assert len(asked) == 1 and len(closed) == 1
     assert closed[0].question.status == "answered"
 
-    messages = await chat.list_messages(conv.id)
-    # No user message was added for the answer, and the dialog tool is no card.
-    assert [m.role for m in messages] == [Role.USER, Role.ASSISTANT]
-    reply = messages[1]
-    persisted = [b for b in reply.content if isinstance(b, QuestionBlock)]
-    assert len(persisted) == 1
-    assert persisted[0].status == "answered" and persisted[0].answered_via == "web"
-    assert persisted[0].answers[0].selected == ("Yes",) and persisted[0].answered_at
-    assert not any(isinstance(b, (ToolUseBlock, ToolResultBlock)) for b in reply.content)
-    texts = [b.text for b in reply.content if isinstance(b, TextBlock)]
-    assert texts == ["Checking. ", "Done."]
+    # The dialog tool is no card: its call and result never reach the renderer.
+    assert not any(isinstance(e, (ToolCall, ToolResult)) for e in events)
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Checking. ", "Done."]
 
 
 async def test_coffer_ask_through_mcp_is_also_not_shown_as_a_tool_card() -> None:
@@ -253,7 +239,7 @@ async def test_coffer_ask_through_mcp_is_also_not_shown_as_a_tool_card() -> None
     queue = await start_turn(orchestrator, conv.id, "go")
     block = await _until_pending(conv.id)
     await questions.answer_question(
-        conv.id, block.question_id, [AnswerInput(text="only staging")], via="web", by="ui"
+        conv.id, block.question_id, [AnswerInput(text="only staging")], via="chan-uid", by="ui"
     )
     events = await _drain(queue)
     assert not any(isinstance(e, (ToolCall, ToolResult)) for e in events)
@@ -271,15 +257,12 @@ async def test_the_first_answer_wins_and_a_later_one_is_refused() -> None:
     )
     with pytest.raises(QuestionClosed):
         await questions.answer_question(
-            conv.id, block.question_id, [AnswerInput(selected=["No"])], via="web", by="ui"
+            conv.id, block.question_id, [AnswerInput(selected=["No"])], via="chan-uid", by="ui"
         )
     await _drain(queue)
 
     outcome = provider.adapters[0].outcome
     assert outcome is not None and outcome.block.answers[0].selected == ("Yes",)
-    (reply,) = [m for m in await chat.list_messages(conv.id) if m.role is Role.ASSISTANT]
-    (persisted,) = [b for b in reply.content if isinstance(b, QuestionBlock)]
-    assert persisted.answers[0].selected == ("Yes",) and persisted.answered_via == "chan-uid"
 
 
 async def test_two_answers_at_once_resolve_to_exactly_one() -> None:
@@ -290,10 +273,10 @@ async def test_two_answers_at_once_resolve_to_exactly_one() -> None:
 
     results = await asyncio.gather(
         questions.answer_question(
-            conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="web", by="a"
+            conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="chan-uid", by="a"
         ),
         questions.answer_question(
-            conv.id, block.question_id, [AnswerInput(selected=["No"])], via="web", by="b"
+            conv.id, block.question_id, [AnswerInput(selected=["No"])], via="chan-uid", by="b"
         ),
         return_exceptions=True,
     )
@@ -310,7 +293,11 @@ async def test_an_answer_for_another_conversation_or_an_unknown_question_is_clos
     for conversation_id, question_id in (("other", block.question_id), (conv.id, "nope")):
         with pytest.raises(QuestionClosed):
             await questions.answer_question(
-                conversation_id, question_id, [AnswerInput(selected=["Yes"])], via="web", by="ui"
+                conversation_id,
+                question_id,
+                [AnswerInput(selected=["Yes"])],
+                via="chan-uid",
+                by="ui",
             )
     # Still pending: a refused answer changes nothing.
     assert questions.pending_question_for(conv.id) is not None
@@ -325,7 +312,7 @@ async def test_an_invalid_answer_changes_nothing() -> None:
     block = await _until_pending(conv.id)
     with pytest.raises(QuestionAnswerInvalid):
         await questions.answer_question(
-            conv.id, block.question_id, [AnswerInput(selected=["Maybe"])], via="web", by="ui"
+            conv.id, block.question_id, [AnswerInput(selected=["Maybe"])], via="chan-uid", by="ui"
         )
     pending = questions.pending_question_for(conv.id)
     assert pending is not None and pending.answers == ()
@@ -342,7 +329,7 @@ async def test_several_questions_are_answered_one_at_a_time_in_order() -> None:
     questions.add_progress_listener(lambda _cid, b: progress.append(b))
 
     first = await questions.answer_question(
-        conv.id, block.question_id, [AnswerInput(selected=["staging"])], via="web", by="ui"
+        conv.id, block.question_id, [AnswerInput(selected=["staging"])], via="chan-uid", by="ui"
     )
     assert first.status == "pending" and first.next_index == 1
     assert questions.pending_question_for(conv.id) is not None
@@ -352,12 +339,12 @@ async def test_several_questions_are_answered_one_at_a_time_in_order() -> None:
             conv.id,
             block.question_id,
             [AnswerInput(selected=["live"])],
-            via="web",
+            via="chan-uid",
             by="ui",
             index=0,
         )
     # Text typed while it waits answers the first unanswered question.
-    last = await questions.answer_pending_with_text(conv.id, "api and web", via="web", by="ui")
+    last = await questions.answer_pending_with_text(conv.id, "api and web", via="chan-uid", by="ui")
     assert last is not None and last.status == "answered"
     events = await _drain(queue)
 
@@ -384,7 +371,7 @@ async def test_a_multi_select_answer_carries_every_label() -> None:
         conv.id,
         block.question_id,
         [AnswerInput(selected=["live"]), AnswerInput(selected=["api", "docs"])],
-        via="web",
+        via="chan-uid",
         by="ui",
     )
     await _drain(queue)
@@ -394,7 +381,7 @@ async def test_a_multi_select_answer_carries_every_label() -> None:
 
 
 async def test_text_with_nothing_pending_is_not_an_answer() -> None:
-    assert await questions.answer_pending_with_text("c", "hello", via="web", by="ui") is None
+    assert await questions.answer_pending_with_text("c", "hello", via="chan-uid", by="ui") is None
 
 
 # --------------------------------------------------------------------------
@@ -443,10 +430,6 @@ async def test_stopping_the_turn_cancels_the_question_and_tells_the_agent() -> N
     assert [b.status for b in closed] == ["cancelled"]
     assert any(isinstance(e, QuestionClosedEvent) for e in events)
     assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in events)
-    reply = next(m for m in await chat.list_messages(conv.id) if m.role is Role.ASSISTANT)
-    assert reply.status == "stopped"
-    (persisted,) = [b for b in reply.content if isinstance(b, QuestionBlock)]
-    assert persisted.status == "cancelled"
     # The adapter was cancelled with its turn; the waiting call is released.
     assert provider.adapters[0].outcome is None
 
@@ -479,12 +462,11 @@ async def test_a_daemon_shutdown_cancels_the_pending_question() -> None:
     await _until_pending(conv.id)
 
     await stop_all_turns()
-    await _drain(queue)
+    events = await _drain(queue)
 
     assert not questions.needs_you(conv.id)
-    reply = next(m for m in await chat.list_messages(conv.id) if m.role is Role.ASSISTANT)
-    assert reply.status == "failed"
-    assert [b.status for b in reply.content if isinstance(b, QuestionBlock)] == ["cancelled"]
+    closed = [e for e in events if isinstance(e, QuestionClosedEvent)]
+    assert [e.question.status for e in closed] == ["cancelled"]
 
 
 async def test_deleting_the_conversation_cancels_its_question() -> None:
@@ -553,10 +535,8 @@ async def test_a_turn_token_lives_exactly_as_long_as_the_turn() -> None:
 
     provider.build_adapter = build  # type: ignore[method-assign]
     registry, _ = make_registry(provider=provider)
-    chat = ChatService(
-        conversations=FakeConversationRepo(), messages=FakeMessageRepo(), registry=registry
-    )
-    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, flush_interval=None)
+    chat = ChatService(conversations=FakeConversationRepo(), registry=registry)
+    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
     conv = await chat.create_conversation(agent_key="builtin")
     assert questions.turn_env(conv.id) == {}
 
@@ -582,7 +562,7 @@ async def test_a_waiting_turn_is_not_cut_off_by_the_idle_watchdog() -> None:
     assert questions.needs_you(conv.id), "the watchdog ended a turn waiting on the owner"
 
     await questions.answer_question(
-        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="web", by="ui"
+        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="chan-uid", by="ui"
     )
     events = await _drain(queue)
     assert any(isinstance(e, TurnDone) and e.stop_reason == "end_turn" for e in events)
@@ -606,18 +586,14 @@ async def test_the_watchdog_resumes_once_the_question_is_answered() -> None:
 
     provider.build_adapter = build  # type: ignore[method-assign]
     registry, _ = make_registry(provider=provider)
-    chat = ChatService(
-        conversations=FakeConversationRepo(), messages=FakeMessageRepo(), registry=registry
-    )
-    orchestrator = TurnOrchestrator(
-        chat_service=chat, registry=registry, idle_timeout=0.1, flush_interval=None
-    )
+    chat = ChatService(conversations=FakeConversationRepo(), registry=registry)
+    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, idle_timeout=0.1)
     conv = await chat.create_conversation(agent_key="builtin")
     queue = await start_turn(orchestrator, conv.id, "go")
     block = await _until_pending(conv.id)
     await asyncio.sleep(0.25)
     await questions.answer_question(
-        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="web", by="ui"
+        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="chan-uid", by="ui"
     )
     events = await _drain(queue)
     assert any(getattr(e, "code", None) == "turn_timeout" for e in events)

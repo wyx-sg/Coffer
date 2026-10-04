@@ -16,7 +16,6 @@ from coffer.domain.retention import (
     DEFAULT_SKILL_DATA_RETENTION_DAYS,
 )
 from coffer.infrastructure.channel.seatalk_media import default_media_dir
-from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.media_retention import (
     count_media_dir,
     count_media_tree,
@@ -32,22 +31,19 @@ def _channel_media_sweep(now: datetime, max_age_days: int) -> list[str]:
 
 
 def _attachments_policy() -> FilePolicy:
-    """The ``attachments`` retention policy over both media dirs: what a channel
-    downloaded and what the web composer uploaded (spec resource-framework
-    "Retain attachments on an adjustable policy")."""
-    chat = FileChatMediaStore(default_chat_media_dir())
+    """The ``attachments`` retention policy over the channel media dir: what a
+    channel downloaded (spec resource-framework "Retain attachments on an
+    adjustable policy")."""
 
     def count(now: datetime, max_age_days: int) -> tuple[int, int]:
-        c_total, c_old = count_media_dir(default_media_dir(), max_age_days=max_age_days, now=now)
-        w_total, w_old = chat.count(now, max_age_days)
-        return c_total + w_total, c_old + w_old
+        return count_media_dir(default_media_dir(), max_age_days=max_age_days, now=now)
 
     return FilePolicy(
         name="attachments",
         display_name="Attachments",
-        description="Files and images sent in conversations and channels.",
+        description="Files and images sent in channels.",
         default_retention_days=DEFAULT_ATTACHMENT_RETENTION_DAYS,
-        sweeps=(_channel_media_sweep, chat.prune),
+        sweeps=(_channel_media_sweep,),
         count=count,
     )
 

@@ -1,7 +1,6 @@
 """AgentEvent union — typed events streamed by an AgentAdapter during a turn.
 
-Each class carries a ``type`` discriminator whose value is reused verbatim as
-the SSE event name on the wire:
+Each class carries a ``type`` discriminator whose value identifies the event:
 
   TurnStarted      → ``turn_start``
   TextDelta        → ``text_delta``
@@ -9,14 +8,8 @@ the SSE event name on the wire:
   ToolResult       → ``tool_result``
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
-  QueueChanged     → ``queue_changed``
   QuestionAsked    → ``question_asked``
   QuestionClosed   → ``question_closed``
-
-``QueueChanged`` is a conversation-level event (the pending-message queue, spec chat
-"Queue messages sent during a turn")
-rather than a turn-content event: it is broadcast by the orchestrator, never
-emitted by an adapter, and is not accumulated into the assistant message.
 """
 
 from __future__ import annotations
@@ -107,20 +100,6 @@ class TurnError:
 
 
 @dataclass(frozen=True)
-class QueueChanged:
-    """The conversation's pending-message queue changed (spec chat "Express a turn
-    as typed events").
-
-    Carries the ordered texts still waiting to run as their own turns, so every
-    subscriber renders the same pending state. Conversation-level, not turn
-    content — never emitted by an adapter.
-    """
-
-    pending: list[str]
-    type: Literal["queue_changed"] = "queue_changed"
-
-
-@dataclass(frozen=True)
 class QuestionAsked:
     """The agent asked the owner a question and the turn is waiting (spec chat
     "Pause a turn on a question for the owner"). Carries the pending block;
@@ -147,7 +126,6 @@ AgentEvent = (
     | ToolResult
     | TurnDone
     | TurnError
-    | QueueChanged
     | QuestionAsked
     | QuestionClosed
 )

@@ -275,34 +275,6 @@ def build_prunable_registry() -> PrunableRegistry:
             description="History of converge rounds against the sync remote.",
         )
     )
-    # Conversations follow a two-stage lifecycle: idle threads are auto-archived,
-    # then archived threads are deleted a while later. Both windows are user-tunable
-    # (or None to disable) via the same retention surface as the log tables.
-    registry.register(
-        PrunableTable(
-            name="conversations_archive",
-            timestamp_column="updated_at",
-            default_retention_days=7,
-            display_name="Auto-archive Idle Chats",
-            description="Archive conversations with no new message for this many days.",
-            action="archive",
-            target_table="conversations",
-            archive_set_column="archived_at",
-        )
-    )
-    registry.register(
-        PrunableTable(
-            name="conversations",
-            timestamp_column="archived_at",
-            default_retention_days=30,
-            display_name="Delete Archived Chats",
-            description="Delete archived conversations this many days after archival "
-            "(with their messages), unless they were written to since.",
-            # An archived conversation can still take a message (a chat thread
-            # resumed from the phone): it is not deleted while that is true.
-            also_older_column="updated_at",
-        )
-    )
     register_usage_retention(registry)
     return registry
 
@@ -311,7 +283,7 @@ def build_retention_service(
     sm: async_sessionmaker[AsyncSession], *, audit: AuditService
 ) -> RetentionService:
     """Compose the ``RetentionService`` (registry + repo + audit) and bind the
-    file policies (``attachments`` over ``channel-media`` and ``chat-media``,
+    file policies (``attachments`` over ``channel-media``,
     ``skill_data`` over ``skill-data``) at
     composition root, so the
     application layer never imports the infrastructure prune. The caller runs

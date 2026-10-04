@@ -26,7 +26,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.inbound import ChannelBinding, InboundProcessor
+from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import AdapterCallbacks, ChannelAdapter
 from coffer.application.channel.runtime_binding import make_binding
@@ -83,12 +83,8 @@ class ChannelRuntime:
         materialize: MaterializeFn | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
-        on_tick: Callable[[ChannelBinding], Awaitable[None]] | None = None,
         secret_revision: SecretRevision | None = None,
     ) -> None:
-        # Handed each running channel's binding after every tick: the outbox
-        # flush of spec chat "Mirror a web reply into the channel it came from".
-        self._on_tick = on_tick
         self._resources = resources
         self._factory = adapter_factory
         self._processor = processor
@@ -240,30 +236,12 @@ class ChannelRuntime:
         except Exception:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
-        await self._after_tick()
 
     def _rename(self, channel_uid: str, entry: _Running, resource: Resource) -> None:
         binding = self._processor.binding(channel_uid)
         if binding is not None:
             self._processor.bind(dataclasses.replace(binding, resource=resource))
         self._running[channel_uid] = dataclasses.replace(entry, name=resource.name)
-
-    async def _after_tick(self) -> None:
-        """Run the tick hook for each running channel; a hook that fails is
-        logged and never breaks the tick or the next channel's turn."""
-        if self._on_tick is None:
-            return
-        for channel_uid in list(self._running):
-            binding = self._processor.binding(channel_uid)
-            if binding is None or self._stop.is_set():
-                continue
-            try:
-                await self._on_tick(binding)
-            except Exception:
-                _logger.exception(
-                    "channel.runtime.tick_hook_failed",
-                    extra={"channel": binding.resource.name},
-                )
 
     async def local_machine_id(self) -> str | None:
         """This machine's id, or ``None`` when no provider is wired.

@@ -1,6 +1,6 @@
 """The orchestrator's per-conversation state: one ``TurnState`` per
 conversation, released once idle; the idle watchdog that bounds a wedged turn;
-and the shared pending queue a channel message rides with its renderer hook.
+and the pending queue a channel message rides with its renderer hook.
 """
 
 from __future__ import annotations
@@ -19,13 +19,11 @@ from coffer.application.chat.turn_state import peek
 from coffer.domain.chat.events import (
     TURN_TIMEOUT,
     AgentEvent,
-    QueueChanged,
     TextDelta,
     TurnDone,
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Role, TextBlock
 from tests.support.chat_turns import start_turn
 
 from .conftest import FakeAgentAdapter
@@ -55,7 +53,7 @@ class _StallingAdapter:
         self.cancelled = False
         self.stalled = asyncio.Event()
 
-    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
         return self._gen()
 
     async def _gen(self) -> AsyncIterator[AgentEvent]:
@@ -77,7 +75,7 @@ class _StallingAdapter:
 @pytest.mark.acceptance(spec="chat", scenario="a silent turn is cancelled by the idle watchdog")
 async def test_a_turn_with_no_event_for_the_idle_window_is_cancelled_as_a_timeout() -> None:
     adapter = _StallingAdapter()
-    orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
+    orchestrator, _conv, _prov = make_orchestrator(adapter=adapter)
     orchestrator._idle_timeout = 0.05
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
@@ -91,11 +89,7 @@ async def test_a_turn_with_no_event_for_the_idle_window_is_cancelled_as_a_timeou
     assert "0.05s" in terminals[0].message
     # The adapter's own cancellation path ran — the subprocess teardown lives there.
     assert adapter.cancelled is True
-    # The partial reply is kept, on a message marked failed, and the slot is free.
-    assistant = [m for m in msg_repo.all_messages() if m.role is Role.ASSISTANT]
-    assert len(assistant) == 1
-    assert assistant[0].status == "failed"
-    assert [b.text for b in assistant[0].content if isinstance(b, TextBlock)] == ["half an answer"]
+    # The slot is free.
     assert conv.id not in active_turns()
 
 
@@ -107,7 +101,7 @@ async def test_events_inside_the_window_keep_a_turn_alive() -> None:
                 yield event
 
     adapter = _Slow([TurnStarted(), TextDelta(text="a"), TextDelta(text="b"), _DONE])
-    orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
+    orchestrator, _conv, _prov = make_orchestrator(adapter=adapter)
     orchestrator._idle_timeout = 0.1
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
@@ -115,13 +109,11 @@ async def test_events_inside_the_window_keep_a_turn_alive() -> None:
 
     assert events[-1] == _DONE
     assert not any(isinstance(e, TurnError) for e in events)
-    assistant = [m for m in msg_repo.all_messages() if m.role is Role.ASSISTANT]
-    assert assistant[0].status == "complete"
 
 
 async def test_a_disabled_watchdog_waits_indefinitely() -> None:
     adapter = _StallingAdapter()
-    orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=adapter)
+    orchestrator, _conv, _prov = make_orchestrator(adapter=adapter)
     orchestrator._idle_timeout = None
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
@@ -137,7 +129,7 @@ async def test_a_disabled_watchdog_waits_indefinitely() -> None:
 
 async def test_an_interrupt_during_the_window_is_still_an_interrupt() -> None:
     adapter = _StallingAdapter()
-    orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
+    orchestrator, _conv, _prov = make_orchestrator(adapter=adapter)
     orchestrator._idle_timeout = 10.0
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
@@ -150,8 +142,6 @@ async def test_an_interrupt_during_the_window_is_still_an_interrupt() -> None:
         prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
     )
     assert not any(isinstance(e, TurnError) for e in events)
-    assistant = [m for m in msg_repo.all_messages() if m.role is Role.ASSISTANT]
-    assert assistant[0].status == "stopped"
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +151,7 @@ async def test_an_interrupt_during_the_window_is_still_an_interrupt() -> None:
 
 @pytest.mark.acceptance(spec="chat", scenario="turn state is released when nothing needs it")
 async def test_finishing_a_turn_releases_the_conversation_state() -> None:
-    orchestrator, _conv, _msg, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
+    orchestrator, _conv, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     await orchestrator.enqueue_message(conv.id, "hi")
@@ -173,29 +163,8 @@ async def test_finishing_a_turn_releases_the_conversation_state() -> None:
     assert orchestrator.pending(conv.id) == []
 
 
-@pytest.mark.acceptance(spec="chat", scenario="turn state is released when nothing needs it")
-async def test_a_subscriber_keeps_the_state_until_it_detaches() -> None:
-    orchestrator, _conv, _msg, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-
-    queue = orchestrator.subscribe(conv.id)
-    await orchestrator.enqueue_message(conv.id, "hi")
-    await _settle()
-    assert conv.id in held_conversations()  # the web tab is still watching
-    # …and a turn started while it watches reaches the SAME subscription.
-    await orchestrator.enqueue_message(conv.id, "again")
-    await _settle()
-    seen = []
-    while not queue.empty():
-        seen.append(queue.get_nowait())
-    assert sum(isinstance(e, TurnDone) for e in seen) == 2
-
-    orchestrator.unsubscribe(conv.id, queue)
-    assert conv.id not in held_conversations()
-
-
 async def test_a_pending_message_keeps_the_state_while_paused() -> None:
-    orchestrator, _conv, _msg, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
+    orchestrator, _conv, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     await orchestrator.enqueue_message(conv.id, "one")
@@ -209,15 +178,17 @@ async def test_a_pending_message_keeps_the_state_while_paused() -> None:
     assert state is not None and state.paused is True
 
 
-async def test_cancel_turn_drops_the_state_and_closes_the_bus() -> None:
-    orchestrator, _conv, _msg, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
+async def test_cancel_turn_drops_the_state() -> None:
+    orchestrator, _conv, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-    queue = orchestrator.subscribe(conv.id)
+    await orchestrator.enqueue_message(conv.id, "one")
+    await orchestrator.enqueue_message(conv.id, "two")
+    assert conv.id in held_conversations()
 
     orchestrator.cancel_turn(conv.id)
 
     assert conv.id not in held_conversations()
-    assert queue.get_nowait() is None  # the close sentinel
+    assert orchestrator.pending(conv.id) == []
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +196,7 @@ async def test_cancel_turn_drops_the_state_and_closes_the_bus() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_a_channel_message_queues_behind_a_web_turn_and_gets_its_own_stream() -> None:
+async def test_a_channel_message_queues_behind_a_running_turn_and_gets_its_own_stream() -> None:
     release = asyncio.Event()
 
     class _Gated(FakeAgentAdapter):
@@ -235,26 +206,18 @@ async def test_a_channel_message_queues_behind_a_web_turn_and_gets_its_own_strea
             yield TextDelta(text="reply")
             yield _DONE
 
-    orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=_Gated([]))
+    orchestrator, _conv, _prov = make_orchestrator(adapter=_Gated([]))
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-    observer = orchestrator.subscribe(conv.id)
     handed: list[asyncio.Queue[Any]] = []
 
-    await orchestrator.enqueue_message(conv.id, "from the web")
+    await orchestrator.enqueue_message(conv.id, "from the first")
     queued = await orchestrator.enqueue_message(
         conv.id, "from the phone", title_hint="phone", on_start=handed.append
     )
 
     assert queued is True
     assert handed == []  # not started yet — the renderer is not attached
-    # The web sees the channel's message in the same pending chips.
     assert orchestrator.pending(conv.id) == ["from the phone"]
-    changes = []
-    while not observer.empty():
-        ev = observer.get_nowait()
-        if isinstance(ev, QueueChanged):
-            changes.append(ev.pending)
-    assert changes[-1] == ["from the phone"]
 
     release.set()
     await _settle()
@@ -263,38 +226,6 @@ async def test_a_channel_message_queues_behind_a_web_turn_and_gets_its_own_strea
     assert [e.text for e in events if isinstance(e, TextDelta)] == ["reply"]
     assert isinstance(events[-1], TurnDone)
     assert orchestrator.pending(conv.id) == []
-    orchestrator.unsubscribe(conv.id, observer)
-
-
-@pytest.mark.acceptance(spec="chat", scenario="a reordered queue keeps each message's attachments")
-async def test_reordering_the_queue_from_the_web_keeps_a_channel_message_whole() -> None:
-    release = asyncio.Event()
-
-    class _Gated(FakeAgentAdapter):
-        async def _yield_events(self) -> AsyncIterator[AgentEvent]:
-            yield TurnStarted()
-            await release.wait()
-            yield _DONE
-
-    orchestrator, _conv, _msg, _prov = make_orchestrator(adapter=_Gated([]))
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-    handed: list[asyncio.Queue[Any]] = []
-    sink = handed.append
-
-    await orchestrator.enqueue_message(conv.id, "running")
-    await orchestrator.enqueue_message(conv.id, "web first")
-    await orchestrator.enqueue_message(conv.id, "phone", on_start=sink)
-
-    assert await orchestrator.set_pending(conv.id, ["phone", "web first"]) == ["phone", "web first"]
-    state = peek(conv.id)
-    assert state is not None
-    assert state.queue[0].on_start is sink  # the renderer hook survived
-    assert state.queue[1].on_start is None
-
-    release.set()
-    await _settle()
-    assert len(handed) == 1
-    orchestrator.cancel_turn(conv.id)  # cleanup
 
 
 @pytest.mark.acceptance(
@@ -315,7 +246,7 @@ async def test_a_channel_message_that_cannot_start_hears_the_failure() -> None:
             yield _DONE
 
     provider = FakeAgentProvider(_Gated([]))
-    orchestrator, _conv, _msg, _prov = make_orchestrator(provider=provider)
+    orchestrator, _conv, _prov = make_orchestrator(provider=provider)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
     handed: list[asyncio.Queue[Any]] = []
 
@@ -330,47 +261,3 @@ async def test_a_channel_message_that_cannot_start_hears_the_failure() -> None:
     assert len(handed) == 1
     events = await drain_queue(handed[0])
     assert events == [TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")]
-
-
-async def test_a_failed_queued_start_is_told_live_but_not_replayed_to_a_late_subscriber() -> None:
-    from coffer.domain.chat.errors import AgentConfigRejected
-    from coffer.domain.chat.events import QueueChanged
-
-    from .conftest import FakeAgentProvider
-
-    release = asyncio.Event()
-
-    class _Gated(FakeAgentAdapter):
-        async def _yield_events(self) -> AsyncIterator[AgentEvent]:
-            yield TurnStarted()
-            await release.wait()
-            yield _DONE
-
-    provider = FakeAgentProvider(_Gated([]))
-    orchestrator, _conv, _msg, _prov = make_orchestrator(provider=provider)
-    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
-    live = orchestrator.subscribe(conv.id)
-
-    await orchestrator.enqueue_message(conv.id, "running")
-    await orchestrator.enqueue_message(conv.id, "second")
-    provider._build_error = AgentConfigRejected("missing_secret", "no secret")
-    release.set()
-    await _settle()
-
-    heard: list[AgentEvent] = []
-    while not live.empty():
-        item = live.get_nowait()
-        if item is not None:
-            heard.append(item)
-    assert TurnError(code="INTERNAL_ERROR", message="failed to start queued turn") in heard
-
-    # A page opened (or reconnected) afterwards sees the held queue, not a turn
-    # error it can do nothing about.
-    late = orchestrator.subscribe(conv.id)
-    replayed: list[AgentEvent] = []
-    while not late.empty():
-        item = late.get_nowait()
-        if item is not None:
-            replayed.append(item)
-    assert not any(isinstance(e, TurnError) for e in replayed)
-    assert replayed[-1] == QueueChanged(pending=["second"])

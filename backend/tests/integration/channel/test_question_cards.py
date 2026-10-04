@@ -18,10 +18,16 @@ import pytest
 
 from coffer.application.chat import questions
 from coffer.application.chat.questions import AnswerInput
-from coffer.domain.chat.message import TextBlock
 from tests.unit.chat.test_questions import TWO, YES_NO, AskingAdapter
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, tap_event, turn_body, wait_until
+from .conftest import (
+    ChannelEnv,
+    FakeChannelAdapter,
+    _RecordingAdapter,
+    inbound,
+    tap_event,
+    wait_until,
+)
 
 _OWNER = "owner-1"
 _TIME = r"\d\d:\d\d"
@@ -40,7 +46,7 @@ def _asking(env: ChannelEnv, ask_input: dict[str, Any]) -> list[AskingAdapter]:
     async def build(conversation_id: str) -> AskingAdapter:
         adapter = AskingAdapter(conversation_id, ask_input, as_tool="AskUserQuestion")
         built.append(adapter)
-        return adapter
+        return _RecordingAdapter(adapter, env.provider, conversation_id)
 
     env.provider.build_adapter = build  # type: ignore[method-assign]
     return built
@@ -67,12 +73,7 @@ async def _tap(env: ChannelEnv, data: str, **kwargs: Any) -> None:
 
 def _user_texts(env: ChannelEnv, conversation_id: str) -> Any:
     async def read() -> list[str]:
-        messages = await env.chat.list_messages(conversation_id)
-        return [
-            turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
-            for m in messages
-            if m.role.value == "user"
-        ]
+        return env.user_texts(conversation_id)
 
     return read()
 
@@ -214,7 +215,7 @@ async def test_a_tap_from_someone_else_in_the_group_is_refused(env: ChannelEnv) 
         inbound("tg", "grp-1", "@bot go", chat_kind="group", sender_id=_OWNER, thread_id="t1")
     )
     await wait_until(lambda: bool(adapter.cards))
-    conversation_id = (await env.chat.list_conversations())[0].id
+    conversation_id = (await env.conversations())[0].id
 
     await env.processor.on_callback(
         tap_event(

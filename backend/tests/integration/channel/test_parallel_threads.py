@@ -19,7 +19,6 @@ import pytest
 from coffer.application.channel.parallel_threads import THREAD_BODY
 from coffer.domain.channel.commands import DM_ONLY_NOTICE
 from coffer.domain.channel.errors import ParallelThreadUnavailable
-from coffer.domain.chat.message import TextBlock
 from coffer.domain.resource import Resource
 
 from .conftest import (
@@ -27,7 +26,6 @@ from .conftest import (
     FakeChannelAdapter,
     inbound,
     tap_event,
-    turn_body,
     uid_of,
     wait_until,
 )
@@ -42,12 +40,7 @@ async def _seatalk_shaped(env: ChannelEnv, **caps: bool) -> tuple[Resource, Fake
 
 
 async def _user_texts(env: ChannelEnv, conversation_id: str) -> list[str]:
-    messages = await env.chat.list_messages(conversation_id)
-    return [
-        turn_body("".join(b.text for b in m.content if isinstance(b, TextBlock)))
-        for m in messages
-        if m.role == "user"
-    ]
+    return env.user_texts(conversation_id)
 
 
 def _answers_in(adapter: FakeChannelAdapter, thread_id: str) -> list[str]:

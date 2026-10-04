@@ -32,7 +32,7 @@ from alembic.script import ScriptDirectory
 BASELINE_REVISION = "0146"
 #: The newest revision in the tree. Equal to the baseline until a revision is
 #: stacked on it; bump it with each new revision.
-HEAD_REVISION = "0148"
+HEAD_REVISION = "0149"
 
 _ALEMBIC_INI = (
     pathlib.Path(__file__).resolve().parents[4]
@@ -150,7 +150,7 @@ def test_0147_drops_the_effort_column_and_the_stored_effort_key(tmp_path, monkey
             " VALUES ('c2', 'claude_code', 't', '2026-10-05 00:00:00', '2026-10-05 00:00:00')"
         )
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0148")
 
     with sqlite3.connect(db_path) as conn:
         columns = [r[1] for r in conn.execute("PRAGMA table_info(channel_thread_conversations)")]
@@ -161,3 +161,50 @@ def test_0147_drops_the_effort_column_and_the_stored_effort_key(tmp_path, monkey
             conn.execute("SELECT agent_config FROM conversations WHERE id='c2'").fetchone()[0]
             is None
         )
+
+
+def test_0149_drops_the_message_store_and_the_conversations_no_channel_owns(tmp_path, monkeypatch):
+    db_path = tmp_path / "messages.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0148")
+    with sqlite3.connect(db_path) as conn:
+        for cid, channel in (("web", None), ("chan", "ch-1")):
+            conn.execute(
+                "INSERT INTO conversations (id, agent_key, title, created_at, updated_at,"
+                " channel_uid, peer_chat_id, archived_at)"
+                " VALUES (?, 'claude_code', 't', '2026-10-05 00:00:00', '2026-10-05 00:00:00',"
+                " ?, ?, '2026-10-05 00:00:00')",
+                (cid, channel, "peer" if channel else None),
+            )
+            conn.execute(
+                "INSERT INTO chat_messages (id, conversation_id, seq, role, content, status,"
+                " created_at) VALUES (?, ?, 0, 'user', '[]', 'complete', '2026-10-05 00:00:00')",
+                (f"m-{cid}", cid),
+            )
+            conn.execute(
+                "INSERT INTO chat_reply_files (message_id, path, seq, added, removed)"
+                " VALUES (?, 'a.py', 0, 1, 0)",
+                (f"m-{cid}",),
+            )
+
+    command.upgrade(cfg, "head")
+
+    with sqlite3.connect(db_path) as conn:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert not {"chat_messages", "chat_reply_files"} & tables
+        columns = [r[1] for r in conn.execute("PRAGMA table_info(conversations)")]
+        assert "archived_at" not in columns
+        indexes = {r[1] for r in conn.execute("PRAGMA index_list(conversations)")}
+        assert "idx_conversations_archived" not in indexes
+        # Only the conversation a channel owns is kept; the web's own is gone.
+        assert [r[0] for r in conn.execute("SELECT id FROM conversations")] == ["chan"]
+
+    # The downgrade recreates the empty tables and the column; nothing is restored.
+    command.downgrade(cfg, "0148")
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM chat_messages").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM chat_reply_files").fetchone()[0] == 0
+        columns = [r[1] for r in conn.execute("PRAGMA table_info(conversations)")]
+        assert "archived_at" in columns
+        assert [r[0] for r in conn.execute("SELECT id FROM conversations")] == ["chan"]

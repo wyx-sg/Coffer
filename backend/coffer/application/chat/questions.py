@@ -13,7 +13,7 @@ through Claude Code's ``AskUserQuestion`` (the adapter's ``can_use_tool`` calls
 ``ask_owner``); both end in :func:`raise_question`, which publishes
 ``QuestionAsked`` on the turn and blocks until the question is answered, cancelled
 or 24 hours pass. :func:`answer_question` is the one place an answer is taken —
-the REST route and the channels both call it — and the first answer wins: it is
+the channels call it — and the first answer wins: it is
 a synchronous check-and-set, so a second one finds the question closed and gets
 ``QuestionClosed``.
 
@@ -23,7 +23,7 @@ API for other kinds (the channels' turn renderer)::
     add_progress_listener(cb)  # cb(conversation_id, block): one of several answered
     add_closed_listener(cb)    # cb(conversation_id, block): answered in full, or cancelled
     pending_question_for(conversation_id) -> QuestionBlock | None
-    answer_question(conversation_id, question_id, answers, via=<channel uid>|"web", by=<name>)
+    answer_question(conversation_id, question_id, answers, via=<channel uid>, by=<name>)
     answer_pending_with_text(conversation_id, text, via=, by=)   # text-as-answer routing
     cancel_conversation_questions(conversation_id)
 
@@ -77,8 +77,8 @@ MSG_STOPPED = "The owner stopped the task."
 MSG_NO_ANSWER = "The owner did not answer."
 MSG_EXPIRED = "No answer: the owner did not answer within 24 hours."
 
-#: Publishes one event on the turn that asked (the runner folds it into the
-#: reply's content and fans it out to the bus and the channel renderer).
+#: Publishes one event on the turn that asked (the runner fans it out to the bus
+#: and the channel renderer).
 EventSink = Callable[[AgentEvent], Awaitable[None]]
 
 
@@ -89,9 +89,6 @@ class TurnContext:
     token: str
     conversation_id: str
     turn_id: str
-    #: The assistant reply the question block lands in; known once the runner
-    #: has written the reply's placeholder row.
-    reply_message_id: str | None = None
     on_event: EventSink | None = None
     #: Told ``True`` when the turn starts waiting on a question and ``False``
     #: when the last one closes (the runner suspends its idle watchdog).
@@ -306,7 +303,7 @@ async def answer_question(
 
     The first answer wins: a question already answered in full, cancelled, gone
     with its turn, or whose question ``index`` was answered meanwhile raises
-    ``QuestionClosed`` and changes nothing. ``via`` is ``"web"`` or the channel's
+    ``QuestionClosed`` and changes nothing. ``via`` is the answering channel's
     uid; ``by`` names who answered. Raises ``QuestionAnswerInvalid`` for an
     answer that does not fit.
     """

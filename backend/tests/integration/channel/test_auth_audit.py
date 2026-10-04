@@ -22,7 +22,7 @@ async def test_message_from_a_different_sender_is_ignored(env: ChannelEnv) -> No
     await env.processor.on_message(inbound("tg", "owner", "do something", sender_id="u-intruder"))
 
     assert adapter.texts() == []  # no reply
-    assert await env.chat.list_conversations() == []  # no turn started
+    assert await env.conversations() == []  # no turn started
 
 
 async def test_matching_sender_passes_the_gate(env: ChannelEnv) -> None:
@@ -43,4 +43,4 @@ async def test_message_with_no_sender_id_is_ignored(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "hi", sender_id=""))
 
     assert adapter.texts() == []
-    assert await env.chat.list_conversations() == []
+    assert await env.conversations() == []

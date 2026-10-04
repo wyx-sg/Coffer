@@ -4,7 +4,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { ThreadAttachment } from "./ThreadAttachment";
 import { chatApi } from "@/lib/api/chat";
 import { contentBlock } from "@/lib/chat/contentBlock";
-import { acceptance } from "@/test/acceptance";
 
 const image = contentBlock({
   type: "attachment",
@@ -21,19 +20,15 @@ describe("ThreadAttachment", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  acceptance(
-    "chat",
-    "an attached image is fetched by its id for the thread's thumbnail",
-    async () => {
-      const fetchBlob = vi
-        .spyOn(chatApi, "attachmentBlob")
-        .mockResolvedValue(new Blob(["x"], { type: "image/png" }));
-      render(<ThreadAttachment conversationId="c-1" block={image} />);
-      const img = await screen.findByTestId("attachment-thumbnail");
-      expect(img).toHaveAttribute("src", "blob:thumb");
-      expect(fetchBlob).toHaveBeenCalledWith("c-1", "a".repeat(32));
-    },
-  );
+  test("an attached image is fetched by its id for the thread's thumbnail", async () => {
+    const fetchBlob = vi
+      .spyOn(chatApi, "attachmentBlob")
+      .mockResolvedValue(new Blob(["x"], { type: "image/png" }));
+    render(<ThreadAttachment conversationId="c-1" block={image} />);
+    const img = await screen.findByTestId("attachment-thumbnail");
+    expect(img).toHaveAttribute("src", "blob:thumb");
+    expect(fetchBlob).toHaveBeenCalledWith("c-1", "a".repeat(32));
+  });
 
   test("a pruned image stays a chip with its type and size", async () => {
     const fetchBlob = vi.spyOn(chatApi, "attachmentBlob").mockRejectedValue(new Error("404"));

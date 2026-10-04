@@ -1,11 +1,11 @@
 """Integration test: deleting a conversation cancels and DISCARDS its turn.
 
-See spec chat "Create, rename, archive, unarchive and delete conversations".
+See spec chat "Rename and delete a conversation through its agent".
 
 
 - The DELETE route forwards ``orchestrator.cancel_turn`` to ``ChatService``.
 - ``delete_conversation``, given ``cancel_turn_fn``, cancels the in-flight turn
-  on the *discard* path — no partial assistant message, no terminal ``TurnDone``
+  on the *discard* path — no terminal ``TurnDone``
   (this is what distinguishes deletion from user interruption).
 """
 
@@ -29,7 +29,6 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
 from coffer.surfaces.http.chat.dependencies import (
     get_agent_registry,
-    get_attachment_service,
     get_chat_service,
     get_turn_orchestrator,
 )
@@ -38,7 +37,6 @@ from coffer.surfaces.http.dependencies import get_resource_service
 from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import (
     FakeAgentProvider,
-    make_attachment_service,
     make_chat_services,
 )
 
@@ -50,7 +48,7 @@ class _BlockingAdapter:
 
     model_id = None
 
-    async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
         async def gen() -> AsyncIterator[AgentEvent]:
             yield TextDelta(text="partial")
             await asyncio.sleep(3600)
@@ -78,9 +76,14 @@ def _build_app(chat_svc: Any, orchestrator: Any, registry: Any) -> FastAPI:
     app.dependency_overrides[get_chat_service] = lambda: chat_svc
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: registry
-    app.dependency_overrides[get_attachment_service] = lambda: make_attachment_service()
     app.dependency_overrides[get_resource_service] = lambda: _NoChannels()
     return app
+
+
+def await_create(chat_svc: Any) -> Any:
+    return asyncio.run(
+        chat_svc.create_conversation(agent_key="builtin", channel_uid="c", peer_chat_id="p")
+    )
 
 
 def test_delete_conversation_route_passes_cancel_fn_to_service() -> None:
@@ -103,9 +106,7 @@ def test_delete_conversation_route_passes_cancel_fn_to_service() -> None:
     chat_svc.delete_conversation = _capturing_delete  # type: ignore[method-assign]
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        conv_id = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()[
-            "id"
-        ]
+        conv_id = (await_create(chat_svc)).id
         resp = client.delete(f"/api/v1/chat/conversations/{conv_id}")
         assert resp.status_code == 204
 
@@ -122,7 +123,7 @@ async def test_delete_discards_an_in_flight_turn() -> None:
     """delete_conversation cancels a live turn on the discard path.
 
     Unlike interruption, the discard path emits no terminal TurnDone and
-    persists no partial assistant message; the task simply leaves the registry.
+    the task simply leaves the registry.
     """
     chat_svc, orchestrator, _registry = make_chat_services(
         provider=FakeAgentProvider(_BlockingAdapter(), agent_key="builtin")

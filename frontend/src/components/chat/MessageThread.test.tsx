@@ -90,7 +90,7 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByText("Hey there")).toBeInTheDocument());
   });
 
-  acceptance("chat", "an attached file is shown in the thread after a reload", async () => {
+  test("an attached file is shown in the thread after a reload", async () => {
     // A fresh mount reads the persisted rows: the attachment reference comes back
     // as a chip naming the file and its type under the message text, with no path.
     chatApiMock.listMessages.mockResolvedValue({
@@ -436,7 +436,7 @@ describe("MessageThread", () => {
     expect(onResend).not.toHaveBeenCalled();
   });
 
-  acceptance("chat", "a failed turn offers a retry in the thread", async () => {
+  test("a failed turn offers a retry in the thread", async () => {
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
         makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "try again" })] }),
@@ -455,7 +455,7 @@ describe("MessageThread", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  acceptance("chat", "a retry re-sends the failed message's attachments", async () => {
+  test("a retry re-sends the failed message's attachments", async () => {
     // Before the failed prompt's row lands, Retry re-sends the echo as it was
     // sent: its text and its files' upload ids, never the text alone.
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });

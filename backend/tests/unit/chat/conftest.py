@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import AsyncIterator, Iterator, Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -19,11 +19,9 @@ from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.audit import AuditEntry
 from coffer.domain.chat.agent_config import AgentConfig
-from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
-from coffer.domain.chat.message import Message, Role, TextBlock
 
 
 @pytest.fixture(autouse=True)
@@ -70,21 +68,22 @@ class FakeConversationRepo:
     async def list(
         self,
         *,
-        archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
         contains: str | None = None,
         narrow: Narrowing = EVERY,
     ) -> list[Conversation]:
-        rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
+        rows = [c for c in self._store.values() if c.channel_uid is not None]
         if contains:
-            rows = [c for c in rows if contains.casefold() in (c.title or "").casefold()]
-        if sources := narrow.sources:
+            needle = contains.casefold()
             rows = [
                 c
                 for c in rows
-                if (c.channel_uid is None and "coffer" in sources) or c.channel_uid in sources
+                if needle in (c.title or "").casefold()
+                or needle in (self._configs_cwd(c.id) or "").casefold()
             ]
+        if sources := narrow.sources:
+            rows = [c for c in rows if c.channel_uid in sources]
         if narrow.agents:
             rows = [c for c in rows if c.agent_key in narrow.agents]
         rows.sort(key=lambda c: (c.updated_at, c.id), reverse=True)
@@ -92,10 +91,19 @@ class FakeConversationRepo:
             rows = [c for c in rows if (c.updated_at, c.id) < after]
         return rows if limit is None else rows[:limit]
 
-    async def count(
-        self, *, archived: bool = False, contains: str | None = None, narrow: Narrowing = EVERY
-    ) -> int:
-        return len(await self.list(archived=archived, contains=contains, narrow=narrow))
+    def _configs_cwd(self, conversation_id: str) -> str | None:
+        return self._agent_configs.get(conversation_id, AgentConfig()).cwd
+
+    async def count(self, *, contains: str | None = None, narrow: Narrowing = EVERY) -> int:
+        return len(await self.list(contains=contains, narrow=narrow))
+
+    async def by_session_ids(self, session_ids: Sequence[str]) -> Sequence[Conversation]:
+        wanted = set(session_ids)
+        return [
+            c
+            for c in self._store.values()
+            if (self._agent_configs.get(c.id) or c.agent_config).session_id in wanted
+        ]
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         conv = self._store[conversation_id]
@@ -106,14 +114,6 @@ class FakeConversationRepo:
     async def touch(self, conversation_id: str, updated_at: datetime) -> None:
         conv = self._store[conversation_id]
         self._store[conversation_id] = dataclasses.replace(conv, updated_at=updated_at)
-
-    async def set_archived(
-        self, conversation_id: str, archived_at: datetime | None
-    ) -> Conversation:
-        conv = self._store[conversation_id]
-        updated = dataclasses.replace(conv, archived_at=archived_at)
-        self._store[conversation_id] = updated
-        return updated
 
     async def delete(self, conversation_id: str) -> None:
         self._store.pop(conversation_id, None)
@@ -127,112 +127,9 @@ class FakeConversationRepo:
         if conversation_id not in self._store:
             raise ConversationNotFound(conversation_id)
         self._agent_configs[conversation_id] = config
-
-
-# ---------------------------------------------------------------------------
-# Message
-# ---------------------------------------------------------------------------
-
-
-class FakeMessageRepo:
-    """In-memory MessageRepo that fully satisfies the MessageRepo Protocol."""
-
-    def __init__(self) -> None:
-        self._messages: list[Message] = []
-        # How many mid-stream partial flushes reached the store.
-        self.partial_writes = 0
-        self.files: dict[str, list[Any]] = {}
-
-    async def append(self, message: Message) -> Message:
-        self._messages.append(message)
-        return message
-
-    async def finalize(
-        self,
-        message_id: str,
-        *,
-        content: list[Any],
-        status: str,
-        model_id: str | None,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
-        finished_at: datetime | None = None,
-    ) -> None:
-        for i, m in enumerate(self._messages):
-            if m.id == message_id:
-                self._messages[i] = dataclasses.replace(
-                    m,
-                    content=content,
-                    status=status,  # type: ignore[arg-type]
-                    model_id=model_id if model_id is not None else m.model_id,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    finished_at=finished_at,
-                )
-                return
-
-    async def save_partial(self, message_id: str, *, content: list[Any]) -> None:
-        self.partial_writes += 1
-        for i, m in enumerate(self._messages):
-            if m.id == message_id and m.status == "streaming":
-                self._messages[i] = dataclasses.replace(m, content=content)
-                return
-
-    async def record_files(self, message_id: str, files: Sequence[Any]) -> None:
-        self.files[message_id] = list(files)
-
-    async def list_files(self, message_id: str) -> list[Any]:
-        return list(self.files.get(message_id, []))
-
-    async def get_file(self, message_id: str, path: str) -> Any:
-        return next((f for f in self.files.get(message_id, []) if f.path == path), None)
-
-    async def delete_message(self, message_id: str) -> None:
-        self._messages = [m for m in self._messages if m.id != message_id]
-
-    async def list_by_conversation(
-        self, conversation_id: str, *, limit: int | None = None
-    ) -> list[Message]:
-        rows = sorted(
-            [m for m in self._messages if m.conversation_id == conversation_id],
-            key=lambda m: m.seq,
+        self._store[conversation_id] = dataclasses.replace(
+            self._store[conversation_id], agent_config=config
         )
-        return rows if limit is None else rows[-limit:]
-
-    async def latest_with_text(
-        self, conversation_ids: Any, *, depth: int
-    ) -> dict[str, list[Message]]:
-        out: dict[str, list[Message]] = {}
-        for m in sorted(self._messages, key=lambda m: m.seq, reverse=True):
-            has_text = any(isinstance(b, TextBlock) for b in m.content)
-            if m.conversation_id in conversation_ids and has_text:
-                rows = out.setdefault(m.conversation_id, [])
-                if len(rows) < depth:
-                    rows.append(m)
-        return out
-
-    async def next_seq(self, conversation_id: str) -> int:
-        msgs = [m for m in self._messages if m.conversation_id == conversation_id]
-        return len(msgs)
-
-    async def delete_by_conversation(self, conversation_id: str) -> None:
-        self._messages = [m for m in self._messages if m.conversation_id != conversation_id]
-
-    async def sweep_streaming(self, *, before: Any = None) -> int:
-        """Flip ``status='streaming'`` rows to ``'failed'``; return count."""
-        flipped = 0
-        updated: list[Message] = []
-        for msg in self._messages:
-            if msg.status == "streaming" and (before is None or msg.created_at < before):
-                updated.append(dataclasses.replace(msg, status="failed"))  # type: ignore[call-overload]
-                flipped += 1
-            else:
-                updated.append(msg)
-        self._messages = updated
-        return flipped
-
-    def all_messages(self) -> list[Message]:
-        return list(self._messages)
 
 
 # ---------------------------------------------------------------------------
@@ -243,21 +140,20 @@ class FakeMessageRepo:
 class FakeAgentAdapter:
     """Scripted ``AgentAdapter``: yields a fixed sequence of ``AgentEvent``s.
 
-    Records the history received on each ``run_turn`` so tests can assert on
-    it. ``model_id`` is exposed because the orchestrator reads it (best-effort)
-    to stamp the assistant message.
+    Records the prompt and attachments received on each ``run_turn`` so tests
+    can assert on them.
     """
 
     def __init__(self, events: list[AgentEvent], *, model_id: str | None = None) -> None:
         self._events = events
         self.model_id = model_id
-        self.recorded_histories: list[list[Message]] = []
+        self.recorded_prompts: list[str] = []
         self.recorded_attachments: list[list[Any]] = []
 
     async def run_turn(
-        self, *, history: Sequence[Message], attachments: Sequence[Any] = (), **_: object
+        self, prompt: str, attachments: Sequence[Any] = ()
     ) -> AsyncIterator[AgentEvent]:
-        self.recorded_histories.append(list(history))
+        self.recorded_prompts.append(prompt)
         self.recorded_attachments.append(list(attachments))
         return self._yield_events()
 
@@ -342,7 +238,6 @@ def make_chat_services(
     from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 
     conv_repo = FakeConversationRepo()
-    msg_repo = FakeMessageRepo()
 
     if provider is None:
         default_events: list[AgentEvent] = events or [
@@ -356,72 +251,7 @@ def make_chat_services(
     registry.register(provider, display_name="Coffer Assistant")
     chat_svc = ChatService(
         conversations=conv_repo,
-        messages=msg_repo,
         registry=registry,
     )
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
     return chat_svc, orchestrator, registry
-
-
-# ---------------------------------------------------------------------------
-# Web composer uploads
-# ---------------------------------------------------------------------------
-
-
-class FakeChatMediaStore:
-    """In-memory ``ChatMediaStore``: records saves, resolves what it saved.
-
-    Paths are fabricated (``/fake/chat-media/<id>``) — nothing is written. A
-    path added to ``gone`` reads as swept off disk."""
-
-    def __init__(self) -> None:
-        self.saved: dict[str, tuple[bytes, Attachment]] = {}
-        self.gone: set[str] = set()
-        self._serial = 0
-
-    async def save(self, *, data: bytes, filename: str, mime: str) -> UploadedAttachment:
-        self._serial += 1
-        attachment_id = f"{self._serial:032x}"
-        path = f"/fake/chat-media/{attachment_id}"
-        self.saved[attachment_id] = (data, Attachment(path=path, mime=mime, filename=filename))
-        return UploadedAttachment(id=attachment_id, filename=filename, mime=mime, size=len(data))
-
-    async def resolve(self, attachment_id: str) -> Attachment | None:
-        entry = self.saved.get(attachment_id)
-        return entry[1] if entry is not None else None
-
-    async def present(self, attachment: Attachment) -> bool:
-        return attachment.path not in self.gone
-
-
-def make_attachment_service(store: FakeChatMediaStore | None = None) -> Any:
-    """A ``ChatAttachmentService`` over an in-memory store (a fresh one by default)."""
-    from coffer.application.chat.attachments import ChatAttachmentService
-
-    return ChatAttachmentService(store if store is not None else FakeChatMediaStore())
-
-
-# ---------------------------------------------------------------------------
-# Domain object helpers
-# ---------------------------------------------------------------------------
-
-
-def make_message(
-    seq: int,
-    text: str,
-    conversation_id: str = "c1",
-    role: Role = Role.USER,
-    status: str = "complete",
-) -> Message:
-    return Message(
-        id=f"msg-{seq}",
-        conversation_id=conversation_id,
-        seq=seq,
-        role=role,
-        content=[TextBlock(text=text)],
-        status=status,  # type: ignore[arg-type]
-        model_id=None,
-        prompt_tokens=None,
-        completion_tokens=None,
-        created_at=datetime.now(tz=UTC),
-    )

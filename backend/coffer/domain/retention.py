@@ -28,15 +28,12 @@ class RetentionPolicy:
 # Media directories
 # ---------------------------------------------------------------------------
 #
-# Attachment bytes live on disk, out of the chat DB (the chat DB keeps only an
-# ``AttachmentBlock`` reference — ADRs channel-attachments and
-# chat-attachment-uploads): ``~/.coffer/channel-media`` for what a channel
-# downloaded, ``~/.coffer/chat-media`` for what the web composer uploaded. Both
-# accumulate, so both are swept on the retention cadence by the same rule. The
-# *decision* — which files are old enough to delete — is pure and lives here;
-# the ``stat``/``unlink`` I/O is ``coffer.infrastructure.media_retention``. A
-# dead reference degrades to a text note on a later read, so a plain mtime age
-# prune (no per-conversation reference check) is sufficient.
+# Attachment bytes live on disk (``~/.coffer/channel-media`` for what a channel
+# downloaded; ADR channel-attachments) and accumulate, so they are swept on the
+# retention cadence. The *decision* — which files are old enough to delete — is
+# pure and lives here; the ``stat``/``unlink`` I/O is
+# ``coffer.infrastructure.media_retention``. A plain mtime age prune (no
+# per-conversation reference check) is sufficient.
 
 #: The attachments policy's default window (by file mtime, no size cap). The
 #: user can change it or keep attachments forever (Settings > Data > Local content).

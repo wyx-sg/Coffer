@@ -1,7 +1,7 @@
 // src/lib/agents/routes.ts — every address under /agents, built in one place.
 //
 // An agent is one per type and named by it, so its pages are addressed by the
-// TYPE (`/agents/claude_code`), never by its uid (spec agent-registry "Expose every agent operation over REST and on the Agents page"). The detail
+// TYPE (`/agents/claude_code`), never by its uid (spec agent-registry "Offer every agent operation over REST and on the Agents page"). The detail
 // page's tab is a path segment (`/agents/<type>/<tab>`, Overview at the bare
 // path), and every page reached from a tab is nested under that tab, so its
 // back link is the tab's address. REST routes are still keyed by uid; the
