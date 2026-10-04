@@ -81,7 +81,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 ## Agent files are the source of truth
 
-**Statement.** An agent's own files are the source of truth for that agent. Coffer reads config files, MCP entries, plugins, native memory and transcripts where the agent keeps them, at read time, and never copies them into SQLite. It writes only an agent's documented surfaces, addressed by an allowlist, atomically and with a `.bak`.
+**Statement.** An agent's own files are the source of truth for that agent. Coffer reads config files, MCP entries, plugins, native memory and transcripts where the agent keeps them, at read time, and never copies them into SQLite. It writes only an agent's documented surfaces, addressed by an allowlist, atomically and with a backup copy in Coffer's own folder.
 
 **Rationale.** A copy of someone else's state drifts the moment they change it, and the agent changes its own state constantly. Deriving at read time means Coffer is never wrong about what the agent has, and uninstalling Coffer leaves every agent exactly as functional as before.
 

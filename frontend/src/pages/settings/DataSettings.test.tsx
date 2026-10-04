@@ -75,6 +75,15 @@ const POLICIES: Policy[] = [
     last_pruned_rows: 0,
   },
   {
+    table_name: "config_backups",
+    display_name: "Config backups",
+    description: "x",
+    default_retention_days: 30,
+    retention_days: 30,
+    last_pruned_at: null,
+    last_pruned_rows: 0,
+  },
+  {
     table_name: "sync_runs",
     display_name: "Sync rounds",
     description: "x",
@@ -165,6 +174,7 @@ describe("DataSettings", () => {
     expect(within(history).getByText("MCP calls")).toBeInTheDocument();
     expect(within(history).getByText("Conversations")).toBeInTheDocument();
     expect(within(history).getByText("Skill working files")).toBeInTheDocument();
+    expect(within(history).getByText("Config backups")).toBeInTheDocument();
     // Only the four record kinds; the other pruned tables keep their defaults.
     expect(within(history).queryByText("Sync rounds")).toBeNull();
     expect(within(history).queryByText("Attachments")).toBeNull();
@@ -225,12 +235,32 @@ describe("DataSettings", () => {
     ).map((el) => el.textContent);
     expect(labels).toEqual(["Conversations", "Skill working files"]);
     // Shortening 30 days asks first and counts files.
-    // The last number field in History is the Skill working files row.
-    const input = within(history).getAllByRole("spinbutton").at(-1) as HTMLElement;
+    // The second-to-last number field in History is the Skill working files row.
+    const input = within(history).getAllByRole("spinbutton").at(-2) as HTMLElement;
     fireEvent.change(input, { target: { value: "7" } });
     fireEvent.blur(input);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Keep skill working files for 7 days?")).toBeInTheDocument();
+    expect(await within(dialog).findByText(/4 files/)).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "config backups are kept for a chosen window", async () => {
+    mockApi();
+    render(wrap(<DataSettings />));
+    const history = await screen.findByTestId("settings-data-history");
+    const labels = (
+      await within(history).findAllByText(/^(Skill working files|Config backups)$/)
+    ).map((el) => el.textContent);
+    expect(labels).toEqual(["Skill working files", "Config backups"]);
+    expect(
+      within(history).getByText(/newest backup of each file is always kept/i),
+    ).toBeInTheDocument();
+    // The last number field in History is the Config backups row.
+    const input = within(history).getAllByRole("spinbutton").at(-1) as HTMLElement;
+    fireEvent.change(input, { target: { value: "7" } });
+    fireEvent.blur(input);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Keep config backups for 7 days?")).toBeInTheDocument();
     expect(await within(dialog).findByText(/4 files/)).toBeInTheDocument();
   });
 

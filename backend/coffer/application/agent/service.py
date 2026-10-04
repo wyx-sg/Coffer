@@ -154,7 +154,7 @@ class AgentService:
         # The host's answers to OS questions — here, which paths are system
         # locations a skill dir must never be in.
         self._platform = platform
-        # Atomic config-file store (write_text_atomic keeps a .bak). Optional so
+        # Atomic config-file store (write_text_atomic keeps a backup). Optional so
         # existing call sites and unit fakes need not supply one.
         self._config_file_store = config_file_store
         # Cross-kind hooks (wired at the composition root). None in contexts

@@ -21,6 +21,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── runs.db                       # history (SQLite, WAL mode)
 ├── runs.db-wal, runs.db-shm      # SQLite write-ahead log and shared memory
 ├── runs.db.pre-<revision>        # copy taken before a schema migration (newest 3 kept)
+├── config-backups/               # copies of agent config files made before Coffer rewrites them: never synced, pruned by retention (each file's newest is kept)
 ├── skill-data/                   # logs, journals and temp files skill scripts write, one folder per skill: never synced, pruned by retention
 ├── derived/                      # rebuilt from the rest: always safe to delete
 ├── master.key                    # secret master key (when stored as a file)
@@ -146,6 +147,12 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | `skill-data/<skill-name>/` | skill 的脚本存放自己产生的日志、操作记录和临时文件的地方。它在保险库之外，所以都不会同步，`coffer path skill-data` 会打印这个目录。最后修改时间早于 **Skill 临时数据** 保留窗口（默认 30 天）的文件会被删除，清空后的文件夹一并删除。 | skill 的脚本；守护进程负责清理 | 否 | 可以。skill 需要长期保留的东西不该放在这里。 |
 
+### 配置备份 {#config-backups}
+
+| 路径 | 用途 | 所有者 | 是否同步 | 可否安全删除 |
+| --- | --- | --- | --- | --- |
+| `config-backups/<file>-<hash>/<name>.coffer-backup-<UTC time>` | 智能体配置文件（`~/.codex/config.toml`、`~/.claude/settings.json`、`~/.claude.json`、记忆或子智能体文件）在 Coffer 改写或删除之前的内容副本。每个文件一个文件夹，以文件名加其完整路径的短哈希命名；每份备份以生成时的 UTC 时间命名。它在保险库之外，所以都不会同步。早于**配置备份**保留窗口（默认 30 天）的备份会被删除，但**每个文件最新的一份备份始终保留**，这样最近一次写入总能撤销。 | 守护进程（配置写入方）；守护进程负责清理 | 否 | 可以，但会失去撤销的可能。 |
+
 ### 日志 {#logs}
 
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
@@ -173,7 +180,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 ## 智能体配置目录里的内容 {#inside-an-agent-s-config-directory}
 
-Coffer 只会为你要求的事写入已注册智能体自己的配置目录：把它连接到 Coffer、投递技能、切换模型提供商，或在智能体页面上编辑配置文件。每次写入都是原子的，被编辑文件的上一版会保存为 `<file>.bak`、`<file>.bak.1` 和 `<file>.bak.2`。
+Coffer 只会为你要求的事写入已注册智能体自己的配置目录：把它连接到 Coffer、投递技能、切换模型提供商，或在智能体页面上编辑配置文件。每次写入都是原子的，被编辑文件的上一版会先复制到 `~/.coffer/config-backups`，从不放在文件旁边（见[配置备份](#config-backups)）。
 
 配置目录默认是 Claude Code 的 `~/.claude` 和 Codex 的 `~/.codex`。如果智能体注册在别的目录，Coffer 为它启动的每个进程都会设置 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME`。
 

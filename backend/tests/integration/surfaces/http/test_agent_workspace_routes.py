@@ -213,10 +213,11 @@ def test_remove_mcp_entry(tmp_path, monkeypatch):
         assert r.status_code == 204, r.text
         data = tomllib.loads(config.read_text(encoding="utf-8"))
         assert "fetcher" not in data["mcp_servers"]
-        # Atomic write preserved the prior content in a .bak.
-        bak = tmp_path / ".codex" / "config.toml.bak"
-        assert bak.exists()
+        # Atomic write preserved the prior content in a backup under Coffer's folder.
+        bak = ConfigFileStore().latest_backup(config)
+        assert bak is not None
         assert "fetcher" in bak.read_text(encoding="utf-8")
+        assert not (tmp_path / ".codex" / "config.toml.bak").exists()
 
         r = c.get(f"/api/v1/agents/{uid}/mcp-entries")
         assert "fetcher" not in [e["name"] for e in r.json()["items"]]

@@ -19,7 +19,7 @@ removal, audit event and status, owned by the kind that knows how to write it:
   ``memory`` experimental feature is on.
 
 This service owns no write of its own: each part keeps its own atomic write,
-``.bak`` and audit event, so a connect is recorded as the part installs it
+backup and audit event, so a connect is recorded as the part installs it
 performed, exactly as each was recorded when it was its own button.
 """
 

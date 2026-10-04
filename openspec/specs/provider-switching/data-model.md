@@ -235,7 +235,7 @@ All implementation MUST reuse these existing components; do not re-implement.
 
 | Component | Path | Used for |
 |---|---|---|
-| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` (rotating `.bak.1` / `.bak.2`) — spec agent-registry "Write config files atomically with a backup and an audit entry" |
+| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write after copying the prior content to a timestamped backup under `~/.coffer/config-backups/` — spec agent-registry "Write config files atomically with a backup and an audit entry" |
 | `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection (spec agent-registry "Reject stale config-file writes by fingerprint"); retiring the Codex catalogue |
 | `spec_for` / `config_files_for` | `backend/coffer/domain/agent/config_files.py` | resolve the canonical path for an `AgentType` + key |
 | `AgentType` descriptors | `backend/coffer/domain/agent/descriptor.py` | `claude_code` `settings` → `~/.claude/settings.json`; `codex` `config` → `~/.codex/config.toml` |
@@ -370,7 +370,7 @@ No new directories. Connections are vault files:
 `vault/secret/` is committed and pushed only when the sync remote carries
 secrets (`include_secret`), and the reach a connection has on this machine
 (`local/reach.json`) never travels. The only other on-disk side effects are the
-native config files projection writes, their `.bak` copies, and the Codex model
+native config files projection writes, their backup copies under `~/.coffer/config-backups/`, and the Codex model
 catalogue.
 
 ## Constraints summary

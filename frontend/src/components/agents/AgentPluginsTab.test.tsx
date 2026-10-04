@@ -162,7 +162,7 @@ describe("AgentPluginsTab", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "Uninstall…" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent(
-      "Coffer removes the plugin’s entry from config.toml (a .bak is kept) and deletes its cache.",
+      "Coffer removes the plugin’s entry from config.toml (a backup copy is kept in Coffer’s folder) and deletes its cache.",
     );
   });
 

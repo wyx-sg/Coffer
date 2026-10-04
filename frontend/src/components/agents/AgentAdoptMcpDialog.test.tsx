@@ -63,7 +63,7 @@ describe("AgentAdoptMcpDialog", () => {
     renderDialog();
     expect(screen.getByText("Adopt postgres-local")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toHaveTextContent(
-      "Coffer serves it through its gateway and takes the entry out of ~/.claude.json, so Claude Code never gets it twice. A .bak is kept.",
+      "Coffer serves it through its gateway and takes the entry out of ~/.claude.json, so Claude Code never gets it twice. A backup copy is kept in Coffer’s folder.",
     );
     expect(screen.getByRole("dialog").className).toContain("max-w-[640px]");
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();

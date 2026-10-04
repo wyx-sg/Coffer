@@ -1,4 +1,4 @@
-"""The file retention policies bound at the composition root (attachments, skill data).
+"""The file retention policies bound at the composition root (attachments, skill data, backups).
 
 Each ``FilePolicy`` carries the sweeps and the preview count as closures over
 the infrastructure file I/O, so the application ``RetentionService`` never
@@ -12,6 +12,7 @@ from datetime import datetime
 from coffer.application.retention_registry import FilePolicy
 from coffer.domain.retention import (
     DEFAULT_ATTACHMENT_RETENTION_DAYS,
+    DEFAULT_CONFIG_BACKUPS_RETENTION_DAYS,
     DEFAULT_SKILL_DATA_RETENTION_DAYS,
 )
 from coffer.infrastructure.channel.seatalk_media import default_media_dir
@@ -22,7 +23,7 @@ from coffer.infrastructure.media_retention import (
     prune_media_dir,
     prune_media_tree,
 )
-from coffer.infrastructure.vault.home import skill_data_dir
+from coffer.infrastructure.vault.home import config_backups_dir, skill_data_dir
 
 
 def _channel_media_sweep(now: datetime, max_age_days: int) -> list[str]:
@@ -72,6 +73,35 @@ def _skill_data_policy() -> FilePolicy:
     )
 
 
+def _config_backups_policy() -> FilePolicy:
+    """The ``config_backups`` retention policy over ``~/.coffer/config-backups``: the
+    copies made before an agent's config file is rewritten, one folder per file; the
+    newest copy of each file is kept however old (spec resource-framework "Retain
+    config backups on an adjustable policy")."""
+
+    def sweep(now: datetime, max_age_days: int) -> list[str]:
+        return prune_media_tree(
+            config_backups_dir(), max_age_days=max_age_days, now=now, keep_newest_per_dir=True
+        )
+
+    def count(now: datetime, max_age_days: int) -> tuple[int, int]:
+        return count_media_tree(
+            config_backups_dir(), max_age_days=max_age_days, now=now, keep_newest_per_dir=True
+        )
+
+    return FilePolicy(
+        name="config_backups",
+        display_name="Config backups",
+        description=(
+            "Copies of agent config files made before Coffer rewrites them, "
+            "under ~/.coffer/config-backups; the newest of each file is always kept."
+        ),
+        default_retention_days=DEFAULT_CONFIG_BACKUPS_RETENTION_DAYS,
+        sweeps=(sweep,),
+        count=count,
+    )
+
+
 def build_file_policies() -> tuple[FilePolicy, ...]:
     """Every file policy the retention service sweeps, in the order they are listed."""
-    return (_attachments_policy(), _skill_data_policy())
+    return (_attachments_policy(), _skill_data_policy(), _config_backups_policy())

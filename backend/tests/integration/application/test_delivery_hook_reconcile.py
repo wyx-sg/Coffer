@@ -218,7 +218,8 @@ async def test_a_stale_hook_is_rewritten_into_the_current_entries(
     )
     # By absolute path: the hook's shell need not have ~/.coffer/bin on PATH.
     assert adapter.command_for(agent.uid).startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
-    assert path.with_name(path.name + ".bak").exists()
+    assert ConfigFileStore().latest_backup(path) is not None
+    assert not path.with_name(path.name + ".bak").exists()
 
     rows = await rig.audit.query(
         resource=agent, event_type=AuditEventType.MEMORY_DELIVERY_INSTALLED.value

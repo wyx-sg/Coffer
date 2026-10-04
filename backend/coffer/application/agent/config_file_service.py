@@ -1,8 +1,8 @@
 """AgentConfigFileService — list / read / write an agent's curated config files.
 
 Exposes list + read + write over the per-type config-file allowlist. Writes are
-atomic (temp file + rename) and keep a `.bak` copy of the prior content, so a bad
-edit is always recoverable. (The same atomic-write/backup machinery on the
+atomic (temp file + rename) and keep a backup copy of the prior content in Coffer's own folder, so a
+bad edit is always recoverable. (The same atomic-write/backup machinery on the
 `ConfigFileStorePort` is also reused by the Coffer-MCP install/uninstall flow in
 `mcp_service.py`.)
 
@@ -60,11 +60,11 @@ class ConfigFileStorePort(Protocol):
     def write_text_atomic(self, path: pathlib.Path, text: str) -> None:
         """Atomically write ``text`` to ``path`` (temp file + rename).
 
-        Creates parent directories as needed, and keeps THREE generations of
-        what was there — ``<path>.bak``, ``.bak.1``, ``.bak.2``, rotated on
-        every write (``ConfigFileStore.BACKUP_COPIES``). These are the user's
-        own config files, so a RUN of bad edits has to be recoverable, not just
-        the last one.
+        Creates parent directories as needed. Every write first copies the prior content to a
+        timestamped file under ``~/.coffer/config-backups/`` (never next to the
+        file). These are the user's own config files, so a RUN of bad edits has
+        to be recoverable, not just the last one; the ``config_backups``
+        retention policy bounds the folder and keeps each file's newest.
 
         The adapter also accepts an ``expected_fingerprint`` keyword for an
         optimistic staleness check; it is absent from this port because the
@@ -83,8 +83,8 @@ class ConfigFileStorePort(Protocol):
         ...
 
     def delete_with_backup(self, path: pathlib.Path) -> bool:
-        """Copy content to ``<path>.bak``, rotating older generations as a
-        write does, then remove the file.
+        """Copy content to a timestamped backup in Coffer's folder, as a write
+        does, then remove the file.
 
         Returns ``False`` when the file is already absent.
         """
@@ -249,7 +249,7 @@ class AgentConfigFileService:
         checks for staleness before any write (`ConfigFileStale` → 409).
         Validates `content` against the file's format (malformed JSON/TOML →
         `ConfigFileFormatInvalid` → 422, before any write so the on-disk file is
-        left unchanged), writes atomically keeping a `.bak` of the prior content,
+        left unchanged), writes atomically keeping a backup of the prior content,
         records an audit entry, and returns the refreshed metadata view.
         """
         agent, cfg = await self._agent(uid)
@@ -261,7 +261,7 @@ class AgentConfigFileService:
             if self._store.fingerprint(current) != expected_fingerprint:
                 raise ConfigFileStale(key)
         validate_content(spec.format, content)  # raises ConfigFileFormatInvalid → 422
-        self._store.write_text_atomic(spec.path, content)  # atomic + <path>.bak
+        self._store.write_text_atomic(spec.path, content)  # atomic + backup in Coffer's folder
         await self._audit.record(
             AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value,
             resource=agent,

@@ -21,7 +21,7 @@ them and hands the event to the reconciler, which records it and runs
 Touches an agent's config directory the same way `AgentConfigFileService`
 does: through the allowlisted `ConfigFileSpec` from
 `domain.agent.config_files.spec_for` (so an unsupported key can never reach
-the filesystem), and through an atomic read/write store that leaves a `.bak`
+the filesystem), and through an atomic read/write store that backs up what it replaces
 of whatever was there before. The store is typed by this module's own
 `AgentConfigWriter` port — the same shape as the agent kind's
 `ConfigFileStorePort`, declared here rather than imported, so the memory kind
