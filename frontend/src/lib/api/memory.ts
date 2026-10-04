@@ -11,11 +11,10 @@
 // Transport via the typed client (.agents/frontend.md §4); wire types in
 // `memoryTypes.ts`, aliases of the generated contract.
 
-import { getApiClient, unwrap } from "@/lib/api/client";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
   AggregationResultOut,
   DeliveredOut,
-  DeliveryOverviewOut,
   MemoryFileTreeOut,
   NoteListOut,
   NoteOut,
@@ -72,6 +71,17 @@ export function saveNote(uid: string, slug: string, payload: NoteSave): Promise<
   );
 }
 
+/** Delete a memory by hand: the file leaves `notes/` and a "Deleted by hand"
+ *  record goes into RETIRED.md carrying its entry ids, so the next update does
+ *  not bring it back. 404 for an unknown slug. */
+export function deleteNote(uid: string, slug: string): Promise<void> {
+  return unwrapVoid(
+    getApiClient().DELETE("/memory/partitions/{uid}/notes/{slug}", {
+      params: { path: { uid, slug } },
+    }),
+  );
+}
+
 export function listRetired(uid: string): Promise<RetiredListOut> {
   return unwrap(getApiClient().GET("/memory/partitions/{uid}/retired", partition(uid)));
 }
@@ -93,10 +103,4 @@ export function getDelivered(uid: string): Promise<DeliveredOut> {
 /** When the agents' memory was last read, and which agents failed. */
 export function getReading(): Promise<ReadingOut> {
   return unwrap(getApiClient().GET("/memory/reading"));
-}
-
-/** Per agent, deliveries, memories read and the last delivery over the last
- *  seven days. */
-export function getDeliveries(): Promise<DeliveryOverviewOut> {
-  return unwrap(getApiClient().GET("/memory/deliveries"));
 }

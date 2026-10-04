@@ -9,7 +9,7 @@ the list rather than have to be filtered out of it ("Record retirements so they 
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
 from coffer.application.memory.retrieval import note_file
 from coffer.application.memory.service import MemoryService
@@ -145,6 +145,21 @@ async def save_note(
         actor="user",
     )
     return _note_out(memory_store.read_note(partition.name, slug), fingerprint)
+
+
+@router.delete("/partitions/{uid}/notes/{slug}", status_code=204, response_class=Response)
+async def delete_note(
+    uid: str,
+    slug: str,
+    svc: MemoryService = Depends(get_memory_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+) -> Response:
+    """Delete one memory by hand. The file leaves ``notes/`` and ``RETIRED.md``
+    gains a "Deleted by hand" record carrying the note's raw entry ids, so the
+    next distil pass does not re-open it. An unknown slug is a 404."""
+    await require_partition(uid, resources)
+    await svc.delete_note(uid, slug, actor="user")
+    return Response(status_code=204)
 
 
 @router.get("/partitions/{uid}/retired", response_model=RetiredListOut)

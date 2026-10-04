@@ -135,7 +135,7 @@ Codex runs a hook only after you have approved it, and it skips an unapproved on
 
 The daemon keeps installed hooks current. On every reconcile pass it rewrites any hook whose command or set of events is out of date for the running build, back into the two current entries. It never adds a hook to an agent that does not have one.
 
-Whether the hook is installed, current and trusted is shown on the **agent's** page (its connection status and **Hooks** tab), not with memory. The delivery views in [See it working](#see-it-working) report what was delivered, never the state of a hook.
+Whether the hook is installed, current and trusted is shown on the **agent's** page (its connection status and **Hooks** tab), not with memory. The partition's **Delivered** tab in [See it working](#see-it-working) shows what is delivered, never the state of a hook.
 
 ### At session start: the index
 
@@ -181,23 +181,13 @@ There is no tool for an agent to write memory through Coffer either. An agent re
 
 ## See it working
 
-**What memory delivered this week.** For every agent with the hook, over the last seven days: how many times memory reached it, when it last did, and how many distinct notes its sessions actually opened.
-
-```text
-Memory → Delivered at session start
-```
-
-On the **Memory** page, the **Delivered at session start · Last 7 days** block has one row per agent: *Delivered 42 times in the last 7 days · 17 memories read · last 12 min ago*. An agent that received nothing in that time reads **Not delivered in the last 7 days**. The block never shows the hook itself; its state and **Repair** are on the agent's page.
-
-"Notes read" is counted from the file paths the agent's tool calls opened under the memory root; Coffer never reads what a message or a tool result said. It reads **unavailable** when Coffer cannot read that agent's transcripts, which is not the same as zero.
-
 **Exactly what an agent is given at session start** in one partition's repository — the same text the hook would print, composed the same way:
 
 ```text
 Memory → choose the partition → Delivered
 ```
 
-The partition's **Delivered** tab shows that text read-only, with a switch between the connected agents (Claude Code first), its length in characters and a **Copy** button.
+The partition's **Delivered** tab shows that text read-only, with a switch between the connected agents (Claude Code first), its length in characters and a **Copy** button. It opens as formatted Markdown (**Rendered**); **Raw** shows the exact text, and **Copy** always copies the raw text. In Rendered mode each entry's title and file name is a link to that memory on its partition's page (entries under *Known about you* open the global partition); an entry whose partition is unknown stays plain text. A hint beside the text reminds you that editing a memory changes what is delivered.
 
 **Every delivery, one by one.** Each delivery is an audit event naming its moment (`session_start` or `prompt`), the session and the notes it carried, never their text:
 
@@ -215,14 +205,14 @@ You can read the same events on the [Activity](/guides/activity) page.
 Memory → choose the partition
 ```
 
-In the web UI a note is called a **memory** (中文 记忆条目): one memory per subject. The **Memory** page carries the **Experimental** tag beside its title; its primary action is **Update memory**, with **Automatic · hourly** beside it. It lists partitions in a table — the partition, its path (**Every project** for `global`), a **Sample memory** (the most recently updated one, or how many entries are waiting to be distilled), its number of memories, its **Sources** (the agents it was learned from) and a **Distilled** column saying when it was last distilled — under the **Delivered at session start** block. Healthy rows are grey; only **Repository missing** is coloured. With no partition yet it shows the first-run welcome **Nothing distilled yet** instead: **Update memory** and the connected agents whose memory Coffer found on this Mac, or, with no agent connected, **Open Agents** to connect one. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it (see [Rebuild a partition](#rebuild-a-partition)).
+In the web UI a note is called a **memory** (中文 记忆条目): one memory per subject. The **Memory** page carries the **Experimental** tag beside its title; its primary action is **Update memory**, with **Automatic · hourly** beside it. It lists partitions in a table — the partition, its path (**Every project** for `global`), its number of memories, its **Sources** (the agents it was learned from) and a **Distilled** column saying when it was last distilled. The table has no heading of its own; a search box above it filters the rows by partition name and path. Healthy rows are grey; only **Repository missing** is coloured. With no partition yet it shows the first-run welcome **Nothing distilled yet** instead: **Update memory** and the connected agents whose memory Coffer found on this Mac, or, with no agent connected, **Open Agents** to connect one. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it (see [Rebuild a partition](#rebuild-a-partition)).
 
 A partition's page has no back link and no Experimental tag: its title is the partition's name, and the line under it carries the path, the number of memories and when it was last distilled. It has two tabs:
 
-- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body, with **Edit**, **Open in editor** and **Reveal in Finder**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists, read-only, the memories that were retired and the reason for each. While Coffer's engine is not set, a banner explains that each agent's entry stays its own memory until it is set in **Settings › General**, with **Open Settings**. A partition not yet distilled shows no list, only an empty state.
+- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body (searchable with ⌘F), with **Edit** and **Open in editor** as buttons and a **⋯** menu holding **Reveal in Finder** and **Delete…**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists the memories that were retired. Choose one to read it: the pane shows its full title, a *Retired* tag, the date, the full reason and, when another memory replaced it, a **Replaced by …** link to that memory. A retired memory is read-only, and the group opens by itself when the address names one. While Coffer's engine is not set, a banner explains that each agent's entry stays its own memory until it is set in **Settings › General**, with **Open Settings**. A partition not yet distilled shows no list, only an empty state.
 - **Delivered** shows the session-start text each agent receives in this partition's project (see [See it working](#see-it-working)).
 
-The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk. A memory is not deleted from the page: it is derived, and distil retires one when its sources are gone. The header's **⋯** menu offers **Reveal partition folder**, **Copy path**, **Distil history in Activity** (the Changes tab, where every distil pass is recorded) and, only while the repository is missing, **Delete partition…**.
+The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk. The header's **⋯** menu offers **Reveal partition folder**, **Copy path**, **Distil history in Activity** (the Changes tab, where every distil pass is recorded) and, only while the repository is missing, **Delete partition…**.
 
 A note's `origins` frontmatter names every agent file it was built from, and `.raw/` holds each entry exactly as it was read, so you can trace a note that reads wrong back to what the agent actually recorded. On disk, a partition's `MEMORY.md`, `notes/` and `RETIRED.md` are plain files under `~/.coffer/derived/memory/<partition>/`.
 
@@ -236,6 +226,10 @@ A memory that is wrong or incomplete can be fixed by you:
 An edited note stays as you left it until newer evidence revises it. The next distil pass that routes a new entry to that note starts from your edited text, and follows the rule in [When two statements disagree](#when-two-statements-disagree). An entry from last month that carries no evidence does not overwrite what you wrote today.
 
 Because the tree is derived, rebuilding a partition (see [Rebuild a partition](#rebuild-a-partition)) loses every edit: the notes come back from the agents' own memory, in new wording.
+
+### Delete a memory {#delete-a-memory}
+
+Choose the memory, open its **⋯** menu and select **Delete…**; Coffer asks first. Deleting retires the memory rather than just removing the file: the sources it was built from still live in the agent's own memory, so Coffer records the deletion in `RETIRED.md` (reason *Deleted by hand*, with the note's source entries), removes the note, rewrites `MEMORY.md` and logs a `memory_note_deleted` event in Activity. The next **Update memory** does not bring it back. If the delete fails, the dialog stays open and shows why. The memory then appears in the **Retired** group.
 
 ### When two statements disagree
 
@@ -278,7 +272,7 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 
 **A partition is empty or missing.** Check that the agent is registered, then choose **Update memory** and read its report. Entries learned outside a git repository do not get a partition of their own.
 
-**An agent is not given its memory.** Open the agent's **Hooks** tab to confirm Coffer's hook is **Current** on both events (press **Repair** if it reads **Out of date** or **Missing**). For Codex, check that both entries are trusted in `/hooks`. Then open **Memory → Delivered at session start** to see whether memory reached the agent this week, and the partition's **Delivered** tab to see exactly what it is given at session start.
+**An agent is not given its memory.** Open the agent's **Hooks** tab to confirm Coffer's hook is **Current** on both events (press **Repair** if it reads **Out of date** or **Missing**). For Codex, check that both entries are trusted in `/hooks`. Then open the partition's **Delivered** tab to see exactly what it is given at session start.
 
 **A prompt brings in no notes.** Short prompts and nudges never do. Otherwise the prompt's words did not match any note of this repository or `global` well enough; with only a few notes in the store that is normal (see [Limits](#limits)). A note the session was already given is not given again.
 

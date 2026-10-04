@@ -23,7 +23,7 @@ import { ThreadAttachment } from "./ThreadAttachment";
 import { ToolCallCard } from "./ToolCallCard";
 import { buildRows } from "@/lib/chat/replyRows";
 import { ToolCallGroup } from "./ToolCallGroup";
-import { MarkdownContent } from "./MarkdownContent";
+import { Markdown } from "@/components/Markdown";
 import { QuestionCard } from "./QuestionCard";
 
 interface Props {
@@ -165,7 +165,9 @@ function MessageBubbleImpl({
             />
           ) : (
             <div key={row.key} className="text-sm leading-relaxed text-text">
-              <MarkdownContent content={row.text} />
+              <Markdown density="chat" highlight breaks copyableCode>
+                {row.text}
+              </Markdown>
             </div>
           ),
         )}

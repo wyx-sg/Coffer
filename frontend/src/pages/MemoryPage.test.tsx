@@ -1,25 +1,23 @@
 // frontend/src/pages/MemoryPage.test.tsx
 //
-// The Memory overview (spec memory "Present a partition as its memories",
-// web-ui "Show memory delivery on the Memory page"): the per-agent deliveries
-// of the last seven days — with no hook detail — above the partitions table,
-// or the first-run state while there are none. Only the api module is mocked;
+// The Memory overview (spec memory "Present a partition as its memories"): the
+// partitions table, untitled and searchable, or the first-run state while there
+// are none. Only the api module is mocked;
 // the real hooks run over a real QueryClient.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { COFFER, DELIVERIES, GLOBAL, GONE } from "@/components/memory/memoryTestData";
-import type { DeliveryOverviewOut, PartitionOut } from "@/lib/api/memoryTypes";
+import { COFFER, GLOBAL, GONE } from "@/components/memory/memoryTestData";
+import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
 import { pathText } from "@/test/truncatedPath";
 import { MemoryPage } from "./MemoryPage";
 
 vi.mock("@/lib/api/memory", () => ({
   listPartitions: vi.fn(),
-  getDeliveries: vi.fn(),
   getReading: vi.fn(),
   sync: vi.fn(),
 }));
@@ -37,9 +35,8 @@ const { agentNativeMemoryApi } = await import("@/lib/api/agentNativeMemory");
 const MINUTE = 60_000;
 const ago = (minutes: number) => new Date(Date.now() - minutes * MINUTE).toISOString();
 
-function stub(partitions: PartitionOut[], deliveries: DeliveryOverviewOut = DELIVERIES) {
+function stub(partitions: PartitionOut[]) {
   vi.mocked(api.listPartitions).mockResolvedValue({ partitions });
-  vi.mocked(api.getDeliveries).mockResolvedValue(deliveries);
 }
 
 function renderPage() {
@@ -58,7 +55,6 @@ function renderPage() {
 describe("MemoryPage", () => {
   beforeEach(() => {
     vi.mocked(api.listPartitions).mockReset();
-    vi.mocked(api.getDeliveries).mockReset();
     vi.mocked(api.getReading).mockResolvedValue({ read_at: ago(14), failures: [] });
     vi.mocked(listUpkeepRuns).mockResolvedValue({ runs: [] });
     vi.mocked(internalEngineApi.get).mockResolvedValue({
@@ -101,66 +97,6 @@ describe("MemoryPage", () => {
     expect(screen.getByText("Experimental")).toBeInTheDocument();
     // The primary kind is the filled accent button; the outline kind is not.
     expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
-  });
-
-  acceptance("web-ui", "the memory overview lists deliveries per agent", async () => {
-    stub([COFFER]);
-    renderPage();
-    const block = await screen.findByTestId("memory-deliveries");
-    expect(within(block).getByText("Delivered at session start")).toBeInTheDocument();
-    // The window sits beside the title as a quiet 12px line (board 5.2.01).
-    expect(within(block).getByText("Last 7 days")).toBeInTheDocument();
-
-    const claude = await within(block).findByTestId("memory-delivery-claude_code");
-    expect(claude).toHaveTextContent("Claude Code");
-    expect(claude).toHaveTextContent(/Delivered 12 times in the last 7 days/);
-    expect(claude).toHaveTextContent(/5 memories read/);
-    expect(claude).toHaveTextContent(/last /);
-
-    const codex = within(block).getByTestId("memory-delivery-codex");
-    expect(codex).toHaveTextContent("Not delivered in the last 7 days");
-    // Claude Code is listed first, as on the Agents page.
-    const rows = within(block).getAllByRole("listitem");
-    expect(rows[0]).toBe(claude);
-
-    // Hook state and Repair live on the agent's page only.
-    expect(block).not.toHaveTextContent(/hook|repair|stale|installed/i);
-    expect(screen.queryByRole("button", { name: /repair|install/i })).toBeNull();
-  });
-
-  test("a read count the daemon cannot compute reads unavailable, never 0", async () => {
-    stub([COFFER], {
-      window_days: 7,
-      agents: [
-        {
-          ...DELIVERIES.agents[1],
-          agent_uid: "ag-codex",
-          agent_name: "Codex",
-          agent_type: "codex",
-          deliveries: 3,
-          notes_read: null,
-          notes_read_status: "unavailable",
-        },
-      ],
-    });
-    renderPage();
-    const row = await screen.findByTestId("memory-delivery-codex");
-    expect(row).toHaveTextContent(
-      /Delivered 3 times in the last 7 days · memories read unavailable/,
-    );
-    expect(row).not.toHaveTextContent(/0 memories read/);
-  });
-
-  acceptance("web-ui", "hook state appears only on the agent page", async () => {
-    // The Memory page carries no hook state or Repair: the deliveries read has no
-    // hook field. The agent's Memory tab shows the hook's state with Repair under
-    // "Coffer's memory" (asserted in AgentMemoryTab.test.tsx under this scenario).
-    stub([COFFER]);
-    renderPage();
-    const block = await screen.findByTestId("memory-deliveries");
-    await within(block).findByTestId("memory-delivery-claude_code");
-    expect(document.body).not.toHaveTextContent(/hook|repair|stale/i);
-    expect(screen.queryByRole("button", { name: /repair|install/i })).toBeNull();
   });
 
   test("the header says when memory was last read, beside Automatic and Update memory", async () => {
@@ -219,25 +155,19 @@ describe("MemoryPage", () => {
     expect(await screen.findByText("Reading agents’ memory…")).toBeInTheDocument();
   });
 
-  test("partitions are a table with path, sample, sources and distil, and a count above it", async () => {
+  test("partitions are an untitled table with path, sources and distil, and no count", async () => {
     stub([GLOBAL, COFFER, GONE]);
     renderPage();
     const section = await screen.findByTestId("memory-partitions");
     await within(section).findByRole("table");
     expect(within(section).queryByText("3 partitions · 20 memories")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Partitions" })).toBeNull();
     expect(within(section).getByText("Every project")).toBeInTheDocument();
     expect(within(section).getByText(pathText("~/work/coffer"))).toBeInTheDocument();
-    for (const header of [
-      "Partition",
-      "Path",
-      "Sample memory",
-      "Memories",
-      "Sources",
-      "Distilled",
-    ]) {
+    for (const header of ["Partition", "Path", "Memories", "Sources", "Distilled"]) {
       expect(within(section).getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
-    expect(within(section).getByText("Use Node 20 for frontend vitest")).toBeInTheDocument();
+    expect(within(section).queryByRole("columnheader", { name: "Sample memory" })).toBeNull();
     expect(within(section).getAllByText("All agents")).toHaveLength(2);
     expect(within(section).getByText("Repository missing")).toBeInTheDocument();
     // Healthy states are a grey dot; only the missing repository is coloured.
@@ -254,7 +184,7 @@ describe("MemoryPage", () => {
 
   acceptance(
     "memory",
-    "the partitions table names each partition's sample, sources and distil state",
+    "the partitions table names each partition's sources and distil state",
     async () => {
       const pending: PartitionOut = {
         ...COFFER,
@@ -264,7 +194,6 @@ describe("MemoryPage", () => {
         repository_key: "path:/Users/dev/work/new-repo",
         note_count: 0,
         distilled_at: null,
-        sample: null,
         sources: [],
         waiting_entries: 4,
         waiting_agents: ["codex"],
@@ -275,15 +204,28 @@ describe("MemoryPage", () => {
       const [, first, second, third] = within(
         await within(section).findByRole("table"),
       ).getAllByRole("row");
-      expect(first).toHaveTextContent("Prefers Chinese replies; docs and commits in English");
       expect(first).toHaveTextContent("All agents");
       expect(first).toHaveTextContent(/Distilled /);
-      expect(second).toHaveTextContent("4 entries read from Codex, waiting to distil");
+      expect(second).toHaveTextContent("new-repo");
       expect(second).toHaveTextContent("Never");
       expect(third).toHaveTextContent("Repository missing");
       expect(within(third).getByRole("button", { name: /^delete: /i })).toBeInTheDocument();
     },
   );
+
+  acceptance("web-ui", "the Memory page shows the partitions with a search and no delivery block", async () => {
+    stub([GLOBAL, COFFER, GONE]);
+    renderPage();
+    const section = await screen.findByTestId("memory-partitions");
+    const table = await within(section).findByRole("table");
+    const search = within(section).getByPlaceholderText("Search partitions");
+    fireEvent.change(search, { target: { value: "work/coffer" } });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent("coffer");
+    expect(screen.queryByTestId("memory-deliveries")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Partitions" })).toBeNull();
+  });
 
   test("with no partitions the first run lists what it found and carries one Update memory", async () => {
     stub([]);

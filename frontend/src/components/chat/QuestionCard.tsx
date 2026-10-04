@@ -13,7 +13,7 @@ import type { Question, QuestionAnswerIn } from "@/lib/api/chat";
 import { answerText, currentIndex } from "@/lib/chat/questions";
 import { clock } from "@/lib/conversations/time";
 import { cn } from "@/lib/utils";
-import { MarkdownContent } from "./MarkdownContent";
+import { Markdown } from "@/components/Markdown";
 import { useQuestionActions } from "./QuestionContext";
 
 /** The first line the owner sees for an ask: its (first) question. */
@@ -65,7 +65,9 @@ function PendingCard({ question: q }: { question: Question }) {
       </span>
       {q.context ? (
         <div className="text-sm leading-relaxed text-text">
-          <MarkdownContent content={q.context} />
+          <Markdown density="chat" highlight breaks copyableCode>
+            {q.context}
+          </Markdown>
         </div>
       ) : null}
       <span className="text-[15px] font-semibold text-text">{spec.question}</span>

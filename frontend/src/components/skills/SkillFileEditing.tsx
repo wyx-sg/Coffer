@@ -15,13 +15,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 
+import { FileTextEditor } from "@/components/files/FileTextEditor";
 import { ViewerToolbar } from "@/components/files/ViewerToolbar";
 import { SkillFileConflict } from "@/components/skills/SkillFileConflict";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
 import type { useFileDraft } from "@/lib/hooks/useFileDraft";
 import { useReadSkillFileNow } from "@/lib/hooks/useSkills";
 
@@ -80,8 +80,19 @@ export function SkillFileEditing({ uid, owner, path, draft, reload }: Props) {
         </Button>
       </ViewerToolbar>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-        {draft.conflict ? (
+      <FileTextEditor
+        className="p-3"
+        variant="code"
+        value={draft.value}
+        onChange={draft.setDraft}
+        ariaLabel={t("skills.files.editorLabel", { path })}
+        isConflict={draft.conflict}
+        dirty={draft.dirty}
+        saving={draft.saving}
+        error={draft.error}
+        onSave={draft.save}
+        onDiscard={cancel}
+        banner={
           <div role="alert" className="flex shrink-0 gap-2.5 rounded-lg bg-danger-soft px-3 py-2.5">
             <AlertCircle className="mt-0.5 size-[15px] shrink-0 text-danger" aria-hidden />
             <div className="flex min-w-0 flex-col gap-1.5">
@@ -99,30 +110,8 @@ export function SkillFileEditing({ uid, owner, path, draft, reload }: Props) {
               </div>
             </div>
           </div>
-        ) : draft.error ? (
-          <p role="alert" className="shrink-0 text-sm text-danger">
-            {translateApiError(t, draft.error)}
-          </p>
-        ) : null}
-
-        <textarea
-          aria-label={t("skills.files.editorLabel", { path })}
-          className="min-h-0 w-full flex-1 resize-none rounded-lg border border-border bg-code p-3 font-mono text-xs leading-[1.6] text-text outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-soft"
-          value={draft.value}
-          spellCheck={false}
-          autoFocus
-          onChange={(e) => draft.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-              e.preventDefault();
-              if (draft.dirty && !draft.saving && !draft.conflict) draft.save();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              cancel();
-            }
-          }}
-        />
-      </div>
+        }
+      />
 
       {onDisk ? (
         <SkillFileConflict

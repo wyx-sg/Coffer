@@ -200,6 +200,7 @@
     "memory_delivery_installed",
     "memory_delivery_removed",
     "memory_distilled",
+    "memory_note_deleted",
     "memory_note_edited",
     "provider_internal_default_set",
     "provider_projection_refused",

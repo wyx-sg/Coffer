@@ -780,6 +780,7 @@
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "memory_distilled": "Distilled memory partition {{resource}}",
       "memory_note_edited": "Edited a memory in {{resource}}",
+      "memory_note_deleted": "Deleted a memory in {{resource}}",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_transcribe_default_set": "Made {{resource}} the provider Coffer transcribes speech on",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
@@ -3472,25 +3473,10 @@
     "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
-    "deliveries": {
-      "title": "Delivered at session start",
-      "window_one": "Last day",
-      "window_other": "Last {{count}} days",
-      "delivered_one": "Delivered once in the last {{days}} days",
-      "delivered_other": "Delivered {{count}} times in the last {{days}} days",
-      "read_one": "{{count}} memory read",
-      "read_other": "{{count}} memories read",
-      "readUnavailable": "memories read unavailable",
-      "readUnavailableHint": "Coffer can't read this agent's transcripts, so it can't count which memories its sessions opened.",
-      "last": "last {{when}}",
-      "notDelivered": "Not delivered in the last {{days}} days",
-      "none": "No agent is connected to Coffer, so memory is delivered to nobody.",
-      "loadFailed": "Couldn't load deliveries."
-    },
     "partitions": {
-      "title": "Partitions",
       "memories_one": "{{count}} memory",
-      "memories_other": "{{count}} memories"
+      "memories_other": "{{count}} memories",
+      "search": "Search partitions"
     },
     "cols": {
       "name": "Partition",
@@ -3498,7 +3484,6 @@
       "global": "Every project",
       "memories": "Memories",
       "unresolvable": "Repository missing",
-      "sample": "Sample memory",
       "sources": "Sources",
       "distil": "Distilled"
     },
@@ -3544,7 +3529,16 @@
       "listLabel": "Memories",
       "retired": "Retired",
       "readOnly": "read-only",
+      "retiredListLabel": "Retired memories",
+      "retiredOn": "Retired {{date}}",
+      "replacedBy": "Replaced by {{title}} →",
       "learnedBy": "Learned by {{agents}} · updated {{date}}",
+      "more": "More actions for {{title}}",
+      "deleteMenu": "Delete…",
+      "deleteTitle": "Delete “{{title}}”?",
+      "deleteBody": "The memory leaves the list and no agent is given it at session start. Coffer keeps a record under Retired so the next update does not learn it again from the agents' own memory.",
+      "deleteConfirm": "Delete memory",
+      "deleted": "Deleted “{{title}}”",
       "updated": "Updated {{date}}",
       "select": "Select a memory to read it.",
       "loadFailed": "Couldn't load the memories.",
@@ -3559,13 +3553,17 @@
       "link": "Open Settings"
     },
     "delivered": {
+      "viewLabel": "View",
+      "rendered": "Rendered",
+      "raw": "Raw",
       "agentsLabel": "Agent",
       "intro": "What a session in {{path}} starts with · read-only",
       "introGlobal": "What every session starts with · read-only",
       "copy": "Copy",
       "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
       "loadFailed": "Couldn't load what is delivered.",
-      "size": "{{size}} characters · nothing trimmed"
+      "size": "{{size}} characters · nothing trimmed",
+      "editHint": "Edit a memory to change what is delivered"
     },
     "automatic": {
       "title": "Read memory automatically",
@@ -3574,8 +3572,6 @@
       "never": "Not read yet"
     },
     "allAgents": "All agents",
-    "waiting_one": "{{count}} entry read from {{agents}}, waiting to distil",
-    "waiting_other": "{{count}} entries read from {{agents}}, waiting to distil",
     "distil": {
       "done": "Distilled {{when}}",
       "never": "Never",

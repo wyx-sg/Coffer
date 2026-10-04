@@ -55,7 +55,7 @@ trusting a comment:
 | `.raw/` | aggregation, and only aggregation | the distil pass only — the file tree leaves it out and its read route refuses it |
 | `notes/` | the distil pass | delivery, prompt-time retrieval, the file tree, and any agent holding the path |
 | `MEMORY.md` | the distil pass | delivery, and a human opening the folder |
-| `RETIRED.md` | the distil pass | **the next distil pass**, and a human |
+| `RETIRED.md` | the distil pass, and a hand deletion from the web UI | **the next distil pass**, and a human |
 
 - `~/.coffer/derived/memory/` is the root, resolved from `HOME` at every call;
   there is no override. Path construction lives in exactly one module,
@@ -179,15 +179,16 @@ second origin on a later pass keeps the identity it had.
 ## Retirement
 
 `RETIRED.md` is a list: one record per retired note, and one per entry a
-pass kept nothing from (empty `slug`). A note is retired either because a later
-entry contradicted it or because every raw entry it was built from is gone
-("Retire a note whose raw entries are all gone"):
+pass kept nothing from (empty `slug`). A note is retired because a later
+entry contradicted it, because every raw entry it was built from is gone
+("Retire a note whose raw entries are all gone"), or because a person deleted
+it by hand ("Delete a memory by hand"):
 
 | Field | Notes |
 |---|---|
 | `slug` | The file name the note had under `notes/`; empty on a record that accounts for a dropped entry rather than for a note. |
 | `title` | So the record reads as prose rather than as filenames. |
-| `reason` | Why it is no longer true, in Coffer's words. |
+| `reason` | Why it is no longer true, in Coffer's words; `Deleted by hand` on a note a person deleted, whose `entry_ids` are the note's own origin entries so the next distil pass does not recreate it. |
 | `replaced_by` | The slug of the note that replaced it, or empty when the subject was simply dropped. |
 | `retired_at` | When. |
 | `entry_ids` | The raw entries the record accounts for — the retired note's own sources, or the one entry kept nothing from — so no later pass routes them to the model again. What the distil pass matches on. |
@@ -346,6 +347,7 @@ every kind shares.
 | `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it |
 | `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start` or `prompt`), the `session_id` and the `notes` it carried; never their text ("Audit every delivery fire") |
 | `memory_note_edited` | a person saves an edit to a note in the web UI, naming the partition, the note and the actor |
+| `memory_note_deleted` | a person deletes a note by hand in the web UI, naming the partition, the note and the actor ("Delete a memory by hand") |
 
 Prompt-time retrieval (`POST /api/v1/memory/hook`) records one
 `memory_delivery_fired` event naming the notes it delivered, and nothing about

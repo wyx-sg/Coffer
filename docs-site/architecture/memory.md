@@ -209,6 +209,8 @@ An edited note is the note, not a suggestion. It is the body the writing stage r
 - **No writer is exempt.** The writing stage's instruction does not mark an edited body as untouchable, whether a person or an agent edited it. An edited note is not safe because of who wrote it, and an agent's entry is not suspect because of who wrote it.
 - **A superseded statement stays legible.** It is retired through `RETIRED.md` with the reason and the replacing note, or kept in the rewritten body with the date it changed. History and restore remain the way back if a pass gets it wrong.
 
+A person can also delete a note. The web UI's **Delete…** asks first, then retires the note rather than only removing its file: it appends a `RETIRED.md` record with the reason `Deleted by hand` carrying the note's own origin entry ids, removes the file and re-renders `MEMORY.md`. The sources behind the note still live in the agent's own memory, so without the record the next distil pass would recreate it; with it, those entries count as accounted for. The deletion is audited as `memory_note_deleted` (actor: the user), and the memory then shows in the partition's read-only **Retired** group.
+
 The derived tree stays disposable. Deleting it and rebuilding reproduces the notes from the agents' own memory and loses every edit, which is why the guide says so.
 
 ### Degrading safely
@@ -355,14 +357,13 @@ The ledger survives a daemon restart without a table of its own. Every fire that
 
 ### Audit and the delivery views
 
-Every **delivering** fire is one `memory_delivery_fired` audit event naming the agent as both the resource and the actor, with details giving its `moment` (`session_start` or `prompt`), the `session_id` and the notes it carried as `<partition>/<slug>`. The event never carries a note's text. A session start is recorded on every fire; a prompt fire only when it delivered a note. A person's edit to a note is audited as `memory_note_edited`, naming the partition, the note and the user.
+Every **delivering** fire is one `memory_delivery_fired` audit event naming the agent as both the resource and the actor, with details giving its `moment` (`session_start` or `prompt`), the `session_id` and the notes it carried as `<partition>/<slug>`. The event never carries a note's text. A session start is recorded on every fire; a prompt fire only when it delivered a note. A person's edit to a note is audited as `memory_note_edited`, and a hand deletion as `memory_note_deleted`, each naming the partition, the note and the user.
 
-Two read-only **delivery views** in the web UI turn that record into answers:
+The web UI's read-only **Delivered view** of one partition answers what an agent is given:
 
-- **The overview** on the Memory page. For every agent with a delivery hook, over the last seven days: how many times memory reached it, the same count by moment, when it last did, and how many **distinct notes** its sessions opened. That last number is read off the file paths the agent's tool calls named: a path under the memory root that names a note counts, and nothing a note, a tool result or a message says is read. A transcript line is parsed only when it mentions the memory root at all, and each transcript's answer is cached by modification time and size. When the agent's transcripts cannot be read, the count is reported as **unavailable**, never as zero. Aggregation still reads no transcript; this is observability over file paths.
-- **The Delivered view** of one partition. The **exact** session-start text each agent is given in that partition's repository, composed by the same function and under the same ceiling as the hook. Reading it records nothing.
+- **The Delivered view** of one partition. The **exact** session-start text each agent is given in that partition's repository, composed by the same function and under the same ceiling as the hook. It is shown as rendered Markdown by default, with a Raw toggle for the exact text; in the rendered view each entry links to the memory it came from on its partition's page. Reading it records nothing.
 
-Neither view says whether a hook is installed or trusted. That is a property of the agent's Coffer connection and lives on the agent's page: its connection status and its Hooks tab. The hook's own status likewise reports installation only and carries no last-fired time. Whether it *fires* is a stream of events, which you read in the delivery views or on the [Activity](/guides/activity) page.
+The view does not say whether a hook is installed or trusted. That is a property of the agent's Coffer connection and lives on the agent's page: its connection status and its Hooks tab. The hook's own status likewise reports installation only and carries no last-fired time. Whether it *fires* is a stream of events, which you read on the [Activity](/guides/activity) page.
 
 ### Codex's approval
 

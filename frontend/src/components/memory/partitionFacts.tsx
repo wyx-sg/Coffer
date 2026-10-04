@@ -59,15 +59,3 @@ export function distilState(
   }
   return t("memory.distil.never");
 }
-
-/** The sample column: a memory, or what is waiting before the first distil. */
-export function sampleLine(t: ReturnType<typeof useTranslation>["t"], row: PartitionOut): string {
-  if (row.sample) return row.sample;
-  if (row.waiting_entries > 0) {
-    return t("memory.waiting", {
-      count: row.waiting_entries,
-      agents: types(row.waiting_agents).map(agentTypeLabel).join(", "),
-    });
-  }
-  return "";
-}

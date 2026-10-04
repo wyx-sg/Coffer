@@ -1,5 +1,5 @@
 """The facts the Memory page reads, over the real daemon: each partition's
-sample, sources and distil state, each memory's agents, and the last read of
+sources and distil state, each memory's agents, and the last read of
 the agents' memory (spec memory "Present a partition as its memories",
 "Report the last read of the agents' memory").
 
@@ -49,7 +49,7 @@ def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):  # type: ig
     set_active_token(None)
 
 
-def test_a_distilled_partition_lists_its_sample_sources_and_distil_time(
+def test_a_distilled_partition_lists_its_sources_and_distil_time(
     client: TestClient,
 ) -> None:
     before = client.get("/api/v1/memory/reading").json()
@@ -62,7 +62,6 @@ def test_a_distilled_partition_lists_its_sample_sources_and_distil_time(
     }
     coffer = partitions["coffer"]
     assert coffer["sources"] == ["claude-code"]
-    assert coffer["sample"] == "Dependencies are locked with uv"
     assert coffer["distilled_at"] is not None
     assert coffer["waiting_entries"] == 0
     assert coffer["waiting_agents"] == []
