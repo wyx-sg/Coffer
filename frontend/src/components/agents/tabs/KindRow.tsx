@@ -8,6 +8,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 interface Props {
+  /** Left of the name: the row's selection checkbox (or its spacer). */
+  leading?: ReactNode;
   /** The name line (a link or button inside) — mono. */
   name: ReactNode;
   /** The line under the name: description, command, file. */
@@ -17,7 +19,7 @@ interface Props {
   className?: string;
 }
 
-export function KindRow({ name, sub, trailing, className }: Props) {
+export function KindRow({ leading, name, sub, trailing, className }: Props) {
   return (
     <li
       className={cn(
@@ -25,6 +27,7 @@ export function KindRow({ name, sub, trailing, className }: Props) {
         className,
       )}
     >
+      {leading}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="min-w-0 truncate font-mono text-sm font-medium text-text">{name}</span>
         {sub ? (

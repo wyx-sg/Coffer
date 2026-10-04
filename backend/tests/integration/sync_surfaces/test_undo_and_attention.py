@@ -71,7 +71,6 @@ def test_stopping_sync_is_undone_with_what_it_removed(pair: tuple[Box, Box]) -> 
         url=mini.url,
         interval_seconds=600,
         secret_ref="sync/token",
-        username="oauth2",
         include_secret=True,
     )
     mini.remotes.put(remote)
@@ -84,7 +83,7 @@ def test_stopping_sync_is_undone_with_what_it_removed(pair: tuple[Box, Box]) -> 
 
         back = c.post("/sync/remote/restore").json()
         assert back["url"] == remote.url and back["interval_seconds"] == 600
-        assert back["secret_ref"] == "sync/token" and back["username"] == "oauth2"
+        assert back["secret_ref"] == "sync/token"
         assert back["include_secret"] is True and back["enabled"] is True
         assert mini.remotes.get() == remote
         assert mini.state.joined(), "the machine is still joined"

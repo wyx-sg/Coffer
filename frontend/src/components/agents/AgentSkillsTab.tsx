@@ -13,6 +13,7 @@ import { Sparkle } from "lucide-react";
 import { Section } from "@/components/Section";
 import { AdoptSkillDialog } from "@/components/agents/skills/AdoptSkillDialog";
 import { AgentOwnSkillRows } from "@/components/agents/skills/AgentOwnSkillRows";
+import { useOwnSkillsBulk } from "@/components/agents/skills/useOwnSkillsBulk";
 import { DeleteOwnSkillDialog } from "@/components/agents/skills/DeleteOwnSkillDialog";
 import {
   buildOwnSkillRows,
@@ -35,6 +36,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
   const [adoptTarget, setAdoptTarget] = useState<OwnSkillRow | null>(null);
   const [duplicateTarget, setDuplicateTarget] = useState<OwnSkillRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OwnSkillRow | null>(null);
+  const bulk = useOwnSkillsBulk(agent.uid);
   const agentLabel = agentTypeLabel(agent.type);
 
   const cofferNames = useMemo(
@@ -82,11 +84,17 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
             description: t("agents.skillsTab.emptyDescription", { agent: agentLabel }),
           }}
           noMatch={t("agents.skillsTab.noMatch")}
+          bulk={{
+            rowKey: (row) => row.key,
+            barLabel: t("agents.skillsTab.bulk.label"),
+            actions: bulk.actions,
+          }}
         >
-          {(visible) => (
+          {(visible, select) => (
             <AgentOwnSkillRows
               agentType={agent.type}
               rows={visible}
+              select={select}
               onAdopt={setAdoptTarget}
               onDeleteDuplicate={setDuplicateTarget}
               onDelete={setDeleteTarget}
@@ -94,6 +102,8 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
           )}
         </AgentKindTab>
       </Section>
+
+      {bulk.dialogs}
 
       <AdoptSkillDialog
         agentUid={agent.uid}

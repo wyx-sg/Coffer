@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 
+import { buildAdoptBody, defaultSecretRefs } from "@/components/agents/mcp/adoptBody";
 import { AdoptKeyTable } from "@/components/agents/mcp/AdoptKeyTable";
 import { entryCommand } from "@/components/agents/mcp/mcpRows";
 import { ReadOnlyCopyField } from "@/components/agents/tabs/ReadOnlyCopyField";
@@ -29,15 +30,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import type { AdoptedResource, AdoptMcpEntryBody, McpEntryOut } from "@/lib/api/agents-workspace";
+import type { AdoptedResource, McpEntryOut } from "@/lib/api/agents-workspace";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useAdoptMcpEntry } from "@/lib/hooks/useAgents";
-
-function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string, string> {
-  return Object.fromEntries(
-    entry.secret_keys.map((key) => [key, `mcp/${agentName}/${entry.name}/${key}`]),
-  );
-}
 
 /** The daemon's 409: the name is taken in Coffer (it sends a `suggested_name`). */
 function isNameConflict(err: unknown): boolean {
@@ -93,9 +88,7 @@ export function AgentAdoptMcpDialog({
   const trimmed = name.trim();
 
   const submit = () => {
-    const body: AdoptMcpEntryBody = { source: entry.source };
-    if (entry.secret_keys.length > 0) body.secrets = refs;
-    if (trimmed && trimmed !== entry.name) body.new_name = trimmed;
+    const body = buildAdoptBody(entry, refs, trimmed);
     setConflict(null);
     setErrorMsg(null);
     adopt.mutate(

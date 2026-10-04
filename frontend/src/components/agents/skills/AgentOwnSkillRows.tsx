@@ -9,6 +9,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import type { RowSelect } from "@/components/agents/tabs/AgentKindTab";
 import { Dot, KindRow } from "@/components/agents/tabs/KindRow";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ const STATE_LABEL: Record<OwnSkillState, string> = {
 interface Props {
   agentType: string;
   rows: OwnSkillRow[];
+  select: RowSelect<OwnSkillRow>;
   onAdopt: (row: OwnSkillRow) => void;
   onDeleteDuplicate: (row: OwnSkillRow) => void;
   /** Delete the agent's own skill folder from disk (asks first). */
@@ -36,6 +38,7 @@ interface Props {
 export function AgentOwnSkillRows({
   agentType,
   rows,
+  select,
   onAdopt,
   onDeleteDuplicate,
   onDelete,
@@ -56,6 +59,7 @@ export function AgentOwnSkillRows({
         return (
           <KindRow
             key={row.key}
+            leading={select.leading(row, row.name)}
             name={
               <Link
                 to={unmanagedSkillPath(agentType, item.location, row.name)}

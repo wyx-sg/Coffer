@@ -82,6 +82,10 @@ export function SyncRoundsTable({
             hasMore,
             loading: isLoadingMore,
             onMore: onLoadMore,
+            countLabel: (loaded, count) =>
+              count === undefined
+                ? t("sync.rounds.loadedCount", { loaded })
+                : t("sync.rounds.loadedOfTotal", { loaded, total: count }),
           }}
           emptyMessage={t("sync.rounds.empty")}
         />

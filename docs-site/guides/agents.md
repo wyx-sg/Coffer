@@ -321,6 +321,18 @@ Transcript text is secret-scrubbed before it is shown, long turns are cut and fl
 
 The **Skills** tab opens with one **From Coffer** row: how many skills Coffer delivers to the agent, the first few names, and **Open Skills ›**, which opens the [Skills](/guides/skills) page narrowed to this agent (`/skills?agent=<uid>`) — Coffer's skills are not listed one by one here. Below it, **the agent's own skills** — the skill folders Coffer does not manage — with a search. Each row carries a state word — **Unmanaged**, **Invalid SKILL.md**, **Foreign link** or **Duplicate** — and at most one button. A valid folder offers **Adopt**, which asks for the **name in Coffer** and its **reach** (every agent unless you narrow it, or off) before moving it into Coffer's library; one named like a skill Coffer delivers offers **Delete duplicate**, which deletes the agent's copy after a confirmation. A row opens the folder's own page — its properties, and its files in a tree beside a read-only viewer — whose header has **Adopt** and a **⋯** menu with **Delete…**. Which skills reach the agent is decided per skill; see [Skills](/guides/skills).
 
+## Act on several of the agent's own items at once {#act-on-several-items-at-once}
+
+On the **Skills**, **MCP servers** and **Plugins** tabs, the agent's own list can be acted on in bulk. Coffer's part — the **From Coffer** row — cannot. Each row has a checkbox and the box above the list selects every row the search shows; an MCP entry of a config file that does not parse has no checkbox. While rows are ticked, a bar reading "N of M selected" replaces the search box, with the actions and **Clear**; **Esc** clears the selection.
+
+| Tab | Actions | Notes |
+| --- | --- | --- |
+| Skills | **Adopt**, **Delete…** | Adopt takes unmanaged folders only and asks once for a reach shared by all of them; each skill keeps its folder name. |
+| MCP servers | **Adopt**, **Remove…** | Adopt takes entries that bypass Coffer only, under their own names and with the default secret references; the dialog says how many secret values move into the [secret store](/guides/secret-store). |
+| Plugins | **Enable**, **Disable**, **Uninstall…** | Enable and Disable need no confirmation and skip plugins already in that state. Uninstall is disabled, with the reason, while the agent's program is not found. |
+
+Coffer sends the same request the single-item action sends, once per item and one after another, so a name Coffer already has fails that item alone. A dialog or toast says how many ticked items an action skipped. When everything went through you get one confirmation and the selection clears; when some failed they are listed by name with the reason, and **Retry** sends only those.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

@@ -74,19 +74,17 @@ describe("SyncSetup", () => {
     expect(screen.getByRole("button", { name: "Check repository" })).toBeDisabled();
   });
 
-  test("the check is asked of the draft, with the user name for an HTTPS URL", () => {
+  test("the check is asked of the draft", () => {
     render(<SyncSetup status={notSetUp()} />);
     fireEvent.change(screen.getByLabelText("Repository URL"), {
       target: { value: "https://gitlab.com/me/vault.git" },
     });
-    fireEvent.change(screen.getByLabelText("User name"), { target: { value: "oauth2" } });
     fireEvent.click(screen.getByRole("button", { name: "Check repository" }));
     expect(check).toHaveBeenCalledWith(
       {
         url: "https://gitlab.com/me/vault.git",
         branch: "main",
         secret_ref: null,
-        username: "oauth2",
       },
       expect.anything(),
     );

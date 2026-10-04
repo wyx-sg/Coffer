@@ -21,7 +21,7 @@ import { SyncIncludeSecrets } from "./SyncIncludeSecrets";
 import { SyncRoundCadence } from "./SyncRoundCadence";
 import { SyncSecretPicker } from "./SyncSecretPicker";
 import { SettingsRow, SettingsSection } from "./SyncSettingsParts";
-import { isHttpsUrl, type FormErrors, type FormState } from "./syncRemoteForm";
+import { type FormErrors, type FormState } from "./syncRemoteForm";
 
 interface Props {
   form: FormState;
@@ -86,7 +86,7 @@ export function SyncSecretsSection(props: Props) {
 export function SyncRemoteFields(props: Props) {
   const { form, onEdit, errors, busy, setup = false } = props;
   const { t } = useTranslation();
-  const text = (key: "url" | "branch" | "username") => ({
+  const text = (key: "url" | "branch") => ({
     value: form[key],
     disabled: busy,
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => onEdit({ [key]: e.target.value }, false),
@@ -145,23 +145,6 @@ export function SyncRemoteFields(props: Props) {
           />
         }
       />
-      {isHttpsUrl(form.url) ? (
-        <SettingsRow
-          label={t("sync.remote.username")}
-          labelFor="sync-username"
-          hintId="sync-username-hint"
-          hint={t("sync.remote.usernameHint")}
-          control={
-            <Input
-              id="sync-username"
-              className="w-full"
-              placeholder="coffer"
-              aria-describedby="sync-username-hint"
-              {...text("username")}
-            />
-          }
-        />
-      ) : null}
       <SettingsRow
         label={t("sync.remote.cadence.label")}
         labelFor="sync-cadence"

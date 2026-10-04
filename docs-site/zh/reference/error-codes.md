@@ -239,6 +239,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | 手动合并的副本中仍有冲突标记；消息会给出所在行。 | 删除它们，保存，然后把文件标记为已解决。 |
 | `SYNC_SECRET_NOT_EDITABLE` | 422 | 停下的一轮或加入中的加密密钥被在编辑器中打开、交给智能体，或被答复为“编辑”。 | 保留本机的版本，或采用另一台的。 |
 | `SYNC_ROUND_NOT_FOUND` | 404 | 没有这个 id 的同步轮次。 | 从**同步**页面的历史中选一个。 |
+| `SYNC_ROUND_FILE_NOT_LISTED` | 404 | 这一轮没有应用或推送该文件。 | 从这一轮自己的**在此应用**或**推送**列表里打开文件。 |
+| `SYNC_ROUND_DIFF_UNAVAILABLE` | 409 | 这一轮差异所依据的提交已不在保险库中。 | 无需处理；这一轮的文件列表仍然准确，只是逐行视图没有了。 |
 | `SYNC_NOTHING_TO_ROLL_BACK` | 409 | 该轮次没有应用任何东西，或者它本身就是一次回滚。 | 无需操作。 |
 | `SYNC_MACHINE_NOT_FOUND` | 404 | 没有这个 id 的机器共享此保险库。 | 在**同步**页面列出机器。 |
 | `SYNC_MACHINE_NAME_INVALID` | 422 | 机器名为空或过长。 | 换一个名字。 |

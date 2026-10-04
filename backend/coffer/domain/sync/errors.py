@@ -53,6 +53,26 @@ class SyncRoundNotFound(CofferError):  # noqa: N818
         self.round_id = round_id
 
 
+class SyncRoundFileNotListed(CofferError):  # noqa: N818
+    """A diff asked for a path the round did not list on that side. Maps to 404."""
+
+    code = "SYNC_ROUND_FILE_NOT_LISTED"
+
+    def __init__(self, path: str, side: str) -> None:
+        super().__init__(f"the round did not {side} {path}")
+        self.path = path
+
+
+class SyncRoundDiffUnavailable(CofferError):  # noqa: N818
+    """The commits a round's diff is read from are no longer in the vault
+    (garbage collected, or the round recorded none). Maps to 409."""
+
+    code = "SYNC_ROUND_DIFF_UNAVAILABLE"
+
+    def __init__(self) -> None:
+        super().__init__("this round's file versions are no longer available")
+
+
 class SyncNoPlaintextFound(CofferError):  # noqa: N818
     """ "Push anyway" when the last round found no plaintext secret. Maps to 409."""
 
@@ -155,6 +175,8 @@ __all__ = [
     "SyncNoRemote",
     "SyncNothingToRestore",
     "SyncRemoteExists",
+    "SyncRoundDiffUnavailable",
+    "SyncRoundFileNotListed",
     "SyncRoundNotFound",
     "SyncVaultMoveFailed",
     "SyncVaultTargetInCloud",

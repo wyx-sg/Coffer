@@ -7,7 +7,8 @@ import { useTranslation } from "react-i18next";
 import { ShowAllRow } from "@/components/LongList";
 import { useLongList } from "@/components/useLongList";
 import type { SyncChange, SyncRound } from "@/lib/api/sync";
-import { ChangeMark, FILE_LIST, FILE_ROW } from "./SyncChangeMark";
+import { FILE_LIST, FILE_ROW } from "./SyncChangeMark";
+import { RoundFileRow } from "./SyncRoundFileRow";
 import { clock, clockSeconds } from "./syncTime";
 
 /** "1  Safety snapshot": a 13/600 title with its step number in grey. */
@@ -38,16 +39,21 @@ function None({ children }: { children: ReactNode }) {
 }
 
 /** A step's files: five rows, then "Showing 5 of 23 · Show all". */
-function ChangeBox({ changes }: { changes: SyncChange[] }) {
+function ChangeBox({
+  changes,
+  runId,
+  side,
+}: {
+  changes: SyncChange[];
+  runId: number | null;
+  side: "applied" | "pushed";
+}) {
   const { visible, shown, total, collapsed, expand, listClassName } = useLongList(changes);
   return (
     <div className={FILE_LIST}>
       <ul className={listClassName}>
         {visible.map((c) => (
-          <li key={c.path} className={FILE_ROW}>
-            <ChangeMark status={c.status} />
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">{c.path}</span>
-          </li>
+          <RoundFileRow key={c.path} runId={runId} side={side} change={c} />
         ))}
       </ul>
       {collapsed ? <ShowAllRow shown={shown} total={total} onShowAll={expand} /> : null}
@@ -95,14 +101,14 @@ export function RoundBody({ run }: { run: SyncRound }) {
       </Step>
       <Step number={3} title={t("sync.drawer.applied")} testId="sync-run-applied">
         {run.applied.length ? (
-          <ChangeBox changes={run.applied} />
+          <ChangeBox changes={run.applied} runId={run.id} side="applied" />
         ) : (
           <None>{t("sync.drawer.nothingApplied")}</None>
         )}
       </Step>
       <Step number={4} title={t("sync.drawer.pushed")} testId="sync-run-pushed">
         {run.pushed.length ? (
-          <ChangeBox changes={run.pushed} />
+          <ChangeBox changes={run.pushed} runId={run.id} side="pushed" />
         ) : (
           <None>{t("sync.drawer.nothingPushed")}</None>
         )}

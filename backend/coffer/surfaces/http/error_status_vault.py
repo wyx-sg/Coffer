@@ -37,6 +37,8 @@ VAULT_AND_SYNC_STATUS: dict[str, int] = {
     "SYNC_REMOTE_EXISTS": 409,
     "SYNC_NO_PLAINTEXT_FOUND": 409,
     "SYNC_ROUND_NOT_FOUND": 404,
+    "SYNC_ROUND_FILE_NOT_LISTED": 404,
+    "SYNC_ROUND_DIFF_UNAVAILABLE": 409,
     "SYNC_MACHINE_NOT_FOUND": 404,
     "SYNC_MACHINE_NAME_INVALID": 422,
     # Moving the vault out of a synchronised folder; a failed move is rolled

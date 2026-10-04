@@ -246,6 +246,8 @@ give the status each code is actually sent with.
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | The hand-merged copy still has conflict markers; the message names the line. | Remove them, save, then mark the file resolved. |
 | `SYNC_SECRET_NOT_EDITABLE` | 422 | An encrypted secret in a stopped round or a join was opened in the editor, handed to an agent or answered as edited. | Keep this Mac's version or take the other's. |
 | `SYNC_ROUND_NOT_FOUND` | 404 | No round with that id. | Pick one from the **Sync** page's history. |
+| `SYNC_ROUND_FILE_NOT_LISTED` | 404 | The round did not apply or push that file. | Open a file from the round's own **Applied here** or **Pushed** list. |
+| `SYNC_ROUND_DIFF_UNAVAILABLE` | 409 | The commits this round's diff is read from are no longer in the vault. | None; the round's file list is still accurate, only the line-by-line view is gone. |
 | `SYNC_NOTHING_TO_ROLL_BACK` | 409 | The round applied nothing, or is itself a rollback. | Nothing to do. |
 | `SYNC_MACHINE_NOT_FOUND` | 404 | No machine with that id shares this vault. | List them on the **Sync** page. |
 | `SYNC_MACHINE_NAME_INVALID` | 422 | The machine name is empty or too long. | Choose another name. |

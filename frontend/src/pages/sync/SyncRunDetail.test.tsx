@@ -4,13 +4,23 @@
 // steps every round takes: the snapshot, the commits pulled and from whom, the
 // files applied here, the files pushed — and its footer rolls it back or opens
 // Activity. A long list of applied files stops at five until Show all.
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import type { SyncRound } from "@/lib/api/sync";
+import { acceptance } from "@/test/acceptance";
 import { SyncRunDetail } from "./SyncRunDetail";
 import { makeRound } from "./syncTestKit";
+
+vi.mock("@/lib/hooks/useSync", () => ({ useRoundFileDiff: vi.fn() }));
+const { useRoundFileDiff } = await import("@/lib/hooks/useSync");
+const diffResult = (data: unknown) =>
+  vi
+    .mocked(useRoundFileDiff)
+    .mockReturnValue({ data, isLoading: false, error: null } as unknown as ReturnType<
+      typeof useRoundFileDiff
+    >);
 
 function open(run: SyncRound, onRollback = vi.fn()) {
   const row = { kind: "run" as const, id: String(run.id), run };
@@ -29,6 +39,8 @@ function open(run: SyncRound, onRollback = vi.fn()) {
 }
 
 describe("SyncRunDetail", () => {
+  beforeEach(() => diffResult(undefined));
+
   test("names the snapshot, the pulled commits and the files moved each way", () => {
     const drawer = open(
       makeRound({
@@ -123,5 +135,46 @@ describe("SyncRunDetail", () => {
     expect(drawer.getByRole("button", { name: "Previous" })).toBeDisabled();
     fireEvent.click(drawer.getByRole("button", { name: "Next" }));
     expect(onOpen).toHaveBeenCalledWith(rows[1]);
+  });
+
+  acceptance("vault-sync", "expanding a file in the drawer shows its diff", () => {
+    diffResult({
+      path: "knowledge/a.md",
+      side: "applied",
+      kind: "text",
+      diff: "--- before/a\n+++ after/a\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n",
+      added: 1,
+      removed: 1,
+    });
+    const drawer = open(
+      makeRound({
+        status: "pulled",
+        snapshot: "s",
+        applied: [{ path: "knowledge/a.md", status: "modified" }],
+      }),
+    );
+    const toggle = drawer.getByRole("button", { name: "Show changes to knowledge/a.md" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(drawer.queryByTestId("sync-round-diff")).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const table = within(drawer.getByTestId("sync-round-diff"));
+    expect(table.getByText("new")).toBeInTheDocument();
+    expect(table.getByText("old")).toBeInTheDocument();
+    expect(drawer.getByText("+1")).toBeInTheDocument();
+    expect(drawer.getByText("−1")).toBeInTheDocument();
+  });
+
+  test("a secret file says its contents are not shown", () => {
+    diffResult({ path: "secret/x.enc", side: "pushed", kind: "secret", added: 0, removed: 0 });
+    const drawer = open(
+      makeRound({
+        status: "pushed",
+        pushed: [{ path: "secret/x.enc", status: "added" }],
+      }),
+    );
+    fireEvent.click(drawer.getByRole("button", { name: "Show changes to secret/x.enc" }));
+    expect(drawer.getByText("Encrypted — contents not shown")).toBeInTheDocument();
+    expect(drawer.queryByTestId("sync-round-diff")).toBeNull();
   });
 });
