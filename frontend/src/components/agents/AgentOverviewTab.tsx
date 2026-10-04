@@ -9,7 +9,6 @@ import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { agentRowState } from "@/lib/agents/rowState";
 import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
-import { useResource } from "@/lib/hooks/useResources";
 
 import { OverviewModelSection } from "./model/OverviewModelSection";
 import { AgentNotFoundCard } from "./overview/AgentNotFoundCard";
@@ -21,10 +20,9 @@ import { OverviewSummary } from "./overview/OverviewSummary";
 export interface OverviewActions {
   /** Open the connection-change preview: connect (also Repair) or disconnect. */
   onConnection: (kind: "connect" | "disconnect") => void;
-  onEnable: () => void;
   /** "Use a different config directory…" */
   onChangeConfigDir: () => void;
-  /** Connect / disconnect / enable is running on the agent: its buttons wait. */
+  /** Connect / disconnect is running on the agent: its buttons wait. */
   busy?: boolean;
 }
 
@@ -46,13 +44,7 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
   const connection = useAgentConnection(agent.uid);
   const hooks = useAgentHooks(agent.uid);
   const memoryOn = useFeatureEnabled("memory") === true;
-  const resource = useResource(agent.uid);
-  const enabled = resource.data?.enabled ?? true;
-  const state = agentRowState(
-    { state: typeRow.state, uid: agent.uid },
-    connection.data?.state,
-    enabled,
-  );
+  const state = agentRowState({ state: typeRow.state, uid: agent.uid }, connection.data?.state);
 
   return (
     <div className="flex max-w-[920px] flex-col gap-8">
@@ -67,12 +59,7 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
         onCheckHook={() => void hooks.refetch()}
         checking={hooks.isFetching}
       />
-      <OverviewSummary
-        agent={agent}
-        typeRow={typeRow}
-        disabled={!enabled}
-        notConnected={state === "not_connected"}
-      />
+      <OverviewSummary agent={agent} typeRow={typeRow} notConnected={state === "not_connected"} />
       <OverviewModelSection agent={agent} />
       <OverviewDetails agent={agent} version={typeRow.version ?? agent.version ?? null} />
     </div>

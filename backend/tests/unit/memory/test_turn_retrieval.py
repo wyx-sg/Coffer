@@ -40,10 +40,9 @@ class _Delivery:
         self.fired.append((agent_uid, dict(details or {})))
 
 
-def _agent(uid: str, agent_type: str, *, enabled: bool = True) -> Any:
+def _agent(uid: str, agent_type: str) -> Any:
     return SimpleNamespace(
         uid=uid,
-        enabled=enabled,
         config={"type": agent_type, "config_dir": f"/home/u/.{agent_type}"},
     )
 
@@ -198,19 +197,3 @@ async def test_a_channel_turn_with_no_index_gets_no_header_but_the_start_is_audi
             "event": CHANNEL_TURN_EVENT,
         }
     ]
-
-
-@pytest.mark.asyncio
-async def test_a_disabled_agent_of_the_same_type_is_not_the_one_audited() -> None:
-    memory = FakeMemory()
-    delivery = _Delivery()
-    turns = TurnRetrieval(
-        RetrievalService(memory, SessionLedger(), signature=lambda _p: ()),  # type: ignore[arg-type]
-        delivery,
-        _Agents([_agent("u-off", "codex", enabled=False), _agent("u-on", "codex")]),  # type: ignore[arg-type]
-        memory,  # type: ignore[arg-type]
-    )
-
-    await turns.index_for_turn(agent_key="codex", cwd="/nowhere", conversation_id="c")
-
-    assert [uid for uid, _d in delivery.fired] == ["u-on"]

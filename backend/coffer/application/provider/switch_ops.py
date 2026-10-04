@@ -60,11 +60,6 @@ async def activate_checks(
     # writes nothing.
     if cfg.protocol is Protocol.OLLAMA:
         raise ProviderInternalOnly(resource.name)
-    if not agent.enabled:
-        # Coffer writes nothing into an agent the user switched off.
-        raise ProviderDoesNotReachAgent(
-            resource.name, agent_type.value, "the agent is switched off"
-        )
     if not resource.enabled:
         raise ProviderDoesNotReachAgent(
             resource.name, agent_type.value, "the connection is switched off"

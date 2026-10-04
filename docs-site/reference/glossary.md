@@ -36,7 +36,7 @@ There is at most one per type on a machine, and its name is its type (`claude-co
 
 ### Aggregate pass
 
-The [upkeep pass](#upkeep-pass) that reads every enabled agent's
+The [upkeep pass](#upkeep-pass) that reads every registered agent's
 [native memory](#native-memory) into Coffer's memory as [raw entries](#raw-entry). Coffer
 never writes back into an agent's own memory. See [Memory](/architecture/memory#the-aggregation-pass).
 

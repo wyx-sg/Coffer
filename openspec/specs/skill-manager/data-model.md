@@ -353,7 +353,7 @@ The workspace amendment adds:
 
 | Value                     | When emitted                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (see "Adopt an unmanaged skill")                                       |
+| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (see "Adopt an unmanaged skill into the master store")                                       |
 | `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (see "Delete an unmanaged skill on explicit request")                                   |
 | `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 | `skill_drift_remediated`  | A drift entry was re-delivered from master by repair — on demand or by a reconcile pass (see "Repair repairable drift from master"); details `{agent, kind}` |
@@ -455,7 +455,7 @@ skill subpackage, same style as `lifecycle_ops.py`):
 | Method                                                                 | Purpose                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | Read-only scan ("List unmanaged skills in an agent's skill locations") over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
-| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill": validate → move to `~/.coffer/vault/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill into the master store": validate → move to `~/.coffer/vault/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
 | `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | "Delete an unmanaged skill on explicit request": delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
 | skill-link target (`link_reconcile.py`) and drift view (`drift_view.py`) | "Reconcile deliveries from state on every pass": recompute every enabled agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted, relink what moved, repair broken links; `verify` / `repair` are read from the reconciler's plan and apply. |
 

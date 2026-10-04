@@ -163,8 +163,6 @@ function CofferDetail({ row, state }: { row: AgentTypeOut; state: AgentRowState 
       return null;
     case "not_found":
       return t("agents.list.detail.gone", { dir });
-    case "disabled":
-      return t("agents.list.detail.disabled");
     case "not_installed":
       return t("agents.list.detail.notOnThisMac");
     case "config_left_behind":

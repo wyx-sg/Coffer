@@ -35,15 +35,6 @@ While the `memory` feature is switched off (spec [experimental-features](../expe
 
 ## Requirements
 
-### Requirement: Read only registered and enabled agents' memory
-Coffer MUST read the native memory of each **registered and enabled** agent, from a path derived from that agent's own `config_dir` ([agent-registry](../agent-registry/spec.md)). An agent that is not registered MUST NOT be read.
-
-#### Scenario: read nothing from a disabled or unregistered agent
-- **GIVEN** fixture memory for an enabled registered agent, for a registered agent that is disabled, and in a config directory no registered agent names
-- **WHEN** aggregation runs
-- **THEN** raw entries come only from the enabled agent's memory
-- **AND** nothing is read from the disabled agent or the unregistered directory
-
 ### Requirement: Never write an agent's native memory
 Aggregation MUST be **read-only**. Coffer MUST NOT create, modify, move, delete or reformat any file in an agent's own memory, and MUST NOT disable or reconfigure an agent's native memory. This is [Aggregate Agent Memory](../../../docs/decisions/aggregate-agent-memory-never-write-it.md)'s prohibition, retained in full and still the load-bearing constraint of this design.
 
@@ -513,12 +504,12 @@ This layer MUST NOT reintroduce transcript distillation, a journal lane, native-
 - **AND** a full aggregation and distil writes no journal directory and nothing outside `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/` in a partition
 
 ### Requirement: Retire a note whose raw entries are all gone
-Every distil pass — the model-driven one and the mechanical one alike — MUST first retire each note **none** of whose provenance entries is still under its partition's `.raw/`. Aggregation removes a raw entry when its source stops producing it: the agent deleted the fact, or deleted the whole source file (judged only for a registered, enabled agent whose config directory is still there — a directory that is missing lists nothing and proves nothing), or placement now files it into a different partition (see "File personal entries into global"). A note is derived from what `.raw/` holds (see "Keep the memory tree derived and local"), so one with no source left MUST NOT stay in `notes/`, in the index or in delivery — otherwise the same lesson is served from two partitions once placement moves its entries.
+Every distil pass — the model-driven one and the mechanical one alike — MUST first retire each note **none** of whose provenance entries is still under its partition's `.raw/`. Aggregation removes a raw entry when its source stops producing it: the agent deleted the fact, or deleted the whole source file (judged only for a registered agent whose config directory is still there — a directory that is missing lists nothing and proves nothing), or placement now files it into a different partition (see "File personal entries into global"). A note is derived from what `.raw/` holds (see "Keep the memory tree derived and local"), so one with no source left MUST NOT stay in `notes/`, in the index or in delivery — otherwise the same lesson is served from two partitions once placement moves its entries.
 
 Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record retirements so they stick"), with a reason saying its sources are gone. Because nothing judged the note untrue, the record MUST NOT exclude anything from later passes: it names no raw entries, and its title MUST NOT be handed to routing as a retired subject, so material that comes back is distilled afresh. A note with at least one provenance entry still under `.raw/` MUST be left alone, and so MUST a note that names no provenance at all.
 
 #### Scenario: a deleted source file takes its raw entries with it
-- **GIVEN** an enabled agent with two native memory files, aggregated, and a second agent with one
+- **GIVEN** a registered agent with two native memory files, aggregated, and a second agent with one
 - **WHEN** the agent deletes one of its files and aggregation runs again
 - **THEN** that file's raw entries are gone from `.raw/`, the agent's other file's and the other agent's entries remain, and an agent whose config directory is missing loses nothing
 
@@ -765,3 +756,12 @@ When a distil pass finds two statements that disagree — a note's body and a ra
 - **GIVEN** a note a person edited today, and a raw entry from last month that disagrees with the edit and carries no evidence
 - **WHEN** the distil pass runs
 - **THEN** the note's body still holds the edited statement
+
+### Requirement: Read only registered agents' memory
+Coffer MUST read the native memory of each **registered** agent, from a path derived from that agent's own `config_dir` ([agent-registry](../agent-registry/spec.md)). An agent that is not registered MUST NOT be read.
+
+#### Scenario: read nothing from an unregistered agent
+- **GIVEN** fixture memory for a registered agent and in a config directory no registered agent names
+- **WHEN** aggregation runs
+- **THEN** raw entries come only from the registered agent's memory
+- **AND** nothing is read from the unregistered directory

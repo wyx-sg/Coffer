@@ -105,7 +105,7 @@ value object.
 |---|---|---|---|
 | `ProviderSecretSourceInvalid` | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | both or neither secret source supplied |
 | `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection some agent runs on (see "Refuse to move the wire of a live connection") |
-| `ProviderDoesNotReachAgent` | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | switching an agent onto a connection it is not reached by: the connection or the agent is switched off, or the connection's scope does not name the agent (see "Switch one agent at a time") |
+| `ProviderDoesNotReachAgent` | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | switching an agent onto a connection it is not reached by: the connection is switched off, or the connection's scope does not name the agent (see "Switch one agent at a time") |
 | `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | switching an agent onto an `ollama` connection (see "Keep ollama connections internal-only") |
 | `ProviderInternalDefaultTaken` | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | a resource write that would flag a second internal-engine default (see "Keep at most one internal default connection") |
 | `ProviderTranscribeDefaultTaken` | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | a resource write that would flag a second speech-to-text default (see "Keep an independent speech-to-text default") |
@@ -316,7 +316,7 @@ kind declares no redactor because its config holds no secret).
 | `delete(uid)` | Guard the owned secret via `find_secret_citations`, remove it when unowned elsewhere, delete the resource. |
 | `activate(uid, agent_type) -> ActivateResult` | Validate the connection reaches the agent, project into that agent's file, set its `connection_uid`, emit `provider_switched`; a failure puts the file back and leaves the record. |
 | `deactivate(agent_type) -> DeactivateResult` | Revert that agent to its built-in login: de-project its file and clear its `connection_uid`; idempotent; touches no other agent. |
-| `_key_of` -> `build_proxy_state(service, tokens) -> ProxyState` (`application/provider/proxy_state.py`) | What the local model proxy serves: each enabled agent's token digest and, for each agent whose `connection_for_agent` is a connection, the ordered members that may serve it. The key is decrypted by the private `_key_of` through the secret boundary, and only while the state is built; it is the only consumer of a connection's key. |
+| `_key_of` -> `build_proxy_state(service, tokens) -> ProxyState` (`application/provider/proxy_state.py`) | What the local model proxy serves: each agent's token digest and, for each agent whose `connection_for_agent` is a connection, the ordered members that may serve it. The key is decrypted by the private `_key_of` through the secret boundary, and only while the state is built; it is the only consumer of a connection's key. |
 | `ProxyTokenService.token_for(agent_uid)` / `rotate` / `revoke` (`application/provider/proxy_tokens.py`) | The agent's local proxy token, minted on first ask; `rotate` replaces it; `revoke` deletes it when the agent is removed. |
 | `set_internal_default(uid) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
 | `set_transcribe_default(uid) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |

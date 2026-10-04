@@ -24,14 +24,12 @@
     "state": {
       "connected": "已连接",
       "not-connected": "未连接到 Coffer",
-      "not-installed": "未安装",
-      "disabled": "已关闭"
+      "not-installed": "未安装"
     },
     "stateInline": {
       "connected": "已连接",
       "not-connected": "未连接到 Coffer",
-      "not-installed": "未安装",
-      "disabled": "已关闭"
+      "not-installed": "未安装"
     }
   },
   "changePreview": {
@@ -1709,7 +1707,7 @@
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "已有另一个连接是 Coffer 内部引擎的默认连接——请把默认切换到这个连接，而不是直接改这个字段",
     "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为智能体开启",
-    "PROVIDER_DOES_NOT_REACH_AGENT": "无法为该智能体开启此连接——连接或智能体已关闭，或连接的适用范围不包含该智能体",
+    "PROVIDER_DOES_NOT_REACH_AGENT": "无法为该智能体开启此连接——连接已关闭，或连接的适用范围不包含该智能体",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "有智能体正在使用该连接，无法更改协议格式——请先让该智能体切回自带登录，再修改协议，然后重新让它切到该连接",
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "已有另一个连接是 Coffer 语音转文字的默认连接——请把默认切换到这个连接，而不是直接设置标记",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
@@ -2171,7 +2169,6 @@
       "not_installed": "未安装",
       "config_left_behind": "配置残留",
       "not_found": "找不到",
-      "disabled": "已关闭",
       "connected": "已连接",
       "needs_repair": "需要修复",
       "not_connected": "未连接",
@@ -2204,13 +2201,11 @@
           "mcpMissing": "<code>{{mcpFile}}</code> 里缺少 <code>coffer</code> 条目，所以 {{name}} 用不了 Coffer 的工具。",
           "hookStale": "记忆 hook 运行的命令已不被当前 Coffer 接受，所以会话开始时没有记忆。",
           "hookMissing": "<code>{{hookFile}}</code> 里缺少记忆 hook，所以会话开始时没有记忆。",
-          "hookUntrusted": "{{name}} 只运行你批准过的 hook。请在 {{name}} 的 /hooks 里批准 Coffer 的 hook，然后重新检查。",
-          "disabled": "关闭期间 Coffer 不向 {{name}} 提供任何东西。它的条目和 hook 保持原样。"
+          "hookUntrusted": "{{name}} 只运行你批准过的 hook。请在 {{name}} 的 /hooks 里批准 Coffer 的 hook，然后重新检查。"
         },
         "action": {
           "connect": "连接",
           "repair": "修复",
-          "enable": "开启",
           "checkAgain": "重新检查"
         },
         "part": {
@@ -2226,7 +2221,6 @@
           "stale": "已过期",
           "missing": "缺失",
           "notSet": "未设置",
-          "idle": "闲置",
           "untrusted": "未批准"
         }
       },
@@ -2249,7 +2243,6 @@
           "memory": "记忆",
           "config": "配置文件"
         },
-        "disabledLine": "关闭期间没有 · 开启后会有 {{count}} 个",
         "toReview": "{{count}} 个待查看",
         "mcp": {
           "line": "{{coffer}} 个经由 Coffer · {{own}} 个在 {{file}} 里",
@@ -2505,7 +2498,6 @@
         "hookStale": "记忆钩子已过期",
         "hookMissing": "记忆钩子未写入",
         "gone": "{{dir}} 和它的程序都不在了",
-        "disabled": "已在 Coffer 中关闭",
         "notOnThisMac": "这台 Mac 上没有",
         "keptNotOnPath": "{{dir}} 已保留 · PATH 上没有 {{program}}"
       }
@@ -2513,9 +2505,7 @@
     "pending": {
       "adding": "正在添加…",
       "connecting": "正在连接…",
-      "disconnecting": "正在断开连接…",
-      "enabling": "正在开启…",
-      "disabling": "正在关闭…"
+      "disconnecting": "正在断开连接…"
     },
     "rowMenu": {
       "label": "{{name}} 的更多操作",
@@ -2525,9 +2515,7 @@
       "copyUid": "复制 uid",
       "connect": "连接",
       "repair": "修复",
-      "disconnect": "断开连接…",
-      "enable": "开启",
-      "disable": "关闭"
+      "disconnect": "断开连接…"
     },
     "change": {
       "title": "查看改动",
@@ -2692,7 +2680,6 @@
       "reason": {
         "skillOff": "该技能已关闭。",
         "outsideReach": "未勾选。",
-        "agentOff": "该智能体已关闭。",
         "agentMissing": "这台机器上没有安装该智能体。",
         "pending": "还没有副本记录。点「重新检查」查看智能体的文件夹。"
       },

@@ -316,7 +316,7 @@ the keys left in its file rather than silently routing it elsewhere.
 connection. The operation:
 
 1. requires the connection to exist, else 404, and the agent of that type to be registered, else 404;
-2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection or the agent is switched off or
+2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection is switched off or
    the connection's scope does not name the agent, and with 409 `PROVIDER_INTERNAL_ONLY` for an
    `ollama` connection;
 3. projects the connection into that agent's native config file, recording the file's prior content;
@@ -367,7 +367,7 @@ agent the switch moved.
 - **THEN** a `provider_switched` entry appears with details `{from, to, protocol, agent_type, agents}`, a timestamp, and an actor.
 
 ### Requirement: Clear an agent's connection its config contradicts
-On every reconcile pass ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), the provider-projection target MUST compare, for each enabled agent that runs on a connection, the keys Coffer's projection would write — base URL, model keys, the key helper command, Codex's provider block and its model catalogue — with the keys the agent's native config carries, by value and not by presence. Where Coffer's keys are present but differ, the connection MUST be projected again. Where they are absent, the system MUST clear that agent's `connection_uid` — only that field of only that agent, writing no file, recorded in the audit log with actor `system` — so every surface then says the agent is on its built-in login, and MUST NOT write the projection back, because a choice left from an earlier session is no warrant to re-route a user's agent through a gateway they are not currently using; the exceptions are a pass run for a sync import and an item a person applies, both of which project. The opposite drift — Coffer's keys present while no connection serves the agent — MUST be reported rather than removed, unless the pass runs for a sync import or a person applies
+On every reconcile pass ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), the provider-projection target MUST compare, for each agent that runs on a connection, the keys Coffer's projection would write — base URL, model keys, the key helper command, Codex's provider block and its model catalogue — with the keys the agent's native config carries, by value and not by presence. Where Coffer's keys are present but differ, the connection MUST be projected again. Where they are absent, the system MUST clear that agent's `connection_uid` — only that field of only that agent, writing no file, recorded in the audit log with actor `system` — so every surface then says the agent is on its built-in login, and MUST NOT write the projection back, because a choice left from an earlier session is no warrant to re-route a user's agent through a gateway they are not currently using; the exceptions are a pass run for a sync import and an item a person applies, both of which project. The opposite drift — Coffer's keys present while no connection serves the agent — MUST be reported rather than removed, unless the pass runs for a sync import or a person applies
 that item. A switch MUST keep reconcile passes out until its file and its record agree. `connection_uid` is not redundant with `enabled`: `enabled` is the user's switch on the connection, while `connection_uid` records that this is the connection currently written into the agent's file — a claim about a file on disk that the agent's own CLI, other tooling, the user and a restore from backup all rewrite.
 
 #### Scenario: boot clears a connection the agent's config does not carry
@@ -885,7 +885,7 @@ set it while another connection holds it MUST be refused before anything is writ
 
 ### Requirement: Revert an agent type to its built-in login
 `POST /api/v1/providers/use-builtin/{agent_type}` MUST
-remove every key Coffer wrote from the enabled agent of that type — for Claude Code `apiKeyHelper`,
+remove every key Coffer wrote from the agent of that type — for Claude Code `apiKeyHelper`,
 `env.ANTHROPIC_BASE_URL`, the top-level `model` and `effortLevel`, the four
 `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins, Coffer's `modelPicker`, the local-runtime compatibility
 keys and Coffer's `env.NO_PROXY` pair; for Codex the provider table, `model_provider`, `model`,

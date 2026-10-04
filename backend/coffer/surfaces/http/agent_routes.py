@@ -47,10 +47,8 @@ class AgentCreate(BaseModel):
 
 
 class AgentPatch(BaseModel):
-    # Only config_dir and the model binding are updatable here. The agent's
-    # `enabled` flag is the kind-agnostic one, toggled through
-    # POST /resources/{uid}/enable|disable (spec agent-registry "Switch an agent
-    # off with the kind-agnostic enabled flag"). Which skills reach this agent
+    # Only config_dir and the model binding are updatable here. An agent has no
+    # enabled switch (its kind is not toggleable). Which skills reach this agent
     # is decided on each skill resource (`enabled` + `scope`), never here.
     config_dir: str | None = None
     # spec provider-switching "Take projected model keys from the agent's binding":

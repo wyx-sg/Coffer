@@ -20,20 +20,14 @@ from coffer.domain.resource import Resource
 _NOW = dt.datetime(2026, 9, 9, tzinfo=dt.UTC)
 
 
-def _agent(
-    name: str,
-    agent_type: str,
-    config_dir: str,
-    *,
-    enabled: bool = True,
-) -> Resource:
+def _agent(name: str, agent_type: str, config_dir: str) -> Resource:
     return Resource(
         uid=f"uid-{name}",
         kind="agent",
         name=name,
         description=None,
         config={"type": agent_type, "config_dir": config_dir},
-        enabled=enabled,
+        enabled=True,
         created_at=_NOW,
         updated_at=_NOW,
     )
@@ -114,24 +108,6 @@ async def test_duplicate_ids_collapse_and_the_first_source_wins(tmp_path: pathli
     models = await svc.catalogue("claude_code")
 
     assert [(m.id, m.label) for m in models] == [("dup", "From the binary"), ("other", "")]
-
-
-async def test_disabled_agents_are_skipped(tmp_path: pathlib.Path) -> None:
-    enabled_dir = tmp_path / "enabled"
-    discovery = _FakeDiscovery()
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents(
-            [
-                _agent("off", "claude_code", str(tmp_path / "disabled"), enabled=False),
-                _agent("on", "claude_code", str(enabled_dir)),
-            ]
-        ),
-        discovery=discovery,
-    )
-
-    await svc.catalogue("claude_code")
-
-    assert discovery.seen == [enabled_dir]
 
 
 async def test_other_agent_types_do_not_supply_the_config_dir(tmp_path: pathlib.Path) -> None:
@@ -218,25 +194,6 @@ async def test_an_unregistered_agent_is_still_offered_what_its_cli_reports() -> 
     svc = AgentModelCatalogueService(agents=_FakeAgents([]), discovery=_FakeDiscovery(list(_THREE)))
 
     assert await svc.suggest("claude_code") == [m.id for m in _THREE]
-
-
-async def test_a_disabled_agent_does_not_answer_for_the_type(tmp_path: pathlib.Path) -> None:
-    """One resource answers for a type, and a disabled one is not it — the user
-    told Coffer to leave it alone, so its config dir must not feed discovery."""
-    enabled_dir = tmp_path / "enabled"
-    discovery = _FakeDiscovery(list(_THREE))
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents(
-            [
-                _agent("off", "claude_code", str(tmp_path / "disabled"), enabled=False),
-                _agent("on", "claude_code", str(enabled_dir)),
-            ]
-        ),
-        discovery=discovery,
-    )
-
-    assert await svc.suggest("claude_code") == [m.id for m in _THREE]
-    assert discovery.seen == [enabled_dir]
 
 
 # --- the reasoning levels beside the id ---------------------------------------

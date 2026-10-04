@@ -1,10 +1,10 @@
 // src/components/agents/detail/AgentDetailHeader.tsx — the agent page's header: mark, name, status pill, New conversation, ⋯.
 //
-// One fixed header for every state: the agent's mark (faded while it is off),
+// One fixed header for every state: the agent's mark ),
 // its name, one StatusPill, then New conversation and the ⋯ menu on the right.
 // An agent whose program is not on this Mac has nothing to converse with, so it
 // shows ⋯ only. The header never changes into a fix button: Connect, Repair,
-// Turn on and Check again live in the Overview's Connection section. There is
+// and Check again live in the Overview's Connection section. There is
 // no meta line; the version is in Overview's Details. Rotate proxy token is in
 // ⋯, only while the agent routes through Coffer's proxy.
 import { Link } from "react-router-dom";
@@ -25,7 +25,6 @@ import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentHooks } from "@/lib/hooks/useAgents";
-import { cn } from "@/lib/utils";
 import { useRotateProxyAction } from "./useRotateProxyToken";
 
 type RowActions = ReturnType<typeof useAgentRowActions>;
@@ -50,10 +49,10 @@ export function AgentDetailHeader({ typeRow, rowActions }: Props) {
   const memoryOn = useFeatureEnabled("memory") === true;
   const notApproved = memoryOn && state === "connected" && hookNotApproved(hooks.data?.coffer_hook);
 
-  // Rotate sits before Disconnect / Turn off, with the other agent-level actions.
+  // Rotate sits before Disconnect, with the other agent-level actions.
   const actions: MenuAction[] = [...rowActions.actions];
   if (rotate) {
-    const at = actions.findIndex((a) => ["disconnect", "disable", "enable"].includes(a.key));
+    const at = actions.findIndex((a) => a.key === "disconnect");
     actions.splice(at < 0 ? actions.length : at, 0, rotate);
   }
 
@@ -61,9 +60,7 @@ export function AgentDetailHeader({ typeRow, rowActions }: Props) {
     <PageHeader
       title={
         <span className="inline-flex items-center gap-2.5">
-          <span className={cn(state === "disabled" && "opacity-[.45]")}>
-            <AgentBadge type={typeRow.type} size="lg" tooltip={false} />
-          </span>
+          <AgentBadge type={typeRow.type} size="lg" tooltip={false} />
           {name}
         </span>
       }

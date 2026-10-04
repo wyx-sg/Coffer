@@ -221,7 +221,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Uninstall
 
-1. On the **Agents** page, choose **Disconnect…** from each agent's **⋯** menu, which removes Coffer's entries from its config, then **Turn off**, which also removes the skill links Coffer delivered into it.
+1. On the **Agents** page, choose **Disconnect…** from each agent's **⋯** menu, which removes Coffer's entries from its config. Then, on the **Skills** page, set each skill's reach to **Off**, which removes the skill links Coffer delivered into the agents.
 
 2. Turn off **Start at login** in **Settings › Daemon** if you turned it on, then stop the daemon:
 

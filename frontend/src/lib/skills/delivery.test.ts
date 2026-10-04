@@ -8,8 +8,6 @@ import { makeAgent, makeSkill } from "@/test/skillsPageKit";
 
 const CC = makeAgent();
 const CODEX = makeAgent({ uid: "ag-cx", name: "codex", type: "codex" });
-const on = () => true;
-
 describe("deliveryRows", () => {
   test("a binding is linked, or copied when the link fell back to a copy", () => {
     const skill = makeSkill({
@@ -30,7 +28,7 @@ describe("deliveryRows", () => {
         },
       ],
     });
-    expect(deliveryRows(skill, [CC, CODEX], on, null).map((r) => r.delivery)).toEqual([
+    expect(deliveryRows(skill, [CC, CODEX], null).map((r) => r.delivery)).toEqual([
       { state: "linked", path: "/l" },
       { state: "copied", path: "/c" },
     ]);
@@ -38,17 +36,17 @@ describe("deliveryRows", () => {
 
   test("without a binding the first reason that applies is given", () => {
     const off = makeSkill({ enabled: false, scope: { agents: [] } });
-    expect(deliveryRows(off, [CC], on, null)[0].delivery).toEqual({
+    expect(deliveryRows(off, [CC], null)[0].delivery).toEqual({
       state: "notDelivered",
       reason: "skillOff",
     });
     const scoped = makeSkill({ scope: { agents: [CC.uid] } });
-    const rows = deliveryRows(scoped, [CC, CODEX], (uid) => uid !== CC.uid, null);
+    const rows = deliveryRows(scoped, [CC, CODEX], null);
     expect(rows.map((r) => r.delivery)).toEqual([
-      { state: "notDelivered", reason: "agentOff" },
+      { state: "notDelivered", reason: "pending" },
       { state: "notDelivered", reason: "outsideReach" },
     ]);
-    expect(deliveryRows(makeSkill(), [CC], on, null)[0].delivery).toEqual({
+    expect(deliveryRows(makeSkill(), [CC], null)[0].delivery).toEqual({
       state: "notDelivered",
       reason: "pending",
     });
@@ -82,7 +80,7 @@ describe("deliveryRows", () => {
         handoff: null,
       },
     ];
-    expect(deliveryRows(skill, [CC], on, drift)[0].delivery).toEqual({
+    expect(deliveryRows(skill, [CC], drift)[0].delivery).toEqual({
       state: "drift",
       kind: "missing_link",
       path: "/l",

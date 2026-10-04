@@ -72,7 +72,7 @@ The agent's **Overview › Model** section then reads the provider, the model, t
 
 Which provider an agent runs on is a field of the agent itself (its `connection_uid`), so an agent is on at most one provider at a time and the choice stays on this machine; it never syncs. A provider that is deleted, switched off or no longer reaches the agent leaves that agent on its own login.
 
-Which provider an agent runs on is a setting of the agent itself, so an agent is on at most one provider and switching one agent never moves another. Switching an agent onto a provider it is not reached by (the provider or the agent is switched off, or the provider's reach does not name the agent) is refused with `PROVIDER_DOES_NOT_REACH_AGENT`. The choice is per machine: it is part of the agent's record, which is not synced.
+Which provider an agent runs on is a setting of the agent itself, so an agent is on at most one provider and switching one agent never moves another. Switching an agent onto a provider it is not reached by (the provider is switched off, or the provider's reach does not name the agent) is refused with `PROVIDER_DOES_NOT_REACH_AGENT`. The choice is per machine: it is part of the agent's record, which is not synced.
 
 The model lives on the **agent**, not on the provider: a provider says which gateway account to use, and the agent's binding says which model to run there. An agent with no model bound gets no model key written and runs on its own default.
 
@@ -235,7 +235,7 @@ The unattended passes, the per-call time limit and which machine may run knowled
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
-| Switch fails with `PROVIDER_DOES_NOT_REACH_AGENT` | The provider or the agent is switched off, or the provider's reach does not name the agent | Switch it on or add the agent to its reach, then switch again. |
+| Switch fails with `PROVIDER_DOES_NOT_REACH_AGENT` | The provider is switched off, or the provider's reach does not name the agent | Switch it on or add the agent to its reach, then switch again. |
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
 | The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key. |
 | The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; **Rotate proxy token** in the agent page's **⋯** menu issues a fresh one. |

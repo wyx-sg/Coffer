@@ -4,14 +4,13 @@ ADR one-level-triggered-reconciler-compares-parameters. A skill reaches an
 agent as a directory link ``<agent skill dir>/<skill name>`` to the skill's
 master folder, recorded by a ``skill_agent_bindings`` row. This target is the
 one place that decides and performs that delivery; every trigger — daemon
-boot, the period, a skill's ``enabled`` / ``scope`` edit, an agent registered,
-switched or moved, an import, the builtin seed, a repair request
+boot, the period, a skill's ``enabled`` / ``scope`` edit, an agent registered
+or moved, an import, the builtin seed, a repair request
 — asks the reconciler for a pass over it.
 
 **What is wanted.** One rule, and nothing else decides it::
 
-    delivered(skill, agent) == agent.enabled and skill.enabled
-                               and scope.is_active(skill.scope, agent.uid)
+    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent.uid)
 
 for every agent whose config parses. Each wanted delivery is an item keyed
 ``<skill_uid>@<agent_uid>`` whose parameters are the link path, the master it
@@ -77,7 +76,7 @@ class _World:
     #: Agent uid → its skills directory, for agents whose config parses.
     skill_dirs: dict[str, pathlib.Path]
     bindings: list[BindingState]
-    #: Enabled agents whose config does not parse right now. What they want is
+    #: Agents whose config does not parse right now. What they want is
     #: unknown, not "nothing": their links are left alone until the config reads
     #: again, instead of being reclaimed as no longer wanted.
     unreadable: frozenset[str] = frozenset()
@@ -89,7 +88,7 @@ class _World:
         skills = sorted(self.skills.values(), key=lambda s: s.name)
         for agent in sorted(self.agents.values(), key=lambda a: a.name):
             skill_dir = self.skill_dirs.get(agent.uid)
-            if not agent.enabled or skill_dir is None:
+            if skill_dir is None:
                 continue
             for skill in skills:
                 if skill.enabled and is_active(skill.scope, agent.uid):
@@ -143,8 +142,7 @@ class SkillLinkTarget:
             try:
                 skill_dirs[agent.uid] = self._svc._resolve_agent_skill_dir(agent)
             except Exception:  # a config that does not parse: unknown, not "wants nothing"
-                if agent.enabled:
-                    unreadable.add(agent.uid)
+                unreadable.add(agent.uid)
         return _World(
             skills, agents, skill_dirs, await self._svc._bindings.list_all(), frozenset(unreadable)
         )
@@ -320,8 +318,8 @@ def _decide(d: Difference, backup: pathlib.Path) -> Decision:
         return Decision(
             Disposition.REPAIR,
             "reclaim",
-            "The skill is no longer enabled and in scope for this agent (or the agent is "
-            "switched off); its delivered link is removed.",
+            "The skill is no longer enabled and in scope for this agent; its delivered "
+            "link is removed.",
         )
     assert d.desired is not None and d.observed is not None
     state = d.observed.params["state"]

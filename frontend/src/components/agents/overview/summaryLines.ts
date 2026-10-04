@@ -17,7 +17,6 @@ export interface SummaryLine {
 }
 
 interface Context {
-  disabled: boolean;
   /** The agent has no `coffer` entry yet, so nothing reaches it through the gateway. */
   notConnected?: boolean;
   /** The file direct MCP entries sit in (`.claude.json`, `config.toml`). */
@@ -29,8 +28,8 @@ interface Context {
 }
 
 /** How many direct entries wait for a look: duplicates of a server Coffer has. */
-function duplicated(c: NonNullable<AgentCounts["mcp"]>, disabled: boolean): number | undefined {
-  return !disabled && c.duplicates > 0 ? c.duplicates : undefined;
+function duplicated(c: NonNullable<AgentCounts["mcp"]>): number | undefined {
+  return c.duplicates > 0 ? c.duplicates : undefined;
 }
 
 export function mcpLine(
@@ -39,19 +38,17 @@ export function mcpLine(
   ctx: Context,
 ): SummaryLine | undefined {
   if (!c) return undefined;
-  if (ctx.disabled)
-    return { count: c.coffer + c.own, line: t(`${K}.disabledLine`, { count: c.coffer }) };
   if (ctx.notConnected) {
     const until = t(`${K}.mcp.untilConnected`, { count: c.coffer });
     const line =
       c.own > 0 ? `${until} · ${t(`${K}.mcp.direct`, { own: c.own, file: ctx.mcpFile })}` : until;
-    return { count: c.own, line, toReview: duplicated(c, ctx.disabled) };
+    return { count: c.own, line, toReview: duplicated(c) };
   }
   const line =
     c.own > 0
       ? t(`${K}.mcp.line`, { coffer: c.coffer, own: c.own, file: ctx.mcpFile })
       : t(`${K}.mcp.lineCofferOnly`, { coffer: c.coffer });
-  return { count: c.coffer + c.own, line, toReview: duplicated(c, ctx.disabled) };
+  return { count: c.coffer + c.own, line, toReview: duplicated(c) };
 }
 
 export function skillsLine(
@@ -60,8 +57,6 @@ export function skillsLine(
   ctx: Context,
 ): SummaryLine | undefined {
   if (!c) return undefined;
-  if (ctx.disabled)
-    return { count: c.coffer + c.own, line: t(`${K}.disabledLine`, { count: c.coffer }) };
   const line =
     c.own > 0
       ? t(`${K}.skills.line`, { coffer: c.coffer, own: c.own })

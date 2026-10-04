@@ -68,9 +68,8 @@ class ProviderDoesNotReachAgent(CofferError):  # noqa: N818
     """A connection cannot be switched onto an agent it does not reach.
 
     Reach is the connection's per-agent scope, narrowed by its ``enabled``
-    switch; and Coffer never writes into an agent the user switched off. The
-    ``reason`` says which of the three it was. Maps to 409: the request is
-    well-formed and succeeds once the connection or agent is switched on, or the
+    switch. The ``reason`` says which it was. Maps to 409: the request is
+    well-formed and succeeds once the connection is switched on, or the
     scope names the agent.
     """
 

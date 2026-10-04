@@ -56,18 +56,10 @@ describe("AgentBadge", () => {
     expect(screen.getByRole("img", { name: "Codex" })).toHaveTextContent("Codex");
   });
 
-  test("not installed is a dashed empty tile; disabled a faded neutral fill", () => {
-    render(
-      <>
-        <AgentBadge type="codex" state="not-installed" />
-        <AgentBadge type="claude_code" state="disabled" />
-      </>,
-    );
+  test("not installed is a dashed empty tile", () => {
+    render(<AgentBadge type="codex" state="not-installed" />);
     const missing = tileOf(screen.getByRole("img", { name: "Codex, not installed" }));
     expect(missing).toHaveClass("border-dashed", "bg-transparent");
-    const off = tileOf(screen.getByRole("img", { name: "Claude Code, off" }));
-    expect(off).toHaveClass("bg-neutral-soft");
-    expect(off.parentElement).toHaveClass("opacity-disabled");
   });
 });
 

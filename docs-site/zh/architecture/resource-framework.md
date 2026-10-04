@@ -61,7 +61,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | 配置 schema | — | 配置必须通过校验的类型化模型（Pydantic）。 |
 | 通用创建 | 允许 | `POST /api/v1/resources`（以及通用的配置更新）能否操作这种类型。 |
 | `supports_scope` | 否 | 该类型是否带有按智能体划分的范围。没有它的类型会拒绝任何非空 scope（`SCOPE_INVALID`，422）。 |
-| `toggleable` | 是 | 该类型到底有没有启用开关。`knowledge` 和 `memory` 不可切换：它们的每个资源都是启用并提供服务的，启用或禁用会被拒绝，返回 `RESOURCE_NOT_TOGGLEABLE`（409），什么都不改。 |
+| `toggleable` | 是 | 该类型到底有没有启用开关。`knowledge`、`memory` 和 `agent` 不可切换：它们的每个资源读起来都是启用并提供服务的（包括在其类型变成不可切换之前、存储的生效范围里写着关闭的那一个），启用或禁用会被拒绝，返回 `RESOURCE_NOT_TOGGLEABLE`（409），什么都不改。 |
 | 存储类别 | `vault` | 该类型资源文件所在的存储类别：`vault`（同步）、`local`（`agent`）或 `derived`（`memory`）。目录就是同步策略。 |
 | 逐行存储 | 无 | 对存储类别的逐行细化，只取决于配置。`skill` 类型把内置的 `coffer-guide` 归为 `derived`。 |
 | 固定名字 | 否 | 名字注册后是否固定，因为它在 Coffer 之外被引用，或者由配置派生而来。名字不同的 `PATCH` 会被拒绝，返回 `409 NAME_IMMUTABLE`。 |
@@ -103,7 +103,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | 类型 | 它提供的 Hook 和标志 |
 | --- | --- |
 | `mcp_server` | 固定名字（名字是智能体看到的每个工具名的前缀）、不带标题、支持范围、命名规则（保留 `__` 作为工具命名空间分隔符，并把名字限制在 24 个字符以内）、审计脱敏（剥掉 `transport.env` 和 `transport.headers`）、密钥引用、配置变更检查（驱逐活跃连接，让下一次调用用新配置启动）、删除清理、启用反应（禁用时驱逐活跃连接） |
-| `agent` | 不参与通用创建、由配置派生的名字和固定名字（每种类型一个智能体，以类型命名）、不带标题、`local` 存储、删除清理、启用反应 |
+| `agent` | 不参与通用创建、由配置派生的名字和固定名字（每种类型一个智能体，以类型命名）、不带标题、不可切换、`local` 存储、删除清理 |
 | `skill` | 不参与通用创建、支持范围、命名规则（`SKILL.md` frontmatter 规则）、删除守卫（拒绝删除内置的 `coffer-guide`）、逐行存储（把 `coffer-guide` 归为 derived）、固定名字（名字是智能体加载它的文件夹）、不带标题、删除清理、范围反应、启用反应 |
 | `knowledge` | 不参与通用创建、不带标题、不可切换、改名搬运（移动知识集目录）、删除清理 |
 | `memory` | 不参与通用创建、不可切换、`derived` 存储、改名搬运、删除清理 |
@@ -120,7 +120,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | 编辑配置 | 同样的通用创建闸门 → schema → 密钥探测 → 配置变更检查 → 写入 → 用脱敏后的前后配置审计 `resource_updated`。 |
 | 改名 | 没变化则不操作 → 拒绝固定名字的类型（`NAME_IMMUTABLE`，409，不审计）→ 命名规则 → 冲突检查（`RESOURCE_ALREADY_EXISTS`，409）→ 改名搬运 → 写入 → 带 `from` 和 `to` 审计 `resource_renamed`。 |
 | 设置标题 | 没变化则不操作 → 标题规则（空白即清除；超过 80 个字符，或在不带标题的类型上有任何标题，都是 `CONFIG_INVALID`）→ 写入 → 带标题的 `before` 和 `after` 审计 `resource_updated`。不受通用创建闸门限制。 |
-| 启用或禁用 | 拒绝非 `toggleable` 的类型（`RESOURCE_NOT_TOGGLEABLE`，409）→ 没变化则不操作（也不审计）→ 写入 → 审计 `resource_enabled` 或 `resource_disabled` → 启用反应。 |
+| 启用或禁用 | 拒绝非 `toggleable` 的类型（`RESOURCE_NOT_TOGGLEABLE`，409）→ 没变化则不操作（也不审计）→ 写入 → 审计 `resource_enabled` 或 `resource_disabled` → 启用反应（该类型有的话）。 |
 | 设置范围 | 检查范围的形状以及类型是否支持范围 → 范围检查 → 写入 → 审计 `resource_scope_updated` → 范围反应。 |
 | 删除 | 解析 → 删除守卫 → 删除清理 → 在一次保险库提交中删除资源文件 → 释放不再被任何资源引用的密钥 → 用脱敏快照审计 `resource_deleted`。 |
 
@@ -196,7 +196,7 @@ sequenceDiagram
 
 ## 生效范围 {#reach}
 
-资源的**生效范围**是它的 `enabled` 标志加上它的 `scope`。既不 `toggleable` 也没有范围的类型——`knowledge`、`memory`——没有生效范围可设：它对所有智能体生效，Web 界面也不为它显示生效范围或状态控件。两者都是本机专属的：在它们所作用的机器上设置，从不通过同步收敛。
+资源的**生效范围**是它的 `enabled` 标志加上它的 `scope`。既不 `toggleable` 也没有范围的类型——`knowledge`、`memory`、`agent`——没有生效范围可设：它始终开启且不设范围，Web 界面也不为它显示生效范围或状态控件。两者都是本机专属的：在它们所作用的机器上设置，从不通过同步收敛。
 
 框架定义了范围的形状，以及每个执行点都会应用的那一条规则：
 

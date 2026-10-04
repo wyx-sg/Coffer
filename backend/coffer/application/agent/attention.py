@@ -93,7 +93,7 @@ class AgentAttentionSource:
 
     async def items(self) -> Sequence[AttentionItem]:
         out: list[AttentionItem] = []
-        for agent in await self._agents.list(kind=KIND, enabled=True):
+        for agent in await self._agents.list(kind=KIND):
             item = await self._item(agent)
             if item is not None:
                 out.append(item)

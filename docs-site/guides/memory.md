@@ -13,7 +13,7 @@ Every agent keeps its own memory, and none can see another's. What Claude Code l
 
 Coffer closes that gap without taking over either agent's memory:
 
-1. **Read.** Coffer reads each registered, enabled agent's native memory files. It never creates, changes, moves or deletes anything there, and never changes an agent's memory settings.
+1. **Read.** Coffer reads each registered agent's native memory files. It never creates, changes, moves or deletes anything there, and never changes an agent's memory settings.
 2. **Distil.** Coffer's own model turns what it read into notes in Coffer's own words — one topic per file — merging lessons that two agents learned separately into one note.
 3. **Deliver.** An installed hook hands the notes back at two moments: the index for the repository and `global` at session start, and the few notes a prompt names when you send it.
 
@@ -75,7 +75,7 @@ Two background passes keep the partitions current. Both are on by default.
 
 | Pass | What it does | Default schedule | Uses a model |
 | --- | --- | --- | --- |
-| **Read from agents** (aggregation) | Reads every enabled agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly | No |
+| **Read from agents** (aggregation) | Reads every registered agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly | No |
 | **Distil memory** | For each partition, routes new entries against the index — merge into a note, open a new note, retire a note, or keep nothing — then rewrites only the notes that changed, and rewrites `MEMORY.md`. | About a minute after start, then every 6 hours | Yes, when configured |
 
 The two passes run on separate timers: distil does not wait for an aggregation (to run both at once, use [Update memory](#run-a-pass-now)), and a partition with no new entries since its last distil costs no model call. Distil is incremental: the routing request carries the new entries and the index lines, never the note bodies, and each touched note is rewritten in its own small request. Two agents' entries about the same lesson, however differently worded, end up in one note whose `origins` name both. When a new entry disagrees with a note, the [newer statement wins unless the older one is shown to be right](#when-two-statements-disagree).
@@ -251,7 +251,7 @@ A partition has no on/off switch and no per-agent reach. Every partition is serv
 
 This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/derived/memory/`.
 
-To stop Coffer reading one agent's memory at all, disable that agent (see [Agents](/guides/agents)).
+Coffer reads every registered agent's memory; there is no per-agent switch for it. Turn off **Read memory automatically** in the Memory header to stop reading all of them.
 
 ## Rebuild a partition
 
@@ -276,7 +276,7 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 
 ## Troubleshooting
 
-**A partition is empty or missing.** Check that the agent is registered and enabled, then choose **Update memory** and read its report. Entries learned outside a git repository do not get a partition of their own.
+**A partition is empty or missing.** Check that the agent is registered, then choose **Update memory** and read its report. Entries learned outside a git repository do not get a partition of their own.
 
 **An agent is not given its memory.** Open the agent's **Hooks** tab to confirm Coffer's hook is **Current** on both events (press **Repair** if it reads **Out of date** or **Missing**). For Codex, check that both entries are trusted in `/hooks`. Then open **Memory → Delivered at session start** to see whether memory reached the agent this week, and the partition's **Delivered** tab to see exactly what it is given at session start.
 

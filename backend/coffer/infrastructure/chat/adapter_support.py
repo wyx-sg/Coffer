@@ -167,7 +167,7 @@ ChannelNoteResolver = Callable[[str, str], Awaitable[ChannelNote | None]]
 #: () -> the environment overrides that point the agent's runtime at the config
 #: directory of the agent answering for this provider's type —
 #: ``{"CLAUDE_CONFIG_DIR": dir}`` / ``{"CODEX_HOME": dir}`` for a custom one,
-#: ``{}`` for the default (spec chat "Ship Claude Code and Codex subprocess
+#: ``{}`` for the default (spec chat "Run Claude Code and Codex as subprocess
 #: providers on the type's one agent"). A narrow seam so chat never imports the agent kind; the
 #: composition root builds it over the agent registry.
 HomeEnvResolver = Callable[[], Awaitable[dict[str, str]]]
@@ -179,14 +179,11 @@ ManagedCheck = Callable[[], Awaitable[bool]]
 
 
 async def require_managed(check: ManagedCheck | None, agent_key: str) -> None:
-    """Refuse a turn for an agent type no enabled managed agent answers for."""
+    """Refuse a turn for an agent type no managed agent answers for."""
     if check is not None and not await check():
         raise AgentConfigRejected(
             reason="agent_not_managed",
-            message=(
-                f"no enabled {agent_key} agent is managed by Coffer; add or enable it on "
-                "the Agents page"
-            ),
+            message=(f"no {agent_key} agent is managed by Coffer; add it on the Agents page"),
         )
 
 

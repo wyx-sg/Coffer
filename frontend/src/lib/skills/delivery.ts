@@ -1,7 +1,7 @@
 // frontend/src/lib/skills/delivery.ts
 // Where each registered agent's copy of one skill stands — the Delivery tab's
 // rows, derived in the client (design add-skill-sources decision 8): from the
-// skill's own bindings, the agents list with each agent's switch, and, once
+// skill's own bindings, the agents list and, once
 // the user has asked for it, the drift report of "Report skill drift on
 // request". There is no read route for this; everything it needs is already
 // on the wire. The tab only reads: who gets the skill is the Reach button's.
@@ -9,14 +9,14 @@
 // Precedence per agent: a drift finding (only after Check again) beats the
 // binding, because it is the fresher, on-disk answer; a binding says the copy
 // is linked or copied; without one the copy is not delivered, and the reason
-// is the first that applies — the skill is off, the agent is outside its
-// reach, the agent itself is switched off.
+// is the first that applies — the skill is off, or the agent is outside its
+// reach.
 import type { AgentOut } from "@/lib/api/agents";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 
 type DriftKind = SkillDriftEntry["kind"];
 
-type NotDeliveredReason = "skillOff" | "outsideReach" | "agentOff" | "pending";
+type NotDeliveredReason = "skillOff" | "outsideReach" | "pending";
 
 /** One agent's copy of the skill, as the Delivery tab shows it. */
 export type AgentDelivery =
@@ -32,27 +32,23 @@ export interface DeliveryRow {
 
 /**
  * One row per registered agent, in the order given (the caller sorts them in
- * Agents-page order). `agentEnabled` answers whether an agent is switched on —
- * its generic resource flag, which `AgentOut` does not carry; an agent it
- * does not know is taken to be on. `drift` is the last report, or `null`
+ * Agents-page order). `drift` is the last report, or `null`
  * before the user has checked.
  */
 export function deliveryRows(
   skill: SkillOut,
   agents: readonly AgentOut[],
-  agentEnabled: (uid: string) => boolean,
   drift: readonly SkillDriftEntry[] | null,
 ): DeliveryRow[] {
   return agents.map((agent) => ({
     agent,
-    delivery: deliveryFor(skill, agent, agentEnabled, drift),
+    delivery: deliveryFor(skill, agent, drift),
   }));
 }
 
 function deliveryFor(
   skill: SkillOut,
   agent: AgentOut,
-  agentEnabled: (uid: string) => boolean,
   drift: readonly SkillDriftEntry[] | null,
 ): AgentDelivery {
   const finding = drift?.find((e) => e.skill_name === skill.name && e.agent_name === agent.name);
@@ -70,6 +66,5 @@ function deliveryFor(
   if (scoped !== null && !scoped.includes(agent.uid)) {
     return { state: "notDelivered", reason: "outsideReach" };
   }
-  if (!agentEnabled(agent.uid)) return { state: "notDelivered", reason: "agentOff" };
   return { state: "notDelivered", reason: "pending" };
 }

@@ -18,7 +18,6 @@ import type { AgentOut } from "@/lib/api/agents";
 import type { SkillOut } from "@/lib/api/skills";
 import { relativeTime } from "@/lib/clis/format";
 import { useAgents } from "@/lib/hooks/useAgents";
-import { useKindReach } from "@/lib/hooks/useResources";
 import { useSkillCopies } from "@/lib/hooks/useSkills";
 import { deliveryRows } from "@/lib/skills/delivery";
 
@@ -29,13 +28,11 @@ interface Props {
 export function SkillDeliveryTab({ skill }: Props) {
   const { t, i18n } = useTranslation();
   const { data: agentsData } = useAgents();
-  const agentReach = useKindReach("agent");
   const copies = useSkillCopies();
   const agents = sortAgents(agentsData ?? []);
   const entries = copies.data?.entries ?? null;
-  const rows = deliveryRows(skill, agents, (uid) => agentReach.get(uid)?.enabled ?? true, entries);
+  const rows = deliveryRows(skill, agents, entries);
   const blocked = (a: AgentOut): string | undefined => {
-    if (agentReach.get(a.uid)?.enabled === false) return t("skills.delivery.reason.agentOff");
     if (a.state === "missing") return t("skills.delivery.reason.agentMissing");
     return undefined;
   };

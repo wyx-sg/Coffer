@@ -248,7 +248,7 @@ export interface paths {
          * Activate Provider
          * @description Switch one agent onto this connection: project it into that agent's
          *     native config and record it on the agent. Nothing else changes (409
-         *     ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+         *     ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection is off or the
          *     scope does not name the agent).
          */
         post: operations["activate_provider_api_v1_providers__uid__activate_post"];

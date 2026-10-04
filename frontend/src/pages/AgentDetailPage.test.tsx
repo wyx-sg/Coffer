@@ -181,12 +181,11 @@ describe("AgentDetailPage", () => {
   });
 
   acceptance("agent-registry", "the header carries one status pill and a fixed action pair", () => {
-    // The header never turns into a fix button: Connect, Repair and Turn on are the Overview's.
+    // The header never turns into a fix button: Connect, Repair and Check again are the Overview's.
     for (const [rowState, word] of [
       ["not_connected", "Not connected"],
       ["connected", "Connected"],
       ["needs_repair", "Needs repair"],
-      ["disabled", "Off"],
     ] as const) {
       mockRoute({ rowState });
       const { unmount } = renderAt();
@@ -195,7 +194,7 @@ describe("AgentDetailPage", () => {
         "href",
         "/conversations/new",
       );
-      for (const name of ["Connect", "Repair", "Turn on", "Check again"]) {
+      for (const name of ["Connect", "Repair", "Check again"]) {
         expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
       }
       unmount();

@@ -194,11 +194,3 @@ def test_a_pointer_is_not_followed_to_a_keyless_connection() -> None:
     resource, _ = _connection(protocol="ollama", scope=None)
     agent = _agent(_CLAUDE_UID, AgentType.CLAUDE_CODE, connection_uid=_CONN_UID)
     assert connection_for_agent(agent, [resource]) is None
-
-
-def test_an_agent_switched_off_still_resolves_its_connection() -> None:
-    # The agent's own ``enabled`` is the caller's business (the projector skips
-    # it at write time), not part of which connection the record names.
-    resource, _ = _connection(scope=None)
-    agent = _agent(_CLAUDE_UID, AgentType.CLAUDE_CODE, enabled=False, connection_uid=_CONN_UID)
-    assert connection_for_agent(agent, [resource]) is not None

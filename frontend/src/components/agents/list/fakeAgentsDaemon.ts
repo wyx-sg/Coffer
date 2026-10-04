@@ -31,8 +31,6 @@ export interface FakeDaemon {
   folders: Record<string, string[]>;
   /** What the native folder dialog answers. */
   pick: { available: boolean; path: string | null };
-  /** Uids of agents switched off. */
-  disabled: string[];
   /** Registrations so far; the next uid is `agt_<seq + 1>`. */
   seq: number;
   /** Return an ApiError to make that request fail. */
@@ -72,7 +70,6 @@ export function fakeDaemon(init: Partial<FakeDaemon> = {}): FakeDaemon {
     calls: [],
     folders: {},
     pick: { available: true, path: null },
-    disabled: [],
     seq: 0,
     ...init,
   };
@@ -105,13 +102,8 @@ export function fakeCallFor(d: FakeDaemon) {
     if (failure) throw failure;
     await d.hold?.(req);
     if (path === "/daemon/status") return { features: {} };
-    const resource = path.match(/^\/resources\/([^/?]+)(?:\/(enable|disable))?$/);
-    if (resource) {
-      const uid = decodeURIComponent(resource[1]);
-      if (resource[2] === "enable") d.disabled = d.disabled.filter((u) => u !== uid);
-      if (resource[2] === "disable") d.disabled.push(uid);
-      return { uid, enabled: !d.disabled.includes(uid) };
-    }
+    const resource = path.match(/^\/resources\/([^/?]+)$/);
+    if (resource) return { uid: decodeURIComponent(resource[1]), enabled: true };
     if (path === "/fs/pick-folder") return d.pick;
     if (path.startsWith("/fs/browse")) {
       const at = decodeURIComponent(path.split("?path=")[1] ?? "");

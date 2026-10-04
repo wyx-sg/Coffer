@@ -95,12 +95,8 @@ class ProviderProjector:
 
     @staticmethod
     def agents_of_type(agents: list[Resource], agent_type: AgentType) -> list[Resource]:
-        """The enabled agents of a given type among ``agents``."""
-        return [
-            a
-            for a in agents
-            if a.enabled and AgentConfig.model_validate(a.config).type == agent_type
-        ]
+        """The agents of a given type among ``agents``."""
+        return [a for a in agents if AgentConfig.model_validate(a.config).type == agent_type]
 
     def projection_for(self, agent_type: AgentType) -> ProviderProjection | None:
         """The agent type's provider projection facet, or ``None`` when it

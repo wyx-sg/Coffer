@@ -27,15 +27,12 @@ async def answering_agent_config(agents: AgentLister, agent_key: str) -> AgentCo
 
     A type has one agent (spec agent-registry "Keep one agent per type, named
     by it"), so this is the agent a chat turn runs against and whose models the
-    pickers offer (spec chat "Ship Claude Code and Codex subprocess providers on
+    pickers offer (spec chat "Run Claude Code and Codex as subprocess providers on
     the type's one agent", spec agent-registry "Serve each agent type's model
-    catalogue from its one agent"). A disabled agent is skipped: the user has
-    told Coffer to leave it alone. A row Coffer can no longer parse is skipped
+    catalogue from its one agent"). A row Coffer can no longer parse is skipped
     too — a read-only lookup must not fail on it; the agent routes surface it.
     """
     for resource in await agents.list():
-        if not resource.enabled:
-            continue
         try:
             cfg = AgentConfig.model_validate(resource.config)
         except ValueError:

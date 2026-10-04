@@ -1,4 +1,4 @@
-"""AgentAttentionSource: at most one item per enabled agent, the most basic
+"""AgentAttentionSource: at most one item per agent, the most basic
 problem first."""
 
 from __future__ import annotations
@@ -29,13 +29,12 @@ MCP_OFF = PartStatus(key="mcp", installed=False, detail=None)
 HOOK_OFF = PartStatus(key="memory_hook", installed=False, detail=None)
 
 
-def _agent(uid: str, *, enabled: bool = True):  # type: ignore[no-untyped-def]
+def _agent(uid: str):  # type: ignore[no-untyped-def]
     return resource(
         uid,
         "agent",
         {"type": "claude_code", "config_dir": f"/agents/{uid}"},
         name=f"claude-{uid}",
-        enabled=enabled,
     )
 
 
@@ -134,13 +133,6 @@ async def test_an_unreadable_config_is_a_warning_with_the_check_action() -> None
     assert "cannot parse /agents/a/settings.json" in item.reason
     assert item.severity is Severity.WARNING
     assert item.action == AttentionAction(verb="check", method="GET", path="/api/v1/agents/a")
-
-
-async def test_disabled_agents_are_not_asked() -> None:
-    detect = FakeDetect({"off": DetectionState.MISSING})
-    items = await _source([_agent("off", enabled=False)], detect, FakeConnection({})).items()
-    assert items == []
-    assert detect.asked == []
 
 
 async def test_a_raising_detection_propagates() -> None:

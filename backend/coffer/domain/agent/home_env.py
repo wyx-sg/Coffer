@@ -12,7 +12,7 @@ then keeps ``.claude.json`` inside that directory), Codex reads ``CODEX_HOME``
 confirmed on codex-cli 0.155.1: a broken ``config.toml`` in ``$CODEX_HOME`` is
 the one ``codex login status`` refuses to load). For the default directory
 nothing is set, so the process behaves exactly as when the user runs the CLI
-themselves — spec chat "Ship Claude Code and Codex subprocess providers on the type's one agent".
+themselves — spec chat "Run Claude Code and Codex as subprocess providers on the type's one agent".
 """
 
 from __future__ import annotations
