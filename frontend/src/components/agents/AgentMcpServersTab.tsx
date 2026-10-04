@@ -18,6 +18,7 @@ import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
 import { AgentMcpEntryDialog } from "@/components/agents/mcp/AgentMcpEntryDialog";
 import { AgentOwnMcpRows } from "@/components/agents/mcp/AgentOwnMcpRows";
 import { McpParseErrorAlert } from "@/components/agents/mcp/McpParseErrorAlert";
+import { useOwnMcpBulk } from "@/components/agents/mcp/useOwnMcpBulk";
 import { buildOwnMcpRows, cofferMcpNames, type OwnMcpRow } from "@/components/agents/mcp/mcpRows";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { FromCofferRow } from "@/components/agents/tabs/FromCofferRow";
@@ -57,6 +58,13 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
     return path ? abbreviateHomePath(path) : source;
   };
 
+  const bulk = useOwnMcpBulk({
+    agentUid: agent.uid,
+    agentName: agent.name,
+    agentLabel,
+    whereLabel,
+  });
+
   return (
     <div className="flex max-w-[1000px] flex-col gap-8">
       {servers.data ? (
@@ -93,6 +101,12 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
             description: t("agents.mcpTab.emptyDescription", { agent: agentLabel }),
           }}
           noMatch={t("agents.mcpTab.noMatch")}
+          bulk={{
+            rowKey: (row) => row.key,
+            selectable: (row) => row.state !== "readOnly",
+            barLabel: t("agents.mcpTab.bulk.label"),
+            actions: bulk.actions,
+          }}
           notice={
             parseErrors.length > 0 ? (
               <div className="flex flex-col gap-1">
@@ -107,9 +121,10 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
             ) : undefined
           }
         >
-          {(visible) => (
+          {(visible, select) => (
             <AgentOwnMcpRows
               rows={visible}
+              select={select}
               whereLabel={whereLabel}
               onAdopt={setAdoptTarget}
               onRemoveDuplicate={setRemoveTarget}
@@ -119,6 +134,8 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
           )}
         </AgentKindTab>
       </Section>
+
+      {bulk.dialogs}
 
       <AgentMcpEntryDialog
         agentUid={agent.uid}

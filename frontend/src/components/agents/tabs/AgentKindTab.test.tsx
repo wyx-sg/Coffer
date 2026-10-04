@@ -67,4 +67,50 @@ describe("AgentKindTab", () => {
     expect(screen.getByText("Heads up")).toBeInTheDocument();
     expect(screen.getByText("?")).toBeInTheDocument();
   });
+
+  describe("bulk selection", () => {
+    function renderBulk(extra: Partial<{ selectable: (r: Row) => boolean }> = {}) {
+      return render(
+        <AgentKindTab
+          rows={ROWS}
+          searchPlaceholder="Search skills"
+          searchText={(r) => r.name}
+          empty={{ title: "none", description: "none" }}
+          noMatch="No skills match."
+          bulk={{
+            rowKey: (r) => r.name,
+            barLabel: "Selected skills",
+            actions: (rows) => <span>{`acting on ${rows.length}`}</span>,
+            ...extra,
+          }}
+        >
+          {(visible, select) =>
+            visible.map((r) => (
+              <li key={r.name} data-testid="row">
+                {select.leading(r, r.name)}
+                {r.name}
+              </li>
+            ))
+          }
+        </AgentKindTab>,
+      );
+    }
+
+    test("select-all ticks every row; the bar replaces the search and Esc clears", () => {
+      renderBulk();
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+      expect(screen.getByText("3 of 3 selected")).toBeInTheDocument();
+      expect(screen.getByText("acting on 3")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Search skills")).toBeNull();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.getByLabelText("Search skills")).toBeInTheDocument();
+    });
+
+    test("a row that cannot be selected has no checkbox and is not counted", () => {
+      renderBulk({ selectable: (r) => r.name !== "lint-fix" });
+      expect(screen.queryByRole("checkbox", { name: "Select lint-fix" })).toBeNull();
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+      expect(screen.getByText("2 of 2 selected")).toBeInTheDocument();
+    });
+  });
 });

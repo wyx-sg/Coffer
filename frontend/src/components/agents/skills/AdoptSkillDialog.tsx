@@ -25,13 +25,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import type { AdoptSkillReach } from "@/lib/api/agents-workspace";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { SkillFileNode } from "@/lib/api/skills";
 import { useAdoptUnmanagedSkill } from "@/lib/hooks/useAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 import { useUnmanagedSkillFiles } from "@/lib/hooks/useUnmanagedSkill";
-import { EVERY_AGENT, type SkillReachDraft } from "@/lib/skills/reach";
+import { EVERY_AGENT, toWire, type SkillReachDraft } from "@/lib/skills/reach";
 import type { OwnSkillRow } from "./skillRows";
 
 /** The relative path of every file under the folder, in tree order. */
@@ -42,12 +41,6 @@ function filePaths(node: SkillFileNode | undefined): string[] {
 }
 
 const FILES_SHOWN = 4;
-
-function toWire(reach: SkillReachDraft): AdoptSkillReach {
-  if (reach.mode === "disabled") return { mode: "disabled", agents: [] };
-  if (reach.mode === "restricted") return { mode: "restricted", agents: reach.scope?.agents ?? [] };
-  return { mode: "everywhere", agents: [] };
-}
 
 interface Props {
   agentUid: string;

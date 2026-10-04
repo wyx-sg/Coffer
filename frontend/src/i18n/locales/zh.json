@@ -1921,7 +1921,32 @@
       "parseError": "无法读取 {{file}}：{{error}}",
       "emptyTitle": "{{agent}} 没有插件",
       "emptyBody": "你在 {{agent}} 中安装的插件会显示在这里。",
-      "noMatches": "没有匹配的插件"
+      "noMatches": "没有匹配的插件",
+      "bulk": {
+        "label": "已选插件",
+        "enable": "启用",
+        "disable": "停用",
+        "uninstall": "卸载…",
+        "alreadyOn_one": "所选的 {{count}} 个插件已经启用。",
+        "alreadyOn_other": "所选的 {{count}} 个插件已经启用。",
+        "alreadyOff_one": "所选的 {{count}} 个插件已经停用。",
+        "alreadyOff_other": "所选的 {{count}} 个插件已经停用。",
+        "enabled_one": "已启用 {{count}} 个插件。",
+        "enabled_other": "已启用 {{count}} 个插件。",
+        "disabled_one": "已停用 {{count}} 个插件。",
+        "disabled_other": "已停用 {{count}} 个插件。",
+        "enablePartial": "已启用 {{ok}} / {{total}}",
+        "disablePartial": "已停用 {{ok}} / {{total}}",
+        "uninstallTitle_one": "卸载 {{count}} 个插件？",
+        "uninstallTitle_other": "卸载 {{count}} 个插件？",
+        "uninstallConfirm_one": "卸载 {{count}} 个插件",
+        "uninstallConfirm_other": "卸载 {{count}} 个插件",
+        "uninstalling": "正在卸载…",
+        "uninstalled_one": "已卸载 {{count}} 个插件",
+        "uninstalled_other": "已卸载 {{count}} 个插件",
+        "uninstallPartial": "已卸载 {{ok}} / {{total}}",
+        "retry": "重试失败的 {{count}} 个"
+      }
     },
     "pluginDetail": {
       "loadFailed": "无法加载此插件",
@@ -2075,6 +2100,34 @@
         "foundInSkills": "{{agent}} 的技能目录",
         "foundInAgentsDir": "共享的 ~/.agents/skills 目录",
         "filesLabel": "文件"
+      },
+      "bulk": {
+        "label": "已选技能",
+        "adoptDisabled": "只有未托管的文件夹才能纳入托管",
+        "delete": "删除…",
+        "adoptTitle_one": "纳入托管 {{count}} 个技能？",
+        "adoptTitle_other": "纳入托管 {{count}} 个技能？",
+        "adoptBody_one": "Coffer 会把 {{names}} 复制进自己的库，并把链接放回这里。每个都会保留 .bak，且沿用原文件夹名。Coffer 已有同名技能时，只有该技能失败。",
+        "adoptBody_other": "Coffer 会把 {{names}} 复制进自己的库，并把链接放回这里。每个都会保留 .bak，且沿用原文件夹名。Coffer 已有同名技能时，只有该技能失败。",
+        "adoptConfirm_one": "纳入托管 {{count}} 个技能",
+        "adoptConfirm_other": "纳入托管 {{count}} 个技能",
+        "adopting": "正在纳入托管…",
+        "adopted_one": "已纳入托管 {{count}} 个技能",
+        "adopted_other": "已纳入托管 {{count}} 个技能",
+        "adoptPartial": "已纳入托管 {{ok}} / {{total}}",
+        "deleteTitle_one": "删除 {{count}} 个技能？",
+        "deleteTitle_other": "删除 {{count}} 个技能？",
+        "deleteBody_one": "这会从磁盘删除 {{names}}。Coffer 没有副本，无法恢复。",
+        "deleteBody_other": "这会从磁盘删除 {{names}}。Coffer 没有副本，无法恢复。",
+        "deleteConfirm_one": "删除 {{count}} 个技能",
+        "deleteConfirm_other": "删除 {{count}} 个技能",
+        "deleted_one": "已删除 {{count}} 个技能",
+        "deleted_other": "已删除 {{count}} 个技能",
+        "deletePartial": "已删除 {{ok}} / {{total}}",
+        "retry": "重试失败的 {{count}} 个",
+        "skipped_one": "已跳过所选的 {{count}} 个技能：只有未托管的文件夹才能纳入托管。",
+        "skipped_other": "已跳过所选的 {{count}} 个技能：只有未托管的文件夹才能纳入托管。",
+        "reachHint": "决定谁能用到。之后可在「技能」页修改。"
       }
     },
     "mcpTab": {
@@ -2139,7 +2192,35 @@
         "pending": "正在纳入托管…",
         "success": "已纳入托管 {{name}}——Coffer 现在通过网关提供它"
       },
-      "noMatch": "没有匹配的服务器。"
+      "noMatch": "没有匹配的服务器。",
+      "bulk": {
+        "label": "已选服务器",
+        "adoptDisabled": "只有绕过 Coffer 的条目才能纳入托管",
+        "remove": "移除…",
+        "adoptTitle_one": "纳入托管 {{count}} 个服务器？",
+        "adoptTitle_other": "纳入托管 {{count}} 个服务器？",
+        "adoptBody_one": "Coffer 会通过网关提供 {{names}}，并把条目从配置文件中取出，沿用原名称。每个文件都会保留 .bak。Coffer 已有同名服务器时，只有该服务器失败。",
+        "adoptBody_other": "Coffer 会通过网关提供 {{names}}，并把条目从配置文件中取出，沿用原名称。每个文件都会保留 .bak。Coffer 已有同名服务器时，只有该服务器失败。",
+        "secrets_one": "{{count}} 个密钥值将移入 Coffer 的密钥库，配置里保留对它们的引用。",
+        "secrets_other": "{{count}} 个密钥值将移入 Coffer 的密钥库，配置里保留对它们的引用。",
+        "adoptConfirm_one": "纳入托管 {{count}} 个服务器",
+        "adoptConfirm_other": "纳入托管 {{count}} 个服务器",
+        "adopted_one": "已纳入托管 {{count}} 个服务器，Coffer 现通过网关提供它们",
+        "adopted_other": "已纳入托管 {{count}} 个服务器，Coffer 现通过网关提供它们",
+        "adoptPartial": "已纳入托管 {{ok}} / {{total}}",
+        "removeTitle_one": "移除 {{count}} 个服务器？",
+        "removeTitle_other": "移除 {{count}} 个服务器？",
+        "removeBody": "{{agent}} 下次会话起将不再有这些服务器。每个文件都会保留 .bak，Coffer 里的内容不变。",
+        "removeConfirm_one": "移除 {{count}} 个服务器",
+        "removeConfirm_other": "移除 {{count}} 个服务器",
+        "removing": "正在移除…",
+        "removed_one": "已移除 {{count}} 个服务器",
+        "removed_other": "已移除 {{count}} 个服务器",
+        "removePartial": "已移除 {{ok}} / {{total}}",
+        "retry": "重试失败的 {{count}} 个",
+        "skipped_one": "已跳过所选的 {{count}} 个条目：只有绕过 Coffer 的条目才能纳入托管。",
+        "skipped_other": "已跳过所选的 {{count}} 个条目：只有绕过 Coffer 的条目才能纳入托管。"
+      }
     },
     "memoryStore": {
       "tree": "文件",
@@ -2160,7 +2241,9 @@
     },
     "kindTab": {
       "loadFailed": "无法读取此列表",
-      "moreFor": "{{name}} 的更多操作"
+      "moreFor": "{{name}} 的更多操作",
+      "selectRow": "选择 {{name}}",
+      "selectAll": "全选"
     },
     "state": {
       "not_installed": "未安装",

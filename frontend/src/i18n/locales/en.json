@@ -1921,7 +1921,32 @@
       "parseError": "Couldn’t read {{file}}: {{error}}",
       "emptyTitle": "{{agent}} has no plugins",
       "emptyBody": "Plugins you install in {{agent}} show up here.",
-      "noMatches": "No plugins match"
+      "noMatches": "No plugins match",
+      "bulk": {
+        "label": "Selected plugins",
+        "enable": "Enable",
+        "disable": "Disable",
+        "uninstall": "Uninstall…",
+        "alreadyOn_one": "{{count}} selected plugin is already on.",
+        "alreadyOn_other": "{{count}} selected plugins are already on.",
+        "alreadyOff_one": "{{count}} selected plugin is already off.",
+        "alreadyOff_other": "{{count}} selected plugins are already off.",
+        "enabled_one": "Enabled {{count}} plugin.",
+        "enabled_other": "Enabled {{count}} plugins.",
+        "disabled_one": "Disabled {{count}} plugin.",
+        "disabled_other": "Disabled {{count}} plugins.",
+        "enablePartial": "Enabled {{ok}} of {{total}}",
+        "disablePartial": "Disabled {{ok}} of {{total}}",
+        "uninstallTitle_one": "Uninstall {{count}} plugin?",
+        "uninstallTitle_other": "Uninstall {{count}} plugins?",
+        "uninstallConfirm_one": "Uninstall {{count}} plugin",
+        "uninstallConfirm_other": "Uninstall {{count}} plugins",
+        "uninstalling": "Uninstalling…",
+        "uninstalled_one": "Uninstalled {{count}} plugin",
+        "uninstalled_other": "Uninstalled {{count}} plugins",
+        "uninstallPartial": "Uninstalled {{ok}} of {{total}}",
+        "retry": "Retry {{count}} that failed"
+      }
     },
     "pluginDetail": {
       "loadFailed": "Couldn't load this plugin",
@@ -2075,6 +2100,34 @@
         "foundInSkills": "{{agent}}’s skills directory",
         "foundInAgentsDir": "The shared ~/.agents/skills directory",
         "filesLabel": "Files"
+      },
+      "bulk": {
+        "label": "Selected skills",
+        "adoptDisabled": "Only unmanaged folders can be adopted",
+        "delete": "Delete…",
+        "adoptTitle_one": "Adopt {{count}} skill?",
+        "adoptTitle_other": "Adopt {{count}} skills?",
+        "adoptBody_one": "Coffer copies {{names}} into its library and links it back here. A .bak is kept, and the skill keeps its folder name.",
+        "adoptBody_other": "Coffer copies {{names}} into its library and links each back here. A .bak is kept for each, and each keeps its folder name. A name Coffer already has fails that skill alone.",
+        "adoptConfirm_one": "Adopt {{count}} skill",
+        "adoptConfirm_other": "Adopt {{count}} skills",
+        "adopting": "Adopting…",
+        "adopted_one": "Adopted {{count}} skill",
+        "adopted_other": "Adopted {{count}} skills",
+        "adoptPartial": "Adopted {{ok}} of {{total}}",
+        "deleteTitle_one": "Delete {{count}} skill?",
+        "deleteTitle_other": "Delete {{count}} skills?",
+        "deleteBody_one": "This deletes {{names}} from disk. Coffer has no copy, so it can’t be restored.",
+        "deleteBody_other": "This deletes {{names}} from disk. Coffer has no copy, so they can’t be restored.",
+        "deleteConfirm_one": "Delete {{count}} skill",
+        "deleteConfirm_other": "Delete {{count}} skills",
+        "deleted_one": "Deleted {{count}} skill",
+        "deleted_other": "Deleted {{count}} skills",
+        "deletePartial": "Deleted {{ok}} of {{total}}",
+        "retry": "Retry {{count}} that failed",
+        "skipped_one": "{{count}} selected skill is skipped: only unmanaged folders can be adopted.",
+        "skipped_other": "{{count}} selected skills are skipped: only unmanaged folders can be adopted.",
+        "reachHint": "Who gets them. Change it later on the Skills page."
       }
     },
     "mcpTab": {
@@ -2139,7 +2192,35 @@
         "pending": "Adopting…",
         "success": "Adopted {{name}} — Coffer now serves it through the gateway"
       },
-      "noMatch": "No servers match."
+      "noMatch": "No servers match.",
+      "bulk": {
+        "label": "Selected servers",
+        "adoptDisabled": "Only entries that bypass Coffer can be adopted",
+        "remove": "Remove…",
+        "adoptTitle_one": "Adopt {{count}} server?",
+        "adoptTitle_other": "Adopt {{count}} servers?",
+        "adoptBody_one": "Coffer serves {{names}} through its gateway and takes the entry out of its config file, under its own name. A .bak is kept.",
+        "adoptBody_other": "Coffer serves {{names}} through its gateway and takes each entry out of its config file, under its own name. A .bak is kept for each file. A name Coffer already has fails that server alone.",
+        "secrets_one": "{{count}} secret value moves into Coffer’s secret store; the config keeps a reference to it.",
+        "secrets_other": "{{count}} secret values move into Coffer’s secret store; the config keeps a reference to each.",
+        "adoptConfirm_one": "Adopt {{count}} server",
+        "adoptConfirm_other": "Adopt {{count}} servers",
+        "adopted_one": "Adopted {{count}} server — Coffer now serves it through the gateway",
+        "adopted_other": "Adopted {{count}} servers — Coffer now serves them through the gateway",
+        "adoptPartial": "Adopted {{ok}} of {{total}}",
+        "removeTitle_one": "Remove {{count}} server?",
+        "removeTitle_other": "Remove {{count}} servers?",
+        "removeBody": "{{agent}} loses these in its next session. A .bak is kept for each file, and nothing in Coffer changes.",
+        "removeConfirm_one": "Remove {{count}} server",
+        "removeConfirm_other": "Remove {{count}} servers",
+        "removing": "Removing…",
+        "removed_one": "Removed {{count}} server",
+        "removed_other": "Removed {{count}} servers",
+        "removePartial": "Removed {{ok}} of {{total}}",
+        "retry": "Retry {{count}} that failed",
+        "skipped_one": "{{count}} selected entry is skipped: only entries that bypass Coffer can be adopted.",
+        "skipped_other": "{{count}} selected entries are skipped: only entries that bypass Coffer can be adopted."
+      }
     },
     "memoryStore": {
       "tree": "Files",
@@ -2160,7 +2241,9 @@
     },
     "kindTab": {
       "loadFailed": "Couldn’t read this list",
-      "moreFor": "More for {{name}}"
+      "moreFor": "More for {{name}}",
+      "selectRow": "Select {{name}}",
+      "selectAll": "Select all"
     },
     "state": {
       "not_installed": "Not installed",
