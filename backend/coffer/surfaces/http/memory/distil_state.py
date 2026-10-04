@@ -1,9 +1,6 @@
 """The distil pass runner's type, for the worker that sweeps with it.
 
-What the runner *is* changed with the redesign, and the change matters here.
-The organise pass was a free function in the application layer, so the
-surface held a closure over the model port and made its own audit call
-afterwards. Distil is a method on ``MemoryService`` — it needs the partition's
+Distil is a method on ``MemoryService`` — it needs the partition's
 Resource row for the repository path the index restates, and it records
 ``memory_distilled`` itself with whichever actor asked for it. So the runner
 below is ``MemoryService.distil``, bound, and a caller passes ``actor`` rather
@@ -31,8 +28,8 @@ class DistilRunner(Protocol):
     Structural, so ``MemoryService.distil`` satisfies it with no adapter and a
     test can substitute a plain async function.
 
-    The partition is named by its **uid**, not by its label. A pass spends a
-    model and rewrites every note in a directory, so what it is aimed at has to
+    The partition is named by its **uid**, not by its label. A pass rewrites
+    the notes and index of a directory, so what it is aimed at has to
     be the thing that cannot be edited while it runs (ADR
     identity-is-the-uid-inside-the-file); the service resolves the row and
     reads the directory name off it. It is also what makes Update memory's

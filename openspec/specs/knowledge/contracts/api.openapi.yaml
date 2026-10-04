@@ -12,7 +12,7 @@ paths:
     get:
       description: |-
         Recent changes across every collection (or one, by its name), newest
-        first, with the items still waiting in each inbox.
+        first.
       operationId: recent_changes_api_v1_knowledge_changes_get
       parameters:
       - in: query
@@ -71,52 +71,11 @@ paths:
       summary: Recent Changes
       tags:
       - knowledge
-  /api/v1/knowledge/changes/{version}:
-    get:
-      description: 'One change in full: every document it touched, with its diff.'
-      operationId: change_detail_api_v1_knowledge_changes__version__get
-      parameters:
-      - in: path
-        name: version
-        required: true
-        schema:
-          title: Version
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChangeDetailOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Change Detail
-      tags:
-      - knowledge
   /api/v1/knowledge/changes/{version}/restore:
     post:
       description: |-
         Put back what a delete removed — a document, or a whole collection with
-        its documents, README and waiting items — as one new change naming the user.
+        its documents and README — as one new change naming the user.
         409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
         the path or the name is taken again; nothing is written then.
       operationId: restore_deleted_api_v1_knowledge_changes__version__restore_post
@@ -163,57 +122,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Restore Deleted
-      tags:
-      - knowledge
-  /api/v1/knowledge/changes/{version}/undo:
-    post:
-      description: |-
-        Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
-        the document a later change would lose; nothing is written then.
-      operationId: undo_pass_api_v1_knowledge_changes__version__undo_post
-      parameters:
-      - in: path
-        name: version
-        required: true
-        schema:
-          title: Version
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChangeOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Undo Pass
       tags:
       - knowledge
   /api/v1/knowledge/collections:
@@ -295,75 +203,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Create Collection
-      tags:
-      - knowledge
-  /api/v1/knowledge/collections/{uid}/curate:
-    post:
-      description: |-
-        Curate now: a pass per pending item until none is left, or one pass over
-        the document named ("Run curation on a sweep and on demand").
-
-        The collection is named by its uid; the run resolves the row itself, so an
-        unknown uid is the same 404 every route here gives. Two guards, in this
-        order on purpose. The registry claim is about THIS collection and is held
-        for the whole run: a second trigger while it runs is refused (409
-        ``UPKEEP_ALREADY_RUNNING``) rather than queued ("Run one pass per collection
-        at a time"), and it is keyed on the uid the sweep claims too. The
-        vault-write lock is about the whole vault and is taken per pass, so a sync
-        round is not held off for the minutes a run can take ("Never overlap
-        curation with a sync round").
-      operationId: curate_api_v1_knowledge_collections__uid__curate_post
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              anyOf:
-              - $ref: '#/components/schemas/CurationRequest'
-              - type: 'null'
-              title: Body
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CurationRunOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Curate
       tags:
       - knowledge
   /api/v1/knowledge/collections/{uid}/description:
@@ -742,6 +581,41 @@ paths:
       summary: Version Body
       tags:
       - knowledge
+  /api/v1/knowledge/tidy-handoff:
+    get:
+      description: The prompt that hands tidying every collection to the person's agent.
+      operationId: tidy_all_handoff_api_v1_knowledge_tidy_handoff_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Tidy All Handoff
+      tags:
+      - knowledge
   /api/v1/knowledge/tree:
     get:
       operationId: read_tree_api_v1_knowledge_tree_get
@@ -847,21 +721,6 @@ components:
       - collection
       title: Body_upload_api_v1_knowledge_upload_post
       type: object
-    ChangeDetailOut:
-      description: 'One change in full: every document it touched, each with its diff.'
-      properties:
-        change:
-          $ref: '#/components/schemas/ChangeOut'
-        diffs:
-          items:
-            $ref: '#/components/schemas/DocumentDiffOut'
-          title: Diffs
-          type: array
-      required:
-      - change
-      - diffs
-      title: ChangeDetailOut
-      type: object
     ChangeOut:
       description: 'One change to knowledge: one commit naming its writer.'
       properties:
@@ -875,7 +734,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
-          description: The agent that wrote it (writer `agent`), or for a curation pass who submitted the item it curated — an agent's name, or `user`.
+          description: The agent that wrote it (writer `agent`).
           title: Agent
         collections:
           description: The collections the change touched.
@@ -892,10 +751,10 @@ components:
           anyOf:
           - type: string
           - type: 'null'
-          description: The item a curation pass curated.
+          description: The item a retired curation pass curated.
           title: Item
         operation:
-          description: '`pass`, `save`, `delete`, `promote`, `submit`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`. Only a `pass` can be undone.'
+          description: '`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.'
           title: Operation
           type: string
         restored_from:
@@ -907,7 +766,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
-          description: A curation pass's outcome status.
+          description: A retired curation pass's outcome status.
           title: Status
         summary:
           title: Summary
@@ -922,11 +781,11 @@ components:
           - type: 'null'
           title: Undoes
         version:
-          description: The change's id (its commit), what diff, restore and undo take.
+          description: The change's id (its commit), what diff and restore take.
           title: Version
           type: string
         writer:
-          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` Coffer''s curation pass; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools).'
+          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools).'
           enum:
           - user
           - agent
@@ -952,7 +811,7 @@ components:
       title: ChangeOut
       type: object
     ChangesOut:
-      description: Recent changes across collections, newest first, with the items still waiting.
+      description: Recent changes across collections, newest first.
       properties:
         changes:
           items:
@@ -965,14 +824,8 @@ components:
           - type: 'null'
           description: Pass back as `cursor` for the next page; null on the last.
           title: Next Cursor
-        waiting:
-          items:
-            $ref: '#/components/schemas/WaitingItemOut'
-          title: Waiting
-          type: array
       required:
       - changes
-      - waiting
       - next_cursor
       title: ChangesOut
       type: object
@@ -1031,10 +884,8 @@ components:
         name:
           title: Name
           type: string
-        pending_count:
-          default: 0
-          title: Pending Count
-          type: integer
+        tidy_handoff:
+          $ref: '#/components/schemas/HandoffOut'
         uid:
           title: Uid
           type: string
@@ -1048,136 +899,16 @@ components:
       - name
       - description
       - document_count
-      - pending_count
       - folder_path
       - updated_at
+      - tidy_handoff
       title: CollectionOut
-      type: object
-    CurationOut:
-      properties:
-        collection:
-          title: Collection
-          type: string
-        documents_after:
-          default: 0
-          title: Documents After
-          type: integer
-        documents_before:
-          default: 0
-          title: Documents Before
-          type: integer
-        gave_up:
-          default: false
-          title: Gave Up
-          type: boolean
-        item:
-          default: ''
-          title: Item
-          type: string
-        limit:
-          default: 0
-          title: Limit
-          type: integer
-        model:
-          default: ''
-          title: Model
-          type: string
-        promoted:
-          items:
-            type: string
-          title: Promoted
-          type: array
-        refused:
-          default: 0
-          title: Refused
-          type: integer
-        retired:
-          default: 0
-          title: Retired
-          type: integer
-        stamped:
-          default: ''
-          title: Stamped
-          type: string
-        status:
-          enum:
-          - ok
-          - truncated
-          - no_model
-          - up_to_date
-          - too_large
-          - failed
-          title: Status
-          type: string
-        written:
-          default: 0
-          title: Written
-          type: integer
-      required:
-      - status
-      - collection
-      - item
-      - model
-      - written
-      - retired
-      - refused
-      - documents_before
-      - documents_after
-      - limit
-      - promoted
-      - gave_up
-      - stamped
-      title: CurationOut
-      type: object
-    CurationRequest:
-      properties:
-        document:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Document
-      title: CurationRequest
-      type: object
-    CurationRunOut:
-      description: |-
-        What Curate now did: every pass it ran, in order (spec knowledge "Report
-        every pass outcome as a status").
-      properties:
-        collection:
-          title: Collection
-          type: string
-        passes:
-          items:
-            $ref: '#/components/schemas/CurationOut'
-          title: Passes
-          type: array
-        status:
-          enum:
-          - ok
-          - failed
-          - no_model
-          - up_to_date
-          title: Status
-          type: string
-        total:
-          title: Total
-          type: integer
-      required:
-      - collection
-      - status
-      - total
-      - passes
-      title: CurationRunOut
       type: object
     DirectoryOut:
       properties:
         file_count:
           title: File Count
           type: integer
-        inbox:
-          default: false
-          title: Inbox
-          type: boolean
         name:
           title: Name
           type: string
@@ -1188,7 +919,6 @@ components:
       - path
       - name
       - file_count
-      - inbox
       title: DirectoryOut
       type: object
     DocumentChangeOut:
@@ -1219,37 +949,6 @@ components:
       - added
       - removed
       title: DocumentChangeOut
-      type: object
-    DocumentDiffOut:
-      description: What one change did to one document, as a unified diff.
-      properties:
-        added:
-          title: Added
-          type: integer
-        diff:
-          description: A unified diff; empty when the change made no textual change.
-          title: Diff
-          type: string
-        path:
-          title: Path
-          type: string
-        removed:
-          title: Removed
-          type: integer
-        status:
-          enum:
-          - added
-          - modified
-          - removed
-          title: Status
-          type: string
-      required:
-      - path
-      - status
-      - diff
-      - added
-      - removed
-      title: DocumentDiffOut
       type: object
     DocumentHistoryOut:
       description: A document's versions, newest first.
@@ -1322,10 +1021,6 @@ components:
         created_at:
           title: Created At
           type: string
-        curated_at:
-          default: ''
-          title: Curated At
-          type: string
         description:
           title: Description
           type: string
@@ -1338,10 +1033,6 @@ components:
         folder_path:
           title: Folder Path
           type: string
-        inbox:
-          default: false
-          title: Inbox
-          type: boolean
         path:
           title: Path
           type: string
@@ -1361,9 +1052,7 @@ components:
       - body
       - file_path
       - folder_path
-      - curated_at
       - fingerprint
-      - inbox
       title: FileOut
       type: object
     FileSave:
@@ -1396,10 +1085,6 @@ components:
         description:
           title: Description
           type: string
-        inbox:
-          default: false
-          title: Inbox
-          type: boolean
         path:
           title: Path
           type: string
@@ -1415,8 +1100,19 @@ components:
       - description
       - actor
       - updated_at
-      - inbox
       title: FileSummaryOut
+      type: object
+    HandoffOut:
+      description: |-
+        A chore for the person's agent. ``prompt`` is the whole text to copy or
+        to pre-fill a new conversation with; Coffer never sends it itself.
+      properties:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: HandoffOut
       type: object
     IngestedDocumentOut:
       properties:
@@ -1427,13 +1123,8 @@ components:
           title: Description
           type: string
         path:
-          anyOf:
-          - type: string
-          - type: 'null'
           title: Path
-        pending:
-          title: Pending
-          type: boolean
+          type: string
         title:
           title: Title
           type: string
@@ -1442,7 +1133,6 @@ components:
       - title
       - description
       - converter
-      - pending
       title: IngestedDocumentOut
       type: object
     TreeOut:
@@ -1536,31 +1226,4 @@ components:
       - path
       - version
       title: VersionRestoreIn
-      type: object
-    WaitingItemOut:
-      description: An item waiting in a collection's inbox — not a change yet.
-      properties:
-        collection:
-          title: Collection
-          type: string
-        path:
-          title: Path
-          type: string
-        submitted_at:
-          title: Submitted At
-          type: string
-        submitted_by:
-          description: The agent that submitted it, or `user`.
-          title: Submitted By
-          type: string
-        title:
-          title: Title
-          type: string
-      required:
-      - collection
-      - path
-      - title
-      - submitted_by
-      - submitted_at
-      title: WaitingItemOut
       type: object

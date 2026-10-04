@@ -7,19 +7,16 @@ changes bytes.
 Every operation here is a filesystem operation and nothing else: no index is
 updated, because there is none (spec knowledge "Store each collection as one
 tree of Markdown files"). That is what lets a person's edit in their own
-editor and a curation pass reach the same bytes with nothing in between.
+editor and an agent's reach the same bytes with nothing in between.
 
 Two kinds of file live under a collection, and this module is where they meet:
 
-* **Documents** — the visible tree. A person edits them in their own editor;
-  a curation pass writes them through :func:`write_file`. What curation last
-  settled each one as is recorded by content in ``local/curation.json``
-  (``curation_state``), and an edit made since is what the sweep comes back
-  for — the file itself carries no stamp.
-* **Material** — the hidden ``.inbox/``, written and read by ``inbox.py``. New
-  knowledge waits there until a pass folds it into the documents, and is
-  deleted when that pass completes (see "Submit every entrance's input as
-  material").
+* **Documents** — the visible tree. A person edits them in their own editor,
+  an agent with its own file tools; Coffer writes them through
+  :func:`write_file`.
+* **Material** — the hidden ``.inbox/``, written and read by ``inbox.py``. A
+  file waits there only until the next sweep promotes it into a document (see
+  "Promote submitted material at once").
 """
 
 from __future__ import annotations
@@ -38,7 +35,7 @@ from coffer.domain.knowledge.errors import (
     UnsafeKnowledgePath,
 )
 from coffer.domain.vault.errors import VaultFileStale
-from coffer.infrastructure.knowledge import curation_state, paths
+from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.catalogue import is_markdown
 from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
@@ -92,7 +89,6 @@ def read_file(relpath: str) -> KnowledgeFile:
         body=body,
         file_path=str(path),
         folder_path=str(path.parent),
-        curated_at=curation_state.curated_at(paths.relative_of(path), raw),
         fingerprint=fingerprint(raw),
     )
 
@@ -126,7 +122,7 @@ def atomic_write(path: pathlib.Path, text: str) -> None:
 def render(frontmatter: dict[str, Any], body: str) -> str:
     """The known keys in their fixed order, then anything else, unharmed.
 
-    The tail matters. A save or a pass rewrites a file a *person* also edits,
+    The tail matters. A save rewrites a file a *person* also edits,
     so dropping a key it does not recognise would quietly delete their own
     `tags:` or `reviewed_by:` from a document.
     """
@@ -143,7 +139,6 @@ def write_file(
     body: str,
     actor: str = ACTOR_AGENT,
     relpath: str | None = None,
-    curated: bool = False,
 ) -> KnowledgeFile:
     """Create a document under ``directory``, or replace the one at ``relpath``.
 
@@ -151,11 +146,6 @@ def write_file(
     inside one; ``relpath`` must name a document (``paths.require_document``).
     Replacing preserves ``created_at`` so the file keeps its own history even
     though nothing but the file records it.
-
-    ``curated`` is the curation pass's own write (or a promotion nothing will
-    curate): the bytes written are recorded as settled, so the sweep does not
-    hand the pass its own output back. Any other write records nothing, which
-    is exactly what makes the sweep look at it.
     """
     now = timestamp()
     created = now
@@ -185,8 +175,6 @@ def write_file(
     }
     text = render(frontmatter, body)
     atomic_write(target, text)
-    if curated:
-        curation_state.record(paths.relative_of(target), text.encode("utf-8"), when=now)
     return read_file(paths.relative_of(target))
 
 
@@ -197,13 +185,11 @@ def save_body(
 
     A person's edit from the web UI (see "Save a document edited in the web
     UI"). ``expected_fingerprint`` is what the editor's read carried: a file
-    whose bytes moved since — a person's own editor, a curation pass — is
+    whose bytes moved since — a person's own editor, an agent — is
     refused with ``KnowledgeFileConflict`` and left untouched. The write goes
     through the operation's vault transaction (``tx``), which compares the
     fingerprint again under the vault's write lock, so a change that lands
-    between this read and the write is refused the same way. Nothing records
-    it as settled, which is exactly what makes the sweep treat it as a
-    person's edit (see "Let the newer or better-evidenced statement win").
+    between this read and the write is refused the same way.
 
     Only a Markdown document can be saved: ``require_document`` keeps the
     collection, its README and the inbox out of reach, and a file a person
@@ -239,19 +225,11 @@ def _conflict(relpath: str, raw: bytes) -> KnowledgeFileConflict:
     )
 
 
-def write_bytes(relpath: str, raw: bytes, *, settled: bool = False) -> None:
-    """Put a document's exact bytes back — a restored version, an undone pass.
-
-    ``settled`` records the bytes as what curation last settled, so a document
-    put back exactly as it was before a pass is not mistaken by the sweep for
-    a person's edit and curated again (an undo); without it the write is a
-    fresh edit the sweep carries outward (a restore).
-    """
+def write_bytes(relpath: str, raw: bytes) -> None:
+    """Put a document's exact bytes back — a restored version."""
     paths.require_document(relpath)
     path = paths.resolve(relpath)
     atomic_write(path, decode(raw))
-    if settled:
-        curation_state.record_file(relpath)
 
 
 def delete_file(relpath: str) -> None:
@@ -260,20 +238,6 @@ def delete_file(relpath: str) -> None:
     if not path.is_file():
         raise KnowledgeFileNotFound(relpath)
     path.unlink()
-
-
-def mark_curated(relpath: str, *, when: str | None = None) -> None:
-    """Record a document as settled by curation, as it is now — the file is
-    not touched.
-
-    Called only after a pass over that document completes. A pass that fails
-    records nothing, so the document comes back on a later sweep rather than
-    being lost to one that half-ran.
-    """
-    paths.require_document(relpath)
-    if not paths.resolve(relpath).is_file():
-        raise KnowledgeFileNotFound(relpath)
-    curation_state.record_file(relpath, when=when)
 
 
 def create_collection_dir(name: str) -> pathlib.Path:
@@ -303,8 +267,8 @@ def rename_collection_dir(old: str, new: str) -> None:
     cleanup left behind — and the check has to be explicit, because
     ``rename(2)`` would not make it for us: it fails on a non-empty target but
     quietly succeeds over an *empty* directory. Neither outcome is one to pick
-    by accident. Merging adopts files into the corpus that nobody registered
-    and that curation would then rewrite; replacing destroys them.
+    by accident. Merging adopts files into the corpus that nobody registered;
+    replacing destroys them.
     ``create_collection`` already refuses exactly this situation with
     ``CollectionExists``, and this is the same rule on the other write path.
 

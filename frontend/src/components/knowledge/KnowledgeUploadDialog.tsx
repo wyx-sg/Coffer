@@ -1,8 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeUploadDialog.tsx
 //
-// Upload a document into a collection (boards 5.1.26–5.1.28): Coffer converts it to Markdown and it joins the collection's Inbox
-// as an item, curated like any other (with no model it is written as a
-// document on the spot). The original file is not kept. A file is dropped on
+// Upload a document into a collection (boards 5.1.26–5.1.28): Coffer converts it to Markdown and writes it as a
+// document on the spot. The original file is not kept. A file is dropped on
 // the zone or chosen; its name, kind and size and the target collection show
 // before anything is sent; converting is its own state, and Cancel stays live
 // in it — it aborts the request. A file that cannot
@@ -26,7 +25,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useUploadKnowledgeFile } from "@/lib/hooks/useKnowledge";
 import { extensionOf, KINDS, refusalOf, refuseBeforeSending } from "@/lib/knowledge/uploadChecks";
 import { cn, formatBytes } from "@/lib/utils";
@@ -42,7 +40,6 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
   const { t } = useTranslation();
   const { toast } = useToast();
   const upload = useUploadKnowledgeFile();
-  const modelSet = useCofferModelSet();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [collection, setCollection] = useState("");
@@ -74,11 +71,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
       { collection, file, signal: controller.signal },
       {
         onSuccess: (doc) => {
-          toast.success(
-            doc.pending || !doc.path
-              ? t("knowledge.upload.pending", { name: file.name, collection })
-              : t("knowledge.upload.written", { name: file.name, path: doc.path }),
-          );
+          toast.success(t("knowledge.upload.written", { name: file.name, path: doc.path }));
           onOpenChange(false);
         },
       },
@@ -109,10 +102,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("knowledge.upload.title")}</DialogTitle>
-          <DialogDescription>
-            {/* With no engine to curate it, the upload is written as a document at once (board 5.1.30). */}
-            {t(modelSet === false ? "knowledge.upload.bodyNoEngine" : "knowledge.upload.body")}
-          </DialogDescription>
+          <DialogDescription>{t("knowledge.upload.body")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {file ? (

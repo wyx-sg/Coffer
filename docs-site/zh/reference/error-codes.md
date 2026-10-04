@@ -53,7 +53,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SCOPE_INVALID` | 422 | 生效范围（激活范围）的内容无效，或该类型没有生效范围。 | 发送智能体允许列表，或在支持的类型的页面上设置生效范围。见[生效范围](/zh/architecture/resource-framework#reach)。 |
 | `RESOURCE_PROTECTED` | 409 | 该资源由 Coffer 自己管理（例如 Coffer 生成的技能），不能被接管或删除。 | 不用管它；Coffer 会维护它。 |
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | 该资源的类型不能启用或禁用：每个知识集和记忆分区都始终提供。 | 如果不再需要提供，就删除该资源。 |
-| `UPKEEP_ALREADY_RUNNING` | 409 | 该知识集已有一次整理正在进行。 | 等正在进行的整理完成；`coffer daemon status` 和界面都会显示它。 |
+| `UPKEEP_ALREADY_RUNNING` | 409 | 该记忆分区已有一个维护任务（aggregate 或 distil）正在运行；此时清除派生缓存也会得到它。 | 等正在运行的任务完成；`coffer daemon status` 和界面都会显示它。 |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | 保留请求指定的表没有保留策略。 | 使用**设置 → 数据**里列出的表。 |
 | `ATTENTION_NOT_IGNORABLE` | 409 | 该键下没有可以忽略的提醒项：要么什么都没列出，要么列出的是故障而不是提示。 | 刷新提醒列表；故障要修好，而不是忽略。 |
 
@@ -162,24 +162,20 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | 路径跳出了知识根目录、指向隐藏条目，或无法指代一篇文档。 | 使用指向知识集内某篇 Markdown 文档的相对路径。 |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | 上传超过了消息中给出的大小上限。 | 拆分文档或上传更小的文件。 |
 | `INGEST_REJECTED` | 400 | 上传的内容无法转换。`details.reason` 为 `unsupported_type`、`scanned_pdf`（没有文本层的 PDF）或 `empty_conversion`；`details.doc_type` 给出类型。 | 转成支持的格式；对扫描的 PDF 做 OCR。 |
-| `KNOWLEDGE_CURATION_HELD` | 409 | 立即整理被拒绝，因为同步轮次正在等你处理（冲突或确认）。 | 先在同步里处理，再重新点击立即整理。 |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | 本机不记录知识历史，通常是因为没装 git。写入仍然可用。 | 安装 git；历史从下一次写入开始记录。 |
 | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | 知识历史中没有这个 id 的版本，或该文档没有这个版本。 | 在知识页面查看该文档的历史来列出版本。 |
-| `KNOWLEDGE_NOT_A_PASS` | 400 | 只有一轮整理可以撤销，而这个版本是其他类型的改动。 | 从文档历史中恢复它的早期版本。 |
-| `KNOWLEDGE_UNDO_CONFLICT` | 409 | 之后的改动动过这轮整理涉及的某篇文档（消息中给出），所以撤销被拒绝，什么都没写。 | 改为编辑或恢复那篇文档。 |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 改为恢复该文档的早期版本。 |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | 放回被删除的文档会覆盖该路径上现在的文件。`details` 给出版本和文档；什么都没写。 | 先移走或重命名该路径上的文件，再恢复。 |
 | `KNOWLEDGE_ERROR` | 400 | 知识层的其他拒绝。 | 阅读 `message`。 |
 | `ENGINE_UNAVAILABLE` | 503 | 操作所需的某个二进制或转换器（ripgrep，或文档转换后端）不可用。 | 重新安装 Coffer；打包附带的二进制中包含它们。 |
-| `GREP_PATTERN_INVALID` | 400 | ripgrep 拒绝了某个模式。 | 修正模式。 |
 
 ## 记忆 {#memory}
 
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `MEMORY_NOTE_NOT_FOUND` | 404 | 该分区中没有这个 slug 的笔记。 | 在分区页面上列出笔记。 |
-| `MEMORY_NOTE_CONFLICT` | 409 | 你读取之后，笔记发生了变化（提炼任务改写了它，或在磁盘上被编辑过），所以你的保存被拒绝，笔记保持原样。`details` 带有 `saved: false` 和笔记现在的内容（正文和指纹）。 | 对照当前文本，再用新的指纹重新保存。 |
-| `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已被提炼并移除。 |
+| `MEMORY_NOTE_CONFLICT` | 409 | 你读取之后，笔记发生了变化（某个维护任务写过它，或在磁盘上被编辑过），所以你的保存被拒绝，笔记保持原样。`details` 带有 `saved: false` 和笔记现在的内容（正文和指纹）。 | 对照当前文本，再用新的指纹重新保存。 |
+| `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已变成笔记并被移除。 |
 | `MEMORY_UNSAFE_PATH` | 400 | 某段路径是隐藏的、全是点，或因其他原因不安全。 | 使用分区内的路径。 |
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | 这个类型的智能体没有 Coffer 可以安装的记忆 Hook。 | 无；该智能体用自己的文件工具从 `coffer-guide` 技能指明的记忆根目录读取记忆笔记。 |
@@ -213,9 +209,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | 新建连接必须恰好提供密钥值或密钥 ref 中的一个。 | 传 `--secret` 或 `--secret-ref`，不要两个都传。 |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | 有智能体运行在该连接上时，不能更改其协议格式。 | 对运行在它上面的每个智能体用**更改模型**切回它自己的登录，编辑后再重新切换。 |
 | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | 不能把智能体切到它不生效的连接上：连接被停用，或连接的作用范围没有指明该智能体。 | 开启该连接，或把该智能体加入它的作用范围，然后再切换。 |
-| `PROVIDER_INTERNAL_ONLY` | 409 | `ollama` 连接只供 Coffer 内部引擎使用，不能为智能体开启。 | 改为把它作为内部引擎的默认连接。 |
-| `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | 已有另一个连接是内部引擎的默认连接。 | 在**设置 › 通用 → Coffer 自用模型**里转移这个标记。 |
-| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 在**设置 › 通用 → Coffer 自用模型**（**语音转文字**）里转移这个标记。 |
+| `PROVIDER_INTERNAL_ONLY` | 409 | `ollama` 连接只供 Coffer 自己使用，不能为智能体开启。 | 为智能体改用其他协议的连接。 |
+| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 在**设置 › 通用 → 语音转文字**里转移这个标记。 |
 
 ## 保险库 {#the-vault}
 

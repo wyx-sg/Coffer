@@ -39,7 +39,7 @@ Everything committed in the vault repository, and nothing else:
 | --- | --- |
 | Resource files of `mcp_server`, `skill`, `channel`, `provider` and `knowledge` | Agents (`local/resources/agent/`): an agent's config directory is a fact about this machine |
 | Knowledge documents and `.inbox/` material, skill master folders | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
-| MCP capability switches, channel pairings, Coffer's model and upkeep settings (`state/`) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
+| MCP capability switches, channel pairings, Coffer's settings (`state/`: upkeep, the speech-to-text model) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
 | Secret ciphertext (`secret/`), only with `include_secret` | Machine-local ciphertext (`local/secret/`), the secret boundary, the master key |
 | One descriptor per machine (`machines/<id>.json`) | `runs.db` (conversations, audit, invocations, rounds), `content/`, logs, `daemon-config.json` |
 
@@ -191,13 +191,6 @@ Each problem is shown as a banner on the **Sync** page (with an **×** that igno
 ### Remote layout
 
 The vault's `manifest.json` carries one number, `schema_version`, currently `3`. A remote at the same number is converged with. A remote at a newer number was written by a newer Coffer and is refused until this machine is upgraded. A remote at an older number is never converted in place: this machine's vault is the source of truth, so it replaces the remote. The push is a fast-forward of one commit whose tree is exactly this machine's content, with this machine's commit and the old tip as parents, so the old history stays reachable in git. Files only the old remote had go away on purpose (the deletion breaker does not apply; the plaintext check still does). A person previews it first, and the round records `join: "replace"`. The other machines upgrade and then join the replaced remote as new machines.
-
-## Sharing the lock with curation
-
-The knowledge [curation pass](/architecture/knowledge) also rewrites vault content unattended. Two rules keep it and sync apart:
-
-- **One lock.** A round, an answer, a rollback and a curation pass all take the same vault lock, so a round never merges over a half-finished rewrite.
-- **One owner machine.** Two machines folding the same inbox item into different documents would merge cleanly and hold the knowledge twice. So the curation owner is a machine id in the synced engine settings (`state/settings/internal-engine.json`), and the pass does nothing on every other machine. It also waits while a round is stopped, held, or waiting on a join's choices, so a rewrite never moves documents under a question you are about to answer.
 
 ## Talking to git safely
 

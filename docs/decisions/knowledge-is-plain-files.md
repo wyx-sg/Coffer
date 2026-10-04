@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-23
 **Deciders**: Yuxing Wu
-**Related**: spec knowledge; [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
+**Related**: spec knowledge; [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
 
 ## Context
 
@@ -60,8 +60,12 @@ documents with its own `Read` and `Grep` at absolute paths; what tells it which
 paths exist is a catalogue — every collection's documents with path,
 title and description — rendered into Coffer's own `coffer-guide` skill, whose
 frontmatter description names the subjects the collections cover (drawn from
-each collection's `README.md`). There is no knowledge tool: an agent adds knowledge by writing a Markdown
-file into `<collection>/.inbox/`, and the sweep fills in the frontmatter.
+each collection's `README.md`). There is no knowledge tool: an agent adds knowledge by writing it into the
+right document itself, by the rules in the `coffer-guide` skill, and tidies a
+collection when the person asks (see
+[Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)).
+A Markdown file dropped into `<collection>/.inbox/` is adopted by the next
+sweep, which fills in the frontmatter.
 
 - **Pros.** Nothing to keep level with the disk: a person's edit — in their own
   editor or in the web UI's editor, which rewrites the same file — is live on
@@ -125,15 +129,13 @@ the tree for the agent.
 - **Cons.** The agent must remember to call them, and 448 sessions showed it
   does not. They duplicate `Read` and `Grep`, which the agent already has.
 - **Why it lost.** A tool an agent does not remember to call is not retrieval.
-  The literal matcher survives in exactly one place — curation's candidate
-  selection, reachable by nothing outside the process (see
-  [Knowledge Curation](knowledge-curation.md)).
+  Literal matching is the agent's own `Grep` and nothing else.
 
 ### Option E — Lanes inside a collection
 
 Two designs were shipped and withdrawn: `notes/` ÷ `docs/` (agent-written
 versus person-written, PR #336), and later `sources/` ÷ `topics/` (people and
-uploads write sources; only curation writes topics, which agents read).
+uploads write sources; only a model pass writes topics, which agents read).
 
 - **Pros.** A lane nothing rewrites makes unattended rewriting safe: the
   derived lane can always be regenerated from a pristine source.
@@ -147,8 +149,9 @@ uploads write sources; only curation writes topics, which agents read).
   PR #418): knowledge is co-created by AI and people; an upload is parsed to
   Markdown and from then on both edit it; each upload appends its new knowledge
   to the knowledge base. One tree with every writer is that sentence; lanes
-  contradict it. How curation stays safe without a pristine lane is
-  [Knowledge Curation](knowledge-curation.md)'s decision.
+  contradict it. Tidying is done by the person's agent on request, with
+  git history to restore from, so no pristine lane is needed
+  ([Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)).
 
 ### Option F — A store or a view per agent
 
@@ -217,7 +220,7 @@ Rules a future change must respect:
   directory. Engines
   that own a derived store stay banned by the import-linter contract.
 - **Path is identity; frontmatter is metadata.** A collection describes itself
-  in its own `README.md`, which is not a document and is not curated.
+  in its own `README.md`, which is not a document.
 - **No tool.** Coffer has no knowledge tool and no knowledge command group:
   agents read, search and write with their own file tools, and a person works
   in the web UI or an editor. Deleting a document is a person's action in the
@@ -241,15 +244,16 @@ Rules a future change must respect:
 - **A person's correction is live immediately.** Direct edits in the tree — in
   their own editor or the web UI's — are a complete way to change knowledge; no
   import or registration step exists.
-- **Adding an agent costs this layer nothing.** The surface is one write tool
-  and plain files.
+- **Adding an agent costs this layer nothing.** The surface is plain files
+  and one guide.
 - **No pretence of a gate.** The knowledge root is readable by any agent with
   shell tools, so Coffer does not pretend to gate collections: there is no
   per-collection switch to suggest a boundary that does not exist.
 - **Keeping the corpus organised becomes someone's job.** Duplication, drift
   and contradictions across documents are not prevented by a lane; they are
-  resolved by curation, which rewrites the only copy under the rules in
-  [Knowledge Curation](knowledge-curation.md).
+  resolved when the person presses Tidy and their agent rewrites the only copy
+  under the rules in the `coffer-guide` skill
+  ([Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)).
 - **A ceiling exists.** Hundreds of documents fit the catalogue comfortably.
   Past that the answer is Option H built for the need, not a return to FTS5.
 - **Semantic retrieval is a placeholder, not a verdict.** Nothing here is to be

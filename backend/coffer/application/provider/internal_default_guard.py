@@ -1,10 +1,9 @@
 """The one-flag rule on every write path but the one that moves it.
 
-Spec provider-switching "Keep at most one internal default connection" and "Keep at most one
-speech-to-text default connection". Each flag is moved by its own setter
-(``set_internal_default`` in ``internal_default_ops``, ``set_transcribe_default`` in
-``transcribe_default_ops``), which clears the holder before it marks the target. Two other
-paths can write a flag, and neither may leave a second one:
+Spec provider-switching "Keep an independent speech-to-text default". The flag is
+moved by its own setter (``set_transcribe_default`` in ``transcribe_default_ops``), which
+clears the holder before it marks the target. Two other paths can write a flag, and neither
+may leave a second one:
 
 - **A direct write** — the kind-agnostic resource PATCH or POST. Refused with the flag's own
   error (409) through the kind's pre-write hooks (:func:`refusing_hooks`), so the holder
@@ -20,17 +19,13 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from coffer.domain.errors import CofferError
-from coffer.domain.provider.errors import (
-    ProviderInternalDefaultTaken,
-    ProviderTranscribeDefaultTaken,
-)
+from coffer.domain.provider.errors import ProviderTranscribeDefaultTaken
 from coffer.domain.resource import Resource
 
 _KIND = "provider"
 #: Each flag only one connection may carry, with the error a second one is
 #: refused with. ``Kind.exclusive_flags`` is built from these names.
 EXCLUSIVE_FLAGS: dict[str, Callable[[str], CofferError]] = {
-    "internal_default": ProviderInternalDefaultTaken,
     "transcribe_default": ProviderTranscribeDefaultTaken,
 }
 

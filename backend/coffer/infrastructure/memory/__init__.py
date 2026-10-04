@@ -24,7 +24,7 @@ The modules, and which pass owns which:
 ``store``
     A partition's ``MEMORY.md``, ``notes/``, ``RETIRED.md`` and ``.raw/``, with
     one writer each — aggregation writes ``.raw/`` and nothing else touches it
-    (see "Keep distil out of the raw directory").
+    (see "Leave the raw directory to aggregation").
 ``source_state``
     The per-source digest cache that lets an unchanged source be skipped without
     re-parsing (see "Skip unchanged sources").

@@ -2,14 +2,13 @@
 //
 // Recent changes as boards 5.1.21–5.1.24 draw them, mocked only at the network
 // boundary: Collection and Author pills kept in the address with Clear
-// filters, the waiting list's whole-row links and secondary Curate now, the
-// one summary (or error) toast a Curate now leaves, an outcome written on a
-// pass's row, Restore as a small button, and the two ways the region fails.
+// filters, a change an earlier curation pass made keeping its curation label,
+// Restore as a small button, and the two ways the region fails.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
-import { EDIT, NAME, OTHER, PASS, UID } from "./knowledgeTestData";
+import { EDIT, NAME, OTHER, PASS } from "./knowledgeTestData";
 import { ApiError } from "@/lib/api/errors";
 
 import { acceptance } from "@/test/acceptance";
@@ -21,11 +20,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   getFile: vi.fn(),
   saveFile: vi.fn(),
   deleteFile: vi.fn(),
-  curateCollection: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getChange: vi.fn(),
-  undoPass: vi.fn(),
   getHistory: vi.fn(),
   getVersionDiff: vi.fn(),
   getVersionBody: vi.fn(),
@@ -33,8 +29,6 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 vi.mock("@/lib/api/agentProviders", () => ({
   agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
@@ -55,17 +49,10 @@ afterEach(() => {
 
 const where = () => screen.getByTestId("where");
 
-function pass(over: Record<string, unknown>) {
-  return {
-    ...PASS,
-    ...over,
-  } as typeof PASS;
-}
-
 describe("filters", () => {
   acceptance("web-ui", "the filter pills narrow the timeline and live in the URL", async () => {
     renderKnowledge("/knowledge");
-    await screen.findByRole("link", { name: "See the pass" });
+    await screen.findByRole("link", { name: "gateway.md" });
     // The old segmented control and select are gone.
     expect(screen.queryByRole("button", { name: "Everyone" })).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
@@ -81,13 +68,12 @@ describe("filters", () => {
     ).toEqual(["You", "Curation"]);
     fireEvent.click(within(list).getByRole("option", { name: "You" }));
     expect(where()).toHaveTextContent("/knowledge?author=user");
-    expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "gateway.md" })).toBeNull();
     expect(screen.getByRole("link", { name: "on-call.md" })).toBeInTheDocument();
 
     // Collection asks the daemon for that collection's changes only.
     api.listChanges.mockImplementation(async ({ collection }) => ({
       changes: collection === OTHER.name ? [EDIT] : [PASS, EDIT],
-      waiting: [],
       next_cursor: null,
     }));
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
@@ -102,13 +88,13 @@ describe("filters", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(where()).toHaveTextContent(/^\/knowledge$/);
-    await waitFor(() => expect(screen.getByRole("link", { name: "See the pass" })).toBeVisible());
+    await waitFor(() => expect(screen.getByRole("link", { name: "gateway.md" })).toBeVisible());
     expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
   });
 
   test("a filter in the address is applied on arrival", async () => {
     renderKnowledge("/knowledge?author=curation");
-    expect(await screen.findByRole("link", { name: "See the pass" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "gateway.md" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "on-call.md" })).toBeNull();
     expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
   });
@@ -122,98 +108,26 @@ describe("filters", () => {
   });
 });
 
-describe("waiting to be curated", () => {
-  test("a row is one link into the Inbox, with no Open button", async () => {
+describe("a change an earlier curation pass made", () => {
+  acceptance("web-ui", "recent changes shows a cross-collection timeline", async () => {
     renderKnowledge("/knowledge");
-    const waiting = await screen.findByRole("region", { name: "Waiting to be curated" });
-    expect(within(waiting).queryByRole("button", { name: /^Open/ })).toBeNull();
-    expect(within(waiting).getByText("Curated into your documents within the hour")).toBeVisible();
-    const row = within(waiting).getByRole("link", { name: /Login retry/ });
-    expect(row).toHaveAttribute("href", expect.stringContaining(`/knowledge/${UID}/inbox?file=`));
-    expect(within(waiting).getByRole("button", { name: "Curate now" }).className).toMatch(
-      /border-border/,
-    );
-  });
-
-  test("an empty inbox is one grey line and no Curate now", async () => {
-    api.listChanges.mockResolvedValue({ changes: [PASS], waiting: [], next_cursor: null });
-    renderKnowledge("/knowledge");
-    const line = await screen.findByText(/Nothing waiting/);
-    expect(line.tagName).toBe("P");
-    expect(line.className).toMatch(/text-text-muted/);
+    // Both changes, each linking the document it wrote, and nothing waiting or to inspect.
+    expect(await screen.findByRole("link", { name: "gateway.md" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "on-call.md" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Waiting to be curated" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull();
   });
 
-  acceptance("knowledge", "a manual curation run ends with one toast", async () => {
-    const ok = { ...PASS_RUN, status: "ok" as const };
-    api.curateCollection.mockResolvedValue({
-      collection: NAME,
-      status: "ok",
-      total: 3,
-      passes: [ok, ok, ok].map((p) => ({ ...p, written: 1 })),
-    });
+  test("keeps its curation label and its summary", async () => {
     renderKnowledge("/knowledge");
-    const waiting = await screen.findByRole("region", { name: "Waiting to be curated" });
-    fireEvent.click(within(waiting).getByRole("button", { name: "Curate now" }));
-    await waitFor(() => expect(api.curateCollection).toHaveBeenCalledWith(UID, null));
-    expect(await screen.findByText("Curated 3 items into 3 documents")).toBeInTheDocument();
-  });
-
-  test("a failed run is one error toast whose Activity action opens Activity", async () => {
-    api.curateCollection.mockResolvedValue({
-      collection: NAME,
-      status: "failed",
-      total: 1,
-      passes: [{ ...PASS_RUN, status: "failed" as const }],
-    });
-    renderKnowledge("/knowledge");
-    const waiting = await screen.findByRole("region", { name: "Waiting to be curated" });
-    fireEvent.click(within(waiting).getByRole("button", { name: "Curate now" }));
-    expect(await screen.findByText(/Curation didn't finish/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
-    expect(where()).toHaveTextContent("/activity");
+    await screen.findByRole("link", { name: "gateway.md" });
+    expect(screen.getByText("Curation")).toBeInTheDocument();
+    expect(screen.getByText(PASS.summary)).toBeInTheDocument();
   });
 });
 
-const PASS_RUN = {
-  status: "ok" as const,
-  collection: NAME,
-  item: "x.md",
-  model: "m",
-  written: 1,
-  retired: 0,
-  refused: 0,
-  documents_before: 1,
-  documents_after: 2,
-  limit: 0,
-  promoted: [] as string[],
-  gave_up: false,
-  stamped: "",
-};
-
-describe("outcomes on the rows", () => {
-  test("an item too large for one pass says so on its row", async () => {
-    api.listChanges.mockResolvedValue({
-      changes: [pass({ status: "too_large" })],
-      waiting: [],
-      next_cursor: null,
-    });
-    renderKnowledge("/knowledge");
-    expect(
-      await screen.findByText("Too large for one pass, so it was kept as its own document"),
-    ).toBeInTheDocument();
-  });
-
-  test("an item cut off until it gave up says so on its row", async () => {
-    api.listChanges.mockResolvedValue({
-      changes: [pass({ status: "truncated" })],
-      waiting: [],
-      next_cursor: null,
-    });
-    renderKnowledge("/knowledge");
-    expect(await screen.findByText(/Cut off by the step limit three times/)).toBeInTheDocument();
-  });
-
+describe("the rows", () => {
   test("a document link is accent and Restore is a small secondary button", async () => {
     const DELETE = {
       ...EDIT,
@@ -223,7 +137,6 @@ describe("outcomes on the rows", () => {
     };
     api.listChanges.mockResolvedValue({
       changes: [PASS, DELETE],
-      waiting: [],
       next_cursor: null,
     });
     renderKnowledge("/knowledge");
@@ -251,7 +164,7 @@ describe("when the region cannot load", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
     // No managed agent here, so the hand-off is the plain Copy prompt.
-    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Copy prompt" }).at(-1) as HTMLElement);
     expect(writeText).toHaveBeenCalledWith(GIT_PROMPT);
     const before = api.listChanges.mock.calls.length;
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));

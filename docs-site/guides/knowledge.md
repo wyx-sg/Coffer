@@ -1,11 +1,11 @@
 ---
 title: Knowledge
-description: Keep what you and your agents know about your working environment as folders of Markdown that every agent reads with its own file tools.
+description: Keep what you and your agents know about your working environment as folders of Markdown that every agent reads with its own file tools, and ask your agent to tidy them.
 ---
 
 # Knowledge
 
-Knowledge is a directory of Markdown documents about your working environment — services, repositories, conventions, decisions, pitfalls — that every agent on your machine reads. This page covers creating collections, adding and editing documents, how Coffer's curation folds new items into the documents, how to look back at every change and undo one, and how agents find what is there.
+Knowledge is a directory of Markdown documents about your working environment — services, repositories, conventions, decisions, pitfalls — that every agent on your machine reads. This page covers creating collections, adding and editing documents, how your agent writes into them and tidies them when you press **Tidy**, how to look back at every change and restore one, and how agents find what is there.
 
 ## What knowledge is for
 
@@ -13,7 +13,7 @@ Knowledge holds facts about the world you work in: which team owns a service, ho
 
 - **One copy for every agent.** Claude Code and Codex read the same files, so what one agent records in the morning another reads in the afternoon.
 - **Plain files.** Each document is a Markdown file you can open, edit, grep and back up. Coffer keeps no index, no embeddings and no database copy of the content.
-- **Written together.** You edit documents on the Knowledge page or in your own editor. Agents add new items by writing files into a collection's inbox, and edit documents with their own file tools. Coffer's curation folds each item into the documents that already cover the subject, so a fact lives in one place instead of piling up as notes.
+- **Written together.** You edit documents on the Knowledge page or in your own editor. Agents write into the documents with their own file tools, following the rules in the `coffer-guide` skill: a fact goes into the document that already covers its subject. When documents drift into overlap, you press **Tidy** and your agent merges, splits and corrects them. Coffer itself runs no model over your knowledge.
 
 Knowledge is not [memory](/guides/memory). Memory is what agents learn while working, read out of their own memory stores. Knowledge is what somebody deliberately wrote down.
 
@@ -28,13 +28,13 @@ A **collection** is a top-level folder under the knowledge root:
     ├── session-ownership.md    ← a document
     ├── gateway/
     │   └── rate-limits.md      ← nesting is allowed and means nothing
-    └── .inbox/                 ← hidden: items waiting to be curated
+    └── .inbox/                 ← hidden: a drop zone, adopted at the next sweep
 ```
 
 - **Documents** are the Markdown files in the collection. A document's path is its identity; there is no separate id. File names are slugs of the title, with a suffix such as `-2` on a collision.
-- **Folders** inside a collection are optional and carry no meaning. You, or curation, can create, move and remove them.
-- **`README.md`** at the collection root describes the collection. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. It is never listed as a document, counted or curated.
-- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. The Knowledge page shows `.inbox/` as the collection's **Inbox**, with how many items wait; its items can be read but not edited or deleted, and no other hidden entry is listed.
+- **Folders** inside a collection are optional and carry no meaning. You or your agent can create, move and remove them.
+- **`README.md`** at the collection root describes the collection. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. It is never listed as a document or counted.
+- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue, and the Knowledge page lists none of them. The one Coffer reads is `.inbox/`: a Markdown file left there is turned into a document at the next sweep (see [A file in the inbox](#a-file-in-the-inbox)).
 
 The knowledge root is inside the vault repository, at `~/.coffer/vault/knowledge`; the `coffer-guide` skill names it to every agent. It cannot be moved elsewhere: a tree outside the vault would be a tree its history cannot see.
 
@@ -58,13 +58,13 @@ The `account-session` service owns ...
 | --- | --- |
 | `title` | The document's title. |
 | `description` | One sentence on what the document covers. Agents see it in the catalogue. |
-| `actor` | `user` or `agent` — who wrote the item it came from. |
+| `actor` | `user` or `agent` — who wrote the document. |
 | `created_at`, `updated_at` | Timestamps. |
 
-Any other key you add is kept, with its value, whenever Coffer rewrites the file. Coffer writes nothing into a document to remember what curation has seen: that is kept on this machine in `~/.coffer/local/curation.json`, as the content each document had when curation last settled it.
+Any other key you add is kept, with its value, whenever Coffer rewrites the file. Coffer writes nothing else into a document.
 
 ::: tip Name the subject, not the file
-A document must not refer to another knowledge file by its file name or path, because paths change as curation reorganises a collection. Write "see the gateway rate-limit notes", not "see `gateway/rate-limits.md`". Curation refuses to write a document that breaks this rule.
+A document must not refer to another knowledge file by its file name or path, because paths change as a collection is tidied. Write "see the gateway rate-limit notes", not "see `gateway/rate-limits.md`". The `coffer-guide` skill tells agents this rule.
 :::
 
 ## Create a collection
@@ -79,23 +79,34 @@ This creates `~/.coffer/vault/knowledge/payments/` and a `README.md` holding the
 
 To rename a collection, choose **⋯ → Rename…** on its page and enter the new name. Its folder moves with it (`~/.coffer/vault/knowledge/<new-name>/`), the page stays on the same collection, and agents find it under the new name from the next catalogue. A name another collection already has, or that is not a valid folder name, is refused under the field and nothing changes.
 
-The **Knowledge** page's tree lists every collection, each with its number of documents and, under it, its **Inbox** with how many items wait. That count is the only place items waiting show up: the sidebar shows no count for them.
+The **Knowledge** page's tree lists every collection, each with its number of documents.
 
 ## Add knowledge
 
-There are five ways in. Four of them submit an **item** into the collection's hidden `.inbox/`; curation then folds it into the documents. The fifth — editing a file yourself — changes a document directly.
+There are five ways in, and each one ends in a document you can read at once.
 
-### From an agent: write a file into the inbox
+### From an agent: write into the documents
 
-Agents file knowledge with their own file tools. An agent connected to Coffer reads the `coffer-guide` skill (see [Connect a client](/guides/connect-a-client)), which names the knowledge root and the collections. When it learns something durable, it writes a Markdown file into that collection's inbox:
+Agents file knowledge with their own file tools. An agent connected to Coffer reads the `coffer-guide` skill (see [Connect a client](/guides/connect-a-client)), which names the knowledge root and the collections and teaches six rules for writing something down:
+
+1. Find the fact's home: fold it into the document that already answers its question, and create a new file only when none does.
+2. Lose nothing: every fact already in a document survives the edit.
+3. Organise by subject, never by who or when.
+4. Where two statements disagree, the newer wins unless the older is shown to be right by a source, a date, a command's output or the code. The superseded one stays legible.
+5. Never name another knowledge file; name the subject.
+6. Give every document a `title`, a one-line `description` saying what question it answers, and `actor: agent`.
+
+You can also ask directly: "write down what we just found out about the session TTL in the payments collection." The collection must already exist; only you create one. Whatever the agent writes is readable at once, and the next sweep commits it to the [history](#history-and-restore).
+
+### A file in the inbox {#a-file-in-the-inbox}
+
+A Markdown file can also arrive at a collection's hidden `.inbox/` folder: from an agent outside Coffer, from another machine, or from an older guide.
 
 ```text
 ~/.coffer/vault/knowledge/payments/.inbox/session-ttl.md
 ```
 
-The file name does not matter, and frontmatter is optional. The agent does not choose a document or a folder, and does not have to check whether the fact is already written down; curation decides where it belongs. You can also ask directly: "write down what we just found out about the session TTL in the payments collection."
-
-The next sweep picks the file up and fills in whatever it lacks:
+The file name does not matter, and frontmatter is optional. The next sweep turns the file into a document at the collection root, filling in whatever it lacks:
 
 | Frontmatter | Filled from |
 | --- | --- |
@@ -104,13 +115,11 @@ The next sweep picks the file up and fills in whatever it lacks:
 | `actor` | `agent`, unless the file says otherwise. |
 | `created_at`, `updated_at` | The time the sweep saw the file. |
 
-Anything the agent did write is kept, other keys included. Each filed item is recorded in the audit log, and from then on it is an inbox item like any other: it appears in the collection's **Inbox** and waits for curation.
-
-Only a collection's own `.inbox/` counts. A Markdown file written into a top-level folder that is not a collection is left alone and never catalogued — only a person creates a collection. A file in an inbox that is not Markdown stays where it is and is not curated.
+Anything the writer did set is kept, other keys included, and each file is recorded in the audit log. Only a collection's own `.inbox/` counts. A Markdown file written into a top-level folder that is not a collection is left alone and never catalogued, because only a person creates a collection. A file in an inbox that is not Markdown stays where it is.
 
 ### Upload a document
 
-Upload converts a file to Markdown and submits the text as an item. Neither the original file nor the extracted text is kept as a file of its own; what is new in it is folded into the collection's documents. With Coffer's engine not set there is nothing to curate with, so the upload is added to the collection as a document straight away, and the Upload dialog says so.
+Upload converts a file to Markdown and adds it to the collection as a document straight away. Neither the original file nor the extracted text is kept as a file of its own.
 
 ```text
 Knowledge → Upload → choose a file and the collection → Upload
@@ -124,7 +133,7 @@ Knowledge → Upload → choose a file and the collection → Upload
 
 One file per upload, at most 20 MB. An unsupported type is refused with the type named, and a conversion that produces no text — an image-only PDF, for example — is refused too. A refused upload leaves nothing behind.
 
-The item's `title` comes from the document (a `# ` heading on its first line, or else the file name). Its `description` is written by Coffer's model when one is configured, and taken from the document's opening prose when not.
+The document's `title` comes from the file (a `# ` heading on its first line, or else the file name). Its `description` is taken from the document's opening prose, or its title when there is none. An upload adds the document as it stands; folding it into an existing document is tidying (see [Tidy a collection](#tidy-a-collection)).
 
 ### From a chat: ask your agent {#from-a-chat-ask-your-agent}
 
@@ -132,113 +141,56 @@ If you have a [channel](/guides/channels) paired, there is no knowledge command.
 
 ### Edit a file yourself
 
-Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (its content differs from what curation last settled, and the change was not curation's own or another machine's) and carries it through to the rest of the collection as a newer statement.
+Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next sweep commits it to the history as an edit on disk.
 
-On the Knowledge page, choose a document and use **Edit** to change it in place, or the **⋯** menu's **Open in editor** or **Reveal in Finder** to jump to the file. The editor holds the document's body only: its front matter is shown above it, read-only, as *Kept by curation*. The editor is the one place that saves on request: **Discard** drops your changes and **Save** (**⌘S**) keeps them, and leaving with unsaved changes asks whether to leave without saving; the tree marks the open document with a dot meanwhile. A save that finds the file changed on disk since the page loaded it, by your own editor or by a curation pass, is refused as a conflict and the file is left as it is. The page says the document changed on disk and your text was not saved, and offers **Compare**, **Copy my text** and **Reload** — never a second save over it. **Compare** puts the two versions side by side with their diff: **Keep my edit** or **Take the version on disk**; whichever you leave out stays in the document's History. **Reload** takes what is on disk and asks first, because it drops your text. The saved file counts as an edit, exactly like one made in your own editor.
+On the Knowledge page, choose a document and use **Edit** to change it in place, or the **⋯** menu's **Open in editor** or **Reveal in Finder** to jump to the file. The editor holds the document's body only: its front matter is shown above it, read-only. The editor is the one place that saves on request: **Discard** drops your changes and **Save** (**⌘S**) keeps them, and leaving with unsaved changes asks whether to leave without saving; the tree marks the open document with a dot meanwhile. A save that finds the file changed on disk since the page loaded it, by your own editor or by an agent, is refused as a conflict and the file is left as it is. The page says the document changed on disk and your text was not saved, and offers **Compare**, **Copy my text** and **Reload** — never a second save over it. **Compare** puts the two versions side by side with their diff: **Keep my edit** or **Take the version on disk**; whichever you leave out stays in the document's History. **Reload** takes what is on disk and asks first, because it drops your text. The saved file counts as an edit, exactly like one made in your own editor.
 
-Agents do the same thing with their own file tools: the `coffer-guide` skill tells them they can correct or extend a document they have read by editing it.
+Agents do the same thing with their own file tools, by the writing rules the `coffer-guide` skill gives them (see [From an agent](#from-an-agent-write-into-the-documents)).
 
-## Curation
+## Tidy a collection {#tidy-a-collection}
 
-Curation is how items become knowledge. It is a short, bounded pass driven by Coffer's own model (the model configured under **Settings › General → Coffer's model**; see [Model providers](/guides/providers)).
+Over time a collection collects overlap: two documents that answer the same question, one that answers several, a statement a newer document contradicts. Coffer does not fix these itself. It hands the job to your agent, which reads the documents with its own file tools and edits them.
 
-### What a pass does
-
-Each pass takes **one item**: the oldest item in a collection's inbox, or a document someone edited since curation last saw it. The model is given:
-
-- the item in full,
-- up to five candidate documents in full, chosen by literal matching of distinctive strings from the item, and
-- the collection's full catalogue of titles and descriptions, so it can open a new document when none of the candidates is the right home.
-
-It can list, read, write and retire documents in that one collection and nothing else — not the inbox, not the `README.md`, not another collection. It then folds what is new into the right document, or opens a new one.
-
-The model is instructed on two rules:
-
-- **The newer statement wins, unless the older one is shown to be right.** When an item contradicts a document, the newer statement is kept unless a source, a date, a command's output or the code shows the older one is right. The superseded statement stays legible with the date it changed.
-- **No writer is exempt.** Text is judged by when it was written and the evidence behind it, never by who wrote it: yours, an agent's and an earlier pass's alike. When the item is a document someone edited, the pass carries the change outward as a newer statement — correcting other documents that disagree, moving a section that belongs elsewhere — and a later item may correct that document like any other.
-
-Two guards protect the data itself. A pass never overwrites a file that changed after it read it, so an edit you make while a pass runs is never silently reverted, and a rewrite keeps every frontmatter key it did not set.
-
-When the pass completes, the curated item is deleted from the inbox, and an edited document is recorded as settled at its new content. A pass that does not complete leaves its item where it was, to be tried again. Each pass is one change in the [history](#history-and-undo), so you can read what it did and undo it.
-
-### Limits
-
-| Limit | Value |
-| --- | --- |
-| Writes per pass (a retire counts as one) | 8 |
-| Candidate documents shown in full | 5 |
-| Largest item a pass takes | 120,000 characters |
-| Passes per collection per sweep | 5 |
-| Passes running per collection at once | 1 |
-
-A pass can only retire a document whose content it has already written elsewhere in the same pass. An item larger than the size limit is never shown to the model: an inbox item is kept as a document as it stands, and an edited document is simply recorded as settled. An item that hits the pass's step limit three times in a row is also kept as it stands and not offered again.
-
-### When curation runs
-
-Curation runs on a background sweep, every hour by default, starting about a minute after the daemon starts. New items are therefore curated within the hour; to have them curated now, curate by hand (below). Each sweep takes inbox items first, oldest first, then edited documents, and runs a few passes per collection.
-
-Change the switch or the interval from the Knowledge page's header: **Automatic · hourly** beside the title opens a popover with the switch, the interval, when the last pass ran and the next one is due, and **Curate now**.
-
-The shortest interval is 60 seconds. A changed interval applies without a restart. With the sweep off, new items wait in the inbox until you curate by hand, and edits are carried through only then.
-
-### Curate by hand
-
-Curating by hand drains a collection: it takes everything pending when it starts — inbox items oldest first, then documents edited since curation last saw them — and runs one pass per item, one after another, until none is left. It is not tied to the owner machine (pressing the button chooses this one), but like the sweep it is refused while a sync conflict or confirmation waits for you. Inbox items are ordered by when they were submitted (the `created_at` in the item itself), never by file time.
+### Press Tidy
 
 ```text
-Knowledge → the collection's Inbox → Curate now
-Knowledge → Recent changes → Curate now   (every collection with items waiting)
+Knowledge → choose the collection → Tidy
+Knowledge → Tidy all   (every collection, one after another)
 ```
 
-While it runs the page reads **Curating · n of m**, and it ends with one summary toast. Each pass is a change in Recent changes with its own status.
+**Tidy** opens a new conversation on your default managed agent, with a prompt that names the collection and its folder, and **sends it at once**. You land on the conversation and can watch the agent work. **Tidy all**, in the Knowledge page's header, sends one prompt that names every collection and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into whichever agent you use.
 
-- The run **stops at the first failed pass**. The items after it stay pending for the next run or sweep.
-- A `truncated` or `too_large` pass does not stop it.
-- With no model configured, the first pass turns the whole inbox into documents and the run ends with `no_model`.
-- Items that arrive while a run is going wait for the next run or sweep.
+The prompt points the agent at the **Tidying a collection** section of the `coffer-guide` skill. Following it, the agent works through one collection at a time:
 
-Every pass reports a status:
+1. Reads the collection's `README.md` and every document's title and description, then the documents in full.
+2. **Merges** documents that answer the same question into one, keeping every fact, and deletes the ones it merged away.
+3. **Splits** a document that answers several unrelated questions, one subject per file.
+4. **Fixes** what is wrong or contradictory by the rule that the newer statement wins unless the older is shown to be right, and rewrites a description that does not say what question its document answers.
+5. Reports what it merged, split, corrected and deleted.
 
-| Status | Meaning |
-| --- | --- |
-| `ok` | The pass ran and settled its item. |
-| `up_to_date` | Nothing is waiting. |
-| `no_model` | No internal model is configured; the pending items became documents as they stood. |
-| `too_large` | The item is over the size limit; it was kept as it stands. |
-| `truncated` | The pass hit its step limit. What it wrote is kept and the item is tried again later. |
-| `failed` | The pass did not finish. Nothing was lost; the item is tried again. |
+It changes nothing that does not need changing. You can also ask any agent that has the `coffer-guide` skill to do this in your own words: "tidy up the payments knowledge."
 
-A request while a run is already going over the same collection is refused rather than queued.
+### Nothing tidies on its own
 
-Every pass reports a status:
+Tidy runs only when you press it or ask your agent. Coffer starts no agent run of its own, so nothing spends your quota or opens a conversation you did not start.
 
-| Status | Meaning |
-| --- | --- |
-| `ok` | The pass ran and settled its item. |
-| `up_to_date` | Nothing is waiting. |
-| `no_model` | No internal model is configured; the pending items became documents as they stood. |
-| `too_large` | The item is over the size limit; it was kept as it stands. |
-| `truncated` | The pass hit its step limit. What it wrote is kept and the item is tried again later. |
-| `failed` | The pass did not finish. Nothing was lost; the item is tried again. |
+### If a tidy goes wrong
 
-A request while a run is already going over the same collection is refused with `UPKEEP_ALREADY_RUNNING` rather than queued.
-
-### Without an internal model
-
-If Coffer's model is not configured, nothing waits: each submission becomes a document at the collection root immediately, as written, and a manual pass promotes anything already in the inbox and reports `no_model`. Nothing is curated, but everything is readable. Edited documents need nothing.
-
-### On more than one machine
-
-A pass rewrites documents that [vault sync](/guides/vault-sync) carries between machines. If two machines both curated, the same item would be folded into two different documents. So curation runs on one **owner machine** only.
-
-- With no owner named, curation runs wherever the vault is open — correct for a single machine.
-- To name the owner: once the vault spans several Macs, the Knowledge header's **Automatic** popover shows **Curation runs on** with a picker of the Macs.
-
-Curation and a sync round never run at the same time, and curation is skipped while a sync conflict or confirmation is outstanding.
+Every edit the agent makes is a version in the [history](#history-and-restore), written as an edit on disk. Open the document's **History** tab and restore the version you want, or open **Recent changes**, which lists what the agent changed and what it deleted, with **Restore** on each delete.
 
 ::: info What leaves your machine
-Curation sends the item, its candidate documents and the catalogue to the model endpoint you configured. Upload also sends the start of a document to that endpoint to write its description. Nothing else in the knowledge layer sends content anywhere.
+Coffer sends nothing about your knowledge to any model. When you press Tidy, the documents the agent reads go to that agent's own provider, as in any conversation with it.
 :::
+
+## What runs on its own {#what-runs-on-its-own}
+
+A background **sweep** keeps the collections current. It runs about once a minute and calls no model. Each round it:
+
+- turns files dropped into a collection's `.inbox/` into documents (see [A file in the inbox](#a-file-in-the-inbox)),
+- commits to the history whatever changed in the tree since the last commit — your editor's saves and your agent's file edits — as an edit on disk, and
+- re-renders the `coffer-guide` skill's catalogue, so a document you or an agent added by hand is listed.
+
+It runs on every machine, takes no part in [vault sync](/guides/vault-sync)'s rounds and never waits for one, and rewrites no existing document. It is skipped while the Knowledge feature is switched off (see [Experimental features](/guides/experimental-features)).
 
 ## How agents find knowledge
 
@@ -247,7 +199,7 @@ Coffer has **no tool for reading, listing or searching knowledge**. An agent rea
 What tells it where to look is Coffer's built-in [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill), which Coffer links into every agent's skill folder:
 
 - Its **description**, which is in every session, names the subjects of your collections, taken from each `README.md`.
-- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every document in every collection: its path, title and description.
+- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every document in every collection: its path, title and description. It also carries the writing rules and the tidying steps described above.
 
 Coffer rewrites the skill whenever the catalogue changes, so a new document appears in it within one sweep.
 
@@ -261,9 +213,9 @@ Write a good `README.md` for each collection: its first paragraph is what a mode
 
 On the Knowledge page, choose the collection in the tree, then a document. The documents are also plain files: the knowledge root is `~/.coffer/vault/knowledge/` and each collection is a folder in it, so you can read and grep them with your own tools. A collection's **⋯** menu has **Copy path**.
 
-The Knowledge page is one tree beside a reading pane, both filling the window under the page header. The title carries the **Experimental** tag; the header's actions are **Automatic · hourly** (curation's switch, interval and **Curate now**) and **Upload**, the page's one primary button — secondary while you are editing a document. At the top of the tree, **Collections** has a **New collection** button; below it every collection by its folder name, each opening to its **Inbox** and its documents, each shown by its file name. The Inbox node is the only one with a number: how many items are waiting. **Recent changes** sits above the collections. Choosing a collection shows its folder name, what belongs in it (click it to edit; it saves when you leave the field or press **⌘Enter**, **Esc** cancels, and a toast offers **Undo**) and its properties: **Documents**, **Inbox** (*N waiting* with **Open Inbox**, or *Nothing*), **Last curated** (a time, or *Never*) and **Folder**. While a Curate now run is draining the Inbox the page reads **Curating · n of m**. The collection's **⋯** menu holds **Reveal in Finder**, **Copy path**, **Rename…** and **Delete collection**; a collection with nothing in it yet says so and reminds you that you can upload one or drop Markdown files into its folder. Choosing a document renders it with **Edit** (see [Edit a file yourself](#edit-a-file-yourself)), a **Preview / Source** switch for Markdown and a **⋯** menu — **Open in editor**, **Reveal in Finder**, **Delete document** — on two tabs: **Document** and **History** (see [History and undo](#history-and-undo)). Under the title one line says who wrote it, with a **See the pass** link when curation did, and when it was created. The Inbox lists the items waiting to be curated — *curated automatically within the hour* — with a quiet **Curate now**; an item opens read-only, with who wrote it and when, and it leaves the Inbox once curation has filed it. A manual **Curate now** ends with one summary toast; what became of an item that could not be curated (too large, cut off, over the step limit) is written on that change's row in Recent changes.
+The Knowledge page is one tree beside a reading pane, both filling the window under the page header. The title carries the **Experimental** tag; the header's actions are **Tidy all** and **Upload**, the page's one primary button — secondary while you are editing a document. At the top of the tree, **Collections** has a **New collection** button; below it every collection by its folder name, each opening to its documents shown by their file names. **Recent changes** sits above the collections. Choosing a collection shows its folder name, what belongs in it (click it to edit; it saves when you leave the field or press **⌘Enter**, **Esc** cancels, and a toast offers **Undo**) and its properties: **Documents** and **Folder**, with **Tidy** beside them. The collection's **⋯** menu holds **Reveal in Finder**, **Copy path**, **Rename…** and **Delete collection**; a collection with nothing in it yet says so and reminds you that you can upload one or drop Markdown files into its folder. Choosing a document renders it with **Edit** (see [Edit a file yourself](#edit-a-file-yourself)), a **Preview / Source** switch for Markdown and a **⋯** menu — **Open in editor**, **Reveal in Finder**, **Delete document** — on two tabs: **Document** and **History** (see [History and restore](#history-and-restore)). Under the title one line says who wrote it and when it was created.
 
-The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a document into the page: you write through **Edit**, and agents by writing files into a collection's `.inbox/`. While Coffer's engine is not set there is no Inbox, no Automatic control and no Curate now; in the control's place **Curation needs Coffer’s engine** leads to **Settings › General**, and until then items become documents as they arrive.
+The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a document into the page: you write through **Edit**, and agents by writing files.
 
 ## Every collection reaches every agent
 
@@ -273,31 +225,23 @@ A collection has no on/off switch and no per-agent reach: every collection is av
 The skill hands agents the knowledge root, and an agent can read anything under it with its own tools. Keep nothing in a collection that an agent on this machine should not read.
 :::
 
-## History and undo
+## History and restore
 
-Every change to a collection is kept as a version: your saves and deletes, each curation pass, a submission that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `curation` (with the item it curated and who submitted it), `sync` or `disk` — so you can always tell who changed what.
+Every change to a collection is kept as a version: your saves and deletes, an upload or dropped file that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools — which is how a tidy shows up. Each change names its **writer** — `user`, `agent`, `sync` or `disk` (and `curation` on versions an earlier Coffer wrote) — so you can always tell who changed what.
 
 The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the history reads are refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab (*History needs git*) and **Recent changes** (*Recent changes needs git*) show one row with **Check again** and **Ask an agent ▾** — its menu copies the prompt.
 
 ### Look at a document's history
 
-A document's **History** tab is split in two, like a skill's: its versions on the left, newest first, with their writers and line counts, and the chosen version on the right — the newest when the tab opens. Drag the divider to give either side more room. The right side shows the diff, **Changes in this version** (against the version before) or **Compare with current**, with **Restore this version** on every version but the current one, and **See the pass** on a curation's version. Long lines wrap rather than being cut off. If the history cannot be read, the tab shows one **Load error** row with **Retry** and **Open Activity**, and the Document tab keeps working.
+A document's **History** tab is split in two, like a skill's: its versions on the left, newest first, with their writers and line counts, and the chosen version on the right — the newest when the tab opens. Drag the divider to give either side more room. The right side shows the diff, **Changes in this version** (against the version before) or **Compare with current**, with **Restore this version** on every version but the current one. Long lines wrap rather than being cut off. If the history cannot be read, the tab shows one **Load error** row with **Retry** and **Open Activity**, and the Document tab keeps working.
 
-A restore is a new version of its own, written by you; the history before it stays. Curation treats it like any edit and carries it through to the rest of the collection as a newer statement. A deleted document is restored the same way, from the version before the delete.
+A restore is a new version of its own, written by you; the history before it stays. A deleted document is restored the same way, from the version before the delete.
 
 ### See recent changes
 
-**Recent changes**, at the top of the tree, is the timeline across every collection for the last seven days, grouped by day, with **Collection** and **Author** filters and **Clear filters** (your choice stays in the page's address). The items waiting and **Curate now** sit above it — while a run is going it reads **Curating · n of m**.
+**Recent changes**, at the top of the tree, is the timeline across every collection for the last seven days, grouped by day, with **Collection** and **Author** filters and **Clear filters** (your choice stays in the page's address).
 
-Each change lists its writer, its time, its collection and every document it added, modified or removed, with line counts. The items still waiting in each inbox are listed separately, with who submitted them and when. A curation pass links to **See the pass**, which shows every document it touched, each with its diff and a link to its History; a delete carries **Restore** (see [Delete documents and collections](#delete-documents-and-collections)).
-
-### Undo a curation pass
-
-If a pass did something you disagree with, undo it as a whole. Open the pass from **Recent changes** (or **See the pass** under a document it wrote) and choose **Undo this pass**; the page asks first, listing each document and what the undo does to it. Every document the pass wrote or retired goes back exactly as it was before the pass, and documents it created are removed, in one new change written by you. Curation does not redo the pass afterwards. The item the pass curated stays out of the inbox; its text is still in the history. An undone pass reads **Undone**, with who undid it and when.
-
-- If a later change touched one of the pass's documents, the undo is refused and says in one sentence which document changed since, with **Open its History**, where you can restore a single version. Nothing is written. You can also undo the pass by hand while keeping the later edits: the refusal carries a prompt for your agent, offered on the pass's page, that names the pass, each document it touched, the ones edited since, and `git -C ~/.coffer/vault show <version> -- knowledge` for reading what the pass did. The agent edits only the files; Coffer records what it writes as an edit on disk.
-- When the pass merged nothing — there was no model, the item was too large, or curation gave up on it — the document it created was the item as it stood, so the undo puts the item back in the Inbox as well. Nothing you submitted is lost.
-- Only a curation pass can be undone this way. For any other change, restore the document's earlier version.
+Each change lists its writer, its time, its collection and every document it added, modified or removed, with line counts. A delete carries **Restore** (see [Delete documents and collections](#delete-documents-and-collections)).
 
 ## Delete documents and collections
 
@@ -307,7 +251,7 @@ Only a person deletes through Coffer. Coffer gives agents no tool that deletes k
 - **A whole collection, and every file in it:** Knowledge → choose the collection → **⋯** → **Delete collection**.
 
 ::: tip A delete can be restored
-In the web UI a delete happens at once: no confirmation, no typed name, and a toast, *Deleted `<name>`*, with **Undo**. A deleted document or collection stays in the [history](#history-and-undo), so **Undo** puts it back even after the toast is gone. **Recent changes** lists the delete with **Restore**, which puts back exactly what it removed — a document into its collection, a collection with its documents, its README and the items that were waiting in its Inbox — as one new change by you. A restore is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again.
+In the web UI a delete happens at once: no confirmation, no typed name, and a toast, *Deleted `<name>`*, with **Undo**. A deleted document or collection stays in the [history](#history-and-restore), so **Undo** puts it back even after the toast is gone. **Recent changes** lists the delete with **Restore**, which puts back exactly what it removed — a document into its collection, a collection with its documents and its README — as one new change by you. A restore is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again.
 :::
 
 ## What not to put in knowledge
@@ -318,19 +262,19 @@ In the web UI a delete happens at once: no confirmation, no typed name, and a to
 
 ## Troubleshooting
 
-**Pending items never get curated.** Check that curation is switched on (the Knowledge header's **Automatic** popover), that this machine is the owner or no owner is set (**Curation runs on** in the same popover), and that Coffer's model is configured. Open the collection's Inbox and choose **Curate now** to see the status of every pass.
+**A tidy rewrote a document badly.** Open the document's **History** tab and restore the version before the agent's edit, or open **Recent changes** and find the agent's changes there.
 
-**Curation rewrote a document badly.** Open the pass from **Recent changes** and choose **Undo this pass**, or restore just that document from its History tab.
+**Tidy offers only Copy prompt.** No managed agent is available. Add one under **Agents**, or paste the copied prompt into the agent you use; it must have the `coffer-guide` skill.
 
 **An agent does not use the knowledge.** Check that the `coffer-guide` skill is enabled and reaches that agent (its **Reach** button on the Skills page), and that the collection's `README.md` opens with a sentence naming its subjects.
 
-**A file an agent wrote never shows in the Inbox.** It must be a Markdown file directly in the `.inbox/` folder of an existing collection; a file anywhere else is left alone, and a file that is not Markdown is not curated. A new file shows up at the next sweep.
+**A file an agent wrote never shows up.** A document written into a collection shows up on the next read. A file left in `.inbox/` must be Markdown, directly in the `.inbox/` folder of an existing collection, and becomes a document at the next sweep, within about a minute; a file anywhere else is left alone, and a file that is not Markdown is not turned into a document.
 
 ## Related
 
-- [Skills](/guides/skills) — the `coffer-guide` skill that carries the catalogue
+- [Skills](/guides/skills) — the `coffer-guide` skill that carries the catalogue and the writing and tidying rules
 - [Memory](/guides/memory)
 - [Knowledge architecture](/architecture/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) and [Aggregate the Agents' Memory; Never Write It](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)
+- [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) and [Tidying Knowledge and Memory Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md)

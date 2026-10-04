@@ -1,26 +1,24 @@
 // frontend/src/pages/KnowledgePage.tsx — the one Knowledge surface.
 //
-// A document app (spec knowledge "Present a collection as one tree in the web
-// UI"): the tree of every collection on the left — Recent changes on top, then
-// each collection with its Inbox and its documents — and whatever the address
-// names on the right (lib/knowledge/routes.ts): Recent changes, one change, a
-// collection, an open document with its Document and History tabs, or the
-// Inbox. Every collection is served to every agent, so there is no
-// per-collection switch and no reach control; and the layer has no retrieval,
-// so there is no search box — ⌘K jumps to a collection by name.
+// A document app (spec knowledge "Show a collection as one tree of documents in
+// the web UI"): the tree of every collection on the left — Recent changes on
+// top, then each collection with its documents — and whatever the address names
+// on the right (lib/knowledge/routes.ts): Recent changes, a collection, or an
+// open document with its Document and History tabs. Every collection is served
+// to every agent, so there is no per-collection switch and no reach control;
+// and the layer has no retrieval, so there is no search box — ⌘K jumps to a
+// collection by name.
 //
-// New knowledge goes in as an ITEM — an upload, an agent's file in `.inbox/` —
-// which waits in the collection's Inbox until curation files it into the right
-// document; people write through Edit. With Coffer's engine not set there is
-// nothing to curate with: the Automatic control reads "Curation needs Coffer's
-// engine" (→ Settings › General) and there is no Inbox and no Curate now.
+// New knowledge goes in as a document — an upload, an agent's file — and people
+// write through Edit. Tidying is the agent's: Tidy all hands every collection
+// to the default managed agent and sends the prompt at once (spec knowledge
+// "Hand a tidy to the agent").
 //
 // Nothing auto-provisions a collection, so an empty list is the first-run
 // empty state. The page is a workspace (boards 5.1.01–5.1.29): a header — the
-// title with its Experimental tag, one subtitle line, and on the right the
-// Automatic control and Upload, the page's one primary button (secondary while
-// a document has unsaved edits) — then the tree and the pane, each scrolling
-// on its own.
+// title with its Experimental tag, one subtitle line, and on the right Tidy all
+// and Upload, the page's one primary button (secondary while a document has
+// unsaved edits) — then the tree and the pane, each scrolling on its own.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -28,22 +26,21 @@ import { useTranslation } from "react-i18next";
 import { Upload } from "lucide-react";
 
 import { ListLoadError } from "@/components/ListPaneStates";
-import { KnowledgeAutomaticPopover } from "@/components/knowledge/KnowledgeAutomaticPopover";
 import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
 import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
+import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
-import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
 import { useEditingDocument } from "@/lib/knowledge/dirtyDocument";
-import { useOpenSettings } from "@/lib/settingsModal";
 import {
   collectionBasePath,
   DEFAULT_KNOWLEDGE_TAB,
@@ -53,11 +50,14 @@ import {
 import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { cn } from "@/lib/utils";
 
+/** Tidy all's prompt, asked of the daemon when the button is pressed. */
+const tidyAllPrompt = () => getTidyHandoff().then((handoff) => handoff.prompt);
+
 export function KnowledgePage() {
   const { t } = useTranslation();
-  // Agents write items while the page is open: a knowledge change event
-  // (submit, curation settling) refetches everything read under knowledgeKey —
-  // Inbox counts, the tree, document bodies — without a poll.
+  // Agents write documents while the page is open: a knowledge change event
+  // refetches everything read under knowledgeKey — the tree, document
+  // bodies — without a poll.
   const qc = useQueryClient();
   useDaemonEvents({
     onMessage: (m) => {
@@ -66,13 +66,11 @@ export function KnowledgePage() {
       }
     },
   });
-  const { uid, version } = useParams<{ uid?: string; version?: string }>();
+  const { uid } = useParams<{ uid?: string }>();
   const [params] = useSearchParams();
   const file = params.get("file");
   const collections = useKnowledgeCollections();
-  const modelSet = useCofferModelSet();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
-  const openSettings = useOpenSettings();
   // While a document has unsaved edits, Upload steps back to secondary.
   // (The editor publishes only its dirty state, so this is the signal we have.)
   const editing = useEditingDocument() !== null;
@@ -100,18 +98,11 @@ export function KnowledgePage() {
         actions={
           list.length > 0 ? (
             <>
-              {modelSet ? (
-                <KnowledgeAutomaticPopover />
-              ) : modelSet === false ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  className="px-0"
-                  onClick={() => openSettings("general")}
-                >
-                  {t("knowledge.noModel.engine")}
-                </Button>
-              ) : null}
+              <AgentHandoff
+                prompt={tidyAllPrompt}
+                autoSend={{ label: t("knowledge.tidy.all") }}
+                help={false}
+              />
               <Button variant={editing ? "outline" : "default"} onClick={() => setDialog("upload")}>
                 <Upload aria-hidden /> {t("knowledge.upload.button")}
               </Button>
@@ -170,10 +161,8 @@ export function KnowledgePage() {
               collections={list}
               isLoading={collections.isPending}
               currentUid={uid ?? null}
-              tab={tab}
               file={file}
-              atRecent={!uid && !version}
-              modelSet={modelSet}
+              atRecent={!uid}
               onCreate={() => setDialog("create")}
             />
           )
@@ -182,13 +171,11 @@ export function KnowledgePage() {
           collections.error ? null : (
             <KnowledgePane
               uid={uid ?? null}
-              version={version ?? null}
               collection={current}
               collections={list}
               collectionsLoading={collections.isPending}
               tab={tab}
               file={file}
-              modelSet={modelSet}
             />
           )
         }

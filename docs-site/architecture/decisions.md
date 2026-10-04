@@ -75,7 +75,7 @@ Explained in: [MCP gateway](/architecture/mcp-gateway).
 | Tool Overload: List a Usage-Ranked Slice, Search the Rest | [`tool-overload-tier-the-list-search-the-rest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md) |
 | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate | [`eval-capture-and-regression-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md) |
 
-## Agents, providers & the internal engine
+## Agents & providers
 
 Explained in: [Agents](/guides/agents), [Model providers](/guides/providers), [Agent facets](/architecture/agent-facets), [Model proxy](/architecture/model-proxy).
 
@@ -89,8 +89,7 @@ Explained in: [Agents](/guides/agents), [Model providers](/guides/providers), [A
 | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
 | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
 | The Model Catalogue Is Read Back From the Installed Agent | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
-| Coffer's Own Model Is an Internal Engine, Not a Persona or a Tool | [`coffer-model-is-an-internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-model-is-an-internal-engine.md) |
-| The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
+| The Speech-to-Text Model Is a Setting; Its Endpoint Is Borrowed From a Flagged Connection | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
 
 ## Chat & channels
 
@@ -120,7 +119,7 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Skills Reach an Agent as a Directory Link to One Master Folder | [`cross-platform-skill-delivery`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cross-platform-skill-delivery.md) |
 | Coffer Ships Its Own Manual as a Skill Resource | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
 | Knowledge Is a Directory of Markdown Files, Not an Index | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
-| Knowledge Curation Merges New Material Into the Documents | [`knowledge-curation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-curation.md) |
+| Tidying Knowledge and Memory Is the Agent's Job | [`tidying-knowledge-and-memory-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md) |
 | Aggregate the Agents' Memory; Never Write It | [`aggregate-agent-memory-never-write-it`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) |
 | Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) |
 
@@ -133,7 +132,6 @@ Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architec
 | Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person | [`sync-applies-clean-merges-and-stops-on-any-conflict`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md) |
 | A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves | [`sync-deletion-breaker`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md) |
 | A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree | [`sync-machine-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-machine-identity.md) |
-| An Unattended Rewriter of Synced Content Runs on One Named Owner Machine | [`single-owner-machine-for-unattended-rewrites`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/single-owner-machine-for-unattended-rewrites.md) |
 | Sync Withholds Derived Output; Each Machine Renders Its Own | [`sync-withholds-derived-output`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-withholds-derived-output.md) |
 | The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault | [`master-key-lives-in-the-macos-keychain`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md) |
 | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use | [`credential-references`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credential-references.md) |

@@ -1,10 +1,8 @@
-"""Errors raised by the knowledge layer's one external dependency: ripgrep.
+"""The error raised when an external converter the knowledge layer needs is missing.
 
-What is left here is only what survives a layer with no index: the search
-binary can be missing, and a caller's regex can be invalid. The knowledge-base
-errors this module once held — ``KBNotFound``, ``DocumentNotFound``,
-``IngestRejected``, ``ReconversionBlocked`` — went with the index
-([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)).
+Knowledge is plain files with no index
+([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)); the
+one dependency outside the package is a converter backend for an uploaded format.
 
 Kept in its own module, re-exported by :mod:`coffer.domain.errors`, so that
 aggregation module stays under the file-size ceiling.
@@ -17,7 +15,7 @@ from coffer.domain.error_base import CofferError
 
 class EngineUnavailable(CofferError):  # noqa: N818
     """An external binary or converter library the requested operation needs is
-    unavailable — today, ripgrep or one of MarkItDown's format backends. The
+    unavailable — today, one of MarkItDown's format backends. The
     caller surfaces a clear per-format error; the daemon stays up."""
 
     code = "ENGINE_UNAVAILABLE"
@@ -25,16 +23,4 @@ class EngineUnavailable(CofferError):  # noqa: N818
     def __init__(self, engine: str, detail: str) -> None:
         super().__init__(f"{engine} engine unavailable: {detail}")
         self.engine = engine
-        self.detail = detail
-
-
-class GrepPatternInvalid(CofferError):  # noqa: N818
-    """ripgrep rejected the pattern (exit code 2, e.g. invalid regex). Maps to
-    400 — without this an rg failure masquerades as 'no matches'."""
-
-    code = "GREP_PATTERN_INVALID"
-
-    def __init__(self, pattern: str, detail: str) -> None:
-        super().__init__(f"grep pattern rejected: {detail}")
-        self.pattern = pattern
         self.detail = detail

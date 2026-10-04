@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
 from coffer.infrastructure.llm.transcription import (
     RemoteTranscriber,
@@ -81,10 +82,20 @@ def test_the_model_comes_from_the_connection_not_the_environment() -> None:
     assert t._model == "gateway-stt-v2"
 
 
-def test_the_operators_bound_reaches_the_upload() -> None:
-    t = remote_transcriber(_conn(), _resolver(), 145.0)
+def test_a_transcriber_runs_under_the_fixed_limit_by_default() -> None:
+    t = remote_transcriber(_conn(), _resolver())
     assert t is not None
-    assert t._timeout == 145.0
+    assert t._timeout == DEFAULT_MODEL_TIMEOUT_S
+
+
+@pytest.mark.asyncio
+async def test_the_factory_builds_transcribers_under_the_fixed_limit() -> None:
+    async def _resolve():
+        return _conn()
+
+    t = await remote_transcriber_factory(_resolve, _resolver())()
+    assert t is not None
+    assert t._timeout == DEFAULT_MODEL_TIMEOUT_S
 
 
 @pytest.mark.asyncio

@@ -85,6 +85,7 @@ class AuditEventType(StrEnum):
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"
     KNOWLEDGE_EDITED = "knowledge_edited"
+    # No longer emitted: kept so a row written by an earlier build keeps its name.
     KNOWLEDGE_CURATED = "knowledge_curated"
     # spec memory
     MEMORY_AGGREGATED = "memory_aggregated"
@@ -114,6 +115,7 @@ class AuditEventType(StrEnum):
     SYNC_PLAINTEXT_PUSHED = "sync_plaintext_pushed"
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
+    # No longer emitted: kept so a row written by an earlier build keeps its name.
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
     PROVIDER_TRANSCRIBE_DEFAULT_SET = "provider_transcribe_default_set"
     # A projection write refused because the agent's native config file changed

@@ -10,8 +10,8 @@ writer each:
     is given, and what a human opens first. Written by the distil pass.
 
 ``notes/``
-    Coffer's own notes, one topic per file (see "Write notes in Coffer's own
-    words", "Keep one topic per note"). Written by the distil pass.
+    Coffer's own notes, one topic per file (see "Distil each raw entry into a note mechanically").
+    Written by the distil pass.
 
 ``RETIRED.md``
     What was retired and why (see "Record retirements so they stick") — also the
@@ -21,7 +21,7 @@ writer each:
 ``.raw/``
     What was read out of the agents, verbatim (see "Keep raw entries verbatim
     and hidden"). Written **only** by aggregation, and never by distil (see
-    "Keep distil out of the raw directory"): that is what lets a bad
+    "Leave the raw directory to aggregation"): that is what lets a bad
     distillation be re-run without going back to the agents. Hidden, and
     excluded from the index and from delivery.
 

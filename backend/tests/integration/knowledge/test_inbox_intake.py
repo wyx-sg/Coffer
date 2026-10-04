@@ -1,5 +1,5 @@
 """An agent adds knowledge by writing a Markdown file into a collection's
-``.inbox/`` (spec knowledge "Submit material by writing a file into the inbox").
+``.inbox/`` (spec knowledge "Adopt a file dropped into the inbox").
 
 Real git over a real directory, because "written outside Coffer" is decided by
 what the vault repository has and has not committed. The registry and the audit
@@ -107,7 +107,7 @@ async def test_a_bare_inbox_file_is_normalised_and_audited() -> None:
     assert event.actor == "agent"
     assert event.details["item"] == "cache-ttl.md"
     assert event.details["actor_reported"] is False
-    # The item is owed a curation pass.
+    # Adoption only normalises it; promoting is the sweep's next step.
     assert inbox.inbox_items("shopee") == ("cache-ttl.md",)
 
 

@@ -58,7 +58,7 @@ export type ConversationPatch = Schemas["ConversationPatch"];
 /**
  * A conversation's agent config (managed agents). `model` is the agent's own
  * per-conversation model, free-text and passed through to its CLI (the
- * coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs). `session_id` is provider-internal and not
+ * model-catalogue-read-from-the-agent ADR). `session_id` is provider-internal and not
  * surfaced.
  */
 export type AgentConfigOut = Schemas["AgentConfigOut"];

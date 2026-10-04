@@ -65,7 +65,6 @@ from coffer.surfaces.http.attention_wiring import lifespan_attention_sources
 from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat_wiring import wire_chat
-from coffer.surfaces.http.curation_wiring import wire_curation
 from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
     set_audit_service,
@@ -96,7 +95,7 @@ from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.secret_boundary_wiring import (
     remember_destination_sources,
 )
-from coffer.surfaces.http.secret_composition import init_secret_store, make_secret_resolver
+from coffer.surfaces.http.secret_composition import init_secret_store
 from coffer.surfaces.http.setup_lifespan import guarded
 from coffer.surfaces.http.vault_composition import build_vault_stores
 from coffer.surfaces.http.vault_wiring import start_vault_scanning
@@ -147,10 +146,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     secrets = await init_secret_store()
     secret_store = secrets.store
-    # Computed once, up front, so every internal-LLM consumer below (knowledge
-    # ingest, the curation pass, the memory distil pass) shares one resolver
-    # rather than each re-wrapping the store.
-    secret_resolver = make_secret_resolver(secret_store)
 
     # ``AuditService.record`` is handed the ``Resource`` the event is about, so
     # the uid it stores is read off it, never looked back up by label.
@@ -208,7 +203,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         vault=vault,
         builtin_tools=builtin_tools,
         secret_store=secret_store,
-        secret_resolver=secret_resolver,
         platform=platform,
         agent_catalog=agent_catalog,
         reconciler=reconciler,
@@ -231,12 +225,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
-
-    # Another internal-LLM knowledge consumer: the curation pass that merges
-    # new material into a collection's documents. It carries
-    # the skill delivery too, because a document nothing has re-rendered a
-    # catalogue for is a document no agent has a path to (spec knowledge).
-    curation_pass = wire_curation(kinds.knowledge.models, secret_resolver, kinds.guide)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat platform's handles.
@@ -278,7 +266,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     workers = start_background_workers(
         retention_svc=retention_svc,
         knowledge_service=kinds.knowledge.service,
-        curation_pass=curation_pass,
         guide=kinds.guide,
         distil=kinds.memory.distil,
         memory_service=kinds.memory.service,

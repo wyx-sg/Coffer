@@ -9,7 +9,7 @@ as it was.
 
 Restoring a deleted collection (spec knowledge "Restore a deleted collection or
 document from Recent changes") puts back, byte for byte, every file the delete
-removed: its documents, its README and the items that were waiting in its inbox.
+removed: its documents, its README and any inbox items.
 Documents go through the same guard every document write does; the README and
 an inbox item are the two non-document paths a collection holds, and each is
 resolved through the module that owns its shape.
@@ -64,7 +64,7 @@ def write_description(collection: str, description: str) -> None:
 
 def restore_file(relpath: str, raw: bytes) -> None:
     """Put back one file of a deleted collection exactly as it was: a document,
-    the README, or an item that was waiting in the inbox."""
+    the README, or an inbox item."""
     in_inbox = paths.inbox_parts(relpath)
     if in_inbox is not None:
         collection, item = in_inbox

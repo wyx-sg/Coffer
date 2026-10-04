@@ -9,7 +9,7 @@ about where transcription happens.
 
 The shipped engine is remote — see
 :mod:`coffer.infrastructure.llm.transcription` — and is absent unless the user
-has designated an internal connection. Absent, transcription degrades to handing
+has designated a speech-to-text connection. Absent, transcription degrades to handing
 over the audio file path (channel media's per-agent materialisation), which is the
 default and means nothing leaves the machine.
 """

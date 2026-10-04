@@ -1,8 +1,7 @@
 // src/components/providers/ProviderListRow.tsx — one provider in the list pane: mark, name, what it offers, who runs on it.
 //
 // The sub-line is the protocol and the model offer — "N models" when the
-// provider curates, "All models" when it does not, and "Coffer's engine only"
-// for an Ollama-protocol provider, which reaches no agent. The marks at the
+// provider curates, "All models" when it does not. The marks at the
 // end are the agents running on it (the Used-by rule) and the Coffer badges.
 // The row links to the provider by uid; the open one is highlighted.
 import { Link } from "react-router-dom";
@@ -29,7 +28,6 @@ interface Props {
 
 function useOfferLabel(provider: Provider): string {
   const { t } = useTranslation();
-  if (provider.protocol === "ollama") return t("providers.list.engineOnly");
   const n = provider.models.length;
   return n === 0 ? t("providers.list.allModels") : t("providers.list.models", { count: n });
 }
@@ -70,7 +68,6 @@ export function ProviderListRow({ provider, use, selected, problem }: Props) {
         {use.agents.map(({ agent }) => (
           <AgentBadge key={agent.uid} type={agent.type} size="sm" />
         ))}
-        {use.engine ? <CofferUseBadge use="engine" /> : null}
         {use.transcribe ? <CofferUseBadge use="transcribe" /> : null}
       </span>
     </Link>

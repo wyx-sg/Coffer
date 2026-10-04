@@ -6,15 +6,13 @@ reading frontmatter when someone asks, so it cannot drift from what is on
 disk — there is no second copy to keep in sync.
 
 A walk sees every visible Markdown document under a collection. It never sees
-the hidden ``.inbox/`` — material there is not knowledge yet (see "Hide
-dot-prefixed entries except the inbox") — and it never lists a ``README.md``,
+the hidden ``.inbox/`` — material there is not knowledge yet — and it never lists a ``README.md``,
 which describes the directory it sits in rather than being content in it (see
 "Keep the collection README out of the corpus").
 """
 
 from __future__ import annotations
 
-import dataclasses
 import os
 import pathlib
 from datetime import UTC, datetime
@@ -53,14 +51,14 @@ def is_collection_readme(path: pathlib.Path) -> bool:
     """Whether ``path`` is a collection's own ``README.md`` — at the collection root.
 
     It describes the collection rather than being content in it, so it is kept out
-    of listings, counts and curation ("Keep the collection README out of the
+    of listings and counts ("Keep the collection README out of the
     corpus"). A ``README.md`` in a subfolder is an ordinary document.
     """
     return path.name == paths.README_NAME and path.parent.parent == paths.knowledge_root()
 
 
 def is_markdown(name: str) -> bool:
-    """Whether a file is a document this layer can read, curate or catalogue."""
+    """Whether a file is a document this layer can read or catalogue."""
     return name.endswith(MARKDOWN_SUFFIX) and is_listed(name)
 
 
@@ -123,8 +121,7 @@ def readme_description(collection: str) -> str:
 
 
 def list_collections() -> tuple[CollectionEntry, ...]:
-    """Every collection directory present on disk, with its documents and its
-    unmerged material counted."""
+    """Every collection directory present on disk, with its documents counted."""
     root = paths.knowledge_root()
     if not root.is_dir():
         return ()
@@ -139,19 +136,11 @@ def list_collections() -> tuple[CollectionEntry, ...]:
             name=d.name,
             description=readme_description(d.name),
             document_count=count_files(d, markdown_only=True),
-            pending_count=_count_inbox(d.name),
             folder_path=str(d),
             updated_at=latest_edit(d),
         )
         for d in found
     )
-
-
-def _count_inbox(collection: str) -> int:
-    inbox = paths.inbox_dir(collection)
-    if not inbox.is_dir():
-        return 0
-    return sum(1 for f in inbox.iterdir() if f.is_file() and is_markdown(f.name))
 
 
 def _file_entry(path: pathlib.Path) -> FileEntry:
@@ -198,47 +187,11 @@ def list_level(relpath: str) -> CatalogueLevel:
             )
         elif is_listed(child.name) and not is_collection_readme(child):
             files.append(_file_entry(child))
-    segments = paths.split(relpath)
-    if len(segments) == 1:
-        # A collection's root also shows what waits to be merged, so a person
-        # can see it (see "Hide dot-prefixed entries except the inbox"). The
-        # one hidden entry any listing names, first as a sorted name would
-        # put it; it is absent when empty.
-        waiting = _count_inbox(segments[0])
-        if waiting:
-            directories.insert(
-                0,
-                DirectoryEntry(
-                    path=f"{segments[0]}/{paths.INBOX_DIR_NAME}",
-                    name=paths.INBOX_DIR_NAME,
-                    file_count=waiting,
-                    inbox=True,
-                ),
-            )
     return CatalogueLevel(
         path=relpath.strip("/"),
         directories=tuple(directories),
         files=tuple(files),
     )
-
-
-def list_inbox(collection: str) -> CatalogueLevel:
-    """A collection's inbox as a tree level: its items, read-only, and no folders.
-
-    Each item is titled from its frontmatter, or by its file name when it has
-    none. A collection whose inbox is empty — or was never created — lists
-    nothing rather than failing: the inbox is part of every collection's shape,
-    and emptying it is exactly what a pass does.
-    """
-    inbox = paths.inbox_dir(collection)
-    files: list[FileEntry] = []
-    if inbox.is_dir():
-        files = [
-            dataclasses.replace(_file_entry(f), inbox=True)
-            for f in sorted(inbox.iterdir())
-            if f.is_file() and is_markdown(f.name)
-        ]
-    return CatalogueLevel(path=f"{collection}/{paths.INBOX_DIR_NAME}", files=tuple(files))
 
 
 def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
@@ -247,7 +200,7 @@ def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
     The catalogue a skill carries is a whole collection at once (see "Merge the
     manual and the catalogue in the skill body"), unlike the level-at-a-time
     listing a human surface pages through — so this is the shape that builds
-    it, and the one curation reads a collection with.
+    it.
     """
     if not directory.is_dir():
         return ()
@@ -255,8 +208,7 @@ def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
     for root, dirnames, filenames in os.walk(directory):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
         for name in sorted(filenames):
-            # The narrow rule: this feeds the catalogue and curation, both of
-            # which need text.
+            # The narrow rule: this feeds the catalogue, which needs text.
             if is_markdown(name) and not is_collection_readme(pathlib.Path(root) / name):
                 found.append(_file_entry(pathlib.Path(root) / name))
     return tuple(sorted(found, key=lambda f: f.path))

@@ -132,7 +132,6 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
             for m in cfg.models
         ],
         local_runtime=cfg.local_runtime,
-        internal_default=cfg.internal_default,
         transcribe_default=cfg.transcribe_default,
         enabled=resource.enabled,
         description=resource.description,
@@ -339,22 +338,6 @@ async def use_builtin_provider(
     )
 
 
-@router.post("/{uid}/internal-default", response_model=ProviderOut)
-async def set_internal_default_provider(
-    uid: str,
-    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
-    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> ProviderOut:
-    """Make this connection Coffer's internal-engine default (≤1 globally).
-
-    Clears the flag on every other connection first, so setting a new default
-    moves it off the previous one. 404 if the connection is absent.
-    """
-    updated = await svc.set_internal_default(uid, actor=actor)
-    return _provider_out(updated, await resources.list(kind="agent"))
-
-
 @router.post("/{uid}/transcribe-default", response_model=ProviderOut)
 async def set_transcribe_default_provider(
     uid: str,
@@ -364,11 +347,10 @@ async def set_transcribe_default_provider(
 ) -> ProviderOut:
     """Make this connection the one Coffer transcribes speech on (≤1 globally).
 
-    The twin of the route above, and deliberately a SECOND flag rather than a
-    reuse of it: the two are different models, and a chat gateway commonly
-    serves no ``/audio/transcriptions`` at all. Nothing falls back between
-    them — with no connection marked here, Coffer transcribes nothing and hands
-    the agent the audio file untouched. 404 if the connection is absent.
+    A chat gateway commonly serves no ``/audio/transcriptions`` at all, so
+    nothing falls back: with no connection marked here, Coffer transcribes
+    nothing and hands the agent the audio file untouched. Clears the flag on
+    every other connection first. 404 if the connection is absent.
     """
     updated = await svc.set_transcribe_default(uid, actor=actor)
     return _provider_out(updated, await resources.list(kind="agent"))

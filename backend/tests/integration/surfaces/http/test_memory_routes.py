@@ -4,9 +4,8 @@ Boots the full FastAPI app (via ``create_app``) so every route is wired exactly 
 production wires it — real SQLite, a real Claude Code fixture tree under a temp
 HOME, and **a real git repository**, because a partition is keyed on a repository
 now and a plain directory deliberately makes none ("Identify a partition by its
-repository", "Create no partition for a non-repository directory"). No internal
-connection is configured, so the distil pass takes its mechanical path ("Distil
-mechanically with no internal connection") — which is what makes "sync, distil, then
+repository", "Create no partition for a non-repository directory"). The distil pass is mechanical
+("Distil each raw entry into a note mechanically") — which is what makes "sync, distil, then
 read" a deterministic three lines here rather than a model call.
 
 What this tier is for, as opposed to the unit and ``tests/integration/memory``
@@ -385,10 +384,9 @@ def test_retired_of_an_unknown_partition_is_not_found(client) -> None:
 # ----- distil ---------------------------------------------------------------
 
 
-def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_path) -> None:
-    """Per "Distil mechanically with no internal connection": thinner, not absent.
-    Each raw entry becomes a note of its own and ``MEMORY.md`` is still written, so
-    this installation still has a delivery."""
+def test_distil_writes_a_note_per_entry_and_an_index(client, tmp_path) -> None:
+    """Per "Distil each raw entry into a note mechanically": each raw entry becomes
+    a note of its own and ``MEMORY.md`` is written, so the partition has a delivery."""
     _register_agent(client)
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
@@ -402,8 +400,36 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
 
     audit = client.get("/api/v1/audit").json()["entries"]
     distilled = [e for e in audit if e["event_type"] == "memory_distilled"]
-    assert distilled and all(e["details"]["model_used"] is False for e in distilled)
+    assert distilled and all("model_used" not in e["details"] for e in distilled)
     assert any(e["event_type"] == "memory_aggregated" for e in audit)
+
+
+def test_a_partition_read_carries_the_tidy_handoff(client, tmp_path) -> None:
+    partition = _distilled(client, tmp_path)
+    uid = _partition_uid(client, partition)
+
+    r = client.get(f"/api/v1/memory/partitions/{uid}")
+
+    assert r.status_code == 200, r.text
+    prompt = r.json()["tidy_handoff"]["prompt"]
+    assert f"Tidy the memory partition `{partition}`" in prompt
+    assert '"Tidying memory" section of the coffer-guide skill' in prompt
+    assert str(memory_paths.partition_dir(partition)) in prompt
+    assert _partitions(client)[partition]["tidy_handoff"]["prompt"] == prompt
+
+
+def test_the_page_level_tidy_handoff_names_every_partition(client, tmp_path) -> None:
+    _distilled(client, tmp_path)
+
+    r = client.get("/api/v1/memory/tidy-handoff")
+
+    assert r.status_code == 200, r.text
+    prompt = r.json()["prompt"]
+    assert prompt.startswith("Tidy every memory partition")
+    assert "one partition at a time" in prompt
+    assert str(_memory_root()) in prompt
+    for name in _partitions(client):
+        assert f"`{name}`: {memory_paths.notes_dir(name)} (1 notes)" in prompt
 
 
 def test_there_is_no_per_partition_distil_route(client, tmp_path) -> None:

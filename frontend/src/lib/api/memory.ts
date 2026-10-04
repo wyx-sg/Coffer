@@ -15,6 +15,7 @@ import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
   AggregationResultOut,
   DeliveredOut,
+  HandoffOut,
   MemoryFileTreeOut,
   NoteListOut,
   NoteOut,
@@ -43,6 +44,15 @@ export function sync(): Promise<AggregationResultOut> {
   return unwrap(getApiClient().POST("/memory/sync"));
 }
 
+// --- tidy ---------------------------------------------------------------------
+
+/** The prompt that hands tidying every partition to the person's agent: the
+ *  Memory page's Tidy all (see "Hand a partition's tidying to the agent"). One
+ *  partition's prompt is the `tidy_handoff` on its read. */
+export function getTidyHandoff(): Promise<HandoffOut> {
+  return unwrap(getApiClient().GET("/memory/tidy-handoff"));
+}
+
 // --- one partition's memories ("Present a partition as its memories") -------
 
 export function listNotes(uid: string): Promise<NoteListOut> {
@@ -57,7 +67,7 @@ export function getNote(uid: string, slug: string): Promise<NoteOut> {
   );
 }
 
-/** Save a memory's body ("Edit a memory in the web UI or on disk"): the
+/** Save a memory's body ("Edit a memory in the web UI or in an editor"): the
  *  frontmatter is kept. `expected_fingerprint` is the one the read carried; a
  *  note changed since is refused with 409 `MEMORY_NOTE_CONFLICT`, whose
  *  `details` carry the note's current body and fingerprint. Resolves with the

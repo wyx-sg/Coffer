@@ -3,8 +3,9 @@
 // Every hand-off in the app is the `AgentHandoff` split button; this hook is
 // its logic. The verbs: copy the daemon's prompt as given (a "Prompt
 // copied" toast says so), or open the draft (New conversation) with the prompt
-// in its composer — never sent until the person presses Send. `canAsk` is false
-// while no managed agent is available, and the caller then offers Copy prompt only.
+// in its composer — sent only when the person presses Send, unless the caller
+// asks for `autoSend` (Tidy), which sends it at once. `canAsk` is false while no
+// managed agent is available, and the caller then offers Copy prompt only.
 //
 // The prompt may also be a function: a hand-off that is a request in itself
 // (it records the files as handed over) is made only when the person picks a
@@ -25,11 +26,14 @@ export interface AgentHandoffControls {
   copy: () => void;
   /** Whether a managed agent is available to ask. */
   canAsk: boolean;
-  /** Open the draft with the prompt typed in, on the default agent. */
+  /** Open the draft with the prompt typed in, on the default agent; with `autoSend`, send it. */
   ask: () => void;
 }
 
-export function useAgentHandoff(prompt: PromptSource): AgentHandoffControls {
+export function useAgentHandoff(
+  prompt: PromptSource,
+  options: { autoSend?: boolean } = {},
+): AgentHandoffControls {
   const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -41,7 +45,12 @@ export function useAgentHandoff(prompt: PromptSource): AgentHandoffControls {
     void navigator.clipboard?.writeText(text).then(() => toast.success(t("handoff.promptCopied")));
   };
   const opened = (text: string) =>
-    openHandoffDraft(navigate, { agentKey, cwd: null, prompt: text });
+    openHandoffDraft(navigate, {
+      agentKey,
+      cwd: null,
+      prompt: text,
+      ...(options.autoSend ? { autoSend: true } : {}),
+    });
   // A plain prompt acts at once, inside the click; a requested one when it arrives.
   const run = (agent: string | null, then: (text: string) => void) => {
     if (typeof prompt === "string") then(prompt);

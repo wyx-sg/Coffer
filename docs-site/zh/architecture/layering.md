@@ -61,8 +61,7 @@ flowchart TB
 | 禁止跨类型导入（每种类型一条） | 九条对称的契约：`mcp`、`agent`、`skill`、`knowledge`、`channel`、`chat`、`provider`、`memory`、`sync`，每条都禁止该领域的模块导入其他领域的模块。指名的例外只涉及纯领域词汇：`provider` 和 `memory` 可以读 `domain.agent`，`channel` 可以读 `domain.chat`。`domain.knowledge` 和 `infrastructure.knowledge` 是共享底层。 |
 | 与类型无关的核心不导入类型专属代码 | 资源服务及其范围、启停、删除、重命名、标题和类型辅助模块、仓库端口、调和器、关注列表和事件流、审计服务、保留期服务和 worker、内置工具注册表、Coffer 自己的引擎模块、领域层的资源、调和、范围和审计模块、共享的基础设施包、通用的依赖提供者和通用路由，都不能导入任何类型。获准的例外有两个：Alembic 的迁移环境（它把每种类型的 ORM 模型导入到同一份 metadata 里），以及一次性的保险库迁移（它要读遍每个领域才能搬数据）。 |
 | 引擎限定：markitdown | 只有消息渠道的附件提取器和知识上传转换器可以导入 `markitdown`（或 `docling`）。 |
-| 已弃用的引擎处处禁止 | `llama_index`、`mem0`、`chromadb`、`sentence_transformers`、`sqlite_vec` 和 `fastembed` 在任何地方都不能导入。Coffer 不做任何 embedding，要重新引入就必须有意地修改这条契约。 |
-| LangGraph 和 LangChain 限定在 infrastructure/llm | Coffer 自己的模型调用都走 `infrastructure/llm/`。领域层、应用层，以及对话、MCP、消息渠道、知识、持久化、密钥、守护进程和日志这些基础设施包，都不能导入 `langgraph` 或任何 `langchain*` 包；它们通过注入的端口接触模型。 |
+| 已弃用的引擎处处禁止 | `llama_index`、`mem0`、`chromadb`、`sentence_transformers`、`sqlite_vec`、`fastembed`、`langgraph` 和 `langchain*` 系列包在任何地方都不能导入。Coffer 不做任何 embedding，也不运行自己的对话模型（它唯一的模型调用是一次普通的 HTTP 语音转文字请求），要重新引入就必须有意地修改这条契约。 |
 | Claude Agent SDK 限定 | 领域层、应用层和其他基础设施包不能导入 `claude_agent_sdk`。它的归宿是 `infrastructure/chat`（智能体适配器）和 `infrastructure/agent`（读取已安装智能体的目录）。 |
 
 当两个类型确实需要同一段代码时，它会搬到层根目录下一个与类型无关的包或模块里：`infrastructure/net/`（SSRF 防护）、`infrastructure/agent_files/`（`agent` 和 `memory` 共用的智能体对话记录读取器），以及领域层根目录下一个小的 Hook 信任模块（`memory` 类型上报、`agent` 类型的 Hook 列表显示的 Hook 信任值）。其他所有跨类型的东西，都通过消费方类型声明、组合根满足的端口来传递。比如对话平台声明的模型目录端口，对话平台用它读取智能体类型的模型目录，而无需导入智能体类型。
@@ -87,8 +86,7 @@ flowchart TB
   C --> R["资源服务、审计、保留期"]
   R --> K["类型：agent 和 skill、provider、knowledge、memory、MCP"]
   K --> CH["对话平台"]
-  CH --> CU["整理轮次"]
-  CU --> CN["消息渠道类型和运行时"]
+  CH --> CN["消息渠道类型和运行时"]
   CN --> H["启动自愈和指南刷新"]
   H --> W["后台 worker"]
 ```
@@ -139,15 +137,15 @@ backend/coffer/
 │   ├── events/             # the change feed: numbered hints, replay buffer, attention watch
 │   ├── runtime/            # supervised background tasks, event-loop lag probe, correlation ids
 │   ├── secret/             # ref-to-secret resolver
-│   ├── engine/             # which model Coffer's own passes run on
+│   ├── engine/             # Coffer's own settings and speech-to-text resolution
 │   ├── fs/                 # browse, pick, open, editor
 │   ├── mcp/                # gateway, supervisor, discovery, search_tools
 │   ├── agent/              # agent services
 │   ├── skill/              # skill services, builtin-skill seed
-│   ├── knowledge/          # the write tool, curation, guide rendering
+│   ├── knowledge/          # the write tool, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # aggregate, distil, delivery, session-start context
+│   ├── memory/             # aggregate, mechanical distil, tidy hand-off, delivery, session-start context
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, history and restore, problems
@@ -161,7 +159,7 @@ backend/coffer/
 │   ├── platform/           # the only code that knows the host OS
 │   ├── logging/            # structlog setup, log files
 │   ├── media_retention.py  # age sweep for the two attachment media dirs
-│   ├── llm/                # LangChain models, completion, transcription
+│   ├── llm/                # speech-to-text over HTTP
 │   ├── agent_files/        # agent transcript readers shared by two kinds
 │   ├── mcp/                # upstream subprocess and HTTP clients
 │   ├── agent/              # agent config-file store

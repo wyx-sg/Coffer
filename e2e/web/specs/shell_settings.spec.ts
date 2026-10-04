@@ -91,7 +91,7 @@ acceptance(
     // first pinned to a card heading it renders itself, so a pane that failed
     // to mount can't satisfy the absence checks vacuously.
     const panes: [string, RegExp][] = [
-      ["general", /^Coffer's model$/], // GeneralSettings -> Coffer's model
+      ["general", /^Speech-to-text$/], // GeneralSettings -> Speech-to-text
       ["security", /^Encryption$/], // SecuritySettings
       ["data", /^Vault$/], // DataSettings
       ["daemon", /^Startup$/], // DaemonSettings
@@ -196,7 +196,10 @@ acceptance(
 
     // Language lives in Settings › General (the sidebar footer is one Settings row).
     await page.getByTestId("sidebar-settings").click();
-    await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "中文" }).click();
+    await page
+      .getByRole("group", { name: "Language" })
+      .getByRole("button", { name: "中文" })
+      .click();
     await page.keyboard.press("Escape");
 
     // Sidebar labels switch to Chinese within the same frame.

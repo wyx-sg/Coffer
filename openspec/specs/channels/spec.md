@@ -20,10 +20,9 @@ in its two children: [`channels/telegram`](telegram/spec.md) (the Bot API
 transport) and [`channels/seatalk`](seatalk/spec.md) (the SeaTalk websocket
 transport and SeaTalk's own message shapes). Watching and steering the same
 conversation from the browser is the Conversations page's, in spec `chat`. Channels
-route to **managed** agents (Claude Code, Codex, …) only: [Coffer's Model Is an
-Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)
-retired the built-in agent as a chat persona, so it is an internal `coffer__*`
-capability and not a channel target. There is no tool-approval flow on a channel
+route to **managed** agents (Claude Code, Codex, …) only: Coffer has no chat
+persona of its own ([Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md)), so
+there is no built-in agent to target. There is no tool-approval flow on a channel
 ([Managed Agents Run With Full Permissions](../../../docs/decisions/managed-agents-run-with-full-permissions.md)); owner
 pairing is the gate.
 

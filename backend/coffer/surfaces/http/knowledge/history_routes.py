@@ -1,16 +1,16 @@
 """``/api/v1/knowledge/history`` and ``/api/v1/knowledge/changes`` — a
-collection's history (spec knowledge "Keep every document's history and undo a
-pass as a whole", "Follow knowledge changes across collections", "Restore a
+collection's history (spec knowledge "Keep every
+document's history", "Follow edits across collections in one feed", "Restore a
 deleted collection or document from Recent changes").
 
 Also a collection's description (``PUT /collections/{uid}/description``): a
 person's recorded write like a restore, so it is served by the same service.
 
 Every accepted write to a collection is one commit naming its writer; these
-routes read that history back, restore one version of a document, and undo a
-curation pass as a whole. Documents are addressed by their knowledge-root-
-relative path, as on the file routes, and a change by its ``version`` (its
-commit id). Without git on the machine every route here answers 503
+routes read that history back and restore one version of a document.
+Documents are addressed by their knowledge-root-relative path, as on the
+file routes, and a change by its ``version`` (its commit id). Without git on
+the machine every route here answers 503
 ``KNOWLEDGE_HISTORY_UNAVAILABLE``; writes elsewhere keep working.
 """
 
@@ -23,7 +23,6 @@ from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.knowledge.dependencies import get_history_service
 from coffer.surfaces.http.knowledge.history_schemas import (
-    ChangeDetailOut,
     ChangeOut,
     ChangesOut,
     CollectionDescribeIn,
@@ -32,11 +31,9 @@ from coffer.surfaces.http.knowledge.history_schemas import (
     VersionDiffOut,
     VersionRestoreIn,
     change_out,
-    detail_out,
     history_out,
-    waiting_out,
 )
-from coffer.surfaces.http.knowledge.schemas import CollectionOut, FileOut
+from coffer.surfaces.http.knowledge.schemas import CollectionOut, FileOut, collection_out
 
 router = APIRouter(
     prefix="/api/v1/knowledge",
@@ -106,33 +103,12 @@ async def recent_changes(
     svc: KnowledgeHistoryService = Depends(get_history_service),  # noqa: B008
 ) -> ChangesOut:
     """Recent changes across every collection (or one, by its name), newest
-    first, with the items still waiting in each inbox."""
+    first."""
     page = await svc.changes(collection=collection, limit=limit, cursor=cursor)
     return ChangesOut(
         changes=[change_out(c) for c in page.changes],
-        waiting=[waiting_out(w) for w in page.waiting],
         next_cursor=page.next_cursor,
     )
-
-
-@router.get("/changes/{version}", response_model=ChangeDetailOut)
-async def change_detail(
-    version: str,
-    svc: KnowledgeHistoryService = Depends(get_history_service),  # noqa: B008
-) -> ChangeDetailOut:
-    """One change in full: every document it touched, with its diff."""
-    return detail_out(await svc.change(version))
-
-
-@router.post("/changes/{version}/undo", response_model=ChangeOut)
-async def undo_pass(
-    version: str,
-    svc: KnowledgeHistoryService = Depends(get_history_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> ChangeOut:
-    """Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
-    the document a later change would lose; nothing is written then."""
-    return change_out(await svc.undo(version, actor=actor))
 
 
 @router.post("/changes/{version}/restore", response_model=ChangeOut)
@@ -142,7 +118,7 @@ async def restore_deleted(
     actor: str = Depends(_actor),
 ) -> ChangeOut:
     """Put back what a delete removed — a document, or a whole collection with
-    its documents, README and waiting items — as one new change naming the user.
+    its documents and README — as one new change naming the user.
     409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
     the path or the name is taken again; nothing is written then."""
     return change_out(await svc.restore_deleted(version, actor=actor))
@@ -157,4 +133,4 @@ async def describe_collection(
 ) -> CollectionOut:
     """Rewrite the opening paragraph of the collection's README."""
     entry = await svc.describe(uid, body.description, actor=actor)
-    return CollectionOut.model_validate(entry, from_attributes=True)
+    return collection_out(entry)

@@ -34,7 +34,7 @@ class UnreadableMemory(CofferError):  # noqa: N818
 class NoteConflict(CofferError):  # noqa: N818
     """A note changed after the editor read it.
 
-    Spec memory "Edit a memory in the web UI or on disk". The save is refused
+    Spec memory "Edit a memory in the web UI or in an editor". The save is refused
     and the file left as it is: a distil pass or a person's own editor wrote it
     in between, and overwriting that silently would lose their change. The
     refusal carries the note as it is now, so the editor can recover without a

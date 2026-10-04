@@ -63,8 +63,8 @@ Gates act at request time, on every surface:
 - **MCP**: each builtin tool records its owning feature
   (`application/builtin_tools.py`). While it is off the tool is absent from
   `tools/list`, and a call to it answers exactly as a call to an unknown tool.
-- **Workers**: sync convergence, knowledge curation, memory aggregation and
-  distillation read the switch at the top of each round and skip it.
+- **Workers**: sync convergence, the knowledge sweep, memory aggregation and
+  distil read the switch at the top of each round and skip it.
 - **CLI**: groups stay registered; a `FEATURE_DISABLED` answer becomes one line
   naming `coffer config set feature.<key> on`.
 - **Web**: `/api/v1/daemon/status` carries `features`; a switched-off feature

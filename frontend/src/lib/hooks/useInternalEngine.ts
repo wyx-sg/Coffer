@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useInternalEngine.ts — TanStack Query bindings for the
-// global internal-engine model selection (spec provider-switching).
+// Coffer's own operating settings (spec internal-engine).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -15,37 +15,12 @@ export function useInternalEngineConfig() {
   });
 }
 
-/**
- * Whether Coffer's own model is set — what decides if knowledge curates items
- * and memory merges entries by meaning, or both take what arrives as it is.
- * `undefined` while the config is loading or unreadable, so a page shows
- * neither the curation controls nor the "set a model" line until it knows.
- */
-export function useCofferModelSet(): boolean | undefined {
-  const { data } = useInternalEngineConfig();
-  return data === undefined ? undefined : Boolean(data.model);
-}
-
-/** Set (or clear, with null) the model the internal engine runs on. */
-export function useSetInternalEngineModel() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (model: string | null) => internalEngineApi.setModel(model),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: internalEngineKey });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
 /** Change one unattended pass's switch or interval (spec internal-engine "Change one
  *  unattended pass per write").
  *
  *  One pass per call, and each half omitted unless it is being changed: the
- *  settings card toggles one row at a time, and a body carrying all three would
- *  make every toggle a chance to write back a stale copy of the other two. */
+ *  Memory page's popover toggles one row at a time, and a body carrying every
+ *  field would make each toggle a chance to write back a stale copy of the rest. */
 export function useSetUpkeep() {
   const qc = useQueryClient();
   const { t } = useTranslation();
@@ -68,50 +43,6 @@ export function useSetUpkeep() {
         // cannot say — the server reads this flag for it instead.
         use_default_interval: interval_s === null,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: internalEngineKey });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/**
- * Name the machine that runs the curation pass, or clear the name with `null`.
- *
- * Success toasts, which the settings mutations around it do not: this one is
- * about a machine OTHER than the one being read, and the surface it is driven
- * from cannot show the outcome on that machine. Taking curation over here
- * stops it there, and the confirmation is the only evidence of that.
- */
-export function useSetCurationOwner() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (machineId: string | null) => internalEngineApi.setCurationOwner(machineId),
-    onSuccess: (_config, machineId) => {
-      void qc.invalidateQueries({ queryKey: internalEngineKey });
-      toast.success(
-        machineId === null
-          ? t("knowledge.automatic.owner.clearedToast")
-          : t("knowledge.automatic.owner.claimedToast"),
-      );
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Bound one call to Coffer's own model; `null` returns it to the default.
- *
- *  A separate mutation from the model above for the reason `useSetUpkeep`
- *  records: one setting per request, so changing the bound cannot write back a
- *  stale copy of the model beside it. */
-export function useSetModelTimeout() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (seconds: number | null) => internalEngineApi.setModelTimeout(seconds),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: internalEngineKey });
     },

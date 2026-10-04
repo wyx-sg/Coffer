@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
-**Related**: [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
+**Related**: [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md); [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
 
 ## Context
 
@@ -56,30 +56,49 @@ neither built a search engine to do it:
 
 ## Options Considered
 
-### Option A — Read the agents' memory, distil it into Coffer's own notes, deliver them through hooks (chosen)
+### Option A — Read the agents' memory, turn each entry into a note, let the agent tidy, deliver through hooks (chosen)
 
 Coffer reads each registered agent's native memory read-only, keeps what it read
-verbatim in a hidden `.raw/`, and has its internal model distil it into notes of
-its own — one topic per file, partitioned by repository plus `global` — merging
-across agents by meaning. Delivery is by hook, at two moments (decided in
+verbatim in a hidden `.raw/`, and turns each entry into a note of its own — one
+topic per file, partitioned by repository plus `global` — mechanically, as the
+entry stands. Merging across agents by meaning is the person's agent's job: the
+**Tidy** button on a partition hands it the task, and the `coffer-guide` skill
+says how ([Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)).
+Delivery is by hook, at two moments (decided in
 the delivery ADR above): a session opens with the index of its repository's
 partition and `global`, bounded to what a hook can carry, plus the absolute
 path of the notes directory; each substantive prompt brings in up to three
 notes it names.
 
 - **Pros.** The agents keep the canonical copy, so nothing Coffer does can
-  corrupt a tool's memory. Distilling starts from the agents' finished work
-  (Codex's 16 entries, not its 284 raw bullets). A merge by meaning can match
-  two agents' differently-worded accounts of one lesson, which string comparison
-  never did. Delivery is the mechanism both agents already use for their own
+  corrupt a tool's memory. Notes start from the agents' finished work (Codex's
+  16 entries, not its 284 raw bullets). A merge by meaning, made by the person's
+  agent when asked, can match two agents' differently-worded accounts of one
+  lesson, which string comparison never did. No model connection is needed for
+  the layer to work. Delivery is the mechanism both agents already use for their own
   memory: an index in front of the model and bodies read as files.
-- **Cons.** A model call on every changed partition. Two readers coupled to two
+- **Cons.** Notes duplicate across agents until someone presses Tidy, and the
+  index is budgeted, so delivery truncates sooner. Two readers coupled to two
   undocumented private formats. A session's opening costs an index instead of
-  eight lines. A rebuild gives back equivalent notes, not identical wording.
+  eight lines. A rebuild gives back the mechanical notes, not a tidied tree.
 - **Why it wins.** It is the only option that keeps the prohibition below and
   still reaches the session with something the session uses. The principle
   it narrows is "pull, not push": Coffer never *writes* into an agent's own
   memory, but it does *deliver* its own notes through hooks the user installed.
+
+### Option A2 — Distil the entries with Coffer's own model on a timer
+
+The design this replaced. A two-stage pass, driven by a model Coffer called
+through its own connection, decided per entry whether to merge it into an
+existing note, open a new one, retire one or keep nothing.
+
+- **Pros.** The cross-agent merge happens with nobody asking.
+- **Cons.** A model connection to configure, with a mechanical fallback that
+  was the real behaviour on any machine without one. A weaker model than the
+  agent the person already uses, run where nobody watches. A model call on every
+  changed partition.
+- **Why it lost.** The judgement is better made by the person's own agent with
+  the person watching, on one click.
 
 ### Option B — Native projection (Coffer owns the store and writes into each agent)
 
@@ -150,7 +169,7 @@ Multi-term, fuzzy or embedding search behind `coffer__recall`.
 ## Decision
 
 **Coffer never writes an agent's native memory. It reads each registered agent's
-memory read-only, distils it into notes of its own — one topic per file, filed
+memory read-only, turns each entry into a note of its own — one topic per file, filed
 by repository — and delivers them through hooks: the index of that set plus
 the path to read the bodies as files at session start, then the notes a prompt
 names.**
@@ -160,21 +179,21 @@ names.**
    nothing there — not a file, not a format, not the agent's memory setting. It
    reads no transcripts or rollouts. Where a source states its own search terms,
    as Codex's summary does, those travel with the entry.
-2. **Two layers on disk, one writer each.** `.raw/` holds what was read,
-   verbatim, written only by aggregation; it is the distil pass's input, not
-   shown in the web UI nor readable through the partition file routes.
-   `notes/` holds Coffer's own writing,
-   written only by the distil pass. A bad distillation is re-run without
+2. **Two layers on disk.** `.raw/` holds what was read, verbatim, written only
+   by aggregation; it is the distil pass's input, not shown in the web UI nor
+   readable through the partition file routes. `notes/` holds the notes: the
+   distil pass writes them, and an agent or a person may edit them. A bad
+   tidy is repaired by deleting the derived tree and rebuilding it, without
    re-reading the agents.
-3. **The product is a distillation, not a copy.** A note is one topic, in
-   Coffer's words, accumulated across passes and agents. Matching is by meaning,
-   done by the internal model. The pass is incremental — new entries plus the
-   existing index, never the existing bodies — and may merge, open, retire or
-   keep nothing per entry. With no internal model configured each entry becomes
-   a note of its own and the index is written mechanically.
-4. **A retirement is written down.** `RETIRED.md` records what was retired, why
-   and what replaced it, and is input to the next pass. In a store whose sources
-   live outside it, an unrecorded deletion is undone by the next pass.
+3. **The distil pass is mechanical.** Each new raw entry becomes a note as it
+   stands, and the index is rendered. Matching by meaning is not Coffer's job:
+   the person's agent merges notes when the person presses Tidy, keeping each
+   merged note's `origins` so its entries stay accounted for.
+4. **A retirement is written down.** An agent retires a note by marking its
+   frontmatter `retired:`; the next distil pass records it in `RETIRED.md` with
+   its origin entry ids, the reason and what replaced it, and removes the file.
+   In a store whose sources live outside it, an unrecorded deletion is undone
+   by the next pass, and an agent cannot compute raw entry ids itself.
 5. **At session start the index, and the bodies are files.** A session
    opens with `global`'s index, the index of the current repository's
    partition — the conclusion written into each line — and the absolute path
@@ -201,7 +220,8 @@ names.**
 ## Consequences
 
 - **The cross-agent merge can happen.** It is a judgement about meaning, made
-  by a model, instead of a string comparison that never matched.
+  by the person's agent on request, instead of a string comparison that never
+  matched.
 - **Coffer stops re-importing raw material** its sources had already distilled.
 - **Nothing is left to fetch.** The delivered payload is an index the agent has
   been shown, and the notes a prompt names arrive unasked; the "8 lines and a
@@ -209,12 +229,12 @@ names.**
   nothing to go and fetch.
 - **A note is an ordinary Markdown file at a path**, read the way both agents
   read their own memory.
-- **"Delete and rebuild" is equivalent, not identical.** `.raw/` is
-  byte-reproducible and is what notes' provenance points at; the notes are a
-  distillation.
-- **The distil pass is the layer's cost.** A model call per changed partition;
-  the mechanical path keeps an installation without a connection working,
-  visibly worse.
+- **"Delete and rebuild" gives back the mechanical notes.** `.raw/` is
+  byte-reproducible and is what notes' provenance points at; the tidying an
+  agent did is not part of what is rebuilt.
+- **Duplicates wait for a Tidy.** The distil pass costs no model call, so the
+  layer works on any installation; the price is that notes from different
+  agents stay separate until the person presses Tidy.
 - **Two readers stay coupled to two private formats.** A format change must
   break one reader loudly and locally, not the layer.
 - **Every partition is served to every agent.** A partition has no per-agent
@@ -230,7 +250,7 @@ names.**
   to the sync remote ([Sync Withholds Derived Output](sync-withholds-derived-output.md)).
 - **Enforcement.** Spec memory "Never write an agent's native memory",
   spec memory "Read no transcripts or rollouts",
-  spec memory "Record provenance and merge by meaning",
+  spec memory "Distil each raw entry into a note mechanically",
   spec memory "Record retirements so they stick",
   spec memory "Deliver the index and the notes path at session start",
   spec memory "Deliver to channel turns through the system prompt",

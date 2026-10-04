@@ -1,11 +1,11 @@
 ---
 title: Memory
-description: How Coffer reads every agent's native memory without writing it, distils it into its own notes per repository, and hands them back at session start and at each prompt.
+description: How Coffer reads every agent's native memory without writing it, turns it into notes per repository, leaves the tidying to the agent, and hands the notes back at session start and at each prompt.
 ---
 
 # Memory
 
-This page explains how Coffer's memory layer works: how it reads what Claude Code and Codex have learned out of their own memory files, distils that into notes of its own, and hands the result back to every agent. It is written for engineers who want the mechanism and the reasoning behind it. For the task-oriented view, see the [Memory guide](/guides/memory).
+This page explains how Coffer's memory layer works: how it reads what Claude Code and Codex have learned out of their own memory files, turns that into notes of its own, has an agent tidy them on request, and hands the result back to every agent. It is written for engineers who want the mechanism and the reasoning behind it. For the task-oriented view, see the [Memory guide](/guides/memory).
 
 ## The problem
 
@@ -14,7 +14,7 @@ Every coding agent keeps its own memory, and none of them can see another's. Cla
 Coffer's answer has three parts:
 
 1. **Read** each agent's native memory, and never write to it.
-2. **Distil** what it read into notes of its own: one topic per file, filed by repository, plus one `global` partition for what is about you.
+2. **Distil** what it read into notes of its own: one note per entry, filed by repository, plus one `global` partition for what is about you. Merging notes about one subject and retiring ones that are no longer true is **tidying**, which your agent does when you press **Tidy**.
 3. **Deliver** those notes back to every agent at two moments: the index at session start, and the few notes a prompt names as it is sent. Every delivery names the absolute path of the note, and the agent reads a body the same way it reads its own memory: as a file.
 
 What Claude Code learns in the morning, Codex has in its index when it opens the same repository in the afternoon. Coffer does not write into Codex's memory to make that happen. It hands Codex the index line.
@@ -28,7 +28,7 @@ Memory is not [knowledge](/architecture/knowledge). Knowledge is what a person o
 Coffer reads native memory and never creates, modifies, moves, deletes or reformats a file in it. It also never disables or reconfigures an agent's native memory. There are two reasons for this:
 
 - **No agent's own loop is disturbed.** Each agent keeps managing its memory exactly as its vendor designed. Coffer never holds a second copy that could drift from the first, so nothing has to be reconciled.
-- **The whole store becomes disposable.** Everything under `~/.coffer/derived/memory/` is derived. You can delete it, and the next aggregation and distil passes rebuild an *equivalent* set of notes: the same subjects from the same sources, possibly in different words. That is what makes it safe for the distil pass to rewrite notes aggressively.
+- **The whole store becomes disposable.** Everything under `~/.coffer/derived/memory/` is derived. You can delete it, and the next aggregation and distil passes rebuild an *equivalent* set of notes: the same subjects from the same sources. Only what an agent or a person did to the notes afterwards (an edit, a merge, a retirement) is not reproduced.
 
 The one file Coffer does write into an agent's configuration is its hook entries in the agent's *settings*. That file is not memory, and Coffer writes the entries only when you connect the agent to Coffer (see [Delivery](#delivery)).
 
@@ -51,9 +51,9 @@ A partition is a top-level directory under `~/.coffer/derived/memory/`:
 | Path | Written by | Role |
 | --- | --- | --- |
 | `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. It is the distil pass's input only: the web UI does not list or read it. |
-| `notes/` | distil, and edits by people or agents | Useful. Coffer's own prose, one topic per file, with provenance naming every raw entry behind it. A person can edit a note in the web UI or on disk (see [Editing a note](#editing-a-note-and-judging-disagreement)). |
+| `notes/` | distil, and edits by people or agents | Useful. One note per file, with provenance naming every raw entry behind it. A person can edit a note in the web UI or on disk (see [Editing a note](#editing-a-note)), and an agent tidies them (see [Tidying](#tidying-is-the-agent-s-job)). |
 | `MEMORY.md` | distil only | Findable. One line per note, newest first (the same lines and order delivery uses). |
-| `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. |
+| `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. An agent never writes it; it marks a note and the pass records the retirement. |
 
 Because `.raw/` has exactly one writer and nothing else touches it, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code: exactly one module writes into `.raw/`, and the distil pass never uses it to write.
 
@@ -72,7 +72,7 @@ Three routes lead to `global`:
 
 - An entry whose type is `user` goes to `global` whichever repository it was learned in. It describes the person, not a project. A `feedback` entry has no route of its own: learned in a repository, it files into that repository's partition, because a standing instruction given there ("run the gates before pushing here") binds that repository, and filing it globally would hand it to every other project's sessions.
 - An entry with no working directory, or whose working directory is your home directory, goes to `global`.
-- An entry learned in a directory that is inside no repository goes to `global`'s `.raw/`. No partition is created for that directory. The distil pass then judges the entry on its merits and either keeps it in `global` or keeps nothing.
+- An entry learned in a directory that is inside no repository goes to `global`'s `.raw/`. No partition is created for that directory. The distil pass then makes it a note in `global`, like any other entry.
 
 Only aggregation creates partitions. The `memory` kind refuses the generic create route, and the memory service registers a new partition itself, through the resource lifecycle's opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
 
@@ -103,7 +103,7 @@ Splitting the two steps is what lets aggregation skip an unchanged file before p
 | --- | --- | --- |
 | Files read | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` and `memory_summary.md` |
 | One entry per | fact file | populated bullet section of a task group (`User preferences`, `Reusable knowledge`, `Failures and how to do differently`), plus the profile and profile preferences in the summary |
-| Title and description | frontmatter `name` and `description` | derived from the bullet; the distil pass rewrites it anyway |
+| Title and description | frontmatter `name` and `description` | derived from the bullet |
 | Type | `metadata.type` mapped to `feedback` / `project` / `user`; `reference` is skipped as knowledge rather than memory | group preferences → `user`; knowledge and failures → `project`; profile → `user` with an empty project root |
 | Project root | the `cwd` recorded in a sibling session transcript, falling back to decoding the project slug | the task group's `applies_to: cwd=…` line |
 | Search terms | none, because the format states none | from `## What's in Memory` in the summary, joined to task groups by conservative token coverage |
@@ -151,79 +151,73 @@ The `version` is the version of the filing rules. A digest says a source is unch
 
 A raw entry's file name is an origin key: the first 16 hex characters of a SHA-256 over `(agent, native_path, anchor)`. The anchor is the entry's position inside its source, such as the fact file's `name`, or a content hash for a Codex bullet. A second read of an unchanged source therefore overwrites the same files rather than adding near-duplicates. When the agent deletes a bullet from its own memory, the re-read no longer produces that entry, and the pass deletes the stale file from `.raw/`. When the agent deletes a whole source file, the file is never listed again, so the pass sweeps what an agent's deleted files once produced the same way, but only for a registered, enabled agent whose config directory is still there: an unmounted directory proves nothing about its files, and a disabled agent keeps what it contributed.
 
-Aggregation never compares two agents' entries. Two agents describing one lesson rarely share any phrasing, so a literal comparison would merge nothing. Merging by meaning is the distil pass's job.
+Aggregation never compares two agents' entries. Two agents describing one lesson rarely share any phrasing, so a literal comparison would merge nothing. Merging by meaning is tidying, which an agent does.
 
 ## The distil pass
 
-The distil pass turns a partition's new raw entries into notes and rewrites `MEMORY.md`. It runs on its own interval as an upkeep pass of the internal engine, not after each aggregation, and sweeps every partition that holds raw entries it has not yet distilled; a partition with nothing new costs no model call. The pass runs on the [internal engine](/guides/providers) connection when one is configured. It is incremental: no single model request ever carries all of a partition's note bodies.
+The distil pass turns a partition's new raw entries into notes and rewrites `MEMORY.md`. It is **mechanical**: it calls no model and sends no file content anywhere. It runs on its own interval as an upkeep pass, not after each aggregation, and sweeps every partition that holds raw entries it has not yet distilled; a partition with nothing new and nothing to retire costs nothing.
 
-Before anything is routed, the pass retires every note none of whose `origins` is still under `.raw/` (see [Notes whose sources are gone](#notes-whose-sources-are-gone)). An entry counts as new when its id appears neither in any note's provenance (`origins`) nor in any `RETIRED.md` record.
+An entry counts as new when its id appears neither in any note's provenance (`origins`) nor in any `RETIRED.md` record. For each partition the pass does four things, in order:
 
 ```mermaid
-sequenceDiagram
-  participant P as Distil pass
-  participant M as Internal model
-  participant FS as Partition files
-  P->>FS: retire notes whose .raw entries are all gone
-  P->>FS: list new .raw entries, index lines, RETIRED.md
-  loop batches of up to 20 new entries
-    P->>M: routing request (entries + index lines + retired titles)
-    M-->>P: merge / open / retire / drop per entry
-  end
-  loop each note the routing touched
-    P->>M: writing request (one note body + its routed entries)
-    M-->>P: rewritten note
-  end
-  P->>FS: write notes/, append RETIRED.md, delete retired files
-  P->>FS: always rewrite MEMORY.md
+flowchart TD
+  A["Retire notes whose raw entries are all gone"] --> B["Retire notes an agent marked retired"]
+  B --> C["Write one note per new raw entry"]
+  C --> D["Render MEMORY.md from the notes' frontmatter"]
 ```
 
-### Two stages
+1. **Retire notes whose sources are gone** (see [Notes whose sources are gone](#notes-whose-sources-are-gone)).
+2. **Retire notes an agent marked.** A note whose frontmatter carries `retired: <reason>` is recorded in `RETIRED.md`, deleted from `notes/`, and left out of the index (see [Retirements stick](#retirements-stick)).
+3. **Write a note for every new entry.** Each raw entry becomes one note of its own, as it stands: the entry's title, description, type, body, search terms and origin, with `created_at` and `updated_at`. A later entry on a topic a note already covers opens a note of its own beside it. Collapsing the two is tidying, which an agent does (see [Tidying is the agent's job](#tidying-is-the-agent-s-job)).
+4. **Render `MEMORY.md`** from the notes' frontmatter, on every path, including when nothing changed. Session-start delivery comes from the index, so a partition without one would deliver nothing.
 
-1. **Routing.** One request per batch of up to 20 new entries, each entry's text capped at 2,000 characters. The request carries the batch, the partition's **index lines**, and the titles in `RETIRED.md`, but no note body. For each entry the model answers with one of four actions:
-   - **merge** into a named existing note,
-   - **open** a new note (optionally joined by another entry in the same batch, which is how two agents' first accounts of one lesson become one note),
-   - **retire** a note the entry contradicts,
-   - **drop**: keep nothing.
-2. **Writing.** One request per note that the routing touched. It carries that note's current body and the entries routed to it, and returns the rewritten note.
-
-So a partition of 100 notes that gained three entries costs one routing request over 100 index lines and at most three small writing requests.
+The pass never writes under `.raw/`; the two passes own two directories, which is what lets a distil pass be re-run without reading the agents again. Each pass records a `memory_distilled` audit event with the counts of notes it `opened` and `retired`, and announces the partition on the daemon's event stream as a `memory` event, because notes change without any write to the partition's row.
 
 ### Retirements stick
 
-A retirement deletes the note's file from `notes/` and appends a record to `RETIRED.md`: the title, the reason, the replacing note if there is one, and the raw entry ids the record excludes. A drop is recorded the same way. This is the one mechanism that makes a deletion hold. The material behind a retired note still lives in the agent's own memory, outside Coffer's control, so the next aggregation reads it again. Without the record, the next distil pass would re-open the note.
+A retirement deletes the note's file from `notes/` and appends a record to `RETIRED.md`: the title, the reason, the replacing note if there is one, and the raw entry ids the record excludes. This is the one mechanism that makes a deletion hold. The material behind a retired note still lives in the agent's own memory, outside Coffer's control, so the next aggregation reads it again. Without the record, the next distil pass would open the note again.
+
+An agent cannot compute raw entry ids, so it does not write the record. It marks the note instead: `retired: <reason>` in the note's frontmatter, and optionally `replaced_by: <slug>`. The next distil pass reads the mark, copies the note's own `origins` into the record as the entry ids, deletes the file and re-renders the index. Merging two notes needs no mark: the survivor carries the merged note's `origins`, and an entry already in some note's `origins` is accounted for.
 
 ### Notes whose sources are gone
 
-Aggregation deletes a raw entry when its source stops producing it: the agent removed the fact from its own memory, or placement now files the entry into a different partition (a `feedback` entry that carries a project root, for example, moves from `global` to that project). A note built only from such entries has nothing left under it, so every distil pass, including the mechanical one, retires it first: the file leaves `notes/` and `RETIRED.md` gains a record with the reason and `sources_gone: true`. A note with at least one surviving origin is left alone.
+Aggregation deletes a raw entry when its source stops producing it: the agent removed the fact from its own memory, or placement now files the entry into a different partition (a `feedback` entry that carries a project root, for example, moves from `global` to that project). A note built only from such entries has nothing left under it, so every distil pass retires it first: the file leaves `notes/` and `RETIRED.md` gains a record with the reason and `sources_gone: true`. A note with at least one surviving origin is left alone, and so is a note that names no origin.
 
-This record is not an exclusion. It names no entry ids, and its title is not sent to routing among the retired subjects, because nobody judged the note untrue. If the material comes back, it is distilled like any new entry.
+This record is not an exclusion. It names no entry ids, because nobody judged the note untrue. If the material comes back, it is distilled like any new entry.
 
-### Editing a note and judging disagreement
+### Editing a note
 
-A person can edit a note: the web UI's **Edit** replaces the note's body and keeps its frontmatter, and editing the file under `notes/` in any editor needs nothing from Coffer. The web UI's save carries a fingerprint of the note as it was read. If the note changed since (distil rewrote it, or the file was edited on disk), the save is refused and the editor is handed the note as it is now, so nothing is overwritten and nothing is lost.
+A person can edit a note: the web UI's **Edit** replaces the note's body and keeps its frontmatter, and editing the file under `notes/` in any editor needs nothing from Coffer. The web UI's save carries a fingerprint of the note as it was read. If the note changed since (an agent merged or rewrote it, or the file was edited on disk), the save is refused and the editor is handed the note as it is now, so nothing is overwritten and nothing is lost.
 
-An edited note is the note, not a suggestion. It is the body the writing stage receives the next time an entry is routed to it, and a note routing leaves alone keeps the edited text exactly. It persists until newer material revises it, under one rule that applies to every writer:
-
-- When two statements disagree, the **newer one wins unless the older one is shown to be right**: by a source, a date, a command's output or the code.
-- **No writer is exempt.** The writing stage's instruction does not mark an edited body as untouchable, whether a person or an agent edited it. An edited note is not safe because of who wrote it, and an agent's entry is not suspect because of who wrote it.
-- **A superseded statement stays legible.** It is retired through `RETIRED.md` with the reason and the replacing note, or kept in the rewritten body with the date it changed. History and restore remain the way back if a pass gets it wrong.
+An edited note is the note, not a suggestion. The distil pass never rewrites an existing note's body, so the edit persists until the note is retired or the derived tree is deleted.
 
 A person can also delete a note. The web UI's **Delete…** asks first, then retires the note rather than only removing its file: it appends a `RETIRED.md` record with the reason `Deleted by hand` carrying the note's own origin entry ids, removes the file and re-renders `MEMORY.md`. The sources behind the note still live in the agent's own memory, so without the record the next distil pass would recreate it; with it, those entries count as accounted for. The deletion is audited as `memory_note_deleted` (actor: the user), and the memory then shows in the partition's read-only **Retired** group.
 
-The derived tree stays disposable. Deleting it and rebuilding reproduces the notes from the agents' own memory and loses every edit, which is why the guide says so.
-
-### Degrading safely
-
-- **No internal connection.** The pass falls back to a mechanical distil, which has no way to call a model at all. Each new entry becomes a note of its own, carrying the source's title, description, text, type and search terms, and the index is written from their frontmatter. The result is thinner, but it still works.
-- **Malformed model output.** An unknown slug, a non-JSON answer, or an action naming an entry outside the batch is logged and skipped. The affected entries stay in `.raw/` for the next pass. The pass never raises for bad output.
-- **`MEMORY.md` is written on every path**, including when nothing changed and when every model call failed. Session-start delivery comes from the index, so a partition without one would deliver nothing at session start.
-
-Each pass records a `memory_distilled` audit event with the counts `merged`, `opened`, `retired` and `dropped`, and `model_used`.
+The derived tree stays disposable. Deleting it and rebuilding reproduces the notes from the agents' own memory, one note per entry, and loses every edit, merge and retirement, which is why the guide says so.
 
 ### One pass per partition
 
 The interval worker and Update memory (the web UI's button, which runs aggregation and then distil) both claim the partition's **uid** in the shared upkeep-runs registry. Update memory reports a partition whose pass is already running under `skipped` and distils the rest. The worker skips a busy partition and returns to it on its next sweep. The registry lives in memory, one per daemon.
+
+## Tidying is the agent's job
+
+Two agents rarely phrase a lesson the same way, so a partition collects near-duplicates: one note per memory each agent wrote. Merging them is a judgement about meaning, and so is deciding that a note is no longer true. Coffer makes neither. The `coffer-guide` skill teaches the agent to do both, and a person starts it with one button. See the decision [Tidying Knowledge and Memory Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md).
+
+### What the guide teaches
+
+While the memory feature is on, the guide's memory section tells the agent to work through one partition at a time under the memory root, reading the partition's `MEMORY.md` and then the notes in full before changing them, and to:
+
+- **Merge** notes about the same subject. It rewrites the surviving note so it holds every fact of both, **appends every entry of the merged note's `origins:` list to the survivor's `origins:`**, unchanged, and deletes the merged file. The `origins` are how Coffer knows a memory is already accounted for: a dropped origin brings the merged note back on the next update.
+- **Retire** a note that is no longer true by adding `retired:` with the reason, and `replaced_by:` with the surviving note's file name when there is one. It does not delete the file, because the memory the note came from still lives in an agent's own memory and a deleted note would come back. The next distil pass records the retirement and removes the file.
+- Let the **newer statement win** where two notes disagree, unless the older one is shown to be right by a source, a date, a command's output or the code, whoever wrote either.
+- Keep one topic and a one-line `description` per note, because the index a session receives is built from it.
+- Leave `.raw/`, `MEMORY.md`, `RETIRED.md` and the agents' own memory files alone.
+
+### The Tidy hand-off
+
+The daemon writes the prompt. Reading a partition carries `tidy_handoff`, which names the partition, its absolute directory and the guide section to follow. `GET /api/v1/memory/tidy-handoff` returns one prompt for every partition: it names the memory root and each partition with its notes directory and note count, and asks the agent to tidy them one at a time.
+
+The web UI offers **Tidy** on a partition's page and **Tidy all** in the Memory page's header. Each opens a new conversation on the default managed agent with that prompt and sends it at once. With no managed agent available it offers **Copy prompt** only. Nothing tidies a partition unattended: the aggregate and distil timers keep running, but they never merge or retire a note on their own.
 
 ## The index line
 
@@ -278,7 +272,7 @@ The payload has two bounds:
 
 When a ceiling binds, the **current repository's lines are spent first** and `global` gets what is left. Within each section the oldest lines drop first, and a notice states how many were dropped and which directory holds them. A trim therefore still leaves every note reachable as a file. With nothing to deliver, the text is empty rather than a bare header.
 
-Composing a context sends nothing anywhere. Note content leaves the machine only through the distil pass's internal connection.
+Composing a context sends nothing anywhere. Coffer calls no model over memory on any path.
 
 ### At each prompt: lexical retrieval
 
@@ -423,16 +417,17 @@ Both passes run as background tasks that the daemon starts at boot:
 | Aggregation | immediately on start | 1 hour | `system:memory-aggregate-worker` |
 | Distil | after 60 s | 6 hours | `system:memory-distil-worker` |
 
-Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: the web UI's **Update memory** button aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
+Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the engine's upkeep settings (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: the web UI's **Update memory** button aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
 
 ## Trade-offs and alternatives
 
 - **Projecting a Coffer-owned store into each agent's memory.** This would give ambient loading for free, but only by writing, symlinking or disabling another tool's memory. That is intrusive, hard to understand, and fragile against vendor changes. Aggregation leaves each agent's loop untouched and pays for it with a hook.
-- **Storing the sources' words verbatim as the product.** This keeps quotes exact, but Codex's untitled bullets would become notes whose title, description and body were the same sentence. Coffer keeps verbatim text in `.raw/`, where provenance points at it, and writes the notes in its own words.
+- **Running a Coffer-owned model to merge and rewrite notes.** This merged duplicates before the person saw them, but it needed a separate model connection the person had to configure, ran unattended, and fell back to a mechanical path when none was set. The agent the person already uses does the same judgement with file tools, a stronger model and the person watching. Each raw entry becomes a note as it stands, and `.raw/` keeps the verbatim text beside it.
 - **A budgeted digest plus a search tool.** Agents do not call a tool to find something they have not been shown: Coffer's earlier recall tool was called five times in its life. Both supported hosts load an index and read a body as a file. Coffer copies that shape, and names the memory root so a note from another partition is one search away.
 - **The whole index at session start, untruncated.** In replay it reached the most needs, but 30–45 KB cannot pass through either agent's hook output, and even delivered in full, half the rules in context were ignored. Hence the bounded index plus retrieval.
 - **Embeddings for ranking.** Embeddings gained three points of recall for a 2.2 GB model. The ranker stays lexical until the eval set shows a replacement earns its cost.
-- **Literal de-duplication across agents.** Two agents never phrase a lesson the same way, so a literal comparison merges nothing. Merging is a judgement about meaning, made by the distil model.
+- **Literal de-duplication across agents.** Two agents never phrase a lesson the same way, so a literal comparison merges nothing. Merging is a judgement about meaning, made by the agent that tidies.
+- **Tidying on a timer.** An unattended agent run would need loop-proofing against Coffer's own hooks, would spend the person's quota without their knowledge and would leave conversations nobody started. Until someone presses Tidy, near-duplicate notes stay, the index is budgeted so delivery truncates sooner, and that is accepted: the person can see the duplicates and the button.
 - **Keying partitions on working directories.** This splits a repository across its worktrees, orphans partitions when directories disappear, and turns scratch folders into permanent partitions. Keying on the repository avoids all three.
 - **A third reader abstraction.** Two readers are written as two readers. A third agent gets an adapter against the existing reader and delivery-adapter contracts, not a capability matrix.
 
@@ -448,6 +443,6 @@ Both are on by default. They read the agents' files and write only the derived t
 
 ## Related
 
-- Spec: [memory](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)
-- Decision records: [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md), [Memory reaches a session at two moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)
+- Spec: [memory](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)
+- Decision records: [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md), [Memory reaches a session at two moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [Tidying Knowledge and Memory Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md)
 - [Memory guide](/guides/memory) · [Knowledge architecture](/architecture/knowledge) · [Vault sync](/architecture/vault-sync) · [MCP gateway](/architecture/mcp-gateway) · [Chat and turns](/architecture/chat)

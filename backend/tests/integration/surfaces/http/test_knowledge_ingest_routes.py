@@ -20,7 +20,7 @@ import pytest
 from coffer.domain.knowledge.converter import Conversion
 from coffer.infrastructure.knowledge.converters.registry import ConverterRegistry
 
-from .conftest import _create_collection, _hold_material
+from .conftest import _create_collection
 
 
 def _files_on_disk(tmp_path, collection: str = "shopee") -> list[str]:  # type: ignore[no-untyped-def]
@@ -42,7 +42,7 @@ def _files_on_disk(tmp_path, collection: str = "shopee") -> list[str]:  # type: 
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="an upload is converted and submitted as material, keeping neither file",
+    scenario="an upload is converted into a document, keeping no original",
 )
 def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
@@ -55,19 +55,18 @@ def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp
     assert resp.status_code == 201, resp.text
     doc = resp.json()
 
-    # No internal model in this app, so the converted text is promoted to a document
-    # on the spot ("Promote material directly when no model is configured"). A CSV,
-    # because a `.txt` or `.md` converts by passthrough and would not show that
-    # conversion happened.
+    # The converted text is promoted to a document on the spot ("Promote submitted
+    # material at once"). A CSV, because a `.txt` or `.md` converts by
+    # passthrough and would not show that conversion happened.
     assert doc["path"] == "shopee/team.md"
-    assert doc["pending"] is False
+    assert "pending" not in doc
     assert doc["converter"] == "csv"
     assert doc["title"] and doc["description"]
     assert "original_path" not in doc
 
     # Neither the original bytes nor a separate extracted file: the one file in the
-    # collection is the document the knowledge became ("Convert uploads into
-    # material without keeping them").
+    # collection is the document the knowledge became ("Convert uploads into documents
+    # without keeping the original").
     assert _files_on_disk(tmp_path) == ["team.md"]
 
     read = client.get("/api/v1/knowledge/file", params={"path": doc["path"]})
@@ -81,29 +80,8 @@ def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp
     assert "| session | account |" in file_out["body"]
 
 
-def test_an_upload_waits_in_the_inbox_when_a_pass_could_merge_it(  # type: ignore[no-untyped-def]
-    client, tmp_path, monkeypatch
-) -> None:
-    """With a model to merge it, the upload is material like any other: it
-    waits in the hidden inbox and the response says so rather than naming a
-    document that does not exist yet ("Submit every entrance's input as material")."""
-    _create_collection(client, "shopee")
-    _hold_material(monkeypatch)
-
-    resp = client.post(
-        "/api/v1/knowledge/upload",
-        data={"collection": "shopee"},
-        files={"file": ("notes.md", b"# Notes\n\nSome prose.\n")},
-    )
-    assert resp.status_code == 201, resp.text
-    doc = resp.json()
-    assert doc["path"] is None
-    assert doc["pending"] is True
-    assert _files_on_disk(tmp_path) == [".inbox/notes.md"]
-
-
 def test_an_upload_takes_no_folder(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Where knowledge lands is curation's call, not the uploader's: a
+    """Where knowledge lands is not the uploader's call: a
     ``folder`` field is not part of the form and is ignored if sent."""
     _create_collection(client, "shopee")
 
@@ -133,7 +111,7 @@ def test_upload_of_unsupported_type_is_refused_with_its_reason(client, tmp_path)
     assert body["error"]["code"] == "INGEST_REJECTED"
     assert body["error"]["details"]["reason"] == "unsupported_type"
     assert body["error"]["details"]["doc_type"] == "exe"
-    # And the collection is left with no file at all — not even in the inbox.
+    # And the collection is left with no file at all.
     assert _files_on_disk(tmp_path) == []
 
 

@@ -1,20 +1,15 @@
 """Acceptance scenarios for notes, the distil pass, the index and the read paths.
 
-Every test drives the real store under the per-test ``HOME``
-and the real distil pass; the internal connection is always a fake that either
-answers from a script or records what it was asked.
+Every test drives the real store under the per-test ``HOME`` and the real distil pass.
 """
 
 from __future__ import annotations
 
-import json
 import pathlib
-from typing import Any
 
 import pytest
 import yaml
 
-from coffer.application.memory import distil_routing, distil_write
 from coffer.application.memory.context import compose_context
 from coffer.application.memory.distil import distil_partition
 from coffer.application.memory.index import index_line
@@ -32,10 +27,7 @@ from coffer.infrastructure.memory import paths, raw_store, store
 from coffer.infrastructure.memory.paths import UnsafeMemoryPath
 from coffer.infrastructure.memory.raw_store import StoredRawEntry, write_raw_entry
 from tests.unit.memory.conftest import (
-    ExplodingCompletion,
     FakeResources,
-    NoModelSelector,
-    StubModelSelector,
     memory_service,
 )
 
@@ -107,53 +99,6 @@ def _existing_note(slug: str, body: str, *, stamp: str = "2025-01-01T00:00:00+00
     return note
 
 
-class _RecordingCompletion:
-    """Answers routing requests with ``routing`` and writing requests from
-    ``writes`` (keyed by the current note's title, ``""`` for a new note), and
-    records every request it was sent."""
-
-    def __init__(self, routing: str, writes: dict[str, str] | None = None) -> None:
-        self._routing = routing
-        self._writes = writes or {}
-        self.routing_calls: list[dict[str, Any]] = []
-        self.writing_calls: list[dict[str, Any]] = []
-
-    async def complete(
-        self,
-        *,
-        system: str,
-        user: str,
-        model: Any,
-        secret_resolver: Any,
-        timeout: float | None = None,
-    ) -> str:
-        payload = json.loads(user)
-        if system == distil_routing.ROUTING_SYSTEM:
-            self.routing_calls.append(payload)
-            return self._routing
-        assert system == distil_write.WRITE_SYSTEM
-        self.writing_calls.append(payload)
-        current = payload["current_note"]["title"]
-        if current in self._writes:
-            return self._writes[current]
-        entry = payload["new_entries"][0]
-        return json.dumps(
-            {
-                "title": current or entry["title"],
-                "description": f"rewritten: {entry['description']}",
-                "body": f"Coffer's own account of {entry['title']}.",
-            }
-        )
-
-
-def _snapshot(directory: pathlib.Path) -> dict[str, tuple[bytes, float]]:
-    return {
-        str(p.relative_to(directory)): (p.read_bytes(), p.stat().st_mtime)
-        for p in sorted(directory.rglob("*"))
-        if p.is_file()
-    }
-
-
 # --- Store each note as one Markdown file with frontmatter --------------------
 
 
@@ -168,7 +113,7 @@ async def test_a_distilled_note_carries_the_full_frontmatter_and_a_one_line_desc
         description="Dependencies are locked with uv.\nA plain pip install drifts.",
     )
 
-    await distil_partition(_PARTITION, completion=None, model_selector=NoModelSelector())
+    await distil_partition(_PARTITION)
 
     files = sorted(paths.notes_dir(_PARTITION).iterdir())
     assert len(files) == 1 and files[0].suffix == ".md"
@@ -188,38 +133,6 @@ async def test_a_distilled_note_carries_the_full_frontmatter_and_a_one_line_desc
     )
 
 
-# --- Write notes in Coffer's own words ----------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="memory", scenario="write the note body the distil model wrote")
-async def test_the_note_body_is_the_models_rewrite_and_the_raw_entry_keeps_its_words() -> None:
-    original = "the agent's own verbatim bullet about worktrees"
-    entry = _raw("Worktrees", original)
-    completion = _RecordingCompletion(
-        json.dumps(
-            {"actions": [{"entry": entry.entry_id, "action": "open", "title": "Worktrees"}]}
-        ),
-        writes={
-            "": json.dumps(
-                {
-                    "title": "Worktrees",
-                    "description": "Develop in a worktree",
-                    "body": "Coffer's rewording: always develop in a git worktree.",
-                }
-            )
-        },
-    )
-
-    await distil_partition(_PARTITION, completion=completion, model_selector=StubModelSelector())
-
-    (note,) = store.list_notes(_PARTITION)
-    assert note.body.strip() == "Coffer's rewording: always develop in a git worktree."
-    assert original not in note.body
-    assert raw_store.read_raw_entry(_PARTITION, entry.entry_id).entry.body == original
-    assert [o.key for o in note.origins] == [entry.entry_id]
-
-
 # --- Keep notes readable as plain files ---------------------------------------
 
 
@@ -227,7 +140,7 @@ async def test_the_note_body_is_the_models_rewrite_and_the_raw_entry_keeps_its_w
 @pytest.mark.acceptance(spec="memory", scenario="open a note from disk with no daemon running")
 async def test_a_distilled_note_reads_as_plain_markdown_straight_off_disk() -> None:
     _raw("Lockfile", "Run `uv sync --frozen`; a plain pip install drifts.", description="uv lock")
-    await distil_partition(_PARTITION, completion=None, model_selector=NoModelSelector())
+    await distil_partition(_PARTITION)
     (note_file,) = list(paths.notes_dir(_PARTITION).glob("*.md"))
 
     # Only pathlib and a YAML parser from here on — no Coffer code at all.
@@ -239,131 +152,6 @@ async def test_a_distilled_note_reads_as_plain_markdown_straight_off_disk() -> N
     assert frontmatter["title"] == "Lockfile"
     assert frontmatter["description"] == "uv lock"
     assert "Run `uv sync --frozen`; a plain pip install drifts." in body
-
-
-# --- Distil incrementally in two stages ---------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="route over the index and write only the touched notes"
-)
-async def test_routing_sees_index_lines_only_and_one_write_carries_one_body() -> None:
-    bodies = {
-        "daemon-restart": "BODY-daemon: restart with coffer daemon stop/start.",
-        "uv-lockfile": "BODY-uv: dependencies are locked with uv.",
-        "worktrees": "BODY-worktrees: always develop in a worktree.",
-    }
-    for slug, body in bodies.items():
-        _existing_note(slug, body)
-    entry = _raw("Frozen sync", "Use uv sync --frozen, never a bare sync.", anchor="frozen")
-    completion = _RecordingCompletion(
-        json.dumps(
-            {"actions": [{"entry": entry.entry_id, "action": "merge", "slug": "uv-lockfile"}]}
-        )
-    )
-
-    result = await distil_partition(
-        _PARTITION, completion=completion, model_selector=StubModelSelector()
-    )
-
-    assert result.merged == 1
-    (routing,) = completion.routing_calls
-    assert [e["id"] for e in routing["entries"]] == [entry.entry_id]
-    assert sorted(n["slug"] for n in routing["notes"]) == sorted(bodies)
-    for note in routing["notes"]:
-        assert set(note) == {"slug", "title", "description"}
-    routing_text = json.dumps(routing)
-    for body in bodies.values():
-        assert body not in routing_text
-
-    (writing,) = completion.writing_calls
-    assert writing["current_note"]["body"] == bodies["uv-lockfile"]
-    writing_text = json.dumps(writing)
-    assert bodies["daemon-restart"] not in writing_text
-    assert bodies["worktrees"] not in writing_text
-    assert [e["title"] for e in writing["new_entries"]] == ["Frozen sync"]
-
-
-# --- Keep distil out of the raw directory -------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="leave the raw directory byte-identical through a model-driven pass"
-)
-async def test_a_merge_an_open_and_a_retirement_leave_every_raw_file_untouched() -> None:
-    _existing_note("uv-lockfile", "locked with uv")
-    _existing_note("pip-install", "a plain pip install is fine")
-    merge = _raw("Frozen", "use --frozen", anchor="a-merge")
-    opened = _raw("Worktrees", "develop in a worktree", anchor="b-open")
-    retire = _raw("No pip", "never run pip install here", anchor="c-retire")
-    completion = _RecordingCompletion(
-        json.dumps(
-            {
-                "actions": [
-                    {"entry": merge.entry_id, "action": "merge", "slug": "uv-lockfile"},
-                    {"entry": opened.entry_id, "action": "open", "title": "Worktrees"},
-                    {
-                        "entry": retire.entry_id,
-                        "action": "retire",
-                        "slug": "pip-install",
-                        "reason": "pip install drifts",
-                    },
-                ]
-            }
-        )
-    )
-    raw_dir = paths.raw_dir(_PARTITION)
-    before = _snapshot(raw_dir)
-    # Three new entries plus the one each existing note was distilled from.
-    assert len(before) == 5
-
-    result = await distil_partition(
-        _PARTITION, completion=completion, model_selector=StubModelSelector()
-    )
-
-    # The pass really did all three things the scenario names.
-    assert (result.merged, result.opened, result.retired) == (1, 2, 1)
-    assert not paths.note_path(_PARTITION, "pip-install").exists()
-    assert _snapshot(raw_dir) == before
-    assert sorted(p.name for p in raw_dir.iterdir()) == sorted(pathlib.Path(k).name for k in before)
-
-
-# --- Record what each distil pass did -----------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "answer",
-    [
-        "Sure! Here is what I would do with these entries.",
-        '{"actions": "merge everything"}',
-        '["not", "an", "object"]',
-        '{"actions": [{"entry": "no-such-entry", "action": "merge", "slug": "nope"}]}',
-    ],
-)
-@pytest.mark.acceptance(
-    spec="memory", scenario="survive malformed routing output and still write the index"
-)
-async def test_a_malformed_routing_answer_proposes_nothing_and_the_index_survives(
-    answer: str,
-) -> None:
-    before = _existing_note("uv-lockfile", "locked with uv")
-    _raw("Frozen", "use --frozen", anchor="one")
-    _raw("Worktrees", "develop in a worktree", anchor="two")
-    completion = _RecordingCompletion(answer)
-
-    result = await distil_partition(
-        _PARTITION, completion=completion, model_selector=StubModelSelector()
-    )
-
-    assert len(completion.routing_calls) == 1
-    assert completion.writing_calls == []
-    assert (result.merged, result.opened, result.retired, result.dropped) == (0, 0, 0, 0)
-    assert store.list_notes(_PARTITION) == (before,)
-    assert paths.index_path(_PARTITION).is_file()
-    assert index_line(before) in paths.index_path(_PARTITION).read_text(encoding="utf-8")
 
 
 # --- Write each index line to stand on its own --------------------------------
@@ -383,7 +171,7 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
         partition="global",
         type=TYPE_USER,
     )
-    await distil_partition("global", completion=None, model_selector=NoModelSelector())
+    await distil_partition("global")
     _raw(
         "Daemon restart",
         "restart the daemon with stop/start",
@@ -392,7 +180,7 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
         type=TYPE_USER,
         search_terms=("coffer daemon", "port drift"),
     )
-    await distil_partition("global", completion=None, model_selector=NoModelSelector())
+    await distil_partition("global")
     # A third, newest, of another type: the two surfaces interleave types by recency.
     _raw(
         "Reply tersely",
@@ -401,7 +189,7 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
         partition="global",
         type=TYPE_FEEDBACK,
     )
-    await distil_partition("global", completion=None, model_selector=NoModelSelector())
+    await distil_partition("global")
 
     notes = {n.title: n for n in store.list_notes("global")}
     newest, newer, older = (
@@ -425,32 +213,6 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
     assert "look up" not in index_lines[2]
     assert context_lines == index_lines
     assert context_lines == [index_line(newest), index_line(newer), index_line(older)]
-
-
-# --- Send file content out only for distil -----------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="memory", scenario="compose context without calling any model")
-async def test_context_answers_while_the_internal_connection_would_fail() -> None:
-    """A distilled partition, an internal connection rigged to fail the test if
-    called: composing the session context answers, and never calls it."""
-    _raw("Lockfile", "dependencies are locked with uv", partition="global", type=TYPE_USER)
-    await distil_partition("global", completion=None, model_selector=NoModelSelector())
-    resources = FakeResources()
-    resources._row(kind=KIND_MEMORY, name="global", config={})
-
-    class _SelectorThatFails:
-        async def get_default(self) -> Any:
-            raise AssertionError("delivery must not reach the internal connection")
-
-    service = memory_service(
-        resources, {}, completion=ExplodingCompletion(), model_selector=_SelectorThatFails()
-    )
-
-    composed = await compose_context(service, cwd="")
-
-    assert "Lockfile" in composed.text
 
 
 # --- Confine reads to registered agents' memory paths -------------------------

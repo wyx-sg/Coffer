@@ -1,5 +1,5 @@
-"""``PUT /api/v1/memory/partitions/{uid}/notes/{slug}`` (spec memory "Edit a
-memory in the web UI or on disk").
+"""``PUT /api/v1/memory/partitions/{uid}/notes/{slug}`` (spec memory "Edit a memory in the web UI
+or in an editor").
 
 The whole app on a fake home with one distilled partition. A save replaces the
 body and keeps every frontmatter key; a save over a note that changed since is

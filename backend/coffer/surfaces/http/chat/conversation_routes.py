@@ -292,7 +292,7 @@ async def create_conversation(
     """Create a conversation for the named Coffer-managed agent.
 
     ``agent_key`` is required — chat has no built-in agent (ADR
-    coffer-model-is-an-internal-engine); ``agent_config`` is validated by that
+    chat-single-owner-live-mirror); ``agent_config`` is validated by that
     agent. An unknown agent or an invalid config is rejected with 400.
     """
     conv = await svc.create_conversation(agent_key=body.agent_key, agent_config=body.agent_config)

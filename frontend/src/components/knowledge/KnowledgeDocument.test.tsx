@@ -27,11 +27,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   getFile: vi.fn(),
   saveFile: vi.fn(),
   deleteFile: vi.fn(),
-  curateCollection: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getChange: vi.fn(),
-  undoPass: vi.fn(),
   getHistory: vi.fn(),
   getVersionDiff: vi.fn(),
   getVersionBody: vi.fn(),
@@ -39,8 +36,6 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
@@ -61,18 +56,28 @@ async function startEditing(text?: string) {
   if (text !== undefined) fireEvent.change(editor(), { target: { value: text } });
 }
 
-/** Edit, change the text, and have the save refused as stale by curation. */
+/** Edit, change the text, and have the save refused as stale because an agent changed the file. */
 async function refusedSave() {
   api.saveFile.mockRejectedValue(
     new ApiError("KNOWLEDGE_FILE_CONFLICT", "changed on disk", {
       saved: false,
-      current_body: "# Account Gateway\n\nCuration added a line.",
+      current_body: "# Account Gateway\n\nAn agent added a line.",
       current_fingerprint: "fp-new",
     }),
   );
   api.getHistory.mockResolvedValue({
     path: GATEWAY.path,
-    versions: [{ change: { ...PASS, time: "2026-10-03T14:05:00" }, removed: false }],
+    versions: [
+      {
+        change: {
+          ...PASS,
+          writer: "agent" as const,
+          operation: "save",
+          time: "2026-10-03T14:05:00",
+        },
+        removed: false,
+      },
+    ],
   });
   renderKnowledge(OPEN);
   await startEditing("My version.");
@@ -92,19 +97,16 @@ describe("the reader", () => {
     expect(screen.queryByText("On this page")).toBeNull();
     expect(screen.queryByText("Properties")).toBeNull();
     expect(screen.queryByText(/See what this pass changed/)).toBeNull();
-    const line = await screen.findByText(/Curated .* from 1 Codex inbox item/);
-    expect(line).toHaveTextContent(/Created Sep 12 by/);
-    expect(within(line).getByRole("link", { name: "See the pass" })).toHaveAttribute(
-      "href",
-      `/knowledge/changes/${PASS.version}`,
-    );
+    // The oldest version is an earlier curation pass: it keeps its label, and no pass is linked.
+    const line = await screen.findByText(/Created Sep 12 by Curation/);
+    expect(line).not.toHaveTextContent("Curated");
+    expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull();
   });
 
   test("leaves a part out when it has no data", async () => {
     renderKnowledge(OPEN);
     const created = await screen.findByText(/^Created Sep 12 by/);
     expect(created).not.toHaveTextContent("Curated");
-    expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull();
   });
 
   test("a file written on disk dates itself by its first version and names no writer", async () => {
@@ -134,7 +136,7 @@ describe("the reader", () => {
     expect(where).toHaveTextContent("gateway.md");
     expect(screen.getByRole("link", { name: "History" })).toHaveTextContent(/^History$/);
 
-    const preview = screen.getByRole("button", { name: "Preview" });
+    const preview = await screen.findByRole("button", { name: "Preview" });
     expect(preview).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Source" }));
     expect(screen.getByRole("button", { name: "Source" })).toHaveAttribute("aria-pressed", "true");
@@ -178,7 +180,7 @@ describe("delete a document", () => {
       operation: "delete",
       documents: [{ path: GATEWAY.path, status: "removed" as const, added: 0, removed: 3 }],
     };
-    api.listChanges.mockResolvedValue({ changes: [deletion], waiting: [], next_cursor: null });
+    api.listChanges.mockResolvedValue({ changes: [deletion], next_cursor: null });
     api.restoreDeleted.mockResolvedValue(deletion);
     await deleteIt();
     fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
@@ -211,8 +213,9 @@ describe("the editor", () => {
     // The old footer (Markdown · ⌘S save · esc cancel) is gone.
     expect(screen.queryByText("esc")).toBeNull();
     expect(screen.queryByText("Markdown")).toBeNull();
-    // Front matter is a read-only grid with its lock note.
-    expect(screen.getByText("Kept by curation")).toBeInTheDocument();
+    // Front matter is a read-only grid.
+    expect(screen.getByText("title")).toBeInTheDocument();
+    expect(screen.queryByText("Kept by curation")).toBeNull();
     expect(screen.queryByText(/Read-only here/)).toBeNull();
   });
 
@@ -274,9 +277,7 @@ describe("a refused save", () => {
   test("shows a banner naming who changed it, Compare / Copy my text / Reload…, and 'Not saved'", async () => {
     const alert = await refusedSave();
     expect(alert).toHaveTextContent("This document changed on disk while you were editing");
-    await waitFor(() =>
-      expect(alert).toHaveTextContent(/Curation added a point to gateway\.md at 14:05\./),
-    );
+    await waitFor(() => expect(alert).toHaveTextContent(/Codex changed gateway\.md at 14:05\./));
     expect(alert).toHaveTextContent("Your text isn’t saved yet.");
     expect(within(alert).getByRole("button", { name: "Compare" })).toBeInTheDocument();
     expect(within(alert).getByRole("button", { name: "Copy my text" })).toBeInTheDocument();
@@ -300,7 +301,7 @@ describe("a refused save", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByText("Which version to keep?")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Keep my edit/ })).toBeChecked();
-    expect(screen.getByText(/Curation · /)).toBeInTheDocument();
+    expect(screen.getByText(/Codex · /)).toBeInTheDocument();
     expect(screen.getByText(/keep your edit\.$/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
 

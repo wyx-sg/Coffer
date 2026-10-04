@@ -23,6 +23,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 
 class PartitionOut(BaseModel):
     """One partition, as the management surface lists it.
@@ -70,6 +72,9 @@ class PartitionOut(BaseModel):
     #: When the partition's newest memory was last updated; ``null`` when it
     #: holds none — the Overview's "Last update 14 min ago".
     updated_at: str | None = None
+    #: The prompt that hands this partition's tidying to the person's agent
+    #: (spec memory "Hand a partition's tidying to the agent").
+    tidy_handoff: HandoffOut
 
 
 class PartitionListOut(BaseModel):
@@ -127,8 +132,8 @@ class NoteListOut(BaseModel):
 class NoteOut(NoteSummaryOut):
     """One note, whole: Coffer's own text and the entries behind it.
 
-    ``body`` is Coffer's writing, not a quote of any source ("Write notes in
-    Coffer's own words") — the
+    ``body`` is Coffer's writing, not a quote of any source ("Distil each raw entry into a note
+    mechanically") — the
     sources are named in ``origins`` and kept verbatim under the partition's
     ``.raw/``, which is what keeps a paraphrase traceable.
     """

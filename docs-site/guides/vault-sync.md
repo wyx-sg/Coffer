@@ -102,7 +102,7 @@ Carry the file over a channel you trust (a password manager, `scp`, a USB stick)
 | --- | --- |
 | Definitions of MCP servers, skills, knowledge collections, providers and channels (`vault/resources/`) | Agents (`local/resources/agent/`): each machine registers its own |
 | Knowledge documents (`vault/knowledge/`), skill folders (`vault/skills/`) | **Reach**: each resource's enabled switch and agent scope (`local/reach.json`) |
-| MCP capability switches, channel pairings, Coffer's model and upkeep settings (`vault/state/`) | The sync remote, retention, the secret boundary's approvals (`local/`) |
+| MCP capability switches, channel pairings, the speech-to-text model and upkeep settings (`vault/state/`) | The sync remote, retention, the secret boundary's approvals (`local/`) |
 | Secret ciphertext (`vault/secret/`), with **Include encrypted secrets** | Memory, caches and the `coffer-guide` skill (`derived/`), which each machine rebuilds |
 | One descriptor per machine (`vault/machines/`) | Conversations, audit and invocation logs (`runs.db`), attachments (`content/`), logs, the master key |
 
@@ -110,7 +110,7 @@ Some consequences to know:
 
 - **Reach is set per machine.** A server that should run only on the desktop is registered everywhere but disabled on the laptop. A resource arriving on a machine for the first time takes that machine's default reach.
 - **A channel travels, but its adapter runs on one machine.** A chat bot can have only one consumer, so each channel names the machine that runs it. To move a bot, change the machine that runs it on the channel's page, from the machine that currently runs it. See [Channels](/guides/channels).
-- **Curation runs on one machine.** The pass that folds new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Once the vault spans several machines, choose it under **Curation runs on** in the Knowledge header's **Automatic** popover. See [Knowledge](/guides/knowledge).
+- **Nothing rewrites your documents unattended.** Tidying is done by an agent when you press **Tidy**, and the result syncs like any other edit. See [Knowledge](/guides/knowledge).
 - **The plugin inventory records, it does not install.** Each machine's descriptor lists its agents' plugins; nothing is written into any agent's configuration.
 - Paths under your home directory are stored against a `${HOME}` placeholder and expanded with each machine's own home.
 
@@ -204,7 +204,7 @@ For older states of a single file or folder, use the vault's own history: [Histo
 
 A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux), hashed before it is published, and survives reinstalling Coffer. Where no host identifier is readable, Coffer stores a generated id in `~/.coffer/machine-id`, which does not survive deleting `~/.coffer`. Renaming changes only a label. Retiring removes the machine's descriptor in a commit of yours and rewrites nothing else; a channel still bound to it runs nowhere until you bind it elsewhere. A retired machine that syncs again comes back.
 
-The **Machines** tab lists every machine with when it was last seen, its last round, its Coffer version and its agents. This Mac is tagged **This Mac**, and the machine that curates knowledge is tagged **Runs curation**. The row's menu renames this Mac (other Macs see the name after their next round) and retires any other one. Retiring runs at once, with no confirmation, and the toast that says so offers **Undo**, which registers the machine again exactly as it was. A machine can only rename itself, because each machine writes only its own descriptor.
+The **Machines** tab lists every machine with when it was last seen, its last round, its Coffer version and its agents. This Mac is tagged **This Mac**. The row's menu renames this Mac (other Macs see the name after their next round) and retires any other one. Retiring runs at once, with no confirmation, and the toast that says so offers **Undo**, which registers the machine again exactly as it was. A machine can only rename itself, because each machine writes only its own descriptor.
 
 ## Pause or stop syncing
 

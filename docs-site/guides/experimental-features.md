@@ -18,7 +18,7 @@ A stable release and a build from source behave the same way here: every experim
 | `sync` | Sync | Vault sync to your own git remote. |
 | `models` | Model providers | Model providers, the local model proxy and Usage, and the projection of connections into your agents' own config files. |
 
-Everything else is always on: the app shell, Overview, Agents, the MCP gateway and custom tools, Skills, Secrets, Activity, Settings, Conversations and Channels. The agent list and its model catalogue, Coffer's own model settings, the vault and an agent's own transcripts and memory files are not gated either.
+Everything else is always on: the app shell, Overview, Agents, the MCP gateway and custom tools, Skills, Secrets, Activity, Settings, Conversations and Channels. The agent list and its model catalogue, the speech-to-text settings, the vault and an agent's own transcripts and memory files are not gated either.
 
 ### How the features relate
 
@@ -26,10 +26,10 @@ No feature needs another. When one is off, the others keep working:
 
 | When this is off | What happens |
 | --- | --- |
-| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, curation skips. Memory is unaffected. |
+| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, the knowledge sweep skips. Memory is unaffected. |
 | `memory` | The Memory page and its API are gone, the handshake does not name the memory root, the memory hook is taken out of your agents (and put back when you switch it on), distil and aggregate skip, and channel turns carry no memory. Knowledge is unaffected. |
-| `sync` | The vault is single-machine for curation. |
-| `models` | The local proxy and Usage are gone, and Coffer's keys are taken out of your agents' own configs, so agents use their own login. Knowledge and memory keep working on the model connection already chosen for Coffer's engine. |
+| `sync` | Nothing else changes: the vault stays a single-machine vault. |
+| `models` | The local proxy and Usage are gone, and Coffer's keys are taken out of your agents' own configs, so agents use their own login. Knowledge and memory keep working, since neither calls a model. |
 
 ## Switch a feature on or off
 

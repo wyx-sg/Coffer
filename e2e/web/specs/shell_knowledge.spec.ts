@@ -7,11 +7,10 @@
 // Recent changes.
 //
 // Nothing auto-provisions a collection (spec knowledge "Create collections
-// only deliberately"), so a walk starts by making one. The e2e daemon runs
-// without Coffer's model, so a submitted item is written as a document on the
-// spot (`pending` false) and the page shows no Inbox and no Curate now — the
-// no-model line instead; the walk reads the upload's `pending` flag and asserts
-// whichever the daemon reported, so it holds in both configurations.
+// only deliberately"), so a walk starts by making one. A submitted item is
+// written as a document on the spot, so the tree lists it at once, with no
+// Inbox and no curation control; the page offers Tidy (or Copy prompt when no
+// managed agent is available) in place of them.
 //
 // No acceptance marker: the spec's viewer and editor scenarios are pinned by
 // the component tests, which assert the same actions far more precisely. What
@@ -45,8 +44,8 @@ async function createCollection(page: Page, name: string, description: string) {
   return (await res.json()) as { uid: string; name: string };
 }
 
-/** Submit an ITEM the way the page's Upload does (agents write a file into
- *  `.inbox/` instead). Where it lands is the layer's decision, never a caller's. */
+/** Submit a file the way the page's Upload does; it becomes a document at the
+ *  collection root. */
 async function submitItem(page: Page, collection: string, body: string) {
   const { base, headers } = api();
   const { "Content-Type": _json, ...multipartHeaders } = headers;
@@ -62,10 +61,7 @@ async function submitItem(page: Page, collection: string, body: string) {
     },
   });
   expect(res.ok()).toBe(true);
-  return (await res.json()) as {
-    pending: boolean;
-    path: string | null;
-  };
+  return (await res.json()) as { path: string };
 }
 
 test("a collection is one tree; a document is read, edited and shows up in its History", async ({
@@ -90,23 +86,15 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   await expect(page.getByTestId("scope-control")).toHaveCount(0);
   await expect(page.getByRole("searchbox")).toHaveCount(0);
 
-  if (submitted.pending) {
-    // Waiting in the Inbox: not a document yet.
-    await expect(tree.getByRole("button", { name: /Inbox/ })).toContainText(
-      "1",
-    );
-    return;
-  }
-
-  // Written on the spot (no model): a document in the tree, and one button
-  // leading to Settings › General stands where the Automatic control would be,
-  // instead of an Inbox.
+  // Written on the spot: a document in the tree, no Inbox, no curation control,
+  // and Tidy all (Copy prompt with no managed agent) in the header.
   await expect(
-    page.getByRole("button", { name: "Curation needs Coffer’s engine" }),
+    page.getByRole("button", { name: /^(Tidy all|Copy prompt)$/ }).first(),
   ).toBeVisible();
   await expect(tree.getByRole("button", { name: /^Inbox/ })).toHaveCount(0);
+  await expect(page.getByTestId("knowledge-automatic")).toHaveCount(0);
   // The tree names a document by its file, as it is on disk.
-  const fileName = (submitted.path ?? "").split("/").pop() ?? "";
+  const fileName = submitted.path.split("/").pop() ?? "";
   await tree.getByRole("button", { name: fileName, exact: true }).click();
   await expect(page).toHaveURL(/\?file=/);
   await expect(page.getByText("The first body.")).toBeVisible();
@@ -115,13 +103,14 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("textbox", { name: `Edit ${submitted.path}` });
   await expect(editor).toBeVisible();
-  await expect(page.getByText("Kept by curation")).toBeVisible();
   await editor.fill("The edited body.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("The edited body.")).toBeVisible();
   // The editor closes once the save lands; leaving before that would meet the
   // unsaved-edits prompt.
-  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
 
   // The save is a version naming you, in the document's History.
   await page.getByRole("link", { name: /^History/ }).click();
@@ -130,7 +119,9 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   );
   // One list of versions, newest first: the save on top, marked Current.
   const versions = page.getByRole("list", { name: "Versions" });
-  await expect(versions.getByRole("listitem").first()).toContainText("Edited in Coffer");
+  await expect(versions.getByRole("listitem").first()).toContainText(
+    "Edited in Coffer",
+  );
   await expect(
     page.getByRole("button", { name: /^You.*Current/ }),
   ).toBeVisible();

@@ -1,5 +1,5 @@
-"""Acceptance scenarios of the knowledge spec that the filesystem layer, the
-curation tools and the worker can observe on their own.
+"""Acceptance scenarios of the knowledge spec that the filesystem layer and the
+sweep can observe on their own.
 
 The knowledge root resolves from the fresh ``HOME`` every test gets
 (``backend/tests/conftest.py``), never the developer's real vault.
@@ -7,25 +7,18 @@ The knowledge root resolves from the fresh ``HOME`` every test gets
 
 from __future__ import annotations
 
-import asyncio
 import pathlib
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 
-from coffer.application.knowledge.curate import pending_items
-from coffer.application.knowledge.curate_tools import Counters, build_tools
-from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.guide_render import render_catalogue
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.intake import adopt_dropped_files
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge import catalogue, fs, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
@@ -139,18 +132,13 @@ def test_a_nested_document_is_listed_and_catalogued_where_it_was_filed(
     spec="knowledge", scenario="keep the README out of listings, counts and curation"
 )
 def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
-    document = fs.write_file(
-        directory="shopee", title="Gateway", description="d", body="b", curated=True
-    ).path
-    # Edited after creation, so its mtime is newer than anything — a sweep that
-    # treated it as a document would owe it a pass.
+    document = fs.write_file(directory="shopee", title="Gateway", description="d", body="b").path
     paths.readme_path("shopee").write_text("# shopee\n\nEdited later.\n", encoding="utf-8")
 
     level = catalogue.list_level("shopee")
     assert [f.path for f in level.files] == [document]
     [entry] = catalogue.list_collections()
     assert entry.document_count == 1
-    assert pending_items("shopee") == ()
 
 
 # ----- presented as files --------------------------------------------------
@@ -160,7 +148,7 @@ def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
     spec="knowledge", scenario="the guide hands over files to read with the agent's own tools"
 )
 def test_the_catalogue_says_read_the_files_with_your_own_tool(root: pathlib.Path) -> None:
-    fs.write_file(directory="shopee", title="Gateway", description="d", body="b", curated=True)
+    fs.write_file(directory="shopee", title="Gateway", description="d", body="b")
     catalogue_ = [
         (entry, catalogue.walk_files(paths.collection_dir(entry.name)))
         for entry in catalogue.list_collections()
@@ -222,192 +210,3 @@ async def test_an_upload_with_no_heading_is_titled_from_its_file_name(
     frontmatter, _ = split_frontmatter((root / result.path).read_text(encoding="utf-8"))
     assert frontmatter["title"] == "release-notes"
     assert frontmatter["description"] == "The release ships the new gateway on Monday."
-
-
-# ----- curation ------------------------------------------------------------
-
-
-def _tools(collection: str) -> dict[str, Any]:
-    tools = build_tools(
-        service=_service("shopee", "personal"),
-        collection=collection,
-        actor="system",
-        counters=Counters(),
-    )
-    return {tool.name: tool for tool in tools}
-
-
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="hand a pass exactly four tools over one collection"
-)
-@pytest.mark.anyio
-async def test_a_pass_gets_four_tools_fenced_to_its_collection(root: pathlib.Path) -> None:
-    fs.create_collection_dir("personal")
-    fs.write_file(directory="shopee", title="Mine", description="d", body="b", curated=True)
-    fs.write_file(directory="personal", title="Other", description="d", body="b", curated=True)
-    before = _files_under(root / "personal")
-
-    tools = _tools("shopee")
-    assert set(tools) == {"list_documents", "read_document", "write_document", "retire_document"}
-
-    answer = await tools["write_document"].handler(
-        {"path": "personal/intruder.md", "title": "t", "description": "d", "body": "b"}
-    )
-    assert "error" in answer
-    assert _files_under(root / "personal") == before
-
-
-def _held_worker(lock: asyncio.Lock, curated: list[Any]) -> CurationWorker:
-    async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
-        curated.append(item)
-        return {"status": "curated"}
-
-    async def enabled() -> bool:
-        return True
-
-    async def collections() -> list[str]:
-        return ["uid-1"]
-
-    return CurationWorker(
-        service=_service("shopee"),
-        curate=curate,
-        deliver=None,
-        is_enabled=enabled,
-        list_collections=collections,
-        lock=lock,
-        runs=UpkeepRunRegistry(),
-    )
-
-
-@pytest.mark.acceptance(spec="knowledge", scenario="wait for the vault lock before sweeping")
-@pytest.mark.anyio
-async def test_the_sweep_waits_for_a_converge_round_to_release_the_lock(
-    root: pathlib.Path,
-) -> None:
-    inbox.submit_material("shopee", title="Waiting", description="d", body="b", actor="agent")
-    asking = asyncio.Event()
-
-    class _WatchedLock(asyncio.Lock):
-        async def acquire(self) -> bool:
-            # Set only when the sweep has reached the lock, so "it waited" is
-            # observed rather than assumed from a sleep (the work before the
-            # lock runs in threads and takes as long as the machine is busy).
-            asking.set()
-            return await super().acquire()
-
-    lock = _WatchedLock()
-    curated: list[Any] = []
-    worker = _held_worker(lock, curated)
-
-    await super(_WatchedLock, lock).acquire()  # a converge round is writing the vault
-    tick = asyncio.create_task(worker.run_once())
-    await asyncio.wait_for(asking.wait(), timeout=60)
-    await asyncio.sleep(0)
-    assert curated == []
-    assert not tick.done()
-
-    lock.release()
-    await asyncio.wait_for(tick, timeout=60)
-    assert len(curated) == 1
-    assert curated[0].material == "waiting.md"
-
-
-@pytest.mark.acceptance(spec="vault-sync", scenario="curation runs only on its owner machine")
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="curate only where the owner machine is this one"
-)
-def test_curation_runs_only_on_the_owner_machine() -> None:
-    now = datetime.now(tz=UTC)
-    default = GlobalInternalEngineConfig(model=None, updated_at=now)
-    assert default.auto_curate_enabled is True
-
-    elsewhere = GlobalInternalEngineConfig(
-        model=None, updated_at=now, curate_owner_machine_id="machine-b"
-    )
-    here = GlobalInternalEngineConfig(
-        model=None, updated_at=now, curate_owner_machine_id="machine-a"
-    )
-    assert elsewhere.curate_runs_on("machine-a") is False
-    assert here.curate_runs_on("machine-a") is True
-    # A single-machine vault never named an owner, and curates where it is.
-    assert default.curate_runs_on("machine-a") is True
-
-
-@pytest.mark.anyio
-async def test_a_truncated_item_neither_stops_the_sweep_nor_is_retried_within_it(
-    root: pathlib.Path,
-) -> None:
-    # A pass cut off by the recursion limit leaves its item pending (spec
-    # knowledge "Settle an item only after its pass completes"). The sweep
-    # moves on to the next item rather than stopping — the item that truncated
-    # is first in line every sweep, so stopping on it would starve the rest —
-    # and does not hand the same item back to a second pass in this sweep.
-    inbox.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
-    inbox.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
-    curated: list[Any] = []
-
-    async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
-        curated.append(item.material)
-        return {"status": "truncated" if item.material == "huge.md" else "ok"}
-
-    async def enabled() -> bool:
-        return True
-
-    async def collections() -> list[str]:
-        return ["uid-1"]
-
-    worker = CurationWorker(
-        service=_service("shopee"),
-        curate=curate,
-        deliver=None,
-        is_enabled=enabled,
-        list_collections=collections,
-        runs=UpkeepRunRegistry(),
-    )
-    await worker.run_once()
-
-    assert curated == ["huge.md", "small.md"]
-
-
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="a pass cut off by the recursion limit reports it and leaves its item owed",
-)
-@pytest.mark.anyio
-async def test_an_item_cut_off_last_sweep_goes_behind_the_rest_of_the_inbox(
-    root: pathlib.Path,
-) -> None:
-    # With one pass a sweep, an item cut off every time would otherwise be
-    # first in line every sweep and the rest of the inbox would never be
-    # reached until it was given up on.
-    inbox.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
-    inbox.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
-    curated: list[Any] = []
-
-    async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
-        curated.append(item.material)
-        if item.material == "huge.md":
-            return {"status": "truncated", "gave_up": False}
-        inbox.discard_material("shopee", item.material)
-        return {"status": "ok"}
-
-    async def enabled() -> bool:
-        return True
-
-    async def collections() -> list[str]:
-        return ["uid-1"]
-
-    worker = CurationWorker(
-        service=_service("shopee"),
-        curate=curate,
-        deliver=None,
-        is_enabled=enabled,
-        list_collections=collections,
-        runs=UpkeepRunRegistry(),
-        max_passes_per_sweep=1,
-    )
-    await worker.run_once()
-    await worker.run_once()
-    await worker.run_once()
-
-    assert curated == ["huge.md", "small.md", "huge.md"]

@@ -257,29 +257,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/providers/{uid}/internal-default": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Internal Default Provider
-         * @description Make this connection Coffer's internal-engine default (≤1 globally).
-         *
-         *     Clears the flag on every other connection first, so setting a new default
-         *     moves it off the previous one. 404 if the connection is absent.
-         */
-        post: operations["set_internal_default_provider_api_v1_providers__uid__internal_default_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/providers/{uid}/prices": {
         parameters: {
             query?: never;
@@ -316,11 +293,10 @@ export interface paths {
          * Set Transcribe Default Provider
          * @description Make this connection the one Coffer transcribes speech on (≤1 globally).
          *
-         *     The twin of the route above, and deliberately a SECOND flag rather than a
-         *     reuse of it: the two are different models, and a chat gateway commonly
-         *     serves no ``/audio/transcriptions`` at all. Nothing falls back between
-         *     them — with no connection marked here, Coffer transcribes nothing and hands
-         *     the agent the audio file untouched. 404 if the connection is absent.
+         *     A chat gateway commonly serves no ``/audio/transcriptions`` at all, so
+         *     nothing falls back: with no connection marked here, Coffer transcribes
+         *     nothing and hands the agent the audio file untouched. Clears the flag on
+         *     every other connection first. 404 if the connection is absent.
          */
         post: operations["set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post"];
         delete?: never;
@@ -805,8 +781,7 @@ export interface components {
          *     to every agent, including one registered tomorrow — and the user narrows
          *     from there; ``unknown`` means the probe was inconclusive, and the
          *     conservative answer to that is "ask", not "guess". ``ollama`` is
-         *     internal-only: it starts scoped to NO agent and is used solely by Coffer's
-         *     internal LLM engine.
+         *     internal-only: it starts scoped to NO agent.
          * @enum {string}
          */
         Protocol: "anthropic" | "openai" | "ollama" | "unknown";
@@ -907,11 +882,9 @@ export interface components {
          *     curated set of models this connection offers to every downstream picker, each
          *     carrying its modality; EMPTY means no restriction — the endpoint's whole
          *     catalogue. A picker takes the entries of the modality it serves, so a chat
-         *     dropdown never offers an embedding or image model. ``internal_default``
-         *     marks the connection Coffer's internal engine uses (at most one globally),
-         *     ``transcribe_default`` the one it transcribes speech on — a separate flag
-         *     because they are separate models and neither falls back to the other. A
-         *     connection may carry either, both or neither. Which agents run on it is not a
+         *     dropdown never offers an embedding or image model. ``transcribe_default``
+         *     marks the one connection Coffer transcribes speech on (at most one
+         *     globally). Which agents run on it is not a
          *     field here: it is each agent's ``connection_uid``.
          *
          *     ``uid`` is the connection's identity and what every route here takes; the
@@ -936,8 +909,6 @@ export interface components {
             description: string | null;
             /** Enabled */
             enabled: boolean;
-            /** Internal Default */
-            internal_default: boolean;
             local_runtime: components["schemas"]["LocalRuntime"] | null;
             /** Models */
             models: components["schemas"]["ProviderModel"][];
@@ -1847,49 +1818,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderDeletePreviewOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    set_internal_default_provider_api_v1_providers__uid__internal_default_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

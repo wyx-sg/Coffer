@@ -1,5 +1,5 @@
-"""A partition's four files, and the one-writer-per-directory split (see "Keep
-distil out of the raw directory").
+"""A partition's four files, and the one-writer-per-directory split (see "Leave the raw directory
+to aggregation").
 
 The memory root resolves from the fresh ``HOME`` the suite-wide
 ``_real_home_guard`` fixture gives every test (``backend/tests/conftest.py``),
@@ -8,8 +8,8 @@ developer's real memory tree.
 
 This file covers the three ``store.py`` owns — ``notes/``, ``RETIRED.md`` and
 ``MEMORY.md``. ``.raw/`` is a module of its own (``raw_store.py``) and is
-tested in ``test_raw_store.py``, which is the split that makes "Keep distil out
-of the raw directory" checkable by reading an import list: the one directory
+tested in ``test_raw_store.py``, which is the split that makes "Leave the raw directory to
+aggregation" checkable by reading an import list: the one directory
 only aggregation may write is the one module only aggregation imports.
 
 What this file is really about is that **``RETIRED.md`` round-trips

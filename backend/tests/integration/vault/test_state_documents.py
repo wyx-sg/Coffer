@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
-from coffer.domain.internal_engine_config import CURATE, UpkeepSetting
+from coffer.domain.internal_engine_config import DISTIL, UpkeepSetting
 from coffer.domain.resource import Kind
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
@@ -127,13 +127,13 @@ async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
 async def test_engine_settings_are_one_vault_document_and_absent_means_defaults() -> None:
     repo = VaultInternalEngineConfigRepo()
     assert await repo.get() is None
-    await repo.set(model="m1", upkeep={CURATE: UpkeepSetting(enabled=False, interval_s=60)})
-    await repo.set_model_timeout(30)
+    await repo.set(upkeep={DISTIL: UpkeepSetting(enabled=False, interval_s=60)})
+    await repo.set_transcribe_model("hears")
     got = await repo.get()
-    assert got is not None and got.model == "m1" and got.model_timeout_s == 30
-    assert got.auto_curate_enabled is False and got.curate_interval_s == 60
+    assert got is not None and got.transcribe_model == "hears"
+    assert got.auto_distil_enabled is False and got.distil_interval_s == 60
     doc = json.loads((vault_root() / "state/settings/internal-engine.json").read_text())
-    assert doc["model"] == "m1" and "updated_at" not in doc
+    assert doc["transcribe_model"] == "hears" and "updated_at" not in doc
     assert "updated_at" in json.loads((local_root() / "engine.json").read_text())
     # A key a newer build wrote survives this build's write.
     path = vault_root() / "state/settings/internal-engine.json"

@@ -69,7 +69,6 @@ def _catalogue() -> guide_render.Catalogue:
                 name="coffer",
                 description="The Coffer project's own knowledge. Notes an agent wrote.",
                 document_count=2,
-                pending_count=2,
             ),
             [
                 FileEntry(
@@ -94,7 +93,6 @@ def _catalogue() -> guide_render.Catalogue:
                 name="scratch",
                 description="",
                 document_count=0,
-                pending_count=1,
             ),
             [],
         ),

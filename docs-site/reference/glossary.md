@@ -1,6 +1,6 @@
 ---
 title: Glossary
-description: Definitions of the terms Coffer uses, from reach and kind to sync round and curation pass, each linked to the page that explains it.
+description: Definitions of the terms Coffer uses, from reach and kind to sync round and tidy, each linked to the page that explains it.
 outline: 2
 pageClass: glossary
 ---
@@ -88,7 +88,7 @@ receive notifications when you are away from the machine. A channel is a
 ### Collection
 
 One knowledge tree: a directory of Markdown documents under
-`~/.coffer/vault/knowledge/<collection>/`, written together by you and Coffer. A collection is a
+`~/.coffer/vault/knowledge/<collection>/`, written by you and your agents. A collection is a
 [resource](#resource) of kind `knowledge`. See [Knowledge](/guides/knowledge).
 
 ### `coffer-guide`
@@ -111,20 +111,6 @@ the command, which is the child's parent. See [Secrets](/guides/secrets#run-a-co
 A model-provider profile: a wire protocol, a base URL and one secret. Switching a
 connection on for an agent [projects](#projection) it into that agent's config. A connection
 is a [resource](#resource) of kind `provider`. See [Model providers](/guides/providers).
-
-### Curation owner
-
-The one machine allowed to run the [curation pass](#curation-pass) automatically, so two
-synced machines never rewrite the same collection at once. Set with
-**Curation runs on** in the **Automatic** popover of the Knowledge page header. See [Knowledge](/architecture/knowledge#the-owner-machine).
-
-### Curation pass
-
-A bounded rewrite of one [collection](#collection) by the [internal engine](#internal-engine):
-it takes one pending item (new [material](#material) from the [inbox](#inbox), or a document
-edited since it was last curated), folds it into the collection's documents, and writes at
-most eight files. It runs on a timer and on demand. See
-[Knowledge](/architecture/knowledge#the-curation-pass).
 
 ## D
 
@@ -172,8 +158,10 @@ daemon if none answers, under a lock so two clients never start two daemons. See
 
 ### Distil pass
 
-The [upkeep pass](#upkeep-pass) that turns a [partition's](#partition) [raw entries](#raw-entry)
-into [notes](#note) and rewrites its index, `MEMORY.md`. See [Memory](/architecture/memory#the-distil-pass).
+The [upkeep pass](#upkeep-pass) that turns each new [raw entry](#raw-entry) of a
+[partition](#partition) into a [note](#note) as it stands, renders the partition's index,
+`MEMORY.md`, and removes any note an agent has marked `retired:` (recording it in `RETIRED.md`).
+It calls no model. See [Memory](/architecture/memory#the-distil-pass).
 
 ## E
 
@@ -189,16 +177,9 @@ tool list, and its UI looks absent; its data is kept. See [Experimental features
 
 ### Inbox
 
-A collection's hidden `.inbox/` directory, where new [material](#material) waits for the
-[curation pass](#curation-pass). It is the one hidden directory Coffer writes inside a
-collection. See [Knowledge](/architecture/knowledge).
-
-### Internal engine
-
-Coffer's own use of a language model, for its [upkeep passes](#upkeep-pass): curating
-knowledge and distilling memory. It runs on the [connection](#connection) you mark as the
-internal-engine default. Without one, curation files new knowledge as it stands and the
-distil pass turns each raw entry into a note of its own. See [Model providers](/guides/providers).
+A collection's hidden `.inbox/` directory, a drop zone: a file an agent or another machine
+leaves there is adopted and promoted to a document by the next [sweep](#upkeep-pass). See
+[Knowledge](/architecture/knowledge).
 
 ### Invocation log
 
@@ -248,9 +229,8 @@ machine from **Settings › Security › Import a master key**. See [Secret stor
 
 ### Material
 
-New knowledge submitted to a collection: a Markdown file an agent writes into the
-[inbox](#inbox), an upload or a channel. Material waits in the [inbox](#inbox) until the
-[curation pass](#curation-pass) folds it into the documents. See
+New knowledge submitted to a collection: an upload, or a file left in the
+[inbox](#inbox). It becomes a document as it stands, at once. See
 [Knowledge](/guides/knowledge).
 
 ### MCP gateway
@@ -422,6 +402,15 @@ an [approval](#approval): a stdio server's full command line with its working di
 other environment, an HTTP server's URL, a git remote's URL, a channel's bot or app. Changing
 the target asks again. See [Secrets](/guides/secrets#approvals).
 
+### Tidy
+
+The button on a knowledge [collection](#collection) or a memory [partition](#partition) (and
+**Tidy all** on the list page) that opens a new conversation with your default managed agent
+and sends it a prompt to merge, split and correct what is there, following the `coffer-guide`
+skill. When no managed agent is available, it offers the prompt to copy. Coffer does the
+tidying through your agent, never on its own. See [Knowledge](/guides/knowledge) and
+[Memory](/guides/memory).
+
 ### Tiering
 
 The gateway's listing budget: when upstream tools outnumber it, `tools/list` carries the
@@ -464,8 +453,10 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 
 ### Upkeep pass
 
-Work Coffer does on a timer, without being asked: `aggregate` and `distil` for memory,
-`curate` for knowledge. Each can be switched off or retimed from the **Automatic** control on the Knowledge and Memory pages.
+Mechanical work Coffer does on a timer, without being asked: `aggregate` and `distil` for
+memory, and the sweep for knowledge (re-render the guide, adopt files left in the
+[inbox](#inbox), commit edits made on disk). None of them calls a model. Each can be switched
+off or retimed from the **Automatic** control on the Knowledge and Memory pages.
 See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/architecture/knowledge#the-sweep).
 
 ## V
@@ -496,5 +487,5 @@ The API protocol a [connection](#connection) speaks: `anthropic`, `openai`, `oll
 
 Who made a commit in the [vault](#vault), named in its `Coffer-Writer` trailer: `user` (you,
 through a Coffer surface), `disk` (a file edited in an editor, a shell or an agent's own file
-tools), `agent`, `daemon`, `curation` or `sync`. A skill's
+tools), `agent`, `daemon`, `curation` (older history only) or `sync`. A skill's
 **History** tab shows it. See [Editing the vault by hand](/guides/vault-files).

@@ -2,10 +2,9 @@
 //
 // The Knowledge page's shell (boards 5.1.01, 5.1.03, 5.1.09, 5.1.11, 5.1.12,
 // 5.1.13, 5.1.26–28; Foundations 0.6.04): the header (title, Experimental tag,
-// one subtitle, the Automatic ghost button and the one primary Upload), the
-// first-run empty state, the engine-less control, the tree (Inbox count only,
-// a Collections strip with New collection, the unsaved dot) and the Upload
-// dialog's Cancel. Mocked only at the network boundary, like the page tests.
+// one subtitle, Tidy all and the one primary Upload), the first-run empty
+// state, the tree (a Collections strip with New collection, the unsaved dot)
+// and the Upload dialog's Cancel. Mocked only at the network boundary, like the page tests.
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -22,11 +21,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   getFile: vi.fn(),
   saveFile: vi.fn(),
   deleteFile: vi.fn(),
-  curateCollection: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getChange: vi.fn(),
-  undoPass: vi.fn(),
   getHistory: vi.fn(),
   getVersionDiff: vi.fn(),
   getVersionBody: vi.fn(),
@@ -34,38 +30,21 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: {
+    list: vi.fn().mockResolvedValue({
+      agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
+    }),
+  },
+}));
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
-const { internalEngineApi } = await import("@/lib/api/internalEngine");
-
-function withCurateSchedule() {
-  vi.mocked(internalEngineApi.get).mockResolvedValue({
-    model: "claude-haiku",
-    curate_owner_machine_id: null,
-    default_model_timeout_s: 60,
-    model_timeout_s: null,
-    transcribe_model: null,
-    updated_at: null,
-    upkeep: {
-      curate: {
-        enabled: true,
-        interval_s: null,
-        default_interval_s: 3600,
-        last_pass_at: null,
-        next_pass_at: null,
-      },
-    },
-  });
-}
 
 const SUBTITLE = "Documents you and your agents write together. Every agent can read them.";
 
 beforeEach(() => {
   answerFromFixtures();
-  withCurateSchedule();
 });
 afterEach(() => {
   act(() => {
@@ -82,18 +61,19 @@ function tree() {
 describe("the header", () => {
   acceptance("knowledge", "the page's one primary action is Upload", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    const automatic = await screen.findByTestId("knowledge-automatic");
+    const tidyAll = await within(screen.getByRole("banner")).findByRole("button", {
+      name: "Tidy all",
+    });
     expect(within(screen.getByRole("banner")).getByRole("heading")).toHaveTextContent("Knowledge");
     expect(screen.getByText("Experimental")).toBeInTheDocument();
     expect(screen.getByText(SUBTITLE)).toBeInTheDocument();
-    expect(automatic).toHaveTextContent("Automatic · hourly");
-    expect(automatic.className).not.toMatch(/bg-accent/);
+    expect(tidyAll.className).not.toMatch(/bg-accent/);
+    // No curation control any more: no Automatic button, no engine link.
+    expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
     const upload = screen.getByRole("button", { name: "Upload" });
     expect(upload.className).toMatch(/bg-accent/);
-    // Upload sits to the right of Automatic.
-    expect(
-      automatic.compareDocumentPosition(upload) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    // Upload sits to the right of Tidy all.
+    expect(tidyAll.compareDocumentPosition(upload) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // "Add a document" no longer exists.
     expect(screen.queryByRole("button", { name: "Add a document" })).toBeNull();
     // 16 top / 32 sides / 12 bottom, no divider.
@@ -104,36 +84,23 @@ describe("the header", () => {
 
   test("Upload drops to secondary while a document is being edited", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    await screen.findByTestId("knowledge-automatic");
+    await screen.findByRole("button", { name: "Tidy all" });
     act(() => setEditingDocument(GATEWAY.path));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Upload" }).className).not.toMatch(/bg-accent/),
     );
   });
-
-  test("with Coffer's engine not set the control says so and opens Settings", async () => {
-    answerFromFixtures({ modelSet: false });
-    renderKnowledge(`/knowledge/${UID}`);
-    const button = await screen.findByRole("button", { name: "Curation needs Coffer’s engine" });
-    // The subtitle stays the normal one; Upload stays; no Automatic, no Inbox.
-    expect(screen.getByText(SUBTITLE)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
-    expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
-    expect(within(tree()).queryByRole("button", { name: /^Inbox/ })).toBeNull();
-    fireEvent.click(button);
-    expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
-  });
 });
 
 describe("first run", () => {
-  test("no collections: the standard empty state with New collection, no Upload or Automatic", async () => {
+  test("no collections: the standard empty state with New collection, no Upload or Tidy all", async () => {
     api.listCollections.mockResolvedValue({ collections: [] });
     renderKnowledge("/knowledge");
     expect(await screen.findByText("No collections yet")).toBeInTheDocument();
     expect(screen.getByText(/A collection is a folder of Markdown documents/)).toBeInTheDocument();
     expect(screen.getByText(SUBTITLE)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upload" })).toBeNull();
-    expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tidy all" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "New collection" }));
     const dialog = await screen.findByRole("dialog");
     expect(
@@ -146,16 +113,16 @@ describe("first run", () => {
 });
 
 describe("the tree", () => {
-  test("only the Inbox shows a count, never 0; Collections strip holds New collection", async () => {
+  test("no node shows a count and no Inbox node is listed; Collections strip holds New collection", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    const inbox = await within(nav).findByRole("button", { name: /^Inbox/ });
-    expect(inbox).toHaveTextContent("1");
+    await within(nav).findByRole("button", { name: "gateway.md" });
+    expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     // The collection rows and Recent changes carry no number.
     const row = within(nav).getByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) });
     expect(row).not.toHaveTextContent(/\d/);
     expect(within(nav).getByRole("link", { name: "Recent changes" })).not.toHaveTextContent(/\d/);
-    // A collection with nothing waiting shows no "0".
+    // A collection with no documents shows no "0".
     fireEvent.click(within(nav).getByRole("button", { name: `Expand ${OTHER.name}` }));
     expect(nav.textContent).not.toMatch(/(^|\s)0(\s|$)/);
     // New collection is the strip's icon button; there is no bottom "+ New collection".
@@ -192,7 +159,7 @@ describe("the Upload dialog", () => {
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText(
-        "Coffer converts it to Markdown and adds it to the collection’s Inbox. The original file isn’t kept.",
+        "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept.",
       ),
     ).toBeInTheDocument();
     const input = within(dialog).getByLabelText("Drop a file here, or choose one");
@@ -206,17 +173,5 @@ describe("the Upload dialog", () => {
     fireEvent.click(cancel);
     expect(signal?.aborted).toBe(true);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  });
-
-  test("with Coffer's engine not set it says the file becomes a document", async () => {
-    answerFromFixtures({ modelSet: false });
-    renderKnowledge(`/knowledge/${UID}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      await within(dialog).findByText(
-        "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept.",
-      ),
-    ).toBeInTheDocument();
   });
 });

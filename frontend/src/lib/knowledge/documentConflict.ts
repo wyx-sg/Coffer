@@ -40,7 +40,6 @@ export function conflictSentence(
 ): string {
   if (!change) return t("knowledge.editor.conflictUnknown", { file });
   const time = clock(change.time, locale);
-  if (change.writer === "curation") return t("knowledge.editor.conflictCuration", { file, time });
   return t("knowledge.editor.conflictOther", { file, time, who: writerLabel(t, change) });
 }
 

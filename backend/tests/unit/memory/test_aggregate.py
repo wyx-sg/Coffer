@@ -4,8 +4,7 @@ Aggregation is the **input** half of the layer. It reads each registered,
 enabled agent through that agent's reader and writes what it read, verbatim,
 under a partition's hidden ``.raw/`` — and it writes nothing else, because
 ``notes/``, ``MEMORY.md`` and ``RETIRED.md`` all belong to the distil pass (see
-"Keep raw entries verbatim and hidden", "Keep distil out of the raw
-directory").
+"Keep raw entries verbatim and hidden", "Leave the raw directory to aggregation").
 
 The readers are faked here, per the tier's own rule: a unit test never touches
 a developer's real ``~/.claude`` or ``~/.codex``. The store is real, under the

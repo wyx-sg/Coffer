@@ -3,14 +3,13 @@
 // The Knowledge page's left pane (boards 5.1.01, 5.1.09, Foundations 0.6.04):
 // Recent changes on top, then a 36px "Collections" header strip with a New
 // collection icon button, then every collection as a node of one tree — its
-// Inbox and its documents under it (spec knowledge "Present a collection as
-// one tree in the web UI"). The open collection is expanded unless closed on
+// documents under it (spec knowledge "Show a collection as one tree of
+// documents in the web UI"). The open collection is expanded unless closed on
 // its chevron; others open and close on theirs, and that choice is ephemeral
 // UI state (it does not survive a reload).
 //
 // There is no filter input: the layer has no retrieval, and ⌘K already jumps
-// to a collection by name. The Inbox count in the tree is the only number and
-// the only signal of items waiting — the sidebar carries no badge.
+// to a collection by name.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -30,18 +29,16 @@ import { ListLoadingRows } from "@/components/ListPaneStates";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { KNOWLEDGE_ROOT, type KnowledgeTab } from "@/lib/knowledge/routes";
+import { KNOWLEDGE_ROOT } from "@/lib/knowledge/routes";
 import { cn } from "@/lib/utils";
 
 interface Props {
   collections: CollectionOut[];
   isLoading: boolean;
   currentUid: string | null;
-  tab: KnowledgeTab;
   file: string | null;
   /** The pane is on Recent changes (the page's bare address). */
   atRecent: boolean;
-  modelSet: boolean | undefined;
   onCreate: () => void;
 }
 
@@ -52,8 +49,7 @@ export function KnowledgeNav(props: Props) {
   // it keeps it open rather than flipping it shut.
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
-  // Arriving in a collection — a document, its Inbox, a link from Recent
-  // changes — opens it again even if it was closed earlier, so what is on
+  // Arriving in a collection — a document, a link from Recent changes — opens it again even if it was closed earlier, so what is on
   // screen is visible in the tree. Adjusted during render, not in an effect,
   // so the tree never paints closed first.
   const [arrivedAt, setArrivedAt] = useState(props.currentUid);
@@ -125,9 +121,7 @@ export function KnowledgeNav(props: Props) {
                 expanded={isOpen(c.uid)}
                 onToggle={() => toggle(c.uid)}
                 current={c.uid === props.currentUid}
-                tab={props.tab}
                 file={props.file}
-                modelSet={props.modelSet}
               />
             ))}
           </ul>

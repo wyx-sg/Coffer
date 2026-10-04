@@ -58,11 +58,6 @@ dependencies = [
     # all now — knowledge search and memory recall are literal.
     "markitdown[docx,pdf,pptx,xls,xlsx]>=0.1",
     "openai>=1.40",
-    # Agent turns: built-in LangGraph multi-LLM agent.
-    "langgraph>=1.2",
-    "langchain-anthropic>=1.4",
-    "langchain-openai>=1.2",
-    "langchain-ollama>=1.1",
     "claude-agent-sdk>=0.2,<0.3",
 ]
 
@@ -1029,14 +1024,11 @@ source_modules = [
     "coffer.application.retention_service",
     "coffer.application.retention_worker",
     "coffer.application.builtin_tools",
-    # Coffer's own engine — what it runs on its OWN behalf. It belongs to no
-    # kind (knowledge's tidy, memory's organise, vault-sync's conflict
-    # resolver and chat's voice transcription all ride it), so it is fenced
-    # here rather than filed under whichever kind happened to consume it
-    # first. The package itself, plus the engine modules that until now sat in
-    # no contract at all, fenced in neither direction.
+    # Coffer's own engine — its settings and what it runs on its OWN behalf
+    # (chat's voice transcription). It belongs to no kind, so it is fenced
+    # here rather than filed under whichever kind consumes it. The package
+    # itself, plus the settings modules, fenced in neither direction.
     "coffer.application.engine",
-    "coffer.application.engine_ports",
     "coffer.application.internal_engine_config_service",
     "coffer.application.upkeep_schedule",
     "coffer.surfaces.http.internal_engine_routes",
@@ -1135,8 +1127,8 @@ ignore_imports = [
 # attachment into text (spec channels "Give documents to every agent as
 # extracted text"), and
 # ``infrastructure.knowledge.converters.markitdown_converter``, which turns an
-# uploaded document into a Markdown file (spec knowledge "Convert uploads into
-# material without keeping them"). The source is the whole ``coffer`` package,
+# uploaded document into a Markdown file (spec knowledge "Convert uploads into documents
+# without keeping the original"). The source is the whole ``coffer`` package,
 # so a package added later is covered without anyone remembering to list it;
 # the two consumers' own edges are the only ones ignored, which also removes
 # every indirect chain through them. The vector-index and embedding SDKs it
@@ -1176,30 +1168,8 @@ forbidden_modules = [
     # for, so an import is a mistake.
     "sqlite_vec",
     "fastembed",
-]
-
-# Contract 9a: langgraph + langchain* confined to infrastructure/llm.
-# These SDKs call a plain chat model on Coffer's behalf (knowledge merge,
-# organize, agentic reorg). infrastructure/llm is their only home — including
-# infrastructure/chat, which drives coding agents through their own SDKs and
-# has no business reaching for a chat model. Domain and application reach the
-# loop only through injected ports (Contracts 2b / 5e).
-[[tool.importlinter.contracts]]
-name = "LangGraph and LangChain confined to infrastructure/llm"
-type = "forbidden"
-source_modules = [
-    "coffer.domain",
-    "coffer.application",
-    "coffer.infrastructure.chat",
-    "coffer.infrastructure.mcp",
-    "coffer.infrastructure.channel",
-    "coffer.infrastructure.knowledge",
-    "coffer.infrastructure.persistence",
-    "coffer.infrastructure.secret",
-    "coffer.infrastructure.daemon",
-    "coffer.infrastructure.logging",
-]
-forbidden_modules = [
+    # Dropped with Coffer's own chat-model calls: the one call Coffer makes on
+    # its own behalf is a plain HTTP speech-to-text request.
     "langgraph",
     "langchain",
     "langchain_core",

@@ -48,7 +48,7 @@ What each box is:
 | HTTP API | FastAPI routes under `/api/v1/*`: the management plane every client uses. |
 | MCP gateway | The `/mcp` endpoint. It aggregates every enabled upstream MCP server behind one endpoint, adds Coffer's builtin tools, and filters what each agent sees by reach. See [MCP gateway](/architecture/mcp-gateway). |
 | Resource framework and kinds | The kind-agnostic core that gives every user-managed thing — an MCP server, a skill, a channel — one identity, lifecycle, audit trail and reach, plus the seven kinds plugged into it. See [Resource framework](/architecture/resource-framework). |
-| Background workers | In-process asyncio loops: retention pruning, knowledge curation, memory aggregation and distillation, vault sync rounds, the transcript-cache warm-up, the MCP session reaper, and the channel runtime that holds Telegram polling and SeaTalk websocket connections. The full list with cadences is in [Daemon and processes](/architecture/daemon#background-work). |
+| Background workers | In-process asyncio loops: retention pruning, the knowledge sweep, memory aggregation and distillation, vault sync rounds, the transcript-cache warm-up, the MCP session reaper, and the channel runtime that holds Telegram polling and SeaTalk websocket connections. The full list with cadences is in [Daemon and processes](/architecture/daemon#background-work). |
 | `vault/` | A git repository under `~/.coffer`, the system of record for configuration and content: one JSON file per resource, state documents, knowledge collections, skill folders and secret ciphertext. Every accepted write is one validated commit naming its writer. Beside it, `local/` holds what is true of this machine only, `content/` media and the chat workspace, and `derived/` what can be rebuilt, such as the memory tree. See [Persistence](/architecture/persistence). |
 | `runs.db` | SQLite, history only: the audit log, MCP invocations, conversations and messages, sync rounds, usage. |
 | Upstream MCP servers | The servers you register — stdio subprocesses or HTTP endpoints — started per client session. |
@@ -131,9 +131,9 @@ Most of Coffer's shape follows from a handful of decisions. Each one below is ar
 The same decisions rule things out, and knowing them saves proposing them:
 
 - **Not a hosted service.** There is no Coffer account and no cloud endpoint. The only remote is a git repository you own, and any one machine can rebuild it.
-- **Not an agent.** Coffer's own model calls are internal passes (curation, distillation, descriptions). The Conversations page drives your installed agents; Coffer has no chat persona of its own.
+- **Not an agent.** Coffer runs no model over your knowledge or memory; tidying them is your agent's job, started by the **Tidy** button. Its one model call is optional speech-to-text. The Conversations page drives your installed agents; Coffer has no chat persona of its own.
 - **Not a retrieval engine.** Coffer embeds nothing and keeps no vector or full-text index. An import contract bans embedding libraries from the codebase.
-- **Not a policy engine.** Coffer does not approve individual tool calls. Curation happens ahead of time, through per-tool switches and reach, and a channel obeys only its paired owner.
+- **Not a policy engine.** Coffer does not approve individual tool calls. Control happens ahead of time, through per-tool switches and reach, and a channel obeys only its paired owner.
 - **Not a plugin platform.** Kinds are wired explicitly at the composition root. A plugin contract needs several concrete implementations to design against, and a single-user tool has no ecosystem to serve.
 
 The rules behind all of this are stated, with their rationale, in [Design principles](/architecture/design-principles).
@@ -150,7 +150,6 @@ Versions are the ones pinned in [`backend/uv.lock`](https://github.com/wyx-sg/Co
 | Persistence | git; SQLAlchemy 2.0 (async) over aiosqlite, Alembic 1.18 | The vault repository; the history database and its migrations. |
 | Secrets | `cryptography` (Fernet), `keyring` 25 | Envelope encryption; `keyring` only for the opt-in keychain master key. |
 | MCP | `mcp` SDK 2.2 | The gateway as an MCP server and as a client of upstream servers. |
-| Coffer's own model calls | LangChain 1.3, LangGraph 1.2 (`langchain-anthropic`, `-openai`, `-ollama`) | Knowledge curation, memory distillation, descriptions. |
 | Agent turns | Claude Agent SDK 0.2, Codex app-server | Running a chat turn in Claude Code or Codex. |
 | Documents | MarkItDown 0.1 | Uploaded documents and channel attachments to Markdown or text. |
 | CLI | Typer 0.26, Rich | The `coffer` command. |

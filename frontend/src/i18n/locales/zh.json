@@ -768,7 +768,7 @@
       "channel_pairing_issued": "为 {{resource}} 签发了配对码",
       "channel_person_removed": "从 {{resource}} 移除了一位已配对的主人",
       "channel_reply_withdrawn": "撤回了 {{resource}} 中的一条机器人回复",
-      "internal_engine_model_set": "设置了内部引擎使用的模型",
+      "internal_engine_model_set": "更改了语音转文字设置",
       "knowledge_deleted": "从 {{resource}} 删除了一篇文档",
       "knowledge_edited": "编辑了 {{resource}} 中的一篇文档",
       "knowledge_written": "向 {{resource}} 添加了一个条目",
@@ -1400,18 +1400,6 @@
         "none": "这台 Mac 还没有主密钥"
       }
     },
-    "internalEngine": {
-      "connection": "使用的模型提供商",
-      "connectionPlaceholder": "选择提供商",
-      "model": "模型",
-      "modelPlaceholder": "选择模型",
-      "timeout": "单次调用的时间上限",
-      "timeoutHint": "Coffer 等自用模型给出一次回答的最长时间。",
-      "timeoutMore": "提炼记忆、给知识写摘要、跑一轮知识整理、转写一段语音，每次都按这个时间算。超时的调用会把这次的活儿留到下次，并且对外报成功，所以这个值要设得比你的提供商实际耗时更宽。",
-      "defaultTimeout": "默认（{{timeout}}）",
-      "seconds": "{{count}} 秒",
-      "minutes": "{{count}} 分钟"
-    },
     "transcribe": {
       "connection": "转写用的模型提供商",
       "connectionPlaceholder": "选择提供商",
@@ -1457,14 +1445,6 @@
       "agentsConnected_other": "{{count}} 个智能体已连接"
     },
     "cofferModel": {
-      "title": "Coffer 自用模型",
-      "subtitle": "Coffer 自己干活所用的模型。先选模型提供商，再从该提供商的列表中选模型。",
-      "engine": {
-        "title": "Coffer 引擎",
-        "description": "提炼智能体的记忆，整理知识。",
-        "notSet": "不会运行任何内部任务；提炼与整理都会等待。",
-        "failingTail": "在它恢复应答前，提炼与整理都会等待。"
-      },
       "stt": {
         "title": "语音转文字",
         "description": "转写通过渠道收到的语音消息。",
@@ -1515,7 +1495,7 @@
         "description": "记忆树和对话摘要缓存。Coffer 会自动重建它。",
         "clear": "清除",
         "confirmTitle": "清除缓存？",
-        "confirmBody": "{{size}} — 记忆树和对话摘要缓存。Coffer 会用 Coffer 的模型从智能体自己的记忆重建记忆；来源已删除的记忆不会恢复。你写的内容和历史记录都不受影响。",
+        "confirmBody": "{{size}} — 记忆树和对话摘要缓存。下次更新时，记忆会从智能体自己的记忆重建，每条记录原样成为一条笔记；来源已删除的笔记不会恢复。你写的内容和历史记录都不受影响。",
         "confirm": "清除缓存",
         "clearing": "正在清除…",
         "cleared": "已清除 {{size}}。记忆会在下次更新时重建。"
@@ -1533,6 +1513,10 @@
       "unknownDate": "日期未知",
       "pinnedOff": "已被 COFFER_PRICE_REFRESH 关闭",
       "lastFailed": "上次刷新失败；保留当前使用的价格表"
+    },
+    "speechToText": {
+      "title": "语音转文字",
+      "subtitle": "把语音消息转成文字所用的模型，以及单次调用最长可以等多久。"
     }
   },
   "daemon": {
@@ -1691,7 +1675,6 @@
     "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
     "FS_PATH_NOT_OPENABLE": "该路径在这台机器上无法打开",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
-    "GREP_PATTERN_INVALID": "无效的 grep 模式",
     "HOST_NOT_ALLOWED": "Coffer 只响应发往它自己回环地址和端口的请求。",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
@@ -1704,8 +1687,6 @@
     "KNOWLEDGE_FILE_CONFLICT": "打开后该文档已在磁盘上被修改——你的文字没有保存。请重新加载、对比，或先复制你的文字。",
     "KNOWLEDGE_FILE_NOT_FOUND": "未找到该知识文件",
     "KNOWLEDGE_HISTORY_UNAVAILABLE": "无法查看文档历史：本机没有安装 git",
-    "KNOWLEDGE_NOT_A_PASS": "只能撤回一次整理——要回到某个版本，请恢复该文档的版本",
-    "KNOWLEDGE_UNDO_CONFLICT": "无法撤回这次整理：它改过的某篇文档之后又被编辑过",
     "KNOWLEDGE_VERSION_NOT_FOUND": "该文档的历史中没有这个版本",
     "KNOWLEDGE_PATH_UNSAFE": "该路径不在知识集合范围内",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "文件过大，无法上传。上限为 20 MB。",
@@ -1730,7 +1711,6 @@
     "PLUGIN_UNINSTALL_FAILED": "卸载失败",
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
-    "PROVIDER_INTERNAL_DEFAULT_TAKEN": "已有另一个连接是 Coffer 内部引擎的默认连接——请把默认切换到这个连接，而不是直接改这个字段",
     "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为智能体开启",
     "PROVIDER_DOES_NOT_REACH_AGENT": "无法为该智能体开启此连接——连接已关闭，或连接的适用范围不包含该智能体",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "有智能体正在使用该连接，无法更改协议格式——请先让该智能体切回自带登录，再修改协议，然后重新让它切到该连接",
@@ -1757,7 +1737,6 @@
     "UPSTREAM_TIMEOUT": "上游服务器响应超时——请重试，或调大它的请求超时",
     "UPSTREAM_UNAVAILABLE": "上游服务器不可达——请检查它的命令或 URL，再点「测试连接」",
     "ADOPT_SECRET_REF_EXISTS": "纳入托管只会新建密钥——其中有名字已存在，或是独立的密钥",
-    "KNOWLEDGE_CURATION_HELD": "同步在等你处理期间，整理已暂停——请先在“同步”中解决，再重新整理",
     "SECRET_BINDING_REJECTED": "该去向已在 Coffer 应用中被拒绝，未发送任何内容。请更换去向，或在“密钥”页重新请求批准。",
     "ATTACHMENT_TOO_LARGE": "文件超过 20 MB 上限。",
     "ATTACHMENT_TYPE_UNSUPPORTED": "不支持此文件类型。请添加图片、文档、音频或文本文件。",
@@ -3145,18 +3124,7 @@
     },
     "stats": {
       "documents": "文档",
-      "waiting": "{{count}} 个待整理",
-      "curated": "上次整理",
-      "never": "从未",
-      "inbox": "收件箱",
-      "nothing": "无",
-      "openInbox": "打开收件箱",
       "folder": "文件夹"
-    },
-    "noModel": {
-      "line": "设置 Coffer 的模型，把新条目整理进你的文档 ·",
-      "link": "设置 › 通用",
-      "engine": "整理需要 Coffer 的引擎"
     },
     "collection": {
       "descriptionLabel": "这个知识集收录什么",
@@ -3194,72 +3162,30 @@
     "upload": {
       "button": "上传",
       "title": "上传文档",
-      "body": "Coffer 会把它转换成 Markdown，并加入知识集的收件箱。原始文件不会保留。",
+      "body": "Coffer 会把它转换成 Markdown，作为一篇文档加入知识集。原始文件不会保留。",
       "choose": "把文件拖到这里，或选择一个",
       "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
       "remove": "移除这个文件",
       "into": "放入知识集",
       "converting": "正在转换为 Markdown…",
       "uploading": "正在上传…",
-      "pending": "{{name}} 已进入 {{collection}} 的收件箱 · 一小时内整理",
       "written": "{{name}} 已保存为 {{path}}",
       "zipTitle": "ZIP 文件无法转换",
       "zipBody": "请先解压，再逐个上传里面的文件。",
       "tooLargeTitle": "超过 20 MB",
       "tooLargeBody": "请拆分文件，或把需要的部分导出为 PDF。",
       "noTextTitle": "这个 PDF 里没有文字",
-      "noTextBody": "它是扫描的页面。Coffer 读取文字而不是图片——请把文字粘贴进一篇文档。没有任何内容进入收件箱。",
+      "noTextBody": "它是扫描的页面。Coffer 读取文字而不是图片——请把文字粘贴进一篇文档。没有添加任何内容。",
       "noTextAnyTitle": "没有找到文字",
-      "noTextAnyBody": "Coffer 在这个文件里读不到任何文字。没有任何内容进入收件箱。",
+      "noTextAnyBody": "Coffer 在这个文件里读不到任何文字。没有添加任何内容。",
       "unsupportedTitle": "{{kind}} 文件无法转换",
-      "failedTitle": "无法上传这个文件",
-      "bodyNoEngine": "Coffer 会把它转换成 Markdown，作为一篇文档加入知识集。原始文件不会保留。"
-    },
-    "curate": {
-      "now": "立即整理",
-      "running": "正在整理…",
-      "progress": "整理中 · 第 {{done}} 个，共 {{total}} 个",
-      "alreadyRunning": "已有一轮整理在进行",
-      "status": {
-        "ok": "整理完成。",
-        "no_model": "Coffer 的模型尚未设置，因此没有进行整理——待整理的条目已按原样成为文档（{{count}} 个）。",
-        "up_to_date": "没有待整理的条目。",
-        "too_large": "这个条目太大，一轮整理放不下，因此把它保留为单独的文档。",
-        "truncated": "这轮整理在完成前达到了步数上限。已写入的内容会保留，之后会再试。",
-        "truncatedGaveUp": "这轮整理已连续三次被截断，因此把该条目保留为单独的文档，不会再运行它。",
-        "failed": "整理没有完成。没有丢失任何内容——之后会再试。",
-        "ok_one": "已把 {{count}} 个条目整理进你的文档",
-        "ok_other": "已把 {{count}} 个条目整理进你的文档"
-      },
-      "summary": "已将{{items}}整理进{{documents}}",
-      "items_one": "{{count}} 条内容",
-      "items_other": "{{count}} 条内容",
-      "documents_one": "{{count}} 篇文档",
-      "documents_other": "{{count}} 篇文档"
-    },
-    "inbox": {
-      "title": "收件箱",
-      "waitingCount_one": "{{count}} 个条目待整理",
-      "waitingCount_other": "{{count}} 个条目待整理",
-      "empty": "没有待整理的条目。智能体写入和上传的新条目会先出现在这里。",
-      "writtenBy": "由 {{who}} 写入 · {{when}}",
-      "writtenWithWrite": "由 {{who}} 写入 · {{when}}",
-      "writtenByYou": "由你写入 · {{when}}",
-      "note": "一小时内会整理进你的文档，然后从这里移除。",
-      "readOnlyTag": "只读",
-      "waitingToCurate": "等待整理"
+      "failedTitle": "无法上传这个文件"
     },
     "document": {
       "tab": "文档",
       "where": "这篇文档的位置",
       "more": "{{path}} 的更多操作",
-      "seePass": "查看这一轮",
       "views": "文档视图",
-      "passes_one": "{{count}} 个收集箱条目",
-      "passes_other": "{{count}} 个收集箱条目",
-      "curated": "{{when}}整理自 {{source}}",
-      "passesFrom_one": "{{count}} 个 {{agent}} 收集箱条目",
-      "passesFrom_other": "{{count}} 个 {{agent}} 收集箱条目",
       "createdBy": "{{date}}由{{who}}创建",
       "you": "你",
       "view": "视图",
@@ -3274,18 +3200,15 @@
       "reload": "重新加载",
       "copyMine": "复制我的文字",
       "copyFailed": "无法复制你的文字",
-      "editStands": "整理会把你的修改带到与它说法不一致的文档里。",
       "unsaved": "有未保存的修改",
       "notSaved": "未保存",
       "copied": "你的文字已复制到剪贴板",
       "reloaded": "已重新加载磁盘上的版本",
-      "keptByCuration": "由整理维护",
       "discard": "放弃",
       "reloadAsk": "重新加载…",
       "reloadTitle": "重新加载磁盘上的版本？",
       "reloadBody": "你未保存的文字会被磁盘上的内容替换。想保留的话请先复制。",
       "reloadConfirm": "重新加载",
-      "conflictCuration": "整理在 {{time}} 给 {{file}} 加了一点内容。你的文字还没有保存。",
       "conflictOther": "{{who}}在 {{time}} 修改了 {{file}}。你的文字还没有保存。",
       "conflictUnknown": "{{file}} 在磁盘上发生了变化。你的文字还没有保存。"
     },
@@ -3309,7 +3232,6 @@
       "changesInVersion": "这个版本的改动",
       "compareCurrent": "与当前版本比较",
       "removedVersion": "这个版本删除了文档，没有可比较的内容。",
-      "seePass": "查看这轮整理",
       "needsGitTitle": "历史需要 git",
       "needsGitBody": "请在这台 Mac 上安装 git 才能查看各版本。文档本身没有问题。",
       "checkAgain": "重新检查"
@@ -3323,14 +3245,10 @@
     },
     "changes": {
       "op": {
-        "pass_one": "把 {{agent}} 的条目整理进了 {{document}}",
-        "pass_other": "把 {{agent}} 的条目整理进了 {{count}} 篇文档",
         "save": "编辑了 {{document}}",
         "delete": "删除了 {{document}}",
         "promote": "按原样添加了 {{document}}",
-        "submit": "提交了一个条目",
         "restore": "恢复了 {{document}} 的一个早期版本",
-        "undo": "撤销了一轮整理",
         "edit": "在 Coffer 之外编辑了 {{document}}",
         "sync": "同步了另一台机器的改动",
         "create": "创建了这个知识集",
@@ -3339,13 +3257,10 @@
         "baseline": "记录了知识集的现状"
       },
       "version": {
-        "pass": "整理了 {{agent}} 的条目",
         "save": "在 Coffer 中编辑",
         "delete": "已删除",
         "promote": "按原样添加",
-        "submit": "作为条目提交",
         "restore": "恢复了一个早期版本",
-        "undo": "撤销了一轮整理",
         "edit": "在磁盘上编辑",
         "sync": "从另一台 Mac 拉取",
         "create": "创建",
@@ -3354,13 +3269,10 @@
         "baseline": "记录现状"
       },
       "verb": {
-        "pass": "把 {{agent}} 的条目整理进",
         "save": "编辑了",
         "delete": "删除了",
         "promote": "按原样添加了",
-        "submit": "提交了一个条目",
         "restore": "恢复了",
-        "undo": "撤销了改动这篇文档的整理",
         "edit": "在磁盘上编辑了",
         "sync": "从另一台 Mac 拉取了",
         "create": "创建了这个知识集",
@@ -3371,19 +3283,13 @@
       }
     },
     "recent": {
-      "waitingCount_other": "{{count}} 个条目待整理",
       "title": "最近改动",
       "window": "最近 7 天",
       "collectionFilter": "知识集",
-      "waitingTitle": "等待整理",
-      "waitingMeta": "{{collection}} · 由 {{who}} 写入 · {{when}}",
-      "nothingWaiting": "没有待整理的条目。智能体写入和上传的新条目会先出现在这里。",
       "today": "今天",
       "yesterday": "昨天",
       "empty": "最近 7 天没有改动。",
       "failed": "无法读取最近改动",
-      "openItem": "打开 {{title}}",
-      "seePass": "查看这轮整理",
       "more_one": "等 {{count}} 篇",
       "more_other": "等 {{count}} 篇",
       "restore": "恢复",
@@ -3394,75 +3300,16 @@
         "delete": "已从知识集移除；它的各个版本仍保留在知识库的历史中。",
         "remove_one": "知识集及其 {{count}} 个文件已删除；它们仍保留在知识库的历史中。",
         "remove_other": "知识集及其 {{count}} 个文件已删除；它们仍保留在知识库的历史中。",
-        "undo": "这轮整理被整体撤销，作为你写入的一个新版本。",
         "restore": "作为新版本放回；之前的历史保持不变。",
         "sync_one": "另一台 Mac 上改动了 {{count}} 行。",
-        "sync_other": "另一台 Mac 上改动了 {{count}} 行。",
-        "pass": "来自一个收件箱条目",
-        "too_large": "内容过大，无法一次整理，已单独保留为一篇文档",
-        "gave_up": "三次都触及步数上限，已单独保留为一篇文档"
+        "sync_other": "另一台 Mac 上改动了 {{count}} 行。"
       },
       "authorFilter": "作者",
       "clearFilters": "清除筛选",
-      "waitingDesc": "一小时内整理进你的文档",
       "needsGitTitle": "最近更改需要 git",
       "needsGitBody": "在这台 Mac 上安装 git 才能查看改了什么。你的文档完好无损。",
       "checkAgain": "重新检查",
-      "openActivity": "打开活动",
-      "waitingCount_one": "{{count}} 个条目待整理",
-      "open": "打开"
-    },
-    "pass": {
-      "title": "整理 · {{when}}",
-      "undo": "撤销这轮整理",
-      "undone": "已撤销",
-      "status": {
-        "added": "添加",
-        "modified": "修改",
-        "removed": "移除"
-      },
-      "undoTitle": "撤销这轮整理？",
-      "undoBody": "把这轮整理改过的文档恢复到 {{when}} 之前的样子。",
-      "undoEffect": {
-        "added": "将被移除",
-        "modified": "恢复到整理前",
-        "removed": "将被放回"
-      },
-      "undoNote": "只要有一篇文档在这轮整理之后被改过，就什么都不撤销。收件箱条目不会重新排队。",
-      "undoConfirm": "撤销整理",
-      "undoing": "正在撤销…",
-      "undoRefused": "{{document}} 在这轮整理之后被改过，因此没有撤销任何内容。",
-      "undoneToast": "已撤销这轮整理。",
-      "heading": "这轮整理改了什么",
-      "changedSince": "在这轮整理之后被修改过",
-      "undoRefusedTitle": "无法撤销这轮整理",
-      "undoneBy": "已由{{who}}于 {{when}} 撤销",
-      "undoneBody": "这轮整理写入的内容已作为你写入的一个新版本放回。最近改动里列出了这次撤销；收件箱条目不会重新排队。",
-      "fromItems_one": "来自 {{count}} 个收件箱条目（{{breakdown}}）",
-      "fromItems_other": "来自 {{count}} 个收件箱条目（{{breakdown}}）",
-      "fromAgent": "{{count}} 个来自 {{agent}}",
-      "openHistory": "打开它的历史"
-    },
-    "automatic": {
-      "title": "自动整理",
-      "description": "把收件箱里的新条目整理进文档，每次一轮。",
-      "last": "上次整理 {{when}}",
-      "never": "尚未整理",
-      "curating": "正在整理…",
-      "owner": {
-        "label": "整理运行在",
-        "thisMac": "{{name}} · 本机",
-        "thisMacFallback": "本机",
-        "none": "未选择",
-        "unknown": "未知的 Mac（{{id}}）",
-        "hint": "只有一台 Mac 整理，其他 Mac 通过同步拿到结果。",
-        "unbound": "尚未选择 Mac，每台 Mac 都会整理，同一份知识可能被写两遍。请选择一台。",
-        "fault": "这个 vault 里没有这个 id 的 Mac，所以整理不会在任何地方运行。请选择一台 Mac。",
-        "claimedToast": "整理已改在所选的 Mac 上运行",
-        "clearedToast": "整理不再固定在一台 Mac 上",
-        "runsElsewhere": "在 {{machine}} 上运行",
-        "pillFault": "未在任何 Mac 上运行"
-      }
+      "openActivity": "打开活动"
     },
     "when": {
       "today": "今天 {{time}}",
@@ -3470,7 +3317,7 @@
     },
     "welcome": {
       "title": "还没有知识集",
-      "body": "知识集是围绕一个主题的 Markdown 文档文件夹。智能体会读取每个知识集，并把学到的内容存入它的收件箱。"
+      "body": "知识集是围绕一个主题的 Markdown 文档文件夹。智能体会读取每个知识集，并把学到的内容写进去。"
     },
     "compare": {
       "title": "保留哪个版本？",
@@ -3486,11 +3333,15 @@
       "back": "回到编辑",
       "saveMine": "保存我的修改",
       "useDisk": "使用磁盘上的版本"
+    },
+    "tidy": {
+      "one": "整理",
+      "all": "整理全部"
     }
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "智能体学到的内容：读取它们各自的记忆，按主题提炼成记忆条目。",
+    "subtitle": "智能体学到的内容：读取它们各自的记忆，按仓库保存为记忆条目。",
     "update": "更新记忆",
     "updating": "正在更新…",
     "syncDone": "读到 {{count}} 条新条目，更新了 {{partitions}} 个分区。",
@@ -3519,7 +3370,7 @@
     },
     "welcome": {
       "title": "还没有提炼出任何东西",
-      "body": "智能体已经记住了你项目里的不少事情。Coffer 读取它们的记忆（绝不写入），并为每个仓库按主题提炼成记忆条目。",
+      "body": "智能体已经记住了你项目里的不少事情。Coffer 读取它们的记忆（绝不写入），并为每个仓库把每条内容保存为记忆条目。",
       "noAgentsTitle": "没有可读取的智能体记忆",
       "noAgentsBody": "记忆来自每个已连接智能体自己的记忆。还没有智能体连接到 Coffer，所以没有可提炼的内容。",
       "connect": "打开智能体 →",
@@ -3570,11 +3421,6 @@
       "emptyWaiting_one": "Coffer 已为这个仓库从 {{agents}} 读取了 {{count}} 条，但尚未提炼。点击更新记忆，或者几小时内会自动进行。",
       "emptyWaiting_other": "Coffer 已为这个仓库从 {{agents}} 读取了 {{count}} 条，但尚未提炼。点击更新记忆，或者几小时内会自动进行。"
     },
-    "noModel": {
-      "title": "Coffer 的引擎尚未设置，所以每个智能体的条目各自保留为一条记忆条目",
-      "body": "同一条经验来自两个智能体时会保留为两条记忆，直到在设置 › 通用中设置引擎。",
-      "link": "打开设置"
-    },
     "delivered": {
       "viewLabel": "显示方式",
       "rendered": "渲染",
@@ -3615,6 +3461,10 @@
       "retry": "重试",
       "prompt": "Coffer 无法读取 {{agent}} 的记忆（{{path}}，原因：{{reason}}）。请查明读不了的原因（多半是权限问题），修好读取权限，让 Coffer 能再次读取。不要改动记忆本身的内容。",
       "noReason": "无法读取"
+    },
+    "tidy": {
+      "one": "整理",
+      "all": "整理全部"
     }
   },
   "conversations": {
@@ -4624,8 +4474,6 @@
         "actions": "操作"
       },
       "thisMac": "本机",
-      "curates": "负责整理",
-      "curatesTip": "为共享这个金库的所有 Mac 整理知识",
       "keyDiffers": "主密钥不同",
       "keyDiffersTip": "它持有另一把主密钥，所以它的密钥在这里无法解密",
       "never": "从未",
@@ -6203,7 +6051,6 @@
   "providers": {
     "title": "模型提供商",
     "subtitle": "智能体的模型从哪里来，以及经由 Coffer 的请求花了多少钱。",
-    "loadFailed": "无法加载模型提供商",
     "protocols": {
       "anthropic": "Anthropic",
       "openai": "OpenAI 兼容",
@@ -6228,8 +6075,6 @@
       "audio": "音频"
     },
     "cofferUse": {
-      "engine": "Coffer 自用 · 后台模型",
-      "engineHint": "Coffer 引擎在这个提供商上跑自己的后台任务（提炼、整理）。在「设置 › 通用」中更改。",
       "transcribe": "Coffer 自用 · 语音转写",
       "transcribeHint": "Coffer 在这个提供商上把语音消息转成文字，再交给智能体。在「设置 › 通用」中更改。"
     },
@@ -6241,7 +6086,6 @@
     },
     "list": {
       "filter": "筛选提供商",
-      "engineOnly": "仅供 Coffer 引擎",
       "allModels": "全部模型",
       "models_one": "{{count}} 个模型",
       "models_other": "{{count}} 个模型",
@@ -6276,10 +6120,9 @@
     },
     "usedBy": {
       "title": "使用方",
-      "engine": "Coffer 引擎",
       "transcribe": "语音转文字",
       "none": "目前没有东西使用它。在智能体页面用「更改模型」选它。",
-      "lead": "在智能体页面用「更改模型」更换它的提供商；Coffer 引擎和语音转文字在「设置 › 通用」中更换。",
+      "lead": "在智能体页面用「更改模型」更换它的提供商；语音转文字在「设置 › 通用」中更换。",
       "changeIt": "在这里更改：",
       "changeModel": "{{agent}} › 更改模型",
       "settingsGeneral": "设置 › 通用"
@@ -6431,8 +6274,6 @@
       "agentTitle": "{{agent}} 回到自己的登录",
       "agentBody": "Coffer 会从 {{path}} 中移除它的模型和提供商配置",
       "agentBodyNoFile": "Coffer 会清除它与这个提供商的连接",
-      "engineTitle": "Coffer 引擎暂停",
-      "engineBody": "直到你在「设置 › 通用」中选了别的模型",
       "transcribeTitle": "语音转文字关闭",
       "transcribeBody": "语音消息将不带转写文本送达",
       "keyTitle": "它的密钥会从这台 Mac 上删除",
@@ -6442,14 +6283,14 @@
     },
     "welcome": {
       "title": "还没有模型提供商",
-      "body": "接入地址和密钥只保存一次；之后你的智能体和 Coffer 引擎就能使用它。从下面选一个开始。",
+      "body": "接入地址和密钥只保存一次；之后你的智能体和语音转文字就能使用它。从下面选一个开始。",
       "anthropic": {
         "title": "Anthropic 或兼容",
-        "body": "Claude Code、对话和 Coffer 引擎都能用。"
+        "body": "Claude Code 和对话都能用。"
       },
       "openai": {
         "title": "OpenAI 或兼容",
-        "body": "Codex、对话和 Coffer 引擎。Gemini、DeepSeek、OpenRouter、网关。"
+        "body": "Codex 和对话。Gemini、DeepSeek、OpenRouter、网关。"
       },
       "local": {
         "title": "这台 Mac 上的运行时",

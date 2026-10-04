@@ -1,13 +1,11 @@
 // frontend/src/components/upkeep/AutomaticPopover.tsx
 //
-// The "Automatic · hourly" ghost button (with a status dot) in the Knowledge
-// and Memory page headers and the popover it opens, anchored under it and
-// right-aligned (boards 5.1.17 and 5.2.04). Automatic upkeep lives on
-// the page it upkeeps, not in Settings: this is the frame both pages share —
-// a switch with its one-line explanation, an interval, any page-specific rows,
-// and a footer with when the pass last ran and runs next, plus an optional
-// action. Each change saves as it is made; there is no Save button.
-import type { ReactNode } from "react";
+// The "Automatic · hourly" ghost button (with a status dot) in the Memory page
+// header and the popover it opens, anchored under it and right-aligned (board
+// 5.2.04). Automatic upkeep lives on the page it upkeeps, not in Settings: a
+// switch with its one-line explanation, an interval, and a footer with when the
+// pass last ran and runs next. Each change saves as it is made; there is no
+// Save button.
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -65,7 +63,7 @@ export function clockLine(
 }
 
 interface Props {
-  /** Accessible name and heading of the popover, e.g. "Automatic curation". */
+  /** Accessible name and heading of the popover, e.g. "Read memory automatically". */
   title: string;
   /** One line under the heading saying what the pass does. */
   description: string;
@@ -75,14 +73,8 @@ interface Props {
   onToggle: (enabled: boolean) => void;
   /** A number of seconds, or `null` for the pass's own default. */
   onInterval: (seconds: number | null) => void;
-  /** Overrides the pill's state word and dot, e.g. for a fault. */
-  pill?: { state: string; tone: "ok" | "off" | "err" };
-  /** Page-specific rows between the interval and the footer. */
-  children?: ReactNode;
   /** The footer's left half: when the pass last ran and runs next. */
   clock: string;
-  /** The footer's right half, e.g. Curate now. */
-  action?: ReactNode;
   testId?: string;
 }
 
@@ -93,18 +85,15 @@ export function AutomaticPopover({
   busy,
   onToggle,
   onInterval,
-  children,
   clock,
-  action,
   testId,
-  pill,
 }: Props) {
   const { t } = useTranslation();
   const seconds = setting.interval_s ?? setting.default_interval_s;
   const choices = INTERVAL_CHOICES.includes(seconds)
     ? INTERVAL_CHOICES
     : [...INTERVAL_CHOICES, seconds].sort((a, b) => a - b);
-  const tone = pill?.tone ?? (setting.enabled ? "ok" : "off");
+  const tone = setting.enabled ? "ok" : "off";
 
   return (
     <Popover>
@@ -114,10 +103,10 @@ export function AutomaticPopover({
             aria-hidden
             className={cn(
               "size-1.5 shrink-0 rounded-full",
-              tone === "ok" ? "bg-status-ok" : tone === "err" ? "bg-status-err" : "bg-text-subtle",
+              tone === "ok" ? "bg-status-ok" : "bg-text-subtle",
             )}
           />
-          {t("upkeep.pill.label", { state: pill?.state ?? pillState(t, setting) })}
+          {t("upkeep.pill.label", { state: pillState(t, setting) })}
           <ChevronDown aria-hidden />
         </Button>
       </PopoverTrigger>
@@ -162,10 +151,8 @@ export function AutomaticPopover({
             </SelectContent>
           </Select>
         </div>
-        {children}
         <div className="flex items-center gap-2 border-t border-border-subtle pt-3">
           <span className="text-xs text-text-subtle">{clock}</span>
-          {action ? <span className="ml-auto">{action}</span> : null}
         </div>
       </PopoverContent>
     </Popover>

@@ -11,16 +11,13 @@ of the two, or a protocol that has no transcription endpoint,
 :func:`remote_transcriber` returns ``None`` and the adapter hands the agent
 the audio file untouched.
 
-**Its own connection, with no fallback to the engine's.** Speech-to-text used to
-borrow the ``internal_default`` connection on the reasoning that voice should
-introduce no new place to configure. It introduced a worse one: the gateway a
-user points Coffer's engine at commonly serves chat completions and no
-``/audio/transcriptions`` at all, so the borrowed connection turned every voice
-message into a 404 — where a connection deliberately left unset produces the
-safe behaviour above. The model was an environment variable on top of that, read
-inside a daemon spawned detached from any shell, which made it unreachable in a
-packaged install. Both are settings now (spec internal-engine "Transcribe speech
-on its own connection and model").
+**Its own connection.** Speech-to-text runs on the connection marked
+``transcribe_default`` and nothing else: the gateway a user points chat at
+commonly serves chat completions and no ``/audio/transcriptions`` at all, so
+borrowing another connection would turn every voice message into a 404, where a
+connection deliberately left unset produces the safe behaviour above. Its model
+is a setting (spec internal-engine "Transcribe speech on its own connection and
+model").
 
 Principle I in ``docs-site/architecture/principles.md`` permits this: cloud
 services are LLM and tool providers, and a transcription endpoint is a tool
@@ -36,11 +33,7 @@ from collections.abc import Awaitable, Callable
 
 import httpx
 
-from coffer.application.engine_timeout import (
-    DEFAULT_MODEL_TIMEOUT_S,
-    TimeoutReader,
-    resolve_timeout,
-)
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.domain.provider.config import Protocol, ResolvedConnection
 
 _logger = logging.getLogger(__name__)
@@ -133,7 +126,6 @@ def remote_transcriber(
 def remote_transcriber_factory(
     resolve_connection: Callable[[], Awaitable[ResolvedConnection | None]],
     secret_resolver: Callable[[str], str],
-    read_timeout: TimeoutReader | None = None,
 ) -> Callable[[], Awaitable[RemoteTranscriber | None]]:
     """A per-turn factory: the connection is resolved when a turn needs it, so
     designating (or clearing) it takes effect without a restart."""
@@ -144,7 +136,7 @@ def remote_transcriber_factory(
         except Exception:
             _logger.info("transcribe.connection_unresolved", exc_info=True)
             return None
-        return remote_transcriber(connection, secret_resolver, await resolve_timeout(read_timeout))
+        return remote_transcriber(connection, secret_resolver, DEFAULT_MODEL_TIMEOUT_S)
 
     return _build
 

@@ -1,8 +1,5 @@
-"""General-purpose LLM adapters.
+"""Remote model adapters: speech-to-text over an OpenAI-compatible endpoint.
 
-These are not agent adapters — they call a plain chat model on behalf of a
-Coffer operation (knowledge merge, organize, agentic reorg) rather than
-driving a coding agent's session. They lived under ``infrastructure.chat``
-only because the chat page was the first thing to need a chat model; the
-consumers that outlived it are knowledge-layer operations.
+These are not agent adapters — they call a plain endpoint on behalf of a
+Coffer operation rather than driving a coding agent's session.
 """

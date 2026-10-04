@@ -8,7 +8,7 @@ them, so the join lives here and nowhere else, exactly as the agent-skill-dir
 resolver does.
 
 That is also why this is a class rather than two calls at the call sites: the
-refresh happens at boot AND after every curation pass, and a second call site
+refresh happens at boot AND on every knowledge sweep, and a second call site
 reconstructing the same pairing is how the two ends drift apart.
 """
 
@@ -36,7 +36,7 @@ class BuiltinGuide:
         self._render = render
         self._seed = seed
         # Three independent triggers can call refresh at once: the boot hook,
-        # the curation worker's interval tick, and an HTTP request that created,
+        # the knowledge sweep's interval tick, and an HTTP request that created,
         # deleted or switched a collection. ``MasterStore.atomic_replace`` moves
         # the folder aside before swapping the new one in, so two overlapping
         # writes leave the second raising on a folder that is briefly not there
@@ -52,7 +52,7 @@ class BuiltinGuide:
         Never raises. A corpus that cannot be read, or a master folder that
         cannot be written, leaves the previous copy exactly where it was —
         which is the honest outcome, because a half-rendered manual is worse
-        than yesterday's. Nothing here may fail a boot or a curation pass.
+        than yesterday's. Nothing here may fail a boot or a sweep tick.
         """
         async with self._lock:
             try:

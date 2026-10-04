@@ -1,13 +1,13 @@
 // e2e/web/specs/shell_settings_security.spec.ts
 //
-// Settings › Security and the Coffer's model section of Settings › General
+// Settings › Security and the Speech-to-text section of Settings › General
 // against a real daemon (change revise-web-ui-ia). Security: the access token
 // is masked until Show, Copy puts it on the clipboard, and a rotation installs
 // the new token so the page keeps loading data with no reload; in a browser
 // the master-key export names the desktop app instead of offering a control.
-// General: an unset engine reads as not set, a seeded connection's curated
-// models fill the model picker, and Test against a dead loopback endpoint
-// reads as failing inline.
+// General: an unset speech-to-text pair reads as not set, a seeded
+// connection's curated speech models fill the model picker, and Test against a
+// dead loopback endpoint reads as failing inline.
 //
 // These are plain tests: the component tests (SecuritySettings.test.tsx,
 // EngineSettings.test.tsx) carry the scenarios' acceptance markers.
@@ -49,7 +49,7 @@ async function api<T>(
 type Provider = {
   uid: string;
   name: string;
-  internal_default: boolean;
+  transcribe_default: boolean;
 };
 
 test("settings security masks, shows, copies and rotates the daemon token", async ({
@@ -95,14 +95,14 @@ test("settings security masks, shows, copies and rotates the daemon token", asyn
   await modal.getByRole("link", { name: /^General$/ }).click();
   await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(
-    modal.getByRole("combobox", { name: /^Model provider$/ }),
+    modal.getByRole("combobox", { name: /^Transcription provider$/ }),
   ).toBeVisible();
 });
 
-test("settings general picks coffer's model from a provider's curated list and tests it", async ({
+test("settings general picks the speech-to-text model from a provider's curated list and tests it", async ({
   page,
 }) => {
-  const engine = await api<{ model: string | null }>(
+  const config = await api<{ transcribe_model: string | null }>(
     "GET",
     "/internal-engine-config",
   );
@@ -110,7 +110,7 @@ test("settings general picks coffer's model from a provider's curated list and t
     "GET",
     "/providers",
   );
-  const priorDefault = providers.find((p) => p.internal_default) ?? null;
+  const priorDefault = providers.find((p) => p.transcribe_default) ?? null;
 
   const name = generateUniqueName("e2emodel");
   // Nothing listens on the discard port, so every call fails at once — no
@@ -121,57 +121,60 @@ test("settings general picks coffer's model from a provider's curated list and t
     base_url: "http://127.0.0.1:9",
     models: [
       { id: "e2e-chat-a", modality: "text" },
-      { id: "e2e-chat-b", modality: "text" },
-      { id: "e2e-whisper", modality: "audio" },
+      { id: "e2e-whisper-a", modality: "audio" },
+      { id: "e2e-whisper-b", modality: "audio" },
     ],
   });
 
   try {
     await page.goto("/settings/general");
-    const section = page.getByTestId("coffer-model-section");
-    const engineState = section.getByTestId("model-state").first();
-    if (priorDefault === null || !engine.model) {
-      // A fresh daemon: no engine, so no internal pass runs.
-      await expect(engineState).toContainText(/Not set/);
-      await expect(engineState).toContainText(/no internal pass runs/i);
+    const section = page.getByTestId("speech-to-text-section");
+    const state = section.getByTestId("model-state");
+    if (priorDefault === null || !config.transcribe_model) {
+      // A fresh daemon: nothing is transcribed, and the agent gets the file.
+      await expect(state).toContainText(/Not set/);
+      await expect(state).toContainText(/reach the agent as audio files/i);
     }
 
-    await section.getByRole("combobox", { name: /^Model provider$/ }).click();
+    await section
+      .getByRole("combobox", { name: /^Transcription provider$/ })
+      .click();
     await page.getByRole("option", { name }).click();
 
-    await section.getByRole("combobox", { name: /^Model$/ }).click();
+    await section
+      .getByRole("combobox", { name: /^Transcription model$/ })
+      .click();
     await expect(
-      page.getByRole("option", { name: "e2e-chat-a" }),
+      page.getByRole("option", { name: "e2e-whisper-a" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("option", { name: "e2e-chat-b" }),
+      page.getByRole("option", { name: "e2e-whisper-b" }),
     ).toBeVisible();
-    await expect(page.getByRole("option", { name: "e2e-whisper" })).toHaveCount(
+    await expect(page.getByRole("option", { name: "e2e-chat-a" })).toHaveCount(
       0,
     );
-    await page.getByRole("option", { name: "e2e-chat-a" }).click();
-    await expect(section.getByRole("combobox", { name: /^Model$/ })).toHaveText(
-      /e2e-chat-a/,
-    );
+    await page.getByRole("option", { name: "e2e-whisper-a" }).click();
+    await expect(
+      section.getByRole("combobox", { name: /^Transcription model$/ }),
+    ).toHaveText(/e2e-whisper-a/);
 
-    await section.getByRole("button", { name: /Test Coffer's engine/ }).click();
-    await expect(engineState).toContainText(/Failing/, { timeout: 15_000 });
-    await expect(engineState).toContainText(/distil and curation wait/i);
+    await section.getByRole("button", { name: /Test speech to text/ }).click();
+    await expect(state).toContainText(/Failing/, { timeout: 15_000 });
     // The failed test changed nothing.
-    const saved = await api<{ model: string | null }>(
+    const saved = await api<{ transcribe_model: string | null }>(
       "GET",
       "/internal-engine-config",
     );
-    expect(saved.model).toBe("e2e-chat-a");
+    expect(saved.transcribe_model).toBe("e2e-whisper-a");
   } finally {
-    // Put Coffer's model back the way the run found it.
-    await api("PUT", "/internal-engine-config", { model: engine.model }).catch(
-      () => undefined,
-    );
+    // Put speech to text back the way the run found it.
+    await api("PUT", "/internal-engine-config/transcribe-model", {
+      model: config.transcribe_model,
+    }).catch(() => undefined);
     if (priorDefault)
       await api(
         "POST",
-        `/providers/${priorDefault.uid}/internal-default`,
+        `/providers/${priorDefault.uid}/transcribe-default`,
       ).catch(() => undefined);
     await api("DELETE", `/providers/${created.uid}`).catch(() => undefined);
   }

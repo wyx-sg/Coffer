@@ -23,7 +23,7 @@ vi.mock("@/lib/api/chat", () => ({
     unarchiveConversation: vi.fn(),
     listMessages: vi.fn(),
     // Per-conversation managed-agent model (the
-    // coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs).
+    // model-catalogue-read-from-the-agent ADR).
     getAgentConfig: vi.fn().mockResolvedValue({ cwd: null, model: null }),
     setAgentModel: vi.fn().mockResolvedValue({ cwd: null, model: null }),
     // Fire-and-return turn control (ADR chat-single-owner-live-mirror).
@@ -51,7 +51,6 @@ vi.mock("@/lib/hooks/useProviders", () => ({
         base_url: "https://api.anthropic.com",
         secret_ref: "ref",
         compatible_agents: ["claude_code"],
-        internal_default: false,
         transcribe_default: false,
         enabled: true,
         description: null,

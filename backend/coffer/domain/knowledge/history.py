@@ -1,6 +1,6 @@
 """Value objects for a collection's history (spec knowledge "Keep every
-document's history and undo a pass as a whole", "Follow knowledge changes
-across collections").
+document's history", "Follow edits across
+collections in one feed").
 
 Knowledge lives inside the vault repository under ``knowledge/``, so its
 history is the vault's history of that directory: every accepted write is one
@@ -10,8 +10,7 @@ the vault's :class:`~coffer.domain.vault.writers.CommitMeta`. These types are
 what a surface reads back out of it, with every path knowledge-root-relative:
 one commit as a :class:`Change`, the documents it touched as
 :class:`DocumentChange`, one document's version of it as
-:class:`DocumentVersion`, and the items still waiting in an inbox — which are
-not changes yet — as :class:`WaitingItem`.
+:class:`DocumentVersion`.
 
 Nothing here is persisted by this layer: git is the record, and these are the
 shape of an answer read from it.
@@ -20,7 +19,7 @@ shape of an answer read from it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 
 from coffer.domain.vault.history import ADDED, MODIFIED, REMOVED
 from coffer.domain.vault.writers import (
@@ -41,21 +40,18 @@ from coffer.domain.vault.writers import (
 
 #: The vault's writers a knowledge change names. ``user`` — a person, through
 #: the page, the CLI or the API; ``agent`` — an agent whose submission became a
-#: document on arrival; ``curation`` — Coffer's curation pass; ``sync`` — a
+#: document on arrival; ``curation`` — what Coffer's retired curation pass wrote,
+#: still in the history; ``sync`` — a
 #: change another machine made, applied by vault sync; ``disk`` — a change
 #: found in the tree that no Coffer operation made (a person's own editor, an
 #: agent's file tools).
 WRITERS = (WRITER_USER, WRITER_AGENT, WRITER_CURATION, WRITER_SYNC, WRITER_DISK)
 
 #: What the change was — knowledge's own operation words beside the vault's.
-#: A curation pass is ``pass``; a person's save of a body ``save``; material
-#: promoted to a document on arrival ``promote`` (material left waiting in the
-#: inbox: ``submit``); the rest name themselves.
+#: A person's save of a body is ``save``; material promoted to a document on
+#: arrival ``promote``; the rest name themselves.
 OP_SAVE = "save"
-OP_SUBMIT = "submit"
 OP_PROMOTE = "promote"
-OP_PASS = "pass"
-OP_UNDO = "undo"
 OP_REMOVE = "remove"
 
 
@@ -113,40 +109,10 @@ class DocumentDiff:
 
 
 @dataclass(frozen=True)
-class ChangeDetail:
-    """One change in full: every document it touched, each with its diff."""
-
-    change: Change
-    diffs: tuple[DocumentDiff, ...] = field(default_factory=tuple)
-
-
-@dataclass(frozen=True)
-class WaitingItem:
-    """An item still waiting in a collection's inbox — not a change yet."""
-
-    collection: str
-    path: str
-    title: str
-    #: Who submitted it: an agent's name, or ``user``.
-    submitted_by: str
-    submitted_at: str
-
-    @property
-    def submitted_instant(self) -> float:
-        """``submitted_at`` as a sortable number; an unreadable stamp sorts oldest."""
-        try:
-            parsed = datetime.fromisoformat(self.submitted_at)
-        except ValueError:
-            return 0.0
-        return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).timestamp()
-
-
-@dataclass(frozen=True)
 class ChangesPage:
-    """One page of the recent-changes feed, with the items still waiting."""
+    """One page of the recent-changes feed."""
 
     changes: tuple[Change, ...]
-    waiting: tuple[WaitingItem, ...]
     next_cursor: str | None = None
 
 
@@ -157,15 +123,12 @@ __all__ = [
     "OP_CREATE",
     "OP_DELETE",
     "OP_EDIT",
-    "OP_PASS",
     "OP_PROMOTE",
     "OP_REMOVE",
     "OP_RENAME",
     "OP_RESTORE",
     "OP_SAVE",
-    "OP_SUBMIT",
     "OP_SYNC",
-    "OP_UNDO",
     "REMOVED",
     "WRITERS",
     "WRITER_AGENT",
@@ -174,10 +137,8 @@ __all__ = [
     "WRITER_SYNC",
     "WRITER_USER",
     "Change",
-    "ChangeDetail",
     "ChangesPage",
     "DocumentChange",
     "DocumentDiff",
     "DocumentVersion",
-    "WaitingItem",
 ]

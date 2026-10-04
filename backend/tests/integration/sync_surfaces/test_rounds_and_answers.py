@@ -67,8 +67,6 @@ def test_a_conflict_stops_the_round_and_each_file_is_answered(tmp_path: Path) ->
     versions = mini.run(mini.service.file_versions(DOC))
     assert versions.ours == "Mini rotates on Fridays.\n"
     assert "+Mac rotates on Mondays." in versions.take_theirs
-    assert mini.run(mini.service.divergence_outstanding())
-
     mini.run(mini.service.answer(DOC, Answer.THEIRS))
     done = mini.run(mini.service.continue_round())
     assert done.status in (RoundStatus.PULLED, RoundStatus.PULLED_AND_PUSHED)

@@ -1,5 +1,4 @@
-"""A person's edit of one note's body (spec memory "Edit a memory in the web UI
-or on disk").
+"""A person's edit of one note's body (spec memory "Edit a memory in the web UI or in an editor").
 
 The note file is the note: this replaces the text after the frontmatter and
 keeps every frontmatter key as it stands, stamping only ``updated_at``. The

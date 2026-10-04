@@ -51,7 +51,7 @@ dependency order — agent and skill, then provider (it projects into agents),
 then usage metering, then knowledge, then memory (so the gateway's handshake
 names the memory root), then MCP last of the kinds (so it picks up every
 built-in tool), then Coffer's own guide skill — and returns them bundled in
-`KindWirings`. Chat, curation, channels and the agent connection are wired
+`KindWirings`. Chat, the knowledge sweep, channels and the agent connection are wired
 after that from those results, and the background workers last. Sync takes
 part the same way and needs no contribution list: it is a round over the vault
 that the kind-agnostic vault writer already admits every kind's files through,

@@ -23,12 +23,10 @@ const SAVED: FileOut = {
   actor: "user",
   created_at: "2026-09-12T00:00:00Z",
   updated_at: "2026-09-28T00:00:00Z",
-  curated_at: "2026-09-13T00:00:00Z",
   body: "Rewritten.",
   file_path: "/Users/dev/.coffer/knowledge/shopee/gateway.md",
   folder_path: "/Users/dev/.coffer/knowledge/shopee",
   fingerprint: "fp-2",
-  inbox: false,
 };
 
 function makeWrapper() {

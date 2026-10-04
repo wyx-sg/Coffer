@@ -1,9 +1,8 @@
 """Which upkeep passes this daemon is running right now.
 
-An *upkeep pass* is one of the long, model-driven rewrites a vault does to
-itself: memory's ``distil`` over a partition, knowledge's ``curate`` over a
-collection. Each takes minutes, rewrites files, and can be started from three
-places — a button, the CLI, a timer. Two of them over the same target at the
+An *upkeep pass* is one of the long rewrites a vault does to itself, such as
+memory's ``distil`` over a partition. Each rewrites files and can be started
+from three places — a button, the CLI, a timer. Two of them over the same target at the
 same time is not a slower version of one; it is two writers racing over the
 same directory.
 
@@ -11,8 +10,8 @@ So whether a pass is running is a fact about the DAEMON, not about whichever
 surface happened to start it. A button that remembers "I am organising" in its
 own component state forgets on the next navigation, and the second click then
 starts a second pass. This registry is where that fact actually lives, keyed
-by ``(kind, name)`` so memory partitions and knowledge collections share one
-table rather than growing two of them.
+by ``(kind, name)`` so every kind's targets share one table rather than
+growing one each.
 
 **It is per-process, and that is the design.** A pass runs inside the daemon
 that was asked for it; there is no queue, no row and no lease. A daemon
@@ -50,8 +49,8 @@ class UpkeepRun:
     kind: str
     name: str
     started_at: datetime
-    #: For a run that works through several items one pass at a time (a
-    #: collection's Curate now): how many it has done of how many. ``None``
+    #: For a run that works through several items one pass at a time (memory's
+    #: Update memory): how many it has done of how many. ``None``
     #: for a pass that is one unit of work.
     done: int | None = None
     total: int | None = None

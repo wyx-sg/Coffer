@@ -127,19 +127,6 @@ export function useDeleteProvider() {
   });
 }
 
-/** Set which connection Coffer's internal engine uses (≤1 globally). */
-export function useSetInternalDefaultProvider() {
-  const qc = useQueryClient();
-  const onError = useProviderToastError();
-  return useMutation({
-    mutationFn: (uid: string) => providersApi.setInternalDefault(uid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: providersKey });
-    },
-    onError,
-  });
-}
-
 /** Set which connection Coffer transcribes speech on (≤1 globally).
  *
  *  Its own mutation rather than a flag on the one above, because the two flags

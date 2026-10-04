@@ -42,162 +42,6 @@ paths:
       summary: Get Config
       tags:
       - internal-engine
-    put:
-      operationId: update_config_api_v1_internal_engine_config_put
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InternalEngineConfigUpdate'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InternalEngineConfigOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Update Config
-      tags:
-      - internal-engine
-  /api/v1/internal-engine-config/curation-owner:
-    put:
-      description: |-
-        Name the machine that runs the curation pass; ``null`` clears it.
-
-        Clearing returns the vault to "curate wherever this is read", which is
-        correct for a vault down to one machine and wrong for one that still spans
-        several — so it is something the user asks for, never a repair anything
-        performs on its own.
-      operationId: update_curation_owner_api_v1_internal_engine_config_curation_owner_put
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CurationOwnerUpdate'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InternalEngineConfigOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Update Curation Owner
-      tags:
-      - internal-engine
-  /api/v1/internal-engine-config/timeout:
-    put:
-      description: |-
-        Bound one call to Coffer's own model, or return it to the default.
-
-        ``null`` is the way back to the default and the only way: it keeps the
-        default in one place, so raising it later reaches every vault that never
-        chose one rather than none of them.
-      operationId: update_model_timeout_api_v1_internal_engine_config_timeout_put
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ModelTimeoutUpdate'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InternalEngineConfigOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Update Model Timeout
-      tags:
-      - internal-engine
   /api/v1/internal-engine-config/transcribe-model:
     put:
       description: |-
@@ -307,22 +151,6 @@ paths:
       - internal-engine
 components:
   schemas:
-    CurationOwnerUpdate:
-      description: |-
-        Name the machine that may run the curation pass; ``null`` clears it.
-
-        Deliberately NOT validated against the registry. A vault that has never
-        converged has no registry at all and must still be able to name its own
-        machine — the one install where checking would refuse the only correct
-        answer.
-      properties:
-        machine_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Machine Id
-      title: CurationOwnerUpdate
-      type: object
     ErrorDetail:
       properties:
         code:
@@ -354,26 +182,8 @@ components:
       title: ErrorResponse
       type: object
     InternalEngineConfigOut:
-      description: 'Coffer''s own operating settings: its model, and its unattended work.'
+      description: 'Coffer''s own operating settings: its unattended work and its speech-to-text.'
       properties:
-        curate_owner_machine_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Curate Owner Machine Id
-        default_model_timeout_s:
-          title: Default Model Timeout S
-          type: integer
-        model:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Model
-        model_timeout_s:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Model Timeout S
         transcribe_model:
           anyOf:
           - type: string
@@ -391,49 +201,18 @@ components:
           title: Upkeep
           type: object
       required:
-      - model
       - updated_at
       - upkeep
-      - curate_owner_machine_id
-      - model_timeout_s
-      - default_model_timeout_s
       - transcribe_model
       title: InternalEngineConfigOut
-      type: object
-    InternalEngineConfigUpdate:
-      description: Set the internal-engine model; ``null``/empty clears it.
-      properties:
-        model:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Model
-      title: InternalEngineConfigUpdate
-      type: object
-    ModelTimeoutUpdate:
-      description: |-
-        Bound one call to Coffer's own model; ``null`` restores the default.
-
-        The range is checked by the service rather than declared here, so the
-        terminal, this route and a synced document are all refused by one rule that
-        says which numbers are allowed and why — and the operator reads the reason
-        instead of a generated constraint message.
-      properties:
-        seconds:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Seconds
-      title: ModelTimeoutUpdate
       type: object
     TranscribeModelUpdate:
       description: |-
         Choose the speech-to-text model; ``null``/empty stops transcription.
 
-        Deliberately NOT defaulted to the engine's own model: a gateway that serves
-        chat completions commonly serves no transcription endpoint, so borrowing
-        the engine's choice would aim every voice message at a 404 instead of at
-        the behaviour an unconfigured vault already has.
+        Transcription runs on the connection marked ``transcribe_default`` alone: a
+        gateway that serves chat completions commonly serves no transcription
+        endpoint.
       properties:
         model:
           anyOf:
@@ -487,8 +266,8 @@ components:
         Change ONE unattended pass, leaving the others exactly as they stand.
 
         One pass at a time on purpose: a settings page toggles one row, and a body
-        carrying all three would make every toggle a chance to write back a stale
-        copy of the other two — on settings the operator may also be changing on
+        carrying both would make every toggle a chance to write back a stale
+        copy of the other — on settings the operator may also be changing on
         another machine, since they converge through vault sync.
 
         Omitting a field leaves that half of the pass alone, so a switch and a
@@ -509,7 +288,6 @@ components:
           enum:
           - aggregate
           - distil
-          - curate
           title: Pass
           type: string
         use_default_interval:

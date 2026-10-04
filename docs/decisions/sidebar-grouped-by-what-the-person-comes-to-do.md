@@ -6,7 +6,7 @@
 **Related**: [Resource Framework Upfront](resource-framework-upfront.md),
 [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md),
 [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md),
-[The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection](internal-engine-settings.md),
+[The Speech-to-Text Model Is a Setting; Its Endpoint Is Borrowed From a Flagged Connection](internal-engine-settings.md),
 [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md),
 [Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon](channel-adapter-framework.md),
 [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md),
@@ -232,9 +232,9 @@ provider-switching "Offer every connection operation over REST and in the web UI
 The provider page is each agent's model configuration seen from the connection side — the page a
 user visits while setting an agent up, not a capability the agent gains and not a machine
 setting. The page is one table of connections: which agent runs on a connection is read on the
-connection's detail page and switched only on the agent's own Model tab. Coffer's own model is
-not on it — it configures Coffer rather than an agent, so it is a section of Settings › General
-that picks a provider and then its model ([The Engine Owns Its Model](internal-engine-settings.md)). Filed under Capabilities
+connection's detail page and switched only on the agent's own Model tab. Coffer's own
+speech-to-text model is not on it — it configures Coffer rather than an agent, so it is a section of
+Settings › General that picks a provider and then its model ([The Speech-to-Text Model Is a Setting](internal-engine-settings.md)). Filed under Capabilities
 it would read as a tool the agent calls; filed under System it would read as a Coffer
 preference, which a provider is not.
 

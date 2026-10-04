@@ -39,7 +39,7 @@ description: Coffer 如何通过拉取和推送保险库自己的 git 仓库，�
 | --- | --- |
 | `mcp_server`、`skill`、`channel`、`provider` 和 `knowledge` 的资源文件 | 智能体（`local/resources/agent/`）：智能体的配置目录是关于这台机器的事实 |
 | 知识文档和 `.inbox/` 材料、技能主文件夹 | 生效范围（`local/reach.json`）、自定义工具的生效范围、保留策略、同步远端本身 |
-| MCP 能力开关、消息渠道配对、Coffer 的模型和整理设置（`state/`） | 派生树：记忆、缓存、`derived.db`、渲染出来的 `coffer-guide` 技能 |
+| MCP 能力开关、消息渠道配对、Coffer 的设置（`state/`：维护、语音转文字模型） | 派生树：记忆、缓存、`derived.db`、渲染出来的 `coffer-guide` 技能 |
 | 密钥密文（`secret/`），仅在开启 `include_secret` 时 | 本机专属密文（`local/secret/`）、密钥边界、主密钥 |
 | 每台机器一个描述文件（`machines/<id>.json`） | `runs.db`（对话、审计、调用、同步轮次）、`content/`、日志、`daemon-config.json` |
 
@@ -191,13 +191,6 @@ sequenceDiagram
 ### 远端布局 {#remote-layout}
 
 保险库的 `manifest.json` 只携带一个数字 `schema_version`，当前是 `3`。数字相同的远端会与之收敛。数字更新的远端是由更新版本的 Coffer 写的，在本机升级之前会被拒绝。数字更旧的远端从不原地转换：这台机器的保险库才是事实来源，所以由它替换远端。推送是一次快进：一个提交，其树恰好是这台机器的内容，父提交是这台机器的提交和旧的远端顶端，因此旧历史仍可在 git 中找到。只有旧远端有的文件会被有意移除（删除断路器不适用，明文检查仍然适用）。替换前会先给人预览，这一轮记为 `join: "replace"`。其他机器升级后，再作为新机器加入被替换的远端。
-
-## 与整理共用一把锁 {#sharing-the-lock-with-curation}
-
-知识的[一轮整理](/zh/architecture/knowledge)也会无人值守地重写保险库内容。有两条规则让它和同步互不干扰：
-
-- **一把锁。** 一轮同步、一次答复、一次回滚和一轮整理都获取同一把保险库锁，所以一轮同步永远不会在做了一半的重写之上合并。
-- **一台所有者机器。** 两台机器把同一个收件箱条目归并进不同的文档，会合并得很干净，知识却存了两份。所以整理的所有者是同步的引擎设置（`state/settings/internal-engine.json`）中的一个机器 id，在其他每台机器上这一轮整理什么都不做。当一轮同步处于停止、被扣住或等待加入选择时，它也会等待，所以重写永远不会在你即将回答的问题底下挪动文档。
 
 ## 安全地与 git 交互 {#talking-to-git-safely}
 

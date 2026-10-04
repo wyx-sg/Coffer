@@ -41,20 +41,12 @@ interface Props {
   provider: Provider;
   use: ProviderUse;
   endpoint: UseQueryResult<EndpointModelsOut>;
-  engineModel: string | null;
   transcribeModel: string | null;
   /** A model id to find (the Usage tab's "unpriced" link): prefills the search. */
   focusModel?: string | null;
 }
 
-export function ProviderModels({
-  provider,
-  use,
-  endpoint,
-  engineModel,
-  transcribeModel,
-  focusModel,
-}: Props) {
+export function ProviderModels({ provider, use, endpoint, transcribeModel, focusModel }: Props) {
   const { t, i18n } = useTranslation();
   const fetched = endpoint.data?.models ?? [];
   const cur = useModelCuration(provider, fetched);
@@ -95,7 +87,6 @@ export function ProviderModels({
     ...use.agents
       .filter(({ model }) => model === id)
       .map(({ agent }) => t("providers.models.agentDefault", { agent: agent.display_name })),
-    ...(use.engine && engineModel === id ? [t("providers.usedBy.engine")] : []),
     ...(use.transcribe && transcribeModel === id ? [t("providers.usedBy.transcribe")] : []),
   ];
   const rowOf = (id: string) => cur.rows.find((m) => m.id === id);

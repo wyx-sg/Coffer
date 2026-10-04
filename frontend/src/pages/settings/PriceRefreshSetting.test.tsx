@@ -1,4 +1,4 @@
-// PriceRefreshSetting: the daily price-list refresh switch under Coffer's model (spec provider-switching).
+// PriceRefreshSetting: the daily price-list refresh switch under Speech-to-text (spec provider-switching).
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

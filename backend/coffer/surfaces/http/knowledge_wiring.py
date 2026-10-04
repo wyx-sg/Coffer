@@ -6,13 +6,8 @@ upload), and the renderer for Coffer's own skill, which carries the catalogue.
 There is no ``SearchService`` any more, and no retrieval tool to register
 alongside it. The layer exposes no built-in tool (spec knowledge "Expose no
 knowledge tool"); reading and writing are the agent's own, at the absolute paths
-the delivered skill carries. ``IngestService`` takes
-an optional ``completion`` port and so cannot fail to build: with no internal
-connection configured it falls back to the document's own opening prose ("Fill
-frontmatter on converted material"). The model port is handed in rather than
-built here — which connection the internal engine runs on is the engine's
-question, not this kind's (spec internal-engine "Reach the engine only through
-its ports").
+the delivered skill carries. ``IngestService`` describes an upload from its own
+opening prose ("Fill frontmatter on converted material"); no model is involved.
 
 What this module hands back is TEXT, not a delivery. The skill that carries
 the catalogue is an ordinary skill resource now, written into the master store
@@ -25,13 +20,11 @@ one place allowed to bridge kinds (Contract 5).
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING
 
 from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
-from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.knowledge import guide_render
 from coffer.application.knowledge.history_service import KnowledgeHistoryService
 from coffer.application.knowledge.ingest import IngestService
@@ -45,9 +38,7 @@ from coffer.domain.features import KNOWLEDGE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
-from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.platform.host import machine_label
-from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.event_dependencies import announce_change
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
@@ -66,13 +57,11 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class KnowledgeWiring:
     """What the knowledge kind hands back: the directory service and its
-    consumers (the channel ``/kb`` card takes the first two), the
-    internal-model selector the curation pass shares, and the renderer for
-    Coffer's own skill, which the pass re-runs whenever the corpus changes."""
+    its upload ingest, and the renderer for
+    Coffer's own skill, which the sweep re-runs whenever the corpus changes."""
 
     service: KnowledgeService
     ingest_service: IngestService
-    models: ModelSelectorPort
     render_guide: GuideRenderer
 
 
@@ -81,25 +70,16 @@ def wire_knowledge_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
-    models: ModelSelectorPort,
-    secret_resolver: Callable[[str], str],
     on_catalogue_changed: CatalogueChanged,
 ) -> KnowledgeWiring:
     """Wire the ``knowledge`` kind into the app and return what it built."""
-
-    async def _merge_available() -> bool:
-        # A pass needs the internal model and nothing else to merge material;
-        # without one, material is promoted to a document on the spot ("Promote
-        # material directly when no model is configured").
-        return await models.get_default() is not None
 
     service = KnowledgeService(
         resources=resource_svc,
         audit=audit,
         on_catalogue_changed=on_catalogue_changed,
-        merge_available=_merge_available,
         # Every write a commit naming its writer (spec knowledge "Keep every
-        # document's history and undo a pass as a whole"), in the vault's repository.
+        # document's history"), in the vault's repository.
         history=KNOWLEDGE_HISTORY,
         announce=lambda uid: announce_change(KIND_KNOWLEDGE, uid),
     )
@@ -117,10 +97,6 @@ def wire_knowledge_kind(
     ingest_service = IngestService(
         knowledge=service,
         registry=default_registry(),
-        models=models,
-        completion=LangchainLlmCompletion(),
-        secret_resolver=secret_resolver,
-        read_timeout=read_internal_engine_timeout,
     )
     set_ingest_service(ingest_service)
 
@@ -157,6 +133,5 @@ def wire_knowledge_kind(
     return KnowledgeWiring(
         service=service,
         ingest_service=ingest_service,
-        models=models,
         render_guide=_render_guide,
     )

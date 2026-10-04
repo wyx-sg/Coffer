@@ -9,13 +9,12 @@ order, and the web UI offers them as one **Update memory** button.
 
 **Only partitions with something to distil are distilled.** An entry is
 undistilled when no note's provenance and no ``RETIRED.md`` record names it (see
-"Distil incrementally in two stages"), and a note whose raw entries are all gone is
+"Distil each raw entry into a note mechanically"), a note an agent marked
+retired (see "Retire a note an agent marked retired"), and a note whose raw entries are all gone is
 owed its retirement (see "Retire a note whose raw entries are all gone"); a partition
 holding neither would get nothing from a pass but a rewritten index, so it is not
 visited. That is also what makes
-the answer useful: ``distilled`` names what actually changed. With no internal
-connection the pass is the mechanical one (see "Distil mechanically with no internal
-connection") — ``MemoryService.distil`` decides that, not this module.
+the answer useful: ``distilled`` names what actually changed.
 
 **A partition already being distilled is skipped, not failed (see "Run one distil
 pass per partition at a time").** The claim is the same upkeep-runs key, on the same
@@ -69,9 +68,8 @@ async def update_memory(
 
     The partition list is read AFTER the aggregation, so a partition the pass
     has just created is distilled in the same action. A distil that raises
-    propagates: the pass degrades a bad model answer to nothing rather than
-    raising (see "Record what each distil pass did"), so an exception here is a
-    fault the caller should see, not a busy partition.
+    propagates: a pass that raises (see "Record what each distil pass wrote
+    and retired") is a fault the caller should see, not a busy partition.
     """
     async with runs.claimed(KIND_MEMORY, UPDATE_RUN) as tracked:
         aggregation = await service.aggregate(actor=actor)

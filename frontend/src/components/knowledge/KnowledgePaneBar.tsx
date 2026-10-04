@@ -2,7 +2,7 @@
 //
 // The 48px bar over every Knowledge pane view (boards 5.1.01, 5.1.09, 5.1.10,
 // 5.1.13): where you are — the collection, its folders and the open file in
-// the mono face, or "Recent changes › Curation pass" — then the view's tabs,
+// the mono face, or "Recent changes › Change" — then the view's tabs,
 // if it has any, and its actions pushed right. One component so a document, an
 // item, a collection and a pass all say where they are the same way. The
 // leading segments give way first (ellipsis) when the path is long, and the
@@ -15,7 +15,7 @@ import { ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export interface Crumb {
+interface Crumb {
   label: string;
   /** Where the crumb leads; the last crumb is where you are and leads nowhere. */
   to?: string;

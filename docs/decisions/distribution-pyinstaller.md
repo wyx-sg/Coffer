@@ -38,7 +38,7 @@ Three more forces shape the answer:
 The daemon spec carries its Alembic migrations and the built web UI
 (`frontend/dist`, shipped as `webui/`) as data files, and pins the modules
 imported lazily inside functions — `markitdown` and its document parsers,
-`openai`, `langgraph`, `langchain` — in `hiddenimports`, because PyInstaller's
+and `openai` — in `hiddenimports`, because PyInstaller's
 static analysis cannot see them. The shim spec excludes the server stack
 (FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) since it only needs `httpx`
 to reach the daemon over loopback, and every spec excludes the heavy ML stack

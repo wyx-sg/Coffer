@@ -11,7 +11,7 @@ This page explains how the daemon turns many upstream MCP servers into one MCP s
 
 A developer who uses several coding agents registers the same MCP servers in each agent's own config file, with the same secrets pasted into each. Every agent then spawns its own copies, and each copy sees a different subset of what the developer set up.
 
-The gateway replaces that with one registration per server. Each agent's config holds exactly one MCP entry, `coffer`, which launches `coffer-mcp-shim`. Behind it, the daemon aggregates every enabled upstream server's tools, resources and prompts, applies the owner's curation (per-capability toggles, per-agent scope), and records each call it forwards.
+The gateway replaces that with one registration per server. Each agent's config holds exactly one MCP entry, `coffer`, which launches `coffer-mcp-shim`. Behind it, the daemon aggregates every enabled upstream server's tools, resources and prompts, applies the owner's selection (per-capability toggles, per-agent scope), and records each call it forwards.
 
 Aggregation brings its own problem. Once a user registers a handful of servers, the merged catalogue passes the point where a model picks tools reliably, which is roughly 30 to 50 tools. The gateway handles this in two ways. It lists a budgeted slice of the catalogue, and it offers a search tool that reaches the rest.
 
@@ -372,7 +372,7 @@ A group's health is read, not stored: `off` while disabled, `failing` when its l
 - **An LLM router that picks and calls the tool.** Rejected. It adds a second model call to every tool use, puts an unauditable hop in the call path, and a router with little context selects worse than the main agent. Search returns real schemas and leaves the choice to the agent.
 - **Embedding-based search.** Coffer embeds nothing. The keyword ranker is deterministic, local, needs no model, and is covered by an offline retrieval eval.
 - **Self-reinforcing usage.** A tool that is never called ranks low, so it stays unlisted and uncalled. The per-server floor and full-catalogue search are the counterweights. A new tool on a busy server is still reachable only through search until it gets used.
-- **No per-call human approval.** The gateway forwards every call that passes the capability and scope gates. There is no approval prompt. Curation happens ahead of time, through toggles and scope.
+- **No per-call human approval.** The gateway forwards every call that passes the capability and scope gates. There is no approval prompt. Selection happens ahead of time, through toggles and scope.
 
 ::: warning Behaviours worth knowing
 - A config edit evicts before the write is committed. A call that lands in the one-write window between the eviction and the commit respawns from the old config, and that connection stays cached until the next edit, disable, crash or session end.

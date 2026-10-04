@@ -1,21 +1,9 @@
 // frontend/src/pages/settings/EngineSettings.tsx
 //
-// The Coffer's model section of Settings › General (spec web-ui "Choose
-// Coffer's model in Settings › General", spec internal-engine "Show and change
-// Coffer's model in Settings › General"): the models Coffer runs for its own
-// work, not anything served to an agent.
-//
-// Two pickers — Coffer's engine and Speech to text — each a provider then a
-// model from that provider's list, with a Test and a state line; the bound on
-// one call to the engine sits under the engine picker. The passes Coffer runs
-// unattended on that model are switched on the pages they upkeep — Knowledge's
-// and Memory's Automatic popovers — not here.
-//
-// Speech to text is a picker of its own rather than a row borrowed from the
-// engine's, because it runs on a SECOND connection flag with no fallback to the
-// engine's (spec internal-engine "Transcribe speech on its own connection and
-// model"). There is no embedding picker: knowledge is a directory of files an
-// agent reads with its own tools, so there is no index for one to feed.
+// The Speech-to-text section of Settings › General (spec internal-engine "Show
+// the speech-to-text pair in Settings › General"): the connection and model
+// Coffer transcribes voice with, and the price-list refresh switch. The passes Coffer runs unattended
+// are switched on the Memory page, not here.
 import { useTranslation } from "react-i18next";
 
 import { SettingsSection } from "@/components/settings/SettingsLayout";
@@ -23,11 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviders } from "@/lib/hooks/useProviders";
 
-import { InternalEngineSettings } from "./InternalEngineSettings";
 import { PriceRefreshSetting } from "./PriceRefreshSetting";
 import { SpeechToTextSettings } from "./SpeechToTextSettings";
 
-/** The section exists only while the Models feature is on: the engine is a
+/** The section exists only while the Models feature is on: speech to text is a
  *  connection of a model provider, so with it off there is nothing to choose
  *  and the section is absent. */
 export function EngineSettings() {
@@ -37,23 +24,21 @@ export function EngineSettings() {
 
 function EngineSection() {
   const { t } = useTranslation();
-  // Both pickers list the same connections; until they arrive, keep the
-  // section's shape rather than render pickers that read as unset.
+  // Until the connections arrive, keep the section's shape rather than render
+  // a picker that reads as unset.
   const { isPending } = useProviders();
   return (
     <SettingsSection
-      title={t("settings.cofferModel.title")}
-      description={t("settings.cofferModel.subtitle")}
-      testId="coffer-model-section"
+      title={t("settings.speechToText.title")}
+      description={t("settings.speechToText.subtitle")}
+      testId="speech-to-text-section"
     >
       {isPending ? (
-        <div className="flex flex-col gap-2 py-2.5" data-testid="coffer-model-loading">
-          <Skeleton className="h-10 w-full" />
+        <div className="flex flex-col gap-2 py-2.5" data-testid="speech-to-text-loading">
           <Skeleton className="h-10 w-full" />
         </div>
       ) : (
         <>
-          <InternalEngineSettings />
           <SpeechToTextSettings />
           <PriceRefreshSetting />
         </>

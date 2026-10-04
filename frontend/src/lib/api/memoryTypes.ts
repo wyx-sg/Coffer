@@ -19,6 +19,9 @@ type Schemas = MemoryWire["schemas"];
 export type PartitionOut = Schemas["PartitionOut"];
 export type PartitionListOut = Schemas["PartitionListOut"];
 
+/** A chore for the person's agent: the prompt, written by the daemon. */
+export type HandoffOut = Schemas["HandoffOut"];
+
 /** One memory in a partition's list — no body, no provenance. */
 export type NoteSummaryOut = Schemas["NoteSummaryOut"];
 export type NoteListOut = Schemas["NoteListOut"];

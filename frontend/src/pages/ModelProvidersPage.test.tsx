@@ -79,7 +79,6 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
     secret_ref: `provider/${name}/key`,
     local_runtime: null,
     compatible_agents: ["claude_code"],
-    internal_default: false,
     transcribe_default: false,
     models: [],
     enabled: true,
@@ -199,7 +198,7 @@ describe("ModelProvidersPage", () => {
     async () => {
       serve([
         makeProvider({ name: "official" }),
-        makeProvider({ name: "agnes", internal_default: true }),
+        makeProvider({ name: "agnes" }),
         makeProvider({ name: "groq", transcribe_default: true }),
       ]);
       renderAt();
@@ -207,10 +206,8 @@ describe("ModelProvidersPage", () => {
 
       const badge = (row: string, name: string | RegExp) =>
         within(rowFor(row)).queryByRole("img", { name });
-      expect(badge("agnes", "Coffer · background model")).toBeTruthy();
-      expect(badge("agnes", "Coffer · speech to text")).toBeNull();
       expect(badge("groq", "Coffer · speech to text")).toBeTruthy();
-      expect(badge("groq", "Coffer · background model")).toBeNull();
+      expect(badge("agnes", /^Coffer · /)).toBeNull();
       expect(badge("official", /^Coffer · /)).toBeNull();
     },
   );
@@ -269,7 +266,7 @@ describe("ModelProvidersPage", () => {
     await screen.findAllByTestId("provider-row");
     expect(rowFor("official")).toHaveTextContent("Anthropic · 2 models");
     expect(rowFor("agnes")).toHaveTextContent("OpenAI-compatible · all models");
-    expect(rowFor("local-llm")).toHaveTextContent("Ollama · Coffer's engine only");
+    expect(rowFor("local-llm")).toHaveTextContent("Ollama · all models");
   });
 
   test("the list is folded by dragging its divider, not by a button", async () => {

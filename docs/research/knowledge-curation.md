@@ -1,6 +1,6 @@
 # Knowledge curation: how other products do it
 
-**Feature**: a knowledge base of plain Markdown files that people and an LLM co-maintain — new material lands in an inbox, an LLM pass merges it into the existing documents (newer wins, human edits respected), and agents read the files with their own tools, guided by a generated catalogue, instead of through RAG retrieval · **Coffer spec**: [knowledge](../../openspec/specs/knowledge/spec.md) · **Related ADRs**: [Knowledge Is Plain Files](../decisions/knowledge-is-plain-files.md), [Knowledge Curation](../decisions/knowledge-curation.md), [Coffer Ships Its Own Skill](../decisions/coffer-ships-its-own-skill.md)
+**Feature**: a knowledge base of plain Markdown files that people and an LLM co-maintain — new material lands in an inbox, an LLM pass merges it into the existing documents (newer wins, human edits respected), and agents read the files with their own tools, guided by a generated catalogue, instead of through RAG retrieval · **Coffer spec**: [knowledge](../../openspec/specs/knowledge/spec.md) · **Related ADRs**: [Knowledge Is Plain Files](../decisions/knowledge-is-plain-files.md), [tidying-knowledge-and-memory-is-the-agents-job](../decisions/tidying-knowledge-and-memory-is-the-agents-job.md), [Coffer Ships Its Own Skill](../decisions/coffer-ships-its-own-skill.md)
 **Researched**: 2026-09 · **Method**: web research, primary sources (repos, official docs, author posts); star counts via the GitHub API, 2026-09-24
 
 The field splits three ways:

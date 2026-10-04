@@ -22,9 +22,9 @@ def _audit(c, event_type: str) -> list[dict]:
     return r.json()["entries"]
 
 
-def _flags(c) -> dict[str, tuple[bool, bool]]:
+def _flags(c) -> dict[str, bool]:
     rows = c.get("/api/v1/providers").json()["providers"]
-    return {p["name"]: (p["internal_default"], p["transcribe_default"]) for p in rows}
+    return {p["name"]: p["transcribe_default"] for p in rows}
 
 
 @pytest.mark.acceptance(
@@ -48,36 +48,19 @@ def test_the_routes_create_list_switch_and_revert(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching", scenario="the internal engine's connection is named over REST"
-)
-def test_the_internal_default_moves_to_the_named_connection(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, 59851)
-    with _client(app) as c:
-        alpha = _new(c, _anthropic_body("alpha"))
-        beta = _new(c, _anthropic_body("beta"))
-        assert c.post(f"/api/v1/providers/{alpha}/internal-default").status_code == 200
-
-        assert c.post(f"/api/v1/providers/{beta}/internal-default").status_code == 200
-        flags = _flags(c)
-        assert flags["beta"][0] is True and flags["alpha"][0] is False
-        assert any(e["resource_name"] == "beta" for e in _audit(c, "provider_internal_default_set"))
-
-
-@pytest.mark.acceptance(
     spec="provider-switching", scenario="the speech-to-text connection is named over REST"
 )
-def test_the_transcribe_default_moves_only_its_own_flag(tmp_path, monkeypatch):
+def test_the_transcribe_default_moves_to_the_named_connection(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59861)
     with _client(app) as c:
         a = _new(c, _anthropic_body("conn-a"))
         b = _new(c, _anthropic_body("conn-b"))
-        assert c.post(f"/api/v1/providers/{a}/internal-default").status_code == 200
         assert c.post(f"/api/v1/providers/{a}/transcribe-default").status_code == 200
 
         assert c.post(f"/api/v1/providers/{b}/transcribe-default").status_code == 200
         flags = _flags(c)
-        assert flags["conn-b"] == (False, True)
-        assert flags["conn-a"] == (True, False)
+        assert flags["conn-b"] is True
+        assert flags["conn-a"] is False
         assert any(
             e["resource_name"] == "conn-b" for e in _audit(c, "provider_transcribe_default_set")
         )

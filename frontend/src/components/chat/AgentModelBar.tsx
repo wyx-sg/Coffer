@@ -3,7 +3,7 @@
 // reply box toolbar: which Coffer-managed agent the conversation is bound to (Claude Code /
 // Codex, by its mark), plus a per-conversation model picker. The
 // picker sets agent_config.model — the agent's own model, passed through to its
-// CLI (the coffer-model-is-an-internal-engine and provider-switching
+// CLI (the model-catalogue-read-from-the-agent and provider-switching
 // ADRs), mirroring the channel `/model` command. An empty
 // value inherits the active provider profile's projected default.
 import { AgentBadge } from "@/components/agent/AgentBadge";

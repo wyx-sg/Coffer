@@ -1,6 +1,6 @@
 """Wire models for a collection's history (spec knowledge "Keep every
-document's history and undo a pass as a whole", "Follow knowledge changes
-across collections").
+document's history", "Follow edits across
+collections in one feed").
 
 Each mirrors a value object in ``domain.knowledge.history``. A change is one
 vault commit that touched ``knowledge/``, named by its commit id (``version``)
@@ -18,10 +18,8 @@ from coffer.domain.knowledge.history import (
     WRITER_DISK,
     WRITERS,
     Change,
-    ChangeDetail,
     DocumentDiff,
     DocumentVersion,
-    WaitingItem,
 )
 
 Writer = Literal["user", "agent", "curation", "sync", "disk"]
@@ -40,29 +38,30 @@ class DocumentChangeOut(BaseModel):
 class ChangeOut(BaseModel):
     """One change to knowledge: one commit naming its writer."""
 
-    version: str = Field(
-        description="The change's id (its commit), what diff, restore and undo take."
-    )
+    version: str = Field(description="The change's id (its commit), what diff and restore take.")
     time: datetime
     writer: Writer = Field(
         description="`user` a person; `agent` an agent whose material became a document on "
-        "arrival; `curation` Coffer's curation pass; `sync` another machine's change; `disk` "
-        "an edit made outside Coffer (a person's editor, an agent's file tools)."
+        "arrival; `curation` a change Coffer's retired curation pass made, kept in the "
+        "history; `sync` another machine's change; `disk` an edit made outside Coffer "
+        "(a person's editor, an agent's file tools)."
     )
     operation: str = Field(
-        description="`pass`, `save`, `delete`, `promote`, `submit`, `restore`, `undo`, `edit`, "
-        "`sync`, `create`, `rename`, `remove` or `baseline`. Only a `pass` can be undone."
+        description="`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, "
+        "`remove` or `baseline`; a change a retired curation pass made also reads "
+        "`pass`, `submit` or `undo`."
     )
     summary: str
     actor: str | None = Field(default=None, description="The audit actor of the operation.")
     agent: str | None = Field(
         default=None,
-        description="The agent that wrote it (writer `agent`), or for a curation pass who "
-        "submitted the item it curated — an agent's name, or `user`.",
+        description="The agent that wrote it (writer `agent`).",
     )
     collections: list[str] = Field(description="The collections the change touched.")
-    item: str | None = Field(default=None, description="The item a curation pass curated.")
-    status: str | None = Field(default=None, description="A curation pass's outcome status.")
+    item: str | None = Field(default=None, description="The item a retired curation pass curated.")
+    status: str | None = Field(
+        default=None, description="A retired curation pass's outcome status."
+    )
     restored_from: str | None = None
     undoes: str | None = None
     documents: list[DocumentChangeOut]
@@ -165,44 +164,10 @@ class VersionRestoreIn(BaseModel):
     version: str = Field(min_length=4, description="The version to restore.")
 
 
-class WaitingItemOut(BaseModel):
-    """An item waiting in a collection's inbox — not a change yet."""
-
-    collection: str
-    path: str
-    title: str
-    submitted_by: str = Field(description="The agent that submitted it, or `user`.")
-    submitted_at: str
-
-
-def waiting_out(item: WaitingItem) -> WaitingItemOut:
-    return WaitingItemOut(
-        collection=item.collection,
-        path=item.path,
-        title=item.title,
-        submitted_by=item.submitted_by,
-        submitted_at=item.submitted_at,
-    )
-
-
 class ChangesOut(BaseModel):
-    """Recent changes across collections, newest first, with the items still waiting."""
+    """Recent changes across collections, newest first."""
 
     changes: list[ChangeOut]
-    waiting: list[WaitingItemOut]
     next_cursor: str | None = Field(
         default=None, description="Pass back as `cursor` for the next page; null on the last."
-    )
-
-
-class ChangeDetailOut(BaseModel):
-    """One change in full: every document it touched, each with its diff."""
-
-    change: ChangeOut
-    diffs: list[DocumentDiffOut]
-
-
-def detail_out(detail: ChangeDetail) -> ChangeDetailOut:
-    return ChangeDetailOut(
-        change=change_out(detail.change), diffs=[diff_out(d) for d in detail.diffs]
     )

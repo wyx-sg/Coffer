@@ -1,16 +1,15 @@
 """Speech-to-text default path for ``ProviderService`` (spec internal-engine).
 
-The twin of :mod:`coffer.application.provider.internal_default_ops`, kept
-beside it rather than folded into it. The two flags have the same shape — at
-most one connection globally, cleared everywhere else before the target is set,
-the move audited — and the same consequence when the connection moves: a model
-chosen for the old endpoint is not a model the new one has heard of.
+At most one connection globally carries ``transcribe_default``, cleared
+everywhere else before the target is set, and the move is audited. A model
+chosen for the old endpoint is not a model the new one has heard of, so a move
+also asks the engine whether the model still stands.
 
-They are NOT the same flag, and nothing here falls back to the other one. A
-gateway that serves chat completions commonly serves no transcription endpoint
-at all, so a fallback would aim every voice message at a 404 in place of the
-behaviour the chat surface already has for an unconfigured vault: hand the
-agent the audio file and leave the recording on this machine.
+Nothing here falls back to another connection. A gateway that serves chat
+completions commonly serves no transcription endpoint at all, so a fallback
+would aim every voice message at a 404 in place of the behaviour the chat
+surface already has for an unconfigured vault: hand the agent the audio file
+and leave the recording on this machine.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ async def transcribe_connection(service: ProviderService, model: str) -> Resolve
     for r in await service.list():
         rc = service._cfg(r)
         if rc.transcribe_default:
-            # Coffer's own engine sends the key to this base URL too: only an
+            # Coffer sends the key to this base URL too: only an
             # approved one (spec secret "Hold a secret for a new
             # destination until a person approves it").
             await require_key(service, r.uid, r.name, rc)
@@ -66,9 +65,9 @@ async def set_transcribe_default(service: ProviderService, uid: str, *, actor: s
             await _set_flag(service, r, value=False, actor=actor)
             previous = r.name
     if not service._cfg(resource).transcribe_default:
-        # Only a real move rewrites the model, exactly as the internal-engine
-        # flag does: re-marking the connection that already carries it changes
-        # nothing, and dropping the model there would be a surprise.
+        # Only a real move rewrites the model: re-marking the connection that
+        # already carries the flag changes nothing, and dropping the model
+        # there would be a surprise.
         await _set_flag(service, resource, value=True, actor=actor)
         if service._engine is not None:
             await service._engine.drop_transcribe_model_unless_curated(

@@ -1,13 +1,17 @@
 """Coffer's own settings as a vault document (spec vault-storage).
 
-The engine's model, what it may run unattended and how often, the one machine
-allowed to curate: every field is a decision the person made for the whole
-fleet, so the settings are one vault document,
+What Coffer may run unattended and how often, and the speech-to-text model:
+every field is a decision the person made for the whole fleet, so the
+settings are one vault document,
 ``state/settings/internal-engine.json``::
 
-    {"format_version": 1, "model": "...", "curate_owner_machine_id": null,
-     "model_timeout_s": null, "transcribe_model": null,
+    {"format_version": 1, "transcribe_model": null,
      "upkeep": {"aggregate": {"enabled": true, "interval_s": null}, ...}}
+
+A document written by an older version may carry ``model``,
+``curate_owner_machine_id``, ``model_timeout_s`` or ``upkeep.curate``. They are ignored on read,
+and the next write rebuilds the document from the fields above, which drops
+them (spec internal-engine "Ignore retired keys in the settings document").
 
 A vault that never chose anything has no document, and reads as the defaults
 (``get`` answers ``None``); a change back to every default removes the
@@ -29,7 +33,6 @@ from typing import Any
 
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
-    CURATE,
     DISTIL,
     GlobalInternalEngineConfig,
     UpkeepSetting,
@@ -40,7 +43,10 @@ from coffer.infrastructure.vault.state_documents import StateDocument
 
 AREA = "settings"
 DOC = "internal-engine"
-_PASSES = (AGGREGATE, DISTIL, CURATE)
+_PASSES = (AGGREGATE, DISTIL)
+#: Top-level keys an older build wrote. A write names each as ``None``, which
+#: the document encoder reads as "remove it from the file".
+_RETIRED_KEYS = ("model", "curate_owner_machine_id", "model_timeout_s")
 
 
 def engine_local_path() -> Path:
@@ -66,27 +72,19 @@ def _upkeep(doc: Mapping[str, Any], name: str) -> UpkeepSetting:
 
 
 def _to_domain(doc: Mapping[str, Any], updated_at: datetime) -> GlobalInternalEngineConfig:
-    aggregate, distil, curate = (_upkeep(doc, name) for name in _PASSES)
+    aggregate, distil = (_upkeep(doc, name) for name in _PASSES)
     return GlobalInternalEngineConfig(
-        model=_str(doc.get("model")),
         updated_at=updated_at,
-        auto_curate_enabled=curate.enabled,
-        curate_owner_machine_id=_str(doc.get("curate_owner_machine_id")),
         auto_aggregate_enabled=aggregate.enabled,
         aggregate_interval_s=aggregate.interval_s,
         auto_distil_enabled=distil.enabled,
         distil_interval_s=distil.interval_s,
-        curate_interval_s=curate.interval_s,
-        model_timeout_s=_int(doc.get("model_timeout_s")),
         transcribe_model=_str(doc.get("transcribe_model")),
     )
 
 
 def _to_doc(config: GlobalInternalEngineConfig) -> dict[str, Any]:
     return {
-        "model": config.model,
-        "curate_owner_machine_id": config.curate_owner_machine_id,
-        "model_timeout_s": config.model_timeout_s,
         "transcribe_model": config.transcribe_model,
         "upkeep": {
             name: {
@@ -139,22 +137,15 @@ class VaultInternalEngineConfigRepo:
             # no document, so a fresh machine and this one agree.
             self.document.remove(summary=summary)
         else:
-            self.document.put(doc, summary=summary)
+            self.document.put({**doc, **dict.fromkeys(_RETIRED_KEYS)}, summary=summary)
         self._local.write({"updated_at": now.isoformat()})
         return _to_domain(self.document.get() or doc, now)
 
     async def set(
-        self,
-        *,
-        model: str | None,
-        curate_owner_machine_id: str | None = None,
-        upkeep: Mapping[str, UpkeepSetting] | None = None,
+        self, *, upkeep: Mapping[str, UpkeepSetting] | None = None
     ) -> GlobalInternalEngineConfig:
         def change(current: GlobalInternalEngineConfig) -> dict[str, Any]:
-            out: dict[str, Any] = {"model": model}
-            if curate_owner_machine_id is not None:
-                # The empty string clears it back to "wherever this is read".
-                out["curate_owner_machine_id"] = curate_owner_machine_id or None
+            out: dict[str, Any] = {}
             if upkeep:
                 block = _to_doc(current)["upkeep"]
                 for name, setting in upkeep.items():
@@ -164,21 +155,10 @@ class VaultInternalEngineConfigRepo:
 
         return self._change("Changed the internal engine's settings", change)
 
-    async def set_model_timeout(self, seconds: int | None) -> GlobalInternalEngineConfig:
-        """Write only the timeout. ``None`` restores the built-in default."""
-        return self._change("Changed the model timeout", lambda _c: {"model_timeout_s": seconds})
-
     async def set_transcribe_model(self, model: str | None) -> GlobalInternalEngineConfig:
         """Write only the transcription model. ``None`` stops transcription."""
         return self._change(
             "Changed the transcription model", lambda _c: {"transcribe_model": model}
-        )
-
-    async def set_curation_owner(self, machine_id: str | None) -> GlobalInternalEngineConfig:
-        """Write only the curation owner. ``None`` clears it (``set`` reads
-        ``None`` as "leave alone" and takes the empty string for clear)."""
-        return self._change(
-            "Changed the curation owner", lambda _c: {"curate_owner_machine_id": machine_id}
         )
 
 

@@ -1,8 +1,8 @@
 """Reads and writes one partition's four files, with one writer each.
 
 A partition holds ``MEMORY.md``, ``notes/``, ``RETIRED.md`` and ``.raw/``, and
-keeping those apart is not tidiness — it is what makes "Keep distil out of the
-raw directory" checkable. Every function here writes into exactly one of the
+keeping those apart is not tidiness — it is what makes "Leave the raw directory to aggregation"
+checkable. Every function here writes into exactly one of the
 four, so "does the distil pass write ``.raw/``?" is answered by reading which
 functions the pass calls rather than by trusting it, and there is deliberately
 no helper that writes a note and its raw entry in one go however convenient that
@@ -102,6 +102,11 @@ def write_note(note: Note) -> str:
         "updated_at": note.updated_at,
         "search_terms": list(note.search_terms),
     }
+    # Written only when set, so an ordinary note's file carries no marker keys.
+    if note.retired:
+        frontmatter["retired"] = note.retired
+    if note.replaced_by:
+        frontmatter["replaced_by"] = note.replaced_by
     path = paths.note_path(note.partition, note.slug)
     atomic_write(path, render_frontmatter(frontmatter, note.body))
     return paths.relative_of(path)
@@ -124,7 +129,23 @@ def read_note(partition: str, slug: str) -> Note:
         created_at=str(fm.get("created_at", "")),
         updated_at=str(fm.get("updated_at", "")),
         search_terms=text_list(fm.get("search_terms")),
+        retired=_retired_marker(fm),
+        replaced_by=str(fm.get("replaced_by") or "").strip(),
     )
+
+
+def _retired_marker(fm: dict[str, Any]) -> str:
+    """The reason in a note's ``retired:`` key, or empty when the key is absent.
+
+    A key with no reason (``retired:`` or ``retired: true``) still marks the
+    note, so it reads as a reason that says only that.
+    """
+    if "retired" not in fm or fm["retired"] is False:
+        return ""
+    value = fm["retired"]
+    if value is None or value is True:
+        return "Marked for retirement"
+    return str(value).strip() or "Marked for retirement"
 
 
 def list_notes(partition: str) -> tuple[Note, ...]:

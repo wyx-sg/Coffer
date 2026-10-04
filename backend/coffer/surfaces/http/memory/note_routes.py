@@ -132,8 +132,8 @@ async def save_note(
     svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> NoteOut:
-    """A person's edit from the page's editor ("Edit a memory in the web UI or
-    on disk"): the body is replaced, the frontmatter kept, ``updated_at``
+    """A person's edit from the page's editor ("Edit a memory in the web UI or in an editor"): the
+    body is replaced, the frontmatter kept, ``updated_at``
     stamped, and a stale fingerprint is a 409 ``MEMORY_NOTE_CONFLICT`` that
     carries the note as it is now and leaves the file alone."""
     partition = await require_partition(uid, resources)

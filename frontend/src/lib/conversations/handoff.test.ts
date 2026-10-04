@@ -10,6 +10,15 @@ describe("readHandoffState", () => {
     ).toEqual({ agentKey: "claude_code", cwd: "/w", prompt: "Install jq." });
   });
 
+  test("reads the send-at-once mark, and only when it is true", () => {
+    const base = { agentKey: "codex", prompt: "p" };
+    expect(readHandoffState({ handoff: { ...base, autoSend: true } })?.autoSend).toBe(true);
+    expect(readHandoffState({ handoff: { ...base, autoSend: "yes" } })).not.toHaveProperty(
+      "autoSend",
+    );
+    expect(readHandoffState({ handoff: base })).not.toHaveProperty("autoSend");
+  });
+
   test("a missing or blank folder is Coffer's own workspace", () => {
     expect(readHandoffState({ handoff: { agentKey: "codex", prompt: "p" } })?.cwd).toBeNull();
     expect(

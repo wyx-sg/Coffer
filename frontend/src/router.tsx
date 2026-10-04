@@ -147,15 +147,13 @@ const pageRoutes: RouteObject[] = gateRoutes([
   { path: "skills", element: <SkillsPage /> },
   { path: "skills/:name", element: <SkillsPage /> },
   { path: "skills/:name/:tab", element: <SkillsPage /> },
-  // Knowledge is ONE page (spec knowledge "Present a collection as one tree in
-  // the web UI"): the collection tree stays on the left whatever the right pane
-  // shows — Recent changes (`/knowledge`), one change (`/knowledge/changes/<version>`),
-  // a collection and its open document (`/knowledge/<uid>?file=`), the
-  // document's History (`/knowledge/<uid>/history?file=`) or the Inbox
-  // (`/knowledge/<uid>/inbox`). Every address reuses the same element, so moving
-  // between them keeps the tree's expanded folders rather than remounting it.
+  // Knowledge is ONE page (spec knowledge "Show a collection as one tree of
+  // documents in the web UI"): the collection tree stays on the left whatever the
+  // right pane shows — Recent changes (`/knowledge`), a collection and its open
+  // document (`/knowledge/<uid>?file=`) or the document's History
+  // (`/knowledge/<uid>/history?file=`). Every address reuses the same element, so
+  // moving between them keeps the tree's expanded folders rather than remounting it.
   { path: "knowledge", element: knowledgePage },
-  { path: "knowledge/changes/:version", element: knowledgePage },
   { path: "knowledge/:uid", element: knowledgePage },
   { path: "knowledge/:uid/:tab", element: knowledgePage },
   {

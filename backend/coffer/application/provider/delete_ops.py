@@ -59,13 +59,10 @@ async def delete(service: ProviderService, uid: str, *, actor: str) -> None:
         for agent_type in types:
             await deactivate(service, agent_type, actor=actor)
         await service._resources.delete(uid, actor)
-        if service._engine is not None:
-            # The flag leaves with the row; the model chosen for it would
-            # otherwise dangle against whatever connection is set next.
-            if cfg.internal_default:
-                await service._engine.drop_model_unless_curated(set(), actor=actor)
-            if cfg.transcribe_default:
-                await service._engine.drop_transcribe_model_unless_curated(set(), actor=actor)
+        # The flag leaves with the row; the model chosen for it would otherwise
+        # dangle against whatever connection is set next.
+        if service._engine is not None and cfg.transcribe_default:
+            await service._engine.drop_transcribe_model_unless_curated(set(), actor=actor)
 
 
 def _rows(before: str | None, after: str | None) -> list[DiffRow]:

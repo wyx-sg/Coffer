@@ -144,7 +144,8 @@ def test_the_body_carries_both_halves() -> None:
     manual, catalogue = body[:manual_end], body[manual_end:]
     assert "`coffer__search_tools`" in manual
     assert "`coffer__write`" not in manual
-    assert "/.inbox/" in manual  # how an agent adds knowledge
+    assert "### Writing something down" in manual  # how an agent adds knowledge
+    assert "### Tidying a collection" in manual
     assert "Everything left out is\nstill callable" in manual  # the tiering contract
     assert "never writes it" in manual
     assert "Nothing here waits on a human" in manual
@@ -165,10 +166,10 @@ def test_the_manual_names_one_tool_the_memory_root_and_the_log_reader() -> None:
     assert "coffer__recall" not in text
     assert "coffer__diagnose" not in text
     assert "adds one tool of its own" in text
-    # Knowledge is added by writing a file into a collection's inbox, edited in
-    # place, and never through git in the vault.
-    assert "/.inbox/" in text
-    assert "Never run git inside the vault" in text
+    # Knowledge is written straight into a collection, tidied there, and never
+    # committed through git in the vault.
+    assert "### Writing something down" in text
+    assert "never run git inside the vault" in text
     assert "coffer knowledge" not in text
     assert "coffer path knowledge" not in text
     assert "coffer path memory" not in text
@@ -256,11 +257,16 @@ def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
     assert render("~/.coffer/knowledge", None) == text
 
 
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="the writing and tidying sections are absent while knowledge is off",
+)
 def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_root() -> None:
-    """The whole guide, not only its description: the inbox instructions and the
-    knowledge root leave with the feature."""
+    """The whole guide, not only its description: the writing and tidying
+    instructions and the knowledge root leave with the feature."""
     text = render("~/.coffer/knowledge", None, memory_root=_MEMORY)
-    assert "/.inbox/" not in text
+    assert "### Writing something down" not in text
+    assert "### Tidying a collection" not in text
     assert "~/.coffer/knowledge" not in text
     assert _MEMORY in text
     assert "adds one tool of its own" in text
@@ -273,14 +279,14 @@ def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
     assert "<MEMORY_ROOT>" not in text
     assert "~/.coffer/memory" not in text
     assert "## Coffer reads your memory" not in text
-    assert "/.inbox/" in text
+    assert "### Writing something down" in text
     assert "### ops" in text
     assert "adds one tool of its own" in text
     assert "memory notes" not in text.split("---")[1]
 
     both_off = render("~/.coffer/knowledge", None)
     assert "~/.coffer/memory" not in both_off
-    assert "/.inbox/" not in both_off
+    assert "### Writing something down" not in both_off
     assert "adds one tool of its own" in both_off
     assert "`coffer path logs`" in both_off  # the log readers are always there
     assert "<!--" not in both_off
@@ -308,3 +314,57 @@ def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
     assert "<MEMORY_ROOT>" not in text
     assert "adds one tool of its own" in text
     assert "memory notes" in text.split("---")[1]
+
+
+def _section(text: str, heading: str) -> str:
+    """The body of one ``### heading`` section, up to the next heading."""
+    start = text.index(f"### {heading}")
+    rest = text[start + len(heading) + 4 :]
+    end = min((i for i in (rest.find("\n## "), rest.find("\n### ")) if i != -1), default=len(rest))
+    return rest[:end]
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the rendered guide carries the writing and tidying sections"
+)
+def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    assert "### Writing something down" in text
+    assert "### Tidying a collection" in text
+    description = yaml.safe_load(text.split("---", 2)[1])["description"].lower()
+    assert "writ" in description and "tidy" in description
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="the writing section states the six rules")
+def test_the_writing_section_states_the_six_rules() -> None:
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    flat = " ".join(_section(text, "Writing something down").split())
+    assert "fold the fact into the" in flat  # 1. the document that owns the subject
+    assert "Lose nothing" in flat
+    assert "Organise by subject, never by provenance" in flat
+    assert "the newer wins unless the older one is shown to be right" in flat
+    assert "Never name another knowledge file" in flat
+    assert "a `title`" in flat and "`actor: agent`" in flat
+
+
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="the memory section teaches merging by origins and retiring by frontmatter",
+)
+def test_the_memory_section_teaches_merging_by_origins_and_retiring_by_frontmatter() -> None:
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    flat = " ".join(_section(text, "Tidying memory").split())
+    assert "append every entry of the merged note's `origins:` list" in flat
+    assert "add `retired:` with the reason" in flat and "`replaced_by:`" in flat
+    assert "the newer statement wins unless the older one is shown to be right" in flat
+    for name in (".raw/", "MEMORY.md", "RETIRED.md"):
+        assert f"`{name}`" in flat.split("Leave everything else")[1]
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="the memory section is absent with the memory feature off"
+)
+def test_the_memory_tidying_section_is_absent_with_memory_off() -> None:
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
+    assert "Tidying memory" not in text
+    assert "retired:" not in text

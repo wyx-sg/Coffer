@@ -28,7 +28,7 @@ folder nor the row (spec vault-sync "Withhold derived output in both halves") â€
 precisely because it is rendered from files that converge *plus* this machine's own
 registry, so two machines are expected to differ whenever their collections do. What
 determinism buys is local: an unchanged catalogue re-rendering to the same bytes is what
-lets the seed skip the write, so a boot or a curation tick that changed nothing
+lets the seed skip the write, so a boot or a sweep tick that changed nothing
 registers nothing, audits nothing and re-delivers nothing, and the row's
 ``version_hash`` means "the content moved" rather than "time passed".
 
@@ -144,9 +144,11 @@ def _lead(*, knowledge: bool, memory: bool) -> str:
     head = _LEAD_WITH_KNOWLEDGE if knowledge else _LEAD_WITHOUT_KNOWLEDGE
     covers = f"Covers its own tool ({_SEARCH_TOOLS_GLOSS})"
     if memory:
-        covers += ", where its memory notes live"
+        covers += ", where its memory notes live and how to tidy them"
     if knowledge:
-        return f"{head}. {covers}, and THIS developer's own knowledge"
+        return (
+            f"{head}. {covers}, how to write and tidy knowledge, and THIS developer's own knowledge"
+        )
     return f"{head}. {covers}"
 
 
@@ -161,9 +163,7 @@ def render_description(catalogue: Catalogue | None, *, memory: bool = False) -> 
         lead = _lead(knowledge=False, memory=memory)
         return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
     lead = _lead(knowledge=True, memory=memory)
-    subjects = [
-        _subject(entry) for entry, _ in catalogue if entry.document_count or entry.pending_count
-    ]
+    subjects = [_subject(entry) for entry, _ in catalogue if entry.document_count]
     while subjects:
         joined = "; ".join(subjects)
         candidate = f"{lead}, covering {joined}. {_TAIL}"
@@ -221,9 +221,7 @@ def _catalogue_lines(
     if not documents:
         lines += [
             "",
-            "_No documents here yet._ Material has been submitted but Coffer has not "
-            "folded it into documents; there is nothing to read in this collection "
-            "right now.",
+            "_No documents here yet._ There is nothing to read in this collection right now.",
         ]
         return lines
     lines += ["", f"Files live under `{root}/{entry.name}/`.", ""]
@@ -295,7 +293,7 @@ def render(root: str, catalogue: Catalogue | None, *, memory_root: str | None = 
 
     ``catalogue`` is ``None`` while the knowledge feature is switched off: the
     skill is then rendered without its knowledge catalogue or the sections
-    that document writing into the inbox and the knowledge root. ``memory_root`` is
+    that document writing and tidying knowledge. ``memory_root`` is
     the memory root as :func:`display_memory_root` gives it, or ``None`` while
     the memory feature is off: the sections naming it are then left out (spec
     experimental-features "Withdraw what a switched-off feature put in front of

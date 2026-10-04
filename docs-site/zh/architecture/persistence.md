@@ -66,7 +66,7 @@ flowchart LR
 ├── resources/<kind>/<name>.json        mcp_server, skill, channel, provider, knowledge
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
 ├── state/channel-peers/<channel>.json  paired identities per channel
-├── state/settings/internal-engine.json Coffer's model and upkeep settings (absent = defaults)
+├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
@@ -109,7 +109,6 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ├── reach.json                    {uid: {enabled, agents, projects}}
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
-├── curation.json                 the content each knowledge document had when curation settled it
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
 ├── secret/                       machine-local ciphertext (proxy tokens)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
@@ -169,7 +168,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 
 ## 进入保险库的唯一写入路径 {#the-one-write-path-into-the-vault}
 
-有三个写入者会改动保险库：你（编辑器、shell、智能体的文件工具）、守护进程（Web 界面里的保存、CLI 或 API 的改动、一轮整理）和同步。它们做的每一次改动，都以同样的方式由唯一的保险库写入器接纳：
+有三个写入者会改动保险库：你（编辑器、shell、智能体的文件工具）、守护进程（Web 界面里的保存、CLI 或 API 的改动）和同步。它们做的每一次改动，都以同样的方式由唯一的保险库写入器接纳：
 
 ```mermaid
 flowchart LR
@@ -184,7 +183,7 @@ flowchart LR
 1. **比较。** 一次写入要说明它预期文件里是什么：它读到的字节的指纹、“不存在”，或者“`HEAD` 里的内容”。在锁内重新读取文件并比较。不一致就是 `VAULT_FILE_STALE`（409）。没有无条件写入的模式，修改时间也从不决定任何事。内容 API（保存技能文件、知识文档、恢复）都要求提供指纹。
 2. **写入** 一个同级临时文件，再改名到位。
 3. **校验** 每个被触及的路径，规则与手工编辑和同步合并所遇到的相同。出现阻断性问题时，把所有文件恢复原样。
-4. **提交** 恰好这些被触及的路径，作为一次提交。它的 trailer 写明写入者（`Coffer-Writer: user`、`disk`、`agent`、`daemon`、`curation` 或 `sync`）、操作，以及相关时的操作者、智能体、机器，或恢复来源的版本。
+4. **提交** 恰好这些被触及的路径，作为一次提交。它的 trailer 写明写入者（`Coffer-Writer: user`、`disk`、`agent`、`daemon` 或 `sync`）、操作，以及相关时的操作者、智能体、机器，或恢复来源的版本。
 
 手工编辑是被发现的，而不是被拦截的。文件事件只是提示（防抖到路径安静一秒为止），每 60 秒一次以及启动时的扫描才是准绳。有效的编辑以 `disk` 写入提交，并以人为操作者审计为 `vault_file_edited`。无效的编辑留在工作区里、不提交，会在待处理列表和 `coffer vault problems` 里被标记出来，同时 `HEAD` 继续生效。生效的状态永远是 `HEAD`：各个存储从一个由 `HEAD` 加载、每次提交后刷新的缓存里读取文档。
 

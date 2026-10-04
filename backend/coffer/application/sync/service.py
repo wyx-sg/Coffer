@@ -3,13 +3,11 @@
 
 The round itself (``round_engine``) is synchronous git work over the vault;
 this service is the policy around it: one round at a time, off the event loop,
-never beside a curation pass, and every round recorded. Three rules:
+and every round recorded. Three rules:
 
-- **One lock over every rewriter of vault content.** A round holds
-  :attr:`SyncService.lock` from its first git call to its record, and the
-  curation pass takes the same lock (spec vault-sync "Never overlap a curation
-  pass and a round"), so a merge is never computed over a half-rewritten
-  collection.
+- **One lock over every round.** A round holds the service's lock from its
+  first git call to its record, so two rounds, an answer and a move never
+  interleave.
 - **Off the event loop.** Every engine call runs in a worker thread
   (``asyncio.to_thread``); the thread takes the engine's own lock too, so an
   answer recorded from the CLI never interleaves with a round from the timer.
@@ -95,7 +93,6 @@ class SyncService(
         mover: VaultMoverPort | None = None,
         after_apply: Callable[[], Awaitable[object]] | None = None,
         hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
-        lock: asyncio.Lock | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
         git_available: Callable[[], bool] = lambda: True,
         host_label: Callable[[], str] = lambda: "this machine",
@@ -118,7 +115,7 @@ class SyncService(
         # changed, and a pass that judged the vault before the round's own
         # import pass would undo what another machine switched.
         self._hold = hold or contextlib.nullcontext
-        self._lock = lock or asyncio.Lock()
+        self._lock = asyncio.Lock()
         self._clock = clock
         self._git_available = git_available
         self._host_label = host_label
@@ -126,11 +123,6 @@ class SyncService(
         self._next_round_at: str | None = None
 
     # --- what other parts of the daemon share ---------------------------------
-
-    @property
-    def lock(self) -> asyncio.Lock:
-        """The one lock over every rewriter of vault content; curation takes it."""
-        return self._lock
 
     @property
     def machine_id(self) -> str:
@@ -142,16 +134,6 @@ class SyncService(
 
     def remote(self) -> SyncRemote | None:
         return self._remotes.get()
-
-    async def divergence_outstanding(self) -> bool:
-        """Whether a round waits for a person — a stop, a hold, or a join's
-        differing files. An unattended rewriter consults this before it runs:
-        a rewrite piled onto an open question changes the very files the
-        person is deciding between."""
-        state = self._engine.d.state
-        return await asyncio.to_thread(
-            lambda: state.stop() is not None or bool(state.join_choices())
-        )
 
     # --- running engine calls ---------------------------------------------------
 

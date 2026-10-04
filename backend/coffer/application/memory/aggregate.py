@@ -5,8 +5,8 @@ agent's native memory through that agent's reader, decides which partition
 each entry belongs to, and writes the entry **verbatim** under that
 partition's hidden ``.raw/``. It writes nothing else — no note, no index, no
 retirement record — because those three belong to the distil pass, and the
-one-writer-per-directory split is what makes "Keep distil out of the raw
-directory" checkable by reading call sites rather than by trusting a comment.
+one-writer-per-directory split is what makes "Leave the raw directory to aggregation" checkable by
+reading call sites rather than by trusting a comment.
 
 ``MemoryService`` (``service.py``) keeps the parts that need a database: which
 agents are registered, which partitions already have a Resource row, and the
@@ -30,10 +30,10 @@ Three decisions live here, and each one is a named past failure:
   live in this module and matched two facts on an identical normalised body or
   an identical ``(type, partition, title)``. Measured on 378 real facts from
   two agents it produced **zero** merges, because two agents never phrase
-  anything the same way — so the merge moved to the distil pass, where it is a
-  judgement about *meaning* made by a model (see "Record provenance and merge by
-  meaning"). There is deliberately no literal comparison left here to be tempted to
-  widen. There are no slugs either: a file name belongs to a note, and a note is written
+  anything the same way — so merging is left to the agent that tidies the
+  partition, where it is a judgement about *meaning*. There is deliberately no literal
+  comparison left here to be tempted to widen. There are no slugs either: a file name belongs to a
+  note, and a note is written
   one layer up. A raw entry's file name is the origin key ``StoredRawEntry`` derives
   from the triple that identifies it, so a second pass over an unchanged source
   overwrites one file rather than accumulating a near-duplicate (see "Let only

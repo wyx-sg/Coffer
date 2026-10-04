@@ -1,13 +1,12 @@
-"""Every write to a collection is a version naming its writer, and a pass can
-be undone as a whole (spec knowledge "Keep every document's history and undo a
-pass as a whole", "Follow knowledge changes across collections").
+"""Every write to a collection is a version naming its writer (spec knowledge
+"Keep every document's history", "Follow edits across
+collections in one feed").
 
 Integration tier because the history is real git over a real directory — the
 vault repository, whose ``knowledge/`` directory holds every collection; its
 trailers and its diffs are the mechanism, and a fake of any of them would be
 testing the fake. The services are real; the registry and the
-audit log are small in-memory stand-ins, and the curation pass's agentic loop
-is scripted, because it is an LLM call.
+audit log are small in-memory stand-ins.
 """
 
 from __future__ import annotations
@@ -19,12 +18,10 @@ from typing import Any
 
 import pytest
 
-from coffer.application.knowledge.curate import pending_items, run_curation
 from coffer.application.knowledge.history_service import KnowledgeHistoryService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER, Pending
-from coffer.domain.knowledge.errors import KnowledgeUndoConflict
+from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, inbox, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
@@ -73,7 +70,7 @@ class _Entry:
 
 
 class _Audit:
-    """The audit log: recorded, and queried the way a pass looks up an item's author."""
+    """The audit log."""
 
     def __init__(self) -> None:
         self.entries: list[_Entry] = []
@@ -96,44 +93,15 @@ class _Audit:
         return found[:limit]
 
 
-class _Model:
-    async def get_default(self) -> Any:
-        return type("C", (), {"model": "fake-model"})()
-
-
-class _NoModel:
-    async def get_default(self) -> Any:
-        return None
-
-
-class _Loop:
-    """An agentic loop scripted to make a fixed sequence of tool calls."""
-
-    def __init__(self, calls: list[tuple[str, dict[str, Any]]]) -> None:
-        self._calls = calls
-        self.results: list[dict[str, Any]] = []
-
-    async def run(self, *, tools: Any, **_: Any) -> dict[str, Any]:
-        by_name = {t.name: t for t in tools}
-        for name, args in self._calls:
-            self.results.append(await by_name[name].handler(args))
-        return {}
-
-
 class _World:
     def __init__(self) -> None:
         self.resources = _Resources()
         self.audit = _Audit()
-        self.can_merge = False
         self.history = KnowledgeHistory()
-
-        async def merge() -> bool:
-            return self.can_merge
 
         self.knowledge = KnowledgeService(
             resources=self.resources,  # type: ignore[arg-type]
             audit=self.audit,  # type: ignore[arg-type]
-            merge_available=merge,
             history=self.history,
         )
         self.histories = KnowledgeHistoryService(
@@ -142,21 +110,6 @@ class _World:
             audit=self.audit,  # type: ignore[arg-type]
             machine=lambda: "a test machine",
         )
-
-    async def curate(
-        self, collection: str, item: Pending, calls: list[tuple[str, dict[str, Any]]]
-    ) -> dict[str, Any]:
-        loop = _Loop(calls)
-        outcome = await run_curation(
-            self.knowledge,
-            f"uid-{collection}",
-            item=item,
-            agent=loop,
-            models=_Model(),
-            secret_resolver=lambda ref: "key",
-        )
-        assert all("error" not in r for r in loop.results), loop.results
-        return outcome
 
 
 @pytest.fixture
@@ -183,47 +136,18 @@ async def _save(world: _World, relpath: str, body: str) -> None:
 @pytest.mark.acceptance(
     spec="knowledge", scenario="a document's history lists its versions with their writers"
 )
-async def test_a_documents_history_names_the_user_curation_and_the_user(world: _World) -> None:
+async def test_a_documents_history_names_the_agent_and_the_user(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    # Material the user submits, with no model to merge it: a document at once.
+    # Claude Code submits material, which becomes a document at once.
     added = await world.knowledge.submit(
         collection="shopee",
         title="Session ownership",
         description="who owns login",
         body="The account service owns sessions.",
-        actor_kind=ACTOR_USER,
-        actor=ACTOR_USER,
-    )
-    assert added.document is not None
-    doc = added.document.path
-
-    # Claude Code writes an item, and a pass merges it into the document.
-    world.can_merge = True
-    waiting = await world.knowledge.submit(
-        collection="shopee",
-        title="Session TTL",
-        description="how long",
-        body="Sessions last 30 days.",
         actor_kind=ACTOR_AGENT,
         actor="claude-code",
     )
-    assert waiting.pending is not None
-    outcome = await world.curate(
-        "shopee",
-        Pending(material=waiting.pending),
-        [
-            (
-                "write_document",
-                {
-                    "path": doc,
-                    "title": "Session ownership",
-                    "description": "who owns login",
-                    "body": "The account service owns sessions.\n\nSessions last 30 days.",
-                },
-            )
-        ],
-    )
-    assert outcome["status"] == "ok"
+    doc = added.document.path
 
     # And the user edits it.
     await _save(world, doc, "The account service owns sessions, which last 30 days.")
@@ -231,207 +155,21 @@ async def test_a_documents_history_names_the_user_curation_and_the_user(world: _
     versions = await world.histories.versions(doc)
     assert [(v.change.meta.writer, v.change.meta.operation) for v in versions] == [
         ("user", "save"),
-        ("curation", "pass"),
-        ("user", "promote"),
+        ("agent", "promote"),
     ]
-    # The curated version names the agent whose item it curated.
     assert versions[1].change.meta.agent == "claude-code"
-    assert versions[1].change.meta.item == f"shopee/{paths.INBOX_DIR_NAME}/{waiting.pending}"
     for version in versions:
         diff = await world.histories.version_diff(doc, version.change.version)
         assert diff.diff.startswith("diff --git"), diff
     assert versions[0].change.time >= versions[-1].change.time
 
-    # Restoring the first version is a new commit; the history keeps all three.
+    # Restoring the first version is a new commit; the history keeps both.
     first = versions[-1].change.version
     await world.histories.restore(doc, first, actor=ACTOR_USER)
     after = await world.histories.versions(doc)
-    assert [v.change.meta.operation for v in after] == ["restore", "save", "pass", "promote"]
+    assert [v.change.meta.operation for v in after] == ["restore", "save", "promote"]
     assert after[0].change.meta.restored_from == first
     assert _body(doc) == "The account service owns sessions."
-
-
-async def _three_documents(world: _World) -> tuple[str, str, str]:
-    await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    made = [
-        fs.write_file(
-            directory="shopee", title=title, description="d", body=f"{title} facts.", curated=True
-        ).path
-        for title in ("Alpha", "Beta", "Gamma")
-    ]
-    return made[0], made[1], made[2]
-
-
-@pytest.mark.acceptance(spec="knowledge", scenario="undo a pass as a whole")
-async def test_undoing_a_pass_puts_every_document_back(world: _World) -> None:
-    alpha, beta, gamma = await _three_documents(world)
-    world.can_merge = True
-    item = await world.knowledge.submit(
-        collection="shopee",
-        title="News",
-        description="d",
-        body="Gamma moved into Beta.",
-        actor_kind=ACTOR_USER,
-        actor=ACTOR_USER,
-    )
-    before = {p: _bytes(p) for p in (alpha, beta, gamma)}
-    await world.curate(
-        "shopee",
-        Pending(material=item.pending),
-        [
-            ("read_document", {"path": gamma}),
-            (
-                "write_document",
-                {"path": alpha, "title": "Alpha", "description": "d", "body": "Alpha, revised."},
-            ),
-            (
-                "write_document",
-                {
-                    "path": beta,
-                    "title": "Beta",
-                    "description": "d",
-                    "body": "Beta facts. Gamma facts.",
-                },
-            ),
-            ("retire_document", {"path": gamma}),
-        ],
-    )
-    assert not paths.resolve(gamma).exists()
-    [pass_] = [c for c in (await world.histories.changes()).changes if c.meta.operation == "pass"]
-    assert {d.path for d in pass_.documents} == {alpha, beta, gamma}
-
-    undone = await world.histories.undo(pass_.version, actor=ACTOR_USER)
-
-    # One new commit puts all three back as they were before the pass.
-    assert undone.meta.operation == "undo"
-    assert undone.meta.undoes == pass_.version
-    assert {d.path for d in undone.documents} == {alpha, beta, gamma}
-    assert {p: _bytes(p) for p in (alpha, beta, gamma)} == before
-    # Put back exactly as curation last left them, so the sweep does not read
-    # the undo as a person's edit and redo the pass.
-    assert pending_items("shopee") == ()
-
-
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="undoing a pass that promoted an item puts the item back"
-)
-async def test_undoing_a_no_model_pass_puts_the_item_back_in_the_inbox(world: _World) -> None:
-    await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
-    world.can_merge = True  # the item waits in the inbox until the pass runs
-    item = await world.knowledge.submit(
-        collection="shopee",
-        title="News",
-        description="d",
-        body="Gateway facts.",
-        actor_kind=ACTOR_USER,
-        actor=ACTOR_USER,
-    )
-    held = inbox.read_material("shopee", item.pending).body
-    outcome = await run_curation(
-        world.knowledge,
-        "uid-shopee",
-        item=None,
-        agent=_Loop([]),
-        models=_NoModel(),
-        secret_resolver=lambda ref: "key",
-    )
-    assert outcome["status"] == "no_model"
-    [promoted] = outcome["promoted"]
-    assert paths.resolve(promoted).exists()
-    assert inbox.inbox_items("shopee") == ()
-    [pass_] = [c for c in (await world.histories.changes()).changes if c.meta.operation == "pass"]
-
-    await world.histories.undo(pass_.version, actor=ACTOR_USER)
-
-    # The document is gone, and what it was made from is waiting again.
-    assert not paths.resolve(promoted).exists()
-    assert inbox.inbox_items("shopee") == (item.pending,)
-    assert inbox.read_material("shopee", item.pending).body == held
-
-
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="an undo that would overwrite a later change is refused"
-)
-async def test_an_undo_over_a_later_edit_is_refused_naming_the_document(world: _World) -> None:
-    alpha, _beta, _gamma = await _three_documents(world)
-    world.can_merge = True
-    item = await world.knowledge.submit(
-        collection="shopee",
-        title="News",
-        description="d",
-        body="b",
-        actor_kind=ACTOR_USER,
-        actor=ACTOR_USER,
-    )
-    await world.curate(
-        "shopee",
-        Pending(material=item.pending),
-        [
-            (
-                "write_document",
-                {"path": alpha, "title": "Alpha", "description": "d", "body": "By the pass."},
-            )
-        ],
-    )
-    pass_version = (await world.histories.versions(alpha))[0].change.version
-    await _save(world, alpha, "The user's own words.")
-    head = (await world.histories.versions(alpha))[0].change.version
-
-    with pytest.raises(KnowledgeUndoConflict) as refused:
-        await world.histories.undo(pass_version, actor=ACTOR_USER)
-
-    assert refused.value.document == alpha
-    assert _body(alpha) == "The user's own words."
-    # Nothing was written: the newest version is still the user's save.
-    assert (await world.histories.versions(alpha))[0].change.version == head
-
-
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="a refused undo carries a prompt for undoing the pass by hand"
-)
-async def test_a_refused_undo_carries_the_by_hand_prompt(world: _World) -> None:
-    alpha, _beta, _gamma = await _three_documents(world)
-    world.can_merge = True
-    item = await world.knowledge.submit(
-        collection="shopee",
-        title="News",
-        description="d",
-        body="b",
-        actor_kind=ACTOR_USER,
-        actor=ACTOR_USER,
-    )
-    await world.curate(
-        "shopee",
-        Pending(material=item.pending),
-        [
-            (
-                "write_document",
-                {"path": alpha, "title": "Alpha", "description": "d", "body": "By the pass."},
-            )
-        ],
-    )
-    pass_version = (await world.histories.versions(alpha))[0].change.version
-    await _save(world, alpha, "The user's own words.")
-    later = (await world.histories.versions(alpha))[0].change.version
-
-    with pytest.raises(KnowledgeUndoConflict) as refused:
-        await world.histories.undo(pass_version, actor=ACTOR_USER)
-
-    details = refused.value.error_details
-    assert (details["document"], details["later_version"]) == (alpha, later)
-    prompt = details["handoff"]["prompt"]  # type: ignore[index]
-    # The history is the vault repository's; the knowledge folder is
-    # ``knowledge/`` inside it.
-    root = str(vault_root())
-    # The pass, the document edited since and its version, where to read the
-    # diffs, and that the later edits stay and nothing is committed by hand.
-    assert pass_version in prompt and later in prompt
-    assert f"{alpha} (last changed in {later})" in prompt
-    assert f"git -C {root} show {pass_version} -- knowledge" in prompt
-    assert "-- knowledge/<document>" in prompt
-    assert "keep the edits made to those documents since" in prompt
-    assert "Do not commit" in prompt
-    assert _body(alpha) == "The user's own words."
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="an edit on disk becomes a version of its own")
@@ -504,90 +242,48 @@ async def test_a_save_over_a_change_it_did_not_see_is_refused(world: _World) -> 
     assert _body(doc) == "v2"
 
 
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="recent changes lists passes and edits across collections with the waiting items",
-)
-async def test_recent_changes_across_collections_with_the_waiting_items(
-    world: _World, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.mark.acceptance(spec="knowledge", scenario="recent changes lists edits across collections")
+async def test_recent_changes_across_collections(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
     await world.knowledge.create_collection("personal", actor=ACTOR_USER)
-    note = fs.write_file(
-        directory="personal", title="Note", description="d", body="one", curated=True
-    ).path
-    world.can_merge = True
+    note = fs.write_file(directory="personal", title="Note", description="d", body="one").path
     item = await world.knowledge.submit(
         collection="shopee",
         title="Gateway",
         description="d",
-        body="The gateway routes by region.",
+        body="Routes by region.\nAnd by tenant.",
         actor_kind=ACTOR_AGENT,
         actor="codex",
     )
-    await world.curate(
-        "shopee",
-        Pending(material=item.pending),
-        [
-            (
-                "write_document",
-                {
-                    "title": "Gateway",
-                    "description": "d",
-                    "body": "Routes by region.\nAnd by tenant.",
-                },
-            )
-        ],
-    )
     await _save(world, note, "one\ntwo\nthree")
-    stamps = iter(["2026-09-01T10:00:00+00:00", "2026-09-02T10:00:00+00:00"])
-    monkeypatch.setattr(inbox, "timestamp", lambda: next(stamps))
-    for title in ("First waiting", "Second waiting"):
-        await world.knowledge.submit(
-            collection="shopee",
-            title=title,
-            description="d",
-            body="b",
-            actor_kind=ACTOR_AGENT,
-            actor="claude-code",
-        )
 
     feed = await world.histories.changes()
-    edit, pass_ = feed.changes[0], feed.changes[1]
+    edit, added = feed.changes[0], feed.changes[1]
     assert (edit.collections, edit.meta.writer, edit.meta.operation) == (
         ("personal",),
         "user",
         "save",
     )
-    assert (pass_.collections, pass_.meta.writer, pass_.meta.agent) == (
+    assert (added.collections, added.meta.writer, added.meta.agent) == (
         ("shopee",),
-        "curation",
+        "agent",
         "codex",
     )
-    [written] = pass_.documents
-    assert (written.path, written.status) == ("shopee/gateway.md", "added")
+    [written] = added.documents
+    assert (written.path, written.status) == (item.document.path, "added")
     assert written.added > 0
     [changed] = edit.documents
     assert (changed.status, changed.added, changed.removed) == ("modified", 2, 0)
-    # Submissions still waiting are not changes; they are the waiting items.
-    assert all(c.meta.operation != "submit" for c in feed.changes)
-    # Newest submitted first, like the timeline.
-    assert [(w.title, w.submitted_by) for w in feed.waiting] == [
-        ("Second waiting", "claude-code"),
-        ("First waiting", "claude-code"),
-    ]
 
     shopee = await world.histories.changes(collection="shopee")
     assert all(c.collections == ("shopee",) for c in shopee.changes)
-    assert shopee.changes[0].version == pass_.version
-    assert len(shopee.waiting) == 2
+    assert shopee.changes[0].version == added.version
     personal = await world.histories.changes(collection="personal")
-    assert personal.waiting == ()
     assert personal.changes[0].version == edit.version
 
-    detail = await world.histories.change(pass_.version)
-    assert [d.path for d in detail.diffs] == ["shopee/gateway.md"]
-    assert "+Routes by region." in detail.diffs[0].diff
+    detail = await world.histories.version_diff("shopee/gateway.md", added.version)
+    assert detail.path == "shopee/gateway.md"
+    assert "+Routes by region." in detail.diff
 
 
 async def test_the_feed_pages_by_cursor(world: _World) -> None:

@@ -12,7 +12,7 @@ Some of what Coffer holds is not authored by anyone; each machine
 
 - **Coffer's own `coffer-guide` skill** ([Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md)).
   Its master folder and its `skill` resource row (whose `version_hash` is that
-  folder's digest) are regenerated at every boot and after curation, from the
+  folder's digest) are regenerated at every boot and after a knowledge change, from the
   running build, the knowledge files and **this machine's own inputs**: its own
   knowledge and memory root paths.
 - **The memory tree and its `memory` partition rows**, aggregated from the
@@ -28,7 +28,7 @@ whole vault repository, so anything stored in the vault would be carried. For
 knowledge but different feature switches, or a relocated knowledge root,
 render different bytes, each correct where it is. Each round would overwrite
 the other machine's folder and row, the overwritten machine re-renders at its
-next boot or curation pass and publishes back, and the result is a commit and
+next boot or knowledge change and publishes back, and the result is a commit and
 an audit event per tick on both machines, forever, over an artifact neither
 reads from the other. Version skew between builds does the same on its own,
 since the shipped half of the text changes.

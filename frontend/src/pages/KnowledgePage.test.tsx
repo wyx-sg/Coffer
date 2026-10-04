@@ -1,12 +1,11 @@
 // frontend/src/pages/KnowledgePage.test.tsx
 //
-// The Knowledge page's tree, reader and editor (spec knowledge "Present a
-// collection as one tree in the web UI"), mocked only at the network boundary:
-// one tree of collections with each collection's Inbox node and documents;
-// the document pane with Edit, open-in-editor, reveal and delete (at once,
-// with an Undo toast); an inbox item read-only; the body-only editor saving
-// with the fingerprint it read and refusing a stale save with Compare / Copy my
-// text / Reload; and the page with Coffer's model not set.
+// The Knowledge page's tree, reader and editor (spec knowledge "Show a
+// collection as one tree of documents in the web UI"), mocked only at the
+// network boundary: one tree of collections with their documents; the document
+// pane with Edit, open-in-editor, reveal and delete (at once, with an Undo
+// toast); the body-only editor saving with the fingerprint it read and
+// refusing a stale save with Compare / Copy my text / Reload.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -14,7 +13,6 @@ import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 import {
   COLLECTION,
   GATEWAY,
-  ITEM,
   NAME,
   PASS,
   SESSION,
@@ -30,11 +28,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   getFile: vi.fn(),
   saveFile: vi.fn(),
   deleteFile: vi.fn(),
-  curateCollection: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getChange: vi.fn(),
-  undoPass: vi.fn(),
   getHistory: vi.fn(),
   getVersionDiff: vi.fn(),
   getVersionBody: vi.fn(),
@@ -42,35 +37,9 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
-const upkeep = vi.mocked(await import("@/lib/api/upkeep"));
-const { internalEngineApi } = await import("@/lib/api/internalEngine");
-
-/** Coffer's engine config with a curate schedule, so the header's Automatic
- *  control has a pass to show whenever the model is set. */
-function withCurateSchedule(model: string | null) {
-  vi.mocked(internalEngineApi.get).mockResolvedValue({
-    model,
-    curate_owner_machine_id: null,
-    default_model_timeout_s: 60,
-    model_timeout_s: null,
-    transcribe_model: null,
-    updated_at: null,
-    upkeep: {
-      curate: {
-        enabled: true,
-        interval_s: null,
-        default_interval_s: 3600,
-        last_pass_at: null,
-        next_pass_at: null,
-      },
-    },
-  });
-}
 
 beforeEach(() => {
   answerFromFixtures();
@@ -98,8 +67,8 @@ describe("the collection tree and the document pane", () => {
     expect(await within(nav).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "account" }));
     expect(await within(nav).findByRole("button", { name: "session.md" })).toBeInTheDocument();
-    // The inbox is its own node, holding the waiting item.
-    expect(within(nav).getByRole("button", { name: /^Inbox/ })).toHaveTextContent("1");
+    // No Inbox node: material becomes a document on arrival.
+    expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
 
     // A document offers Edit, open-in-editor, reveal and delete.
     fireEvent.click(within(nav).getByRole("button", { name: "gateway.md" }));
@@ -108,14 +77,6 @@ describe("the collection tree and the document pane", () => {
     expect(screen.getByRole("menuitem", { name: "Open in editor" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Reveal in Finder" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Delete document…" })).toBeInTheDocument();
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-
-    // The inbox item offers neither Edit nor delete.
-    fireEvent.click(within(nav).getByRole("button", { name: /^Inbox/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Login retry/ }));
-    expect(await screen.findByText("Retries back off after three failures.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /More actions/ })).toBeNull();
   });
 
   test("a collection opened from Recent changes stays open when a document in it is opened", async () => {
@@ -138,21 +99,8 @@ describe("the collection tree and the document pane", () => {
     expect(within(tree()).queryByRole("button", { name: "gateway.md" })).toBeNull();
     // Leave for Recent changes, then come back in through a document link.
     fireEvent.click(within(tree()).getByRole("link", { name: /Recent changes/ }));
-    fireEvent.click(await screen.findByRole("link", { name: /Login retry/ }));
+    fireEvent.click(await screen.findByRole("link", { name: "gateway.md" }));
     expect(await within(tree()).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
-  });
-
-  test("the Inbox list closes on its chevron and the collection stays open", async () => {
-    renderKnowledge(`/knowledge/${UID}/inbox`);
-    const item = await within(tree()).findByRole("button", { name: ITEM.path.split("/").pop() });
-    expect(item).toBeInTheDocument();
-    fireEvent.click(within(tree()).getByRole("button", { name: "Collapse Inbox" }));
-    expect(within(tree()).queryByRole("button", { name: ITEM.path.split("/").pop() })).toBeNull();
-    expect(within(tree()).getByRole("button", { name: "gateway.md" })).toBeInTheDocument();
-    fireEvent.click(within(tree()).getByRole("button", { name: "Expand Inbox" }));
-    expect(
-      await within(tree()).findByRole("button", { name: ITEM.path.split("/").pop() }),
-    ).toBeInTheDocument();
   });
 
   test("a deep link opens the folders on the way to its document", async () => {
@@ -162,73 +110,6 @@ describe("the collection tree and the document pane", () => {
     ).findByRole("button", { name: "session.md" });
     expect(row).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("Login state is owned by account.session.")).toBeInTheDocument();
-  });
-
-  acceptance(
-    "knowledge",
-    "the inbox node counts waiting items and holds the only trigger",
-    async () => {
-      withCurateSchedule("claude-haiku");
-      renderKnowledge(`/knowledge/${UID}`);
-      const stats = await screen.findByTestId("knowledge-stats");
-      expect(within(tree()).getByRole("button", { name: /^Inbox/ })).toHaveTextContent("1");
-      expect(await screen.findByTestId("knowledge-automatic")).toBeInTheDocument();
-      // The collection page's properties: documents, what waits, when it last ran.
-      expect(within(stats).getByText("1 waiting")).toBeInTheDocument();
-      expect(await within(stats).findByText("2 hours ago")).toBeInTheDocument();
-      expect(within(stats).queryByRole("link", { name: "1" })).toBeNull();
-      // Curate now lives in the Inbox view, not in the header or on documents.
-      expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
-      fireEvent.click(within(stats).getByRole("button", { name: "Open Inbox" }));
-      expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}/inbox`);
-      expect(await screen.findByRole("button", { name: "Curate now" })).toBeInTheDocument();
-    },
-  );
-
-  test("a running curation reads its progress, from the daemon's run list by uid", async () => {
-    upkeep.listUpkeepRuns.mockResolvedValue({
-      runs: [
-        { kind: "knowledge", name: UID, started_at: new Date().toISOString(), done: 1, total: 3 },
-      ],
-    });
-    renderKnowledge(`/knowledge/${UID}/inbox`);
-    expect(await screen.findByRole("button", { name: "Curating · 2 of 3" })).toBeDisabled();
-    // The collection's own status line says the same, in place of "Curated".
-    fireEvent.click(within(tree()).getByRole("button", { name: /^shopee/ }));
-    await waitFor(() =>
-      expect(screen.getByTestId("knowledge-stats")).toHaveTextContent("Curating · 2 of 3"),
-    );
-  });
-
-  test("Curate now curates this collection by uid", async () => {
-    api.curateCollection.mockResolvedValue({
-      collection: NAME,
-      status: "ok",
-      total: 1,
-      passes: [],
-    });
-    renderKnowledge(`/knowledge/${UID}/inbox`);
-    fireEvent.click(await screen.findByRole("button", { name: "Curate now" }));
-    await waitFor(() => expect(api.curateCollection).toHaveBeenCalledWith(UID, null));
-  });
-});
-
-describe("with Coffer's model not set", () => {
-  acceptance("knowledge", "no model shows no curation controls", async () => {
-    answerFromFixtures({ modelSet: false });
-    withCurateSchedule(null);
-    renderKnowledge(`/knowledge/${UID}`);
-    const link = await screen.findByRole("button", { name: "Curation needs Coffer’s engine" });
-    expect(
-      screen.getByText("Documents you and your agents write together. Every agent can read them."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
-    expect(within(tree()).queryByRole("button", { name: /^Inbox/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
-    expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
-    expect(screen.getByTestId("knowledge-stats")).not.toHaveTextContent("waiting");
-    fireEvent.click(link);
-    expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
   });
 });
 
@@ -264,7 +145,7 @@ describe("the body-only editor", () => {
     api.saveFile.mockRejectedValue(
       new ApiError("KNOWLEDGE_FILE_CONFLICT", "changed on disk", {
         saved: false,
-        current_body: "# Account Gateway\n\nCuration added a line.",
+        current_body: "# Account Gateway\n\nAn agent added a line.",
         current_fingerprint: "fp-new",
       }),
     );
@@ -322,7 +203,7 @@ describe("delete a document", () => {
     );
     expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
 
-    api.listChanges.mockResolvedValue({ changes: [deletion], waiting: [], next_cursor: null });
+    api.listChanges.mockResolvedValue({ changes: [deletion], next_cursor: null });
     api.restoreDeleted.mockResolvedValue(deletion);
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(api.restoreDeleted).toHaveBeenCalledWith("d3l3t3"));
@@ -377,9 +258,4 @@ describe("the reader", () => {
     expect(screen.queryByText("On this page")).toBeNull();
     expect(await screen.findByText(/^Created Sep 12 by/)).toBeInTheDocument();
   });
-});
-
-test("an inbox item carries who wrote it", async () => {
-  renderKnowledge(`/knowledge/${UID}/inbox?file=${encodeURIComponent(ITEM.path)}`);
-  expect(await screen.findByText(/Written by An agent/)).toBeInTheDocument();
 });

@@ -1,13 +1,9 @@
 """Document ingestion: convert, describe, and submit what it says as material.
 
 The upload contract under test (spec knowledge): an upload becomes **material**
-for a collection — the same submission, frontmatter and audit event as an
-agent's inbox file — which a curation pass merges into the documents.
-Nothing of the upload itself is kept: not the original bytes, not the extracted
-text as a file of its own. With no internal model to merge it, the material
-becomes a document as it stands (see "Promote material directly when no model
-is configured"). And the whole thing is all-or-nothing: a refusal leaves
-nothing behind.
+for a collection, which becomes a document as it stands. Nothing of the upload
+itself is kept: not the original bytes, not the extracted text as a file of its
+own. And the whole thing is all-or-nothing: a refusal leaves nothing behind.
 """
 
 from __future__ import annotations
@@ -26,9 +22,8 @@ from coffer.domain.knowledge.converter import (
 )
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import CollectionNotFound, KnowledgeFileNotFound, UploadTooLarge
-from coffer.domain.provider.config import ProviderConfig, ResolvedConnection
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 
 
@@ -79,61 +74,10 @@ class _Audit:
         self.events.append(event_type)
 
 
-class _Model:
-    def __init__(self, connection) -> None:  # type: ignore[no-untyped-def]
-        self._connection = connection
-
-    async def get_default(self):  # type: ignore[no-untyped-def]
-        return self._connection
-
-
-class _Completion:
-    """Records what it was called with; answers a fixed text or raises."""
-
-    def __init__(self, text: str | None = None, *, raises: bool = False) -> None:
-        self._text = text
-        self._raises = raises
-        self.calls: list[tuple[str, str]] = []
-
-    async def complete(self, *, system, user, model, secret_resolver, timeout=None):  # type: ignore[no-untyped-def]
-        self.calls.append((system, user))
-        self.timeout = timeout
-        if self._raises:
-            raise RuntimeError("the internal connection is unreachable")
-        assert secret_resolver("provider/test") == "k"
-        return self._text or ""
-
-
-@pytest.fixture
-def fake_connection() -> ResolvedConnection:
-    return ResolvedConnection(
-        config=ProviderConfig(
-            protocol="openai",
-            base_url="https://example.invalid/v1",
-            secret_ref="provider/test",
-        ),
-        model="agnes-2.0-flash",
-    )
-
-
-async def _can_merge() -> bool:
-    return True
-
-
 @pytest.fixture
 def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """A ``KnowledgeService`` over an isolated tree with one collection
-    (``shopee``) and a model that could merge; ``elsewhere`` is a name no
-    collection answers to."""
-    fs.create_collection_dir("shopee")
-    return KnowledgeService(
-        resources=_Resources(["shopee"]), audit=_Audit(), merge_available=_can_merge
-    )
-
-
-@pytest.fixture
-def knowledge_without_model(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    """The same tree, with nothing configured to merge material."""
+    (``shopee``); ``elsewhere`` is a name no collection answers to."""
     fs.create_collection_dir("shopee")
     return KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
 
@@ -152,14 +96,8 @@ class _EmptyRegistry:
         return Conversion(markdown=self._markdown, title="Scan", converter="markitdown")
 
 
-def _service(knowledge, *, models=None, completion=None, secret_resolver=None):  # type: ignore[no-untyped-def]
-    return IngestService(
-        knowledge=knowledge,
-        registry=default_registry(),
-        models=models,
-        completion=completion,
-        secret_resolver=secret_resolver or (lambda ref: "k"),
-    )
+def _service(knowledge):  # type: ignore[no-untyped-def]
+    return IngestService(knowledge=knowledge, registry=default_registry())
 
 
 def _on_disk(collection: str = "shopee") -> list[str]:
@@ -180,9 +118,12 @@ def _on_disk(collection: str = "shopee") -> list[str]:
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="an upload is converted and submitted as material, keeping neither file",
+    scenario="an upload is converted into a document, keeping no original",
 )
-async def test_an_upload_becomes_material_and_nothing_else(knowledge) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="an upload becomes a document at the collection root"
+)
+async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"# Meeting Notes\n\nDiscussed the launch plan and open risks.\n"
 
@@ -191,39 +132,17 @@ async def test_an_upload_becomes_material_and_nothing_else(knowledge) -> None:  
     )
 
     assert isinstance(result, IngestedDocument)
-    assert result.pending is True
-    assert result.path is None
+    assert result.path == "shopee/meeting-notes.md"
     assert result.title == "Meeting Notes"
     assert result.converter == "passthrough"
     assert result.description == "Discussed the launch plan and open risks."
 
-    # One inbox item, carrying the text; no original and no document beside it.
-    assert _on_disk() == [".inbox/meeting-notes.md"]
-    material = inbox.read_material("shopee", "meeting-notes.md")
-    assert material.actor == ACTOR_USER
-    assert material.description == result.description
-    assert material.body.strip() == data.decode().strip()
-
-    entry = next(c for c in catalogue.list_collections() if c.name == "shopee")
-    assert (entry.document_count, entry.pending_count) == (0, 1)
-
-
-async def test_with_no_model_an_upload_becomes_a_document_as_it_stands(  # type: ignore[no-untyped-def]
-    knowledge_without_model,
-) -> None:
-    service = _service(knowledge_without_model)
-
-    result = await service.ingest(
-        collection="shopee",
-        filename="notes.md",
-        data=b"# Meeting Notes\n\nDiscussed the launch plan.\n",
-        actor="tester",
-    )
-
-    assert result.pending is False
-    assert result.path == "shopee/meeting-notes.md"
+    # One document, carrying the text; no original and no inbox item beside it.
     assert _on_disk() == ["meeting-notes.md"]
-    assert "Discussed the launch plan." in fs.read_file(result.path).body
+    document = fs.read_file(result.path)
+    assert document.actor == ACTOR_USER
+    assert document.description == result.description
+    assert document.body.strip() == data.decode().strip()
 
 
 async def test_a_non_markdown_upload_is_converted_and_its_original_dropped(knowledge) -> None:  # type: ignore[no-untyped-def]
@@ -236,12 +155,12 @@ async def test_a_non_markdown_upload_is_converted_and_its_original_dropped(knowl
 
     assert result.converter == "csv"
     assert result.title == "team"
-    material = inbox.read_material("shopee", "team.md")
-    assert "| name | role |" in material.body
-    assert "| Ada | engineer |" in material.body
+    document = fs.read_file("shopee/team.md")
+    assert "| name | role |" in document.body
+    assert "| Ada | engineer |" in document.body
     # The `.csv` itself is nowhere: the collection keeps knowledge, not the
     # document it arrived in.
-    assert _on_disk() == [".inbox/team.md"]
+    assert _on_disk() == ["team.md"]
 
 
 @pytest.mark.acceptance(
@@ -268,19 +187,13 @@ async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing
     """See "Bound uploads and leave nothing behind on failure". The real case
     is an image-only PDF: MarkItDown extracts no text, returns ``""``, and
     reports no error — it did its job, the document simply has no text layer.
-    Stored, that is titled material with an empty body: it would be material a
-    curation pass has nothing to fold in from, and with no model it would
-    become a document that says nothing.
+    Stored, that would be a document that says nothing.
 
     Driven through a converter that returns empty markdown rather than through
     a real scanned PDF, because the rule is about ANY converter producing
     nothing, and a fixture PDF would only prove the one format.
     """
-    service = IngestService(
-        knowledge=knowledge,
-        registry=_EmptyRegistry(),
-        secret_resolver=lambda ref: "k",
-    )
+    service = IngestService(knowledge=knowledge, registry=_EmptyRegistry())
 
     with pytest.raises(EmptyConversion) as exc_info:
         await service.ingest(
@@ -288,17 +201,13 @@ async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing
         )
 
     assert exc_info.value.doc_type == "pdf"
-    # Nothing reached the inbox.
+    # Nothing was written.
     assert _on_disk() == []
 
 
 async def test_a_whitespace_only_conversion_counts_as_nothing(knowledge) -> None:  # type: ignore[no-untyped-def]
     """A page of blank lines carries as little as an empty one."""
-    service = IngestService(
-        knowledge=knowledge,
-        registry=_EmptyRegistry(markdown="\n   \n\t\n"),
-        secret_resolver=lambda ref: "k",
-    )
+    service = IngestService(knowledge=knowledge, registry=_EmptyRegistry(markdown="\n   \n\t\n"))
 
     with pytest.raises(EmptyConversion):
         await service.ingest(collection="shopee", filename="blank.docx", data=b"x", actor="tester")
@@ -318,56 +227,20 @@ async def test_oversize_upload_is_refused_naming_the_limit(knowledge) -> None:  
     assert _on_disk() == []
 
 
-# ----- the description: model when available, prose otherwise ----------
+# ----- the description is the document's own opening prose -------------
 
 
-async def test_description_comes_from_the_model_when_one_is_configured(  # type: ignore[no-untyped-def]
-    knowledge, fake_connection
-) -> None:
-    completion = _Completion(text="  A recap of the launch plan and its risks.  \n")
-    service = _service(knowledge, models=_Model(fake_connection), completion=completion)
+async def test_description_is_the_opening_prose(knowledge) -> None:  # type: ignore[no-untyped-def]
+    service = _service(knowledge)
 
     result = await service.ingest(
         collection="shopee",
         filename="notes.md",
-        data=b"# Notes\n\nSome opening prose that the model will ignore.\n",
+        data=b"# Notes\n\nThe description this test expects to see.\n",
         actor="tester",
     )
 
-    assert result.description == "A recap of the launch plan and its risks."
-    assert len(completion.calls) == 1
-
-
-async def test_description_falls_back_to_opening_prose_with_no_model_configured(  # type: ignore[no-untyped-def]
-    knowledge,
-) -> None:
-    service = _service(knowledge, models=None, completion=None)
-
-    result = await service.ingest(
-        collection="shopee",
-        filename="notes.md",
-        data=b"# Notes\n\nThe fallback text this test expects to see.\n",
-        actor="tester",
-    )
-
-    assert result.description == "The fallback text this test expects to see."
-
-
-async def test_description_falls_back_to_opening_prose_when_the_model_call_raises(  # type: ignore[no-untyped-def]
-    knowledge, fake_connection
-) -> None:
-    completion = _Completion(raises=True)
-    service = _service(knowledge, models=_Model(fake_connection), completion=completion)
-
-    result = await service.ingest(
-        collection="shopee",
-        filename="notes.md",
-        data=b"# Notes\n\nStill readable even though the model failed.\n",
-        actor="tester",
-    )
-
-    assert result.description == "Still readable even though the model failed."
-    assert len(completion.calls) == 1
+    assert result.description == "The description this test expects to see."
 
 
 async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all(  # type: ignore[no-untyped-def]
@@ -379,10 +252,9 @@ async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all
     description and actor in frontmatter" makes the description required: the
     title is the only thing left to use.
 
-    This used to be driven with a completely EMPTY CSV. That is no longer a
-    stored document at all — a conversion that produces nothing is refused
-    (``EmptyConversion``) — so the vehicle has to be a document that converts
-    to something and still yields no prose.
+    The vehicle has to be a document that converts to something and still
+    yields no prose: a conversion that produces nothing is refused
+    (``EmptyConversion``).
     """
     service = _service(knowledge)
 
@@ -417,9 +289,7 @@ async def test_ingest_into_a_collection_that_does_not_exist_fails(knowledge) -> 
 
 
 async def test_a_person_may_delete_any_document(knowledge) -> None:  # type: ignore[no-untyped-def]
-    written = fs.write_file(
-        directory="shopee", title="Curated", description="d", body="b", curated=True
-    )
+    written = fs.write_file(directory="shopee", title="Doc", description="d", body="b")
 
     await knowledge.delete_document(written.path, actor="tester")
 

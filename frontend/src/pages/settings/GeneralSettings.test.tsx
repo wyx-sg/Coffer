@@ -6,7 +6,7 @@ import { GeneralSettings } from "./GeneralSettings";
 import { DataTable, type Column } from "@/components/DataTable";
 import { acceptance } from "@/test/acceptance";
 
-// The Coffer's model section has its own tests (and its own daemon routes);
+// The Speech-to-text section has its own tests (and its own daemon routes);
 // stub it so these stay about the preferences this page owns, and need no
 // query client.
 vi.mock("./EngineSettings", () => ({

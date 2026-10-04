@@ -53,10 +53,10 @@ async def test_internal_engine_config_refuses_a_second_row() -> None:
     two answers — the settings are one vault document at one fixed path, so
     every write rewrites it rather than adding a second."""
     repo = VaultInternalEngineConfigRepo()
-    await repo.set(model="m")
-    await repo.set(model="other")
+    await repo.set_transcribe_model("whisper-1")
+    await repo.set_transcribe_model("whisper-2")
     assert list(vault_repository().tree("HEAD", "state/settings/")) == [
         "state/settings/internal-engine.json"
     ]
     got = await repo.get()
-    assert got is not None and got.model == "other"
+    assert got is not None and got.transcribe_model == "whisper-2"

@@ -13,12 +13,11 @@ import {
   authorKey,
   authorOptions,
   matchesAuthor,
-  undoneVersions,
   withinDays,
   writerLabel,
 } from "./changes";
-import { changePath, collectionOfPath, collectionPath, pathInCollection } from "./routes";
-import { curatingLabel, describeItem } from "./text";
+import { collectionOfPath, collectionPath, pathInCollection } from "./routes";
+import { describeItem } from "./text";
 
 const t = i18n.getFixedT("en") as TFunction;
 
@@ -53,17 +52,16 @@ describe("wording", () => {
 
   test("words a change from its fields, the document without its collection", () => {
     expect(changeSentence(t, change({}))).toBe("edited dir/doc.md");
+    // A change an earlier curation pass made has no words of its own: its summary stands.
     expect(
-      changeSentence(t, change({ writer: "curation", operation: "pass", agent: "codex" })),
-    ).toBe("curated Codex's item into dir/doc.md");
+      changeSentence(
+        t,
+        change({ writer: "curation", operation: "pass", summary: "Curate login-retry.md" }),
+      ),
+    ).toBe("Curate login-retry.md");
     expect(changeSentence(t, change({ operation: "mystery", summary: "Raw subject" }))).toBe(
       "Raw subject",
     );
-  });
-
-  test("never says merge for curation", () => {
-    const sentence = changeSentence(t, change({ writer: "curation", operation: "pass" }));
-    expect(sentence).not.toMatch(/merg/i);
   });
 });
 
@@ -98,11 +96,10 @@ describe("filters and grouping", () => {
     expect(dayKey(new Date(2026, 8, 30, 1).toISOString(), now)).toBe("today");
   });
 
-  test("the last seven days, and the passes a later change undid", () => {
+  test("the last seven days", () => {
     const now = Date.parse("2026-09-30T10:00:00Z");
     expect(withinDays("2026-09-24T10:00:00Z", 7, now)).toBe(true);
     expect(withinDays("2026-09-22T10:00:00Z", 7, now)).toBe(false);
-    expect(undoneVersions([change({ undoes: "p1" }), change({})])).toEqual(new Set(["p1"]));
   });
 });
 
@@ -112,16 +109,8 @@ describe("addresses and derived text", () => {
     expect(collectionPath("kn-1", "history", "c/a b.md")).toBe(
       "/knowledge/kn-1/history?file=c%2Fa%20b.md",
     );
-    expect(changePath("abc")).toBe("/knowledge/changes/abc");
     expect(collectionOfPath("c/dir/doc.md")).toBe("c");
     expect(pathInCollection("c/dir/doc.md")).toBe("dir/doc.md");
-  });
-
-  test("reads a Curate now run's progress, counting the pass in flight from one", () => {
-    const run = { kind: "knowledge", name: "kn-1", started_at: "", done: 0, total: 2 };
-    expect(curatingLabel(t, run)).toBe("Curating · 1 of 2");
-    expect(curatingLabel(t, { ...run, done: 5 })).toBe("Curating · 2 of 2");
-    expect(curatingLabel(t, null)).toBe("Curating…");
   });
 
   test("describes an added item by its first sentence, else its title", () => {

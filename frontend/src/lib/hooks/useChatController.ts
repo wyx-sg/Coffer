@@ -6,9 +6,9 @@
 // Addresses: `/conversations` is the list, `/conversations/:id` an open
 // conversation, `/conversations/new` the draft New conversation opens (spec chat
 // "Create the conversation on the first send": the draft is not a row, its first
-// send creates one). The list's filters ride along as search params. A
-// hand-off (lib/conversations/handoff.ts) opens the draft with an agent, a
-// folder and a prompt already in the composer; it is never sent for the person.
+// send creates one). The list's filters ride along as search params. A hand-off
+// (lib/conversations/handoff.ts) opens the draft with an agent, a folder and a prompt
+// in the composer for the person to send; one marked `autoSend` (Tidy) sends itself.
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -25,6 +25,7 @@ import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
+import { useHandoffAutoSend, type QueuedPrompt } from "@/lib/hooks/useHandoffAutoSend";
 import { readDraftSeed } from "@/lib/conversations/handoff";
 import {
   defaultDraftAgent,
@@ -80,6 +81,7 @@ export function useChatController() {
   const clearDraftPrefill = useCallback(() => setDraftPrefill(null), []);
   // The draft was opened by a hand-off: the box says nothing is sent until Send.
   const [draftFromHandoff, setDraftFromHandoff] = useState(false);
+  const [autoSendPrompt, setAutoSendPrompt] = useState<QueuedPrompt | null>(null);
 
   // Apply a hand-off (or New conversation's agent) once, then drop the state so Back does not.
   const handoffState: unknown = isDraft ? location.state : null;
@@ -91,12 +93,12 @@ export function useChatController() {
     setDraftConfig({ agentKey: seed.agentKey, cwd, model: null });
     setDraftPrefill(seed.prompt ? { text: seed.prompt, attachments: [] } : null);
     setDraftFromHandoff(!!seed.prompt);
+    if (seed.prompt && seed.autoSend) setAutoSendPrompt({ text: seed.prompt });
     navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
   }, [handoffState, pathname, locationSearch, navigate]);
 
-  // The title search is the server's: typed text waits for a pause, then the
-  // list starts again from its first page for it.
-  // Its text lives in the URL (`?q=`), so a search is a link.
+  // The title search is the server's: typed text waits for a pause, then the list
+  // starts again from its first page for it. Its text lives in the URL (`?q=`).
   const titleSearch = filters.q;
   const setTitleSearch = useCallback(
     (text: string) => setFilters({ ...filters, q: text }),
@@ -200,6 +202,8 @@ export function useChatController() {
         },
       );
     });
+
+  useHandoffAutoSend(autoSendPrompt, !!draftConfig, sendDraft, clearDraftPrefill);
 
   const confirmDelete = () => {
     if (!deletingId) return;

@@ -17,8 +17,7 @@ deletions included. Background and alternatives in
 `machine_id` — how it is derived, that it survives a reinstall, what travels in
 its place, and the registry that lists it — is specified here and nowhere else.
 Other specs key on it: a channel's machine binding in spec
-[channels](../channels/spec.md) and the curation owner in spec
-[knowledge](../knowledge/spec.md) both name a `machine_id` this spec defines.
+[channels](../channels/spec.md) names a `machine_id` this spec defines.
 
 Vocabulary. A **vault document** is the serialized form of one piece of vault
 state at one path in the working tree: a knowledge file, a skill file, a
@@ -51,7 +50,7 @@ Out of scope:
   machine-local"), so each machine already answers that question for itself by
   holding its own scope.
 
-While the `sync` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the sync feature's surfaces"), the sync routes are closed and the convergence worker skips its rounds; the configured remote and the history stay untouched, and curation treats the vault as single-machine. Requirements below describe the feature while it is on.
+While the `sync` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the sync feature's surfaces"), the sync routes are closed and the convergence worker skips its rounds; the configured remote and the history stay untouched, and the knowledge sweep treats the vault as single-machine. Requirements below describe the feature while it is on.
 
 ## Requirements
 
@@ -107,17 +106,18 @@ and system litter are kept out by the repository's own exclude file.
 Module-owned shared state that belongs to the vault rather than to one machine
 MUST converge as vault state documents under `vault/state/<area>/`: MCP
 capability switches (`state/mcp-preferences/<server>.json`), channel peer
-pairings (`state/channel-peers/<channel>.json`) and Coffer's own engine settings
+pairings (`state/channel-peers/<channel>.json`) and Coffer's own settings — the
+speech-to-text model and the upkeep switches
 (`state/settings/internal-engine.json`). A state document names its owner by
 uid; an area with nothing but its defaults has no document. The plugin
 inventory is not a state area: it is carried in each machine's descriptor (see
 "Record plugins as an inventory, not a replicator").
 
 #### Scenario: each shared state area reaches the working tree
-- **GIVEN** a switched-off MCP capability, a channel pairing and a non-default engine setting
+- **GIVEN** a switched-off MCP capability, a channel pairing and a non-default Coffer setting
 - **WHEN** each is stored
 - **THEN** each is a vault document under its area, named by its owner, and when each capability was first and last seen stays in `derived/`
-- **AND** engine settings at their defaults have no document
+- **AND** Coffer settings at their defaults have no document
 
 ### Requirement: Carry channel pairings as platform identity
 Channel peer pairings MUST travel as **platform identity** — chat id, sender id,
@@ -272,7 +272,7 @@ returning machine reads back from its own descriptor.
 `machine_id` MUST survive reinstalling and uninstalling Coffer. A machine that
 comes back under a new identity becomes a ghost: it rejoins as a stranger, its
 old descriptor lingers in the registry with nobody to update it, and anything
-that named it — the curation owner, a channel's binding — silently stops meaning
+that named it — a channel's binding — silently stops meaning
 this machine.
 
 #### Scenario: a machine identity survives reinstalling Coffer
@@ -701,86 +701,6 @@ anyone answering it.
 - **GIVEN** a vault held on the outgoing side after 22 documents were removed
 - **WHEN** the documents are written back and a round runs
 - **THEN** the round is not held and nothing is left waiting on the person
-
-### Requirement: Run an unattended rewriter on one owner machine
-A worker that rewrites vault content with no human approving the diff is safe on
-one machine and unsafe on several. Two machines rewriting one corpus each merge
-the same pair of documents into a *different* result, and git merges that
-cleanly — both agree the originals are deleted, the two results are additions at
-different paths — so the vault holds the same content twice with nothing
-reported as a conflict.
-
-An unattended rewriter of synced vault content MUST name **one owner machine**,
-MUST run only on the machine that setting names, and MUST be a clean no-op on
-every other. The owner MUST be **synced state**, so every machine agrees who it
-is; the knowledge **curation** pass is the case that exists today and its owner
-travels in the `internal-engine` state document that already carries its switch.
-If the owner machine is off, no pass happens, which is the accepted trade for a
-background nicety. The retention worker is exempt: it prunes the audit log, MCP
-invocation records and conversations, none of which sync.
-
-#### Scenario: curation runs only on its owner machine
-- **GIVEN** two converged machines with curation enabled and one of them named
-  as the owner,
-- **WHEN** the curation interval elapses on both,
-- **THEN** a pass runs on the owner and is a no-op on the other, and the vault
-  holds one rewritten document rather than two.
-
-### Requirement: Report and change the rewriter's owner
-The owner MUST be **reportable and changeable**, on the same terms as a
-channel's machine binding ([channels](../channels/spec.md) "Bind each channel to the one machine that runs it"), because it is the same fact in
-the same shape: one machine named in a document every machine holds.
-
-- A surface MUST be able to say which machine owns the pass, and MUST
-  distinguish **four** states — no owner named, this machine, another machine in
-  the registry, and a machine **the registry does not hold**. Only the last is a
-  fault, and it MUST be reported as one rather than folded into "runs
-  elsewhere": the pass then runs on no machine at all, and no other part of the
-  product says so.
-- An **empty** registry MUST NOT produce that fault. A vault that has never
-  converged has no registry to be absent from, and every single-machine install
-  has an owner naming its own machine.
-- A user MUST be able to take the pass over on this machine, and to clear the
-  owner. Clearing returns the vault to running the pass wherever the setting is
-  read, which is right for a vault down to one machine and wrong for one that
-  still spans several, so it MUST be an explicit choice and never a repair
-  anything performs on its own.
-- The four states MUST be **derived from the setting and the registry**, not
-  stored: the owner is one field, and a second field recording what that field
-  means is a second thing to keep true.
-
-This exists because the pass failed silently in exactly the way the requirement
-above accepts and the one below does not. "If the owner machine is off, no pass
-happens" ("Run an unattended rewriter on one owner machine") is the accepted
-trade for a machine that will come back; an owner naming a machine that is
-**gone** is not that trade, it is curation stopped everywhere with nothing to
-say why and — until this requirement — no way to take it back short of editing
-the database.
-
-#### Scenario: an owner naming a machine that is gone is reported, not silent
-- **GIVEN** an unattended rewriter whose owner setting names a machine the
-  registry does not hold — a machine retired, reinstalled under a new identity,
-  or never converged with,
-- **WHEN** a surface reports where the pass runs,
-- **THEN** it names that as a fault distinct from "runs on another machine",
-  because the pass is running on none, and the user can take it over here.
-
-### Requirement: Never overlap a curation pass and a round
-A curation pass and a round MUST NOT overlap. Both write the vault, so they MUST
-take the same lock, and the worker MUST wait for a pass to finish rather than run
-a round under it. A pass MUST additionally be skipped while a round waits for a
-person — a stop on conflicts, a hold, or a join's differing files — so a rewrite
-is never piled onto the very files the person is deciding between.
-
-#### Scenario: a curation pass and a converge round do not overlap
-- **GIVEN** a curation pass holding the vault lock
-- **WHEN** the sync worker ticks
-- **THEN** no round is recorded until the pass releases the lock, and then one is
-
-#### Scenario: a curation pass is skipped while a round is unresolved
-- **GIVEN** a machine whose last round stopped on a conflict
-- **WHEN** the unattended curation pass asks whether it may run
-- **THEN** it is told no, and once the conflict is answered and the round continued it is told yes again
 
 ### Requirement: Serialize deterministically
 Every vault document MUST be written with one deterministic encoding ([vault-storage](../vault-storage/spec.md)
@@ -1368,7 +1288,7 @@ button, the branch and when rounds run. The title carries the Experimental mark.
     round opens in a drawer with its snapshot, the commits it pulled, what it changed here and what
     it pushed, and Roll back to before the round is there and nowhere else.
 - **Machines** lists the machine registry. A user renames this machine and retires one that is
-  gone, at once, with Undo. The machine that runs knowledge curation carries a read-only "Runs curation" tag.
+  gone, at once, with Undo.
 - **Remote** holds the remote's settings, each saved as it is changed:
   - the URL, the branch and the push secret;
   - when a round runs. "Only when I press Sync now" pauses the remote;
@@ -1425,7 +1345,7 @@ replaces the link, otherwise the folder is placed at `to` and `~/.coffer/vault` 
 No restart is needed. The target MUST be absolute (`~` allowed), absent or empty, outside and not
 around the current vault, in a writable parent, and not inside a folder the Cloud folder detector
 names: `SYNC_VAULT_TARGET_INVALID` (422), `SYNC_VAULT_TARGET_IN_CLOUD` (422) and
-`SYNC_VAULT_TARGET_NOT_EMPTY` (409). While it moves, rounds, the curation pass and agent writes are
+`SYNC_VAULT_TARGET_NOT_EMPTY` (409). While it moves, rounds and agent writes are
 held off by the sync lock; the folder is renamed, or copied and then emptied when the target is on
 another filesystem; the git repository (HEAD, working-tree status, connectivity) is checked at the
 new place against the old; any failure puts the vault back and is `SYNC_VAULT_MOVE_FAILED` (500).

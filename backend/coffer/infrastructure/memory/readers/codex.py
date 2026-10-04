@@ -20,7 +20,7 @@ Two files matter, both under `<config_dir>/memories/`:
 What a reader produces is a `RawEntry`, and a raw entry is **the input layer,
 not the product** (see "Keep raw entries verbatim and hidden"). It is written
 verbatim under the partition's `.raw/`, and the distil pass is what turns
-entries into Coffer's own notes (see "Write notes in Coffer's own words"). That
+entries into Coffer's own notes (see "Distil each raw entry into a note mechanically"). That
 is why nothing here tries to write something a person will read: a title derived
 from a bullet's first clause would be a poor note title, and is a perfectly good
 handle for a pass that is going to rewrite the material anyway. The verbatim
@@ -67,7 +67,7 @@ entry, for two reasons. The spec (see "Read Claude Code and Codex memory with
 their search terms") names which sections become entries and those are not among
 them; and `.raw/` is the layer that must stay *faithful* (see "Keep raw entries
 verbatim and hidden") while Coffer's own distillation happens later and in one
-place (see "Distil incrementally in two stages"). Feeding the pass Codex's
+place (see "Distil each raw entry into a note mechanically"). Feeding the pass Codex's
 pre-compressed summary instead of the material it was compressed from would
 distil a distillation — the same mistake, one level up, that this layer's
 rewrite was built to stop making. The terms are different: they are metadata
@@ -212,7 +212,7 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
         # A group can route to more than one cwd (`applies_to: cwd=A and B`);
         # attributing every entry to all of them would give the same anchor two
         # homes and blur which partition a note built from it belongs to (see
-        # "Record provenance and merge by meaning"), so — same as the
+        # "Distil each raw entry into a note mechanically"), so — same as the
         # un-ambiguous, overwhelmingly common single-cwd case — the first
         # recorded cwd is the one project a group's entries are filed under. A
         # group with none files under "" (global).
@@ -331,8 +331,8 @@ def _bullet_title(bullet: str) -> str:
     description and the body, and the body is what lands verbatim under `.raw/`
     (see "Keep raw entries verbatim and hidden"), so nothing is lost by a handle
     that trims it. It is not trying to be a title a person will read: the note's
-    title is Coffer's to write, later, in the distil pass (see "Write notes in
-    Coffer's own words").
+    title is Coffer's to write, later, in the distil pass (see "Distil each raw entry into a note
+    mechanically").
     """
     clause = re.split(r"\s*->\s*|\.\s|;\s", bullet, maxsplit=1)[0].strip().rstrip(".")
     if not clause:
@@ -350,8 +350,8 @@ def _anchor(group: str, heading: str, bullet: str) -> str:
 
     Two different bullets in the same section hash differently; the same bullet
     re-read on a later sync hashes the same, which is the whole point — the
-    anchor is half of a note's provenance (see "Record provenance and merge by
-    meaning") and the name a raw entry keeps under `.raw/`, so a note must still
+    anchor is half of a note's provenance (see "Distil each raw entry into a note mechanically")
+    and the name a raw entry keeps under `.raw/`, so a note must still
     point at the entry it was built from after MEMORY.md is regenerated with
     this group's text unchanged.
     """

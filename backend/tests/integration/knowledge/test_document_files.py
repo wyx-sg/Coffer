@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from coffer.infrastructure.knowledge import catalogue, curation_state, fs, inbox, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.paths import knowledge_root
 
 
@@ -35,7 +35,6 @@ def test_a_rewrite_keeps_the_keys_a_person_added() -> None:
         description="d2",
         body="v2",
         relpath=created.path,
-        curated=True,
     )
 
     text = target.read_text()
@@ -65,8 +64,6 @@ def test_a_nested_readme_is_a_document_and_only_the_collection_readme_is_not() -
     paths.require_document("shopee/guide/README.md")
     with pytest.raises(Exception, match="README"):
         paths.require_document("shopee/README.md")
-    assert curation_state.is_document("shopee/guide/README.md", "shopee")
-    assert not curation_state.is_document("shopee/README.md", "shopee")
 
 
 def test_inbox_items_are_ordered_by_when_they_were_submitted_not_by_file_time() -> None:

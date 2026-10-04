@@ -265,9 +265,8 @@ test.describe("agent detail", () => {
 
 /**
  * The Knowledge page with a collection in it: its overview, an open document,
- * the document's History tab and Recent changes. The visual daemon runs
- * without Coffer's model, so the submitted items are written as documents on
- * the spot and the page shows the no-model line — the same on every machine.
+ * the document's History tab and Recent changes. Submitted items are written
+ * as documents on the spot, so the pages read the same on every machine.
  */
 test.describe("knowledge collection", () => {
   let uid = "";
@@ -311,7 +310,7 @@ test.describe("knowledge collection", () => {
       ],
       [
         "Vault sync",
-        "# Vault sync\n\nA sync round takes the vault lock; curation waits for it.\n",
+        "# Vault sync\n\nA sync round takes the vault lock; a write waits for it.\n",
       ],
     ]) {
       // Submitted as the page's Upload does: one Markdown file per document.

@@ -14,29 +14,9 @@ export interface paths {
         /**
          * Recent Changes
          * @description Recent changes across every collection (or one, by its name), newest
-         *     first, with the items still waiting in each inbox.
+         *     first.
          */
         get: operations["recent_changes_api_v1_knowledge_changes_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/changes/{version}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Change Detail
-         * @description One change in full: every document it touched, with its diff.
-         */
-        get: operations["change_detail_api_v1_knowledge_changes__version__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -57,32 +37,11 @@ export interface paths {
         /**
          * Restore Deleted
          * @description Put back what a delete removed — a document, or a whole collection with
-         *     its documents, README and waiting items — as one new change naming the user.
+         *     its documents and README — as one new change naming the user.
          *     409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
          *     the path or the name is taken again; nothing is written then.
          */
         post: operations["restore_deleted_api_v1_knowledge_changes__version__restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/changes/{version}/undo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Undo Pass
-         * @description Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
-         *     the document a later change would lose; nothing is written then.
-         */
-        post: operations["undo_pass_api_v1_knowledge_changes__version__undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -101,37 +60,6 @@ export interface paths {
         put?: never;
         /** Create Collection */
         post: operations["create_collection_api_v1_knowledge_collections_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/collections/{uid}/curate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Curate
-         * @description Curate now: a pass per pending item until none is left, or one pass over
-         *     the document named ("Run curation on a sweep and on demand").
-         *
-         *     The collection is named by its uid; the run resolves the row itself, so an
-         *     unknown uid is the same 404 every route here gives. Two guards, in this
-         *     order on purpose. The registry claim is about THIS collection and is held
-         *     for the whole run: a second trigger while it runs is refused (409
-         *     ``UPKEEP_ALREADY_RUNNING``) rather than queued ("Run one pass per collection
-         *     at a time"), and it is keyed on the uid the sweep claims too. The
-         *     vault-write lock is about the whole vault and is taken per pass, so a sync
-         *     round is not held off for the minutes a run can take ("Never overlap
-         *     curation with a sync round").
-         */
-        post: operations["curate_api_v1_knowledge_collections__uid__curate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -257,6 +185,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/tidy-handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tidy All Handoff
+         * @description The prompt that hands tidying every collection to the person's agent.
+         */
+        get: operations["tidy_all_handoff_api_v1_knowledge_tidy_handoff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/tree": {
         parameters: {
             query?: never;
@@ -303,15 +251,6 @@ export interface components {
             file: string;
         };
         /**
-         * ChangeDetailOut
-         * @description One change in full: every document it touched, each with its diff.
-         */
-        ChangeDetailOut: {
-            change: components["schemas"]["ChangeOut"];
-            /** Diffs */
-            diffs: components["schemas"]["DocumentDiffOut"][];
-        };
-        /**
          * ChangeOut
          * @description One change to knowledge: one commit naming its writer.
          */
@@ -323,7 +262,7 @@ export interface components {
             actor: string | null;
             /**
              * Agent
-             * @description The agent that wrote it (writer `agent`), or for a curation pass who submitted the item it curated — an agent's name, or `user`.
+             * @description The agent that wrote it (writer `agent`).
              */
             agent: string | null;
             /**
@@ -335,19 +274,19 @@ export interface components {
             documents: components["schemas"]["DocumentChangeOut"][];
             /**
              * Item
-             * @description The item a curation pass curated.
+             * @description The item a retired curation pass curated.
              */
             item: string | null;
             /**
              * Operation
-             * @description `pass`, `save`, `delete`, `promote`, `submit`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`. Only a `pass` can be undone.
+             * @description `save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.
              */
             operation: string;
             /** Restored From */
             restored_from: string | null;
             /**
              * Status
-             * @description A curation pass's outcome status.
+             * @description A retired curation pass's outcome status.
              */
             status: string | null;
             /** Summary */
@@ -361,19 +300,19 @@ export interface components {
             undoes: string | null;
             /**
              * Version
-             * @description The change's id (its commit), what diff, restore and undo take.
+             * @description The change's id (its commit), what diff and restore take.
              */
             version: string;
             /**
              * Writer
-             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` Coffer's curation pass; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools).
+             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools).
              * @enum {string}
              */
             writer: "user" | "agent" | "curation" | "sync" | "disk";
         };
         /**
          * ChangesOut
-         * @description Recent changes across collections, newest first, with the items still waiting.
+         * @description Recent changes across collections, newest first.
          */
         ChangesOut: {
             /** Changes */
@@ -383,8 +322,6 @@ export interface components {
              * @description Pass back as `cursor` for the next page; null on the last.
              */
             next_cursor: string | null;
-            /** Waiting */
-            waiting: components["schemas"]["WaitingItemOut"][];
         };
         /** CollectionCreate */
         CollectionCreate: {
@@ -422,110 +359,16 @@ export interface components {
             folder_path: string;
             /** Name */
             name: string;
-            /**
-             * Pending Count
-             * @default 0
-             */
-            pending_count: number;
+            tidy_handoff: components["schemas"]["HandoffOut"];
             /** Uid */
             uid: string;
             /** Updated At */
             updated_at: string | null;
         };
-        /** CurationOut */
-        CurationOut: {
-            /** Collection */
-            collection: string;
-            /**
-             * Documents After
-             * @default 0
-             */
-            documents_after: number;
-            /**
-             * Documents Before
-             * @default 0
-             */
-            documents_before: number;
-            /**
-             * Gave Up
-             * @default false
-             */
-            gave_up: boolean;
-            /**
-             * Item
-             * @default
-             */
-            item: string;
-            /**
-             * Limit
-             * @default 0
-             */
-            limit: number;
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /** Promoted */
-            promoted: string[];
-            /**
-             * Refused
-             * @default 0
-             */
-            refused: number;
-            /**
-             * Retired
-             * @default 0
-             */
-            retired: number;
-            /**
-             * Stamped
-             * @default
-             */
-            stamped: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "ok" | "truncated" | "no_model" | "up_to_date" | "too_large" | "failed";
-            /**
-             * Written
-             * @default 0
-             */
-            written: number;
-        };
-        /** CurationRequest */
-        CurationRequest: {
-            /** Document */
-            document?: string | null;
-        };
-        /**
-         * CurationRunOut
-         * @description What Curate now did: every pass it ran, in order (spec knowledge "Report
-         *     every pass outcome as a status").
-         */
-        CurationRunOut: {
-            /** Collection */
-            collection: string;
-            /** Passes */
-            passes: components["schemas"]["CurationOut"][];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "ok" | "failed" | "no_model" | "up_to_date";
-            /** Total */
-            total: number;
-        };
         /** DirectoryOut */
         DirectoryOut: {
             /** File Count */
             file_count: number;
-            /**
-             * Inbox
-             * @default false
-             */
-            inbox: boolean;
             /** Name */
             name: string;
             /** Path */
@@ -550,28 +393,6 @@ export interface components {
              * Removed
              * @description Lines removed.
              */
-            removed: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "added" | "modified" | "removed";
-        };
-        /**
-         * DocumentDiffOut
-         * @description What one change did to one document, as a unified diff.
-         */
-        DocumentDiffOut: {
-            /** Added */
-            added: number;
-            /**
-             * Diff
-             * @description A unified diff; empty when the change made no textual change.
-             */
-            diff: string;
-            /** Path */
-            path: string;
-            /** Removed */
             removed: number;
             /**
              * Status
@@ -630,11 +451,6 @@ export interface components {
             body: string;
             /** Created At */
             created_at: string;
-            /**
-             * Curated At
-             * @default
-             */
-            curated_at: string;
             /** Description */
             description: string;
             /** File Path */
@@ -643,11 +459,6 @@ export interface components {
             fingerprint: string;
             /** Folder Path */
             folder_path: string;
-            /**
-             * Inbox
-             * @default false
-             */
-            inbox: boolean;
             /** Path */
             path: string;
             /** Title */
@@ -674,17 +485,21 @@ export interface components {
             actor: string;
             /** Description */
             description: string;
-            /**
-             * Inbox
-             * @default false
-             */
-            inbox: boolean;
             /** Path */
             path: string;
             /** Title */
             title: string;
             /** Updated At */
             updated_at: string;
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
         /** IngestedDocumentOut */
         IngestedDocumentOut: {
@@ -693,9 +508,7 @@ export interface components {
             /** Description */
             description: string;
             /** Path */
-            path: string | null;
-            /** Pending */
-            pending: boolean;
+            path: string;
             /** Title */
             title: string;
         };
@@ -760,25 +573,6 @@ export interface components {
              */
             version: string;
         };
-        /**
-         * WaitingItemOut
-         * @description An item waiting in a collection's inbox — not a change yet.
-         */
-        WaitingItemOut: {
-            /** Collection */
-            collection: string;
-            /** Path */
-            path: string;
-            /** Submitted At */
-            submitted_at: string;
-            /**
-             * Submitted By
-             * @description The agent that submitted it, or `user`.
-             */
-            submitted_by: string;
-            /** Title */
-            title: string;
-        };
     };
     responses: never;
     parameters: never;
@@ -832,92 +626,7 @@ export interface operations {
             };
         };
     };
-    change_detail_api_v1_knowledge_changes__version__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                version: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChangeDetailOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     restore_deleted_api_v1_knowledge_changes__version__restore_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                version: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChangeOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    undo_pass_api_v1_knowledge_changes__version__undo_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1023,53 +732,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    curate_api_v1_knowledge_collections__uid__curate_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CurationRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CurationRunOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1418,6 +1080,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionBodyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    tidy_all_handoff_api_v1_knowledge_tidy_handoff_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

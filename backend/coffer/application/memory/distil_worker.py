@@ -1,5 +1,5 @@
 """The background worker that runs the distil pass on an interval (spec internal-engine
-"Carry a switch and interval for each unattended pass").
+"Carry a switch and interval for each of the two unattended passes").
 
 Shaped like ``aggregate_worker.AggregateWorker``: a catch-up pass shortly after
 boot, then on an interval; a failing pass is logged and never kills the loop; a
@@ -11,14 +11,13 @@ internal-engine "Apply a changed switch or interval without a restart").
 
 The delay before the first pass is the one difference from aggregation, and it
 is deliberate: aggregation is what *fills* ``.raw/``, and distilling a
-partition before this boot's aggregation has run would spend a model on the
-same entries the pass a minute later would have seen anyway.
+partition before this boot's aggregation has run would write notes from a
+half-filled ``.raw/`` that the pass a minute later would have seen whole.
 
 **On by default**, like aggregation. Everything this pass writes is under
 ``~/.coffer/derived/memory/``, which is derived by construction (see "Keep the memory tree
 derived and local"): delete it, run aggregation and distil, and an equivalent partition
-comes back. The switch exists because each pass spends a model call, and the operator
-may turn it off or re-time it.
+comes back. The operator may turn it off or re-time it.
 
 **One pass per partition, whoever started it (see "Run one distil pass per partition at
 a time").** The timer and Update memory are two writers over one directory, so both
@@ -43,10 +42,10 @@ from coffer.domain.internal_engine_config import DISTIL
 logger = logging.getLogger(__name__)
 
 #: Long enough that the boot storm — this daemon's first aggregation above all
-#: — has settled before a model is spent on what it found.
+#: — has settled before a pass turns what it found into notes.
 DEFAULT_START_DELAY_S = 60.0
-#: Slower than aggregation's hour: this pass calls a model and rewrites notes,
-#: where aggregation skips every source whose digest is unchanged.
+#: Slower than aggregation's hour: this pass rewrites the index of every
+#: partition, where aggregation skips every source whose digest is unchanged.
 DEFAULT_INTERVAL_S = 6 * 60 * 60.0
 
 #: The actor recorded on an unattended pass's audit event, so the log can tell
@@ -55,8 +54,8 @@ WORKER_ACTOR = "system:memory-distil-worker"
 
 DistilCallable = Callable[..., Awaitable[object]]
 EnabledCheck = Callable[[], Awaitable[bool]]
-#: Yields the **uids** of the partitions to sweep. A pass spends a model and rewrites
-#: every note in a directory, so it is aimed at the identity rather than at a label the
+#: Yields the **uids** of the partitions to sweep. A pass rewrites the notes and index
+#: of a directory, so it is aimed at the identity rather than at a label the
 #: user can edit while it runs — and Update memory claims the same uid, which is what
 #: lets the claim below and its claim collide the way "Run one distil pass per
 #: partition at a time" needs them to without either side translating.

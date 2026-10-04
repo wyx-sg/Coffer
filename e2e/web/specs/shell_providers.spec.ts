@@ -2,10 +2,10 @@
 //
 // The Model providers page against the real daemon: one page under two tabs,
 // Providers | Usage. Providers is a list + detail (the detail one column, no
-// tabs of its own), Used by naming Coffer's engine once the provider carries
+// tabs of its own), Used by naming speech to text once the provider carries
 // it (and linking Settings › General), Edit renaming in place, and Delete —
-// confirmed with a consequence line while the provider is the engine's, done
-// for an unused one. Usage (/model-providers?tab=usage) is reached from
+// confirmed with a consequence line while speech to text runs on the provider,
+// done for an unused one. Usage (/model-providers?tab=usage) is reached from
 // the Providers tab and covered by shell_usage.spec.ts; its range, filters,
 // tiles and breakdown are covered in
 // frontend/src/components/usage/UsageTab.test.tsx.
@@ -107,33 +107,38 @@ test("the list opens a provider as one column, addressed by its uid", async ({
   }
 });
 
-test("Used by names Coffer's engine and links Settings › General; Delete names the consequence", async ({
+test("Used by names speech to text and links Settings › General; Delete names the consequence", async ({
   page,
 }) => {
-  const name = generateUniqueName("e2eengine");
+  const name = generateUniqueName("e2estt");
   const uid = await seedProvider(name);
+  // The flag sits on one connection globally: put it back where it was.
+  const listed = (await (await api("GET", "/providers")).json()) as {
+    providers: { uid: string; transcribe_default: boolean }[];
+  };
+  const prior = listed.providers.find((p) => p.transcribe_default)?.uid ?? null;
   try {
-    const r = await api("POST", `/providers/${uid}/internal-default`);
+    const r = await api("POST", `/providers/${uid}/transcribe-default`);
     expect(r.ok).toBeTruthy();
 
     await page.goto(`/model-providers/${uid}`);
     const usedBy = page.locator("section").filter({
       has: page.getByRole("heading", { name: "Used by" }),
     });
-    await expect(usedBy.getByText("Coffer's engine")).toBeVisible();
+    await expect(usedBy.getByText("Speech to text")).toBeVisible();
     const settings = usedBy.getByRole("button", { name: "Settings › General" });
     await expect(settings).toBeVisible();
     await expect(
-      row(page, name).getByRole("img", { name: "Coffer · background model" }),
+      row(page, name).getByRole("img", { name: "Coffer · speech to text" }),
     ).toBeVisible();
 
-    // Deleting a provider the engine runs on says what pauses, and asks first.
+    // Deleting the provider speech to text runs on says what turns off, and asks first.
     await page
       .getByRole("button", { name: `More actions for ${name}` })
       .click();
     await page.getByRole("menuitem", { name: "Delete provider" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Coffer’s engine pauses")).toBeVisible();
+    await expect(dialog.getByText("Speech to text turns off")).toBeVisible();
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
 
@@ -141,6 +146,10 @@ test("Used by names Coffer's engine and links Settings › General; Delete names
     await expect(page).toHaveURL(/\/settings\/general$/);
   } finally {
     await removeProvider(uid);
+    if (prior !== null)
+      await api("POST", `/providers/${prior}/transcribe-default`).catch(
+        () => undefined,
+      );
   }
 });
 

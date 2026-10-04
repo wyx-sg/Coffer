@@ -6,7 +6,9 @@
 // the update time — and shows none of the agents' own memory: no file tree,
 // no MEMORY.md / RETIRED.md / .raw/, no native path. Delivered, at
 // /memory/<uid>/delivered, shows each agent's session-start text with an
-// agent switch and no hook state. Only the api modules are mocked.
+// agent switch and no hook state. Tidy and Tidy all hand the partition or every
+// partition to the default managed agent and send the prompt at once. Only the
+// api modules are mocked.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -26,6 +28,7 @@ import {
   RETIRED,
 } from "@/components/memory/memoryTestData";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
+import { readHandoffState } from "@/lib/conversations/handoff";
 import { ApiError } from "@/lib/api/errors";
 import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
 import { MemoryPage } from "@/pages/MemoryPage";
@@ -47,23 +50,24 @@ vi.mock("@/lib/api/memory", () => ({
   getDelivered: vi.fn(),
   getReading: vi.fn(async () => ({ read_at: null, failures: [] })),
   sync: vi.fn(),
+  getTidyHandoff: vi.fn(),
 }));
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
+vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
 vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn() } }));
 // The first-run welcome lists the connected agents; none here.
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn(async () => ({ items: [] })) } }));
 
 const api = await import("@/lib/api/memory");
 const { listUpkeepRuns } = await import("@/lib/api/upkeep");
-const { internalEngineApi } = await import("@/lib/api/internalEngine");
+const { agentProvidersApi } = await import("@/lib/api/agentProviders");
 const { resourcesApi } = await import("@/lib/api/resources");
 
 function stub({
   partitions = [COFFER],
-  model = "claude-sonnet",
   running = false,
-}: { partitions?: PartitionOut[]; model?: string | null; running?: boolean } = {}) {
+  managedAgent = false,
+}: { partitions?: PartitionOut[]; running?: boolean; managedAgent?: boolean } = {}) {
   vi.mocked(api.listPartitions).mockResolvedValue({ partitions });
   vi.mocked(api.listNotes).mockResolvedValue(NOTES);
   vi.mocked(api.getNote).mockImplementation(async (_uid, slug) =>
@@ -85,9 +89,24 @@ function stub({
         ]
       : [],
   });
-  vi.mocked(internalEngineApi.get).mockResolvedValue({ model } as Awaited<
-    ReturnType<typeof internalEngineApi.get>
-  >);
+  vi.mocked(agentProvidersApi.list).mockResolvedValue({
+    agents: managedAgent
+      ? [{ agent_key: "claude_code", display_name: "Claude Code", available: true }]
+      : [],
+  } as Awaited<ReturnType<typeof agentProvidersApi.list>>);
+  vi.mocked(api.getTidyHandoff).mockResolvedValue({ prompt: "Tidy every partition." });
+}
+
+/** The draft a hand-off opens: agent, whether it sends itself, and the prompt. */
+function DraftProbe() {
+  const handoff = readHandoffState(useLocation().state);
+  return (
+    <div data-testid="draft">
+      {handoff
+        ? `${handoff.agentKey}|${handoff.autoSend ? "send" : "draft"}|${handoff.prompt}`
+        : "empty"}
+    </div>
+  );
 }
 
 function LocationProbe() {
@@ -105,6 +124,7 @@ function renderAt(path: string) {
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/memory/:uid" element={<MemoryDetailPage />} />
             <Route path="/memory/:uid/:tab" element={<MemoryDetailPage />} />
+            <Route path="/conversations/new" element={<DraftProbe />} />
             <Route path="*" element={null} />
           </Routes>
           <LocationProbe />
@@ -249,23 +269,10 @@ describe("MemoryDetailPage", () => {
     expect(screen.queryByRole("list", { name: "Memories" })).toBeNull();
   });
 
-  test("without Coffer's model, a quiet notice links to Settings › General", async () => {
-    stub({ model: null });
-    renderAt(`/memory/${COFFER.uid}`);
-    const notice = await screen.findByTestId("memory-no-model");
-    expect(notice).toHaveTextContent(/each agent’s entry stays its own memory/);
-    expect(notice).toHaveTextContent(/until it is set in Settings › General\./);
-    fireEvent.click(within(notice).getByRole("button", { name: "Open Settings" }));
-    await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent("/settings/general"),
-    );
-  });
-
   acceptance(
     "memory",
     "a partition's page names the partition and offers no way back",
     async () => {
-      stub({ model: null });
       renderAt(`/memory/${COFFER.uid}`);
       expect(await screen.findByRole("heading", { name: "coffer" })).toBeInTheDocument();
       expect(screen.queryByText("Experimental")).toBeNull();
@@ -273,18 +280,44 @@ describe("MemoryDetailPage", () => {
       expect(screen.queryByRole("button", { name: /^back/i })).toBeNull();
       expect(screen.queryByTestId("memory-automatic")).toBeNull();
       expect(screen.getByText(/memories/)).toBeInTheDocument();
-      // Without Coffer's engine a banner names it and offers Open Settings.
-      const notice = await screen.findByTestId("memory-no-model");
-      expect(notice).toHaveTextContent(/each agent’s entry stays its own memory/);
-      expect(within(notice).getByRole("button", { name: "Open Settings" })).toBeInTheDocument();
+      // Tidy sits beside Update memory, and no notice about Coffer's engine is drawn.
+      expect(screen.getByRole("button", { name: /update memory/i })).toBeInTheDocument();
+      expect(screen.queryByTestId("memory-no-model")).toBeNull();
     },
   );
 
-  test("with Coffer's model set, there is no such notice", async () => {
+  acceptance("memory", "Tidy sends the prompt to the default managed agent", async () => {
+    stub({ managedAgent: true });
     renderAt(`/memory/${COFFER.uid}`);
-    await screen.findByTestId("memory-pane");
-    expect(screen.queryByTestId("memory-no-model")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
+    expect(await screen.findByTestId("draft")).toHaveTextContent(
+      `claude_code|send|${COFFER.tidy_handoff.prompt}`,
+    );
   });
+
+  acceptance("memory", "with no managed agent the page offers Copy prompt only", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderAt(`/memory/${COFFER.uid}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
+    expect(writeText).toHaveBeenCalledWith(COFFER.tidy_handoff.prompt);
+    expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
+    expect(screen.queryByTestId("draft")).toBeNull();
+  });
+
+  acceptance(
+    "memory",
+    "Tidy all hands every partition to the agent in one conversation",
+    async () => {
+      stub({ managedAgent: true, partitions: [GLOBAL, COFFER] });
+      renderAt("/memory");
+      fireEvent.click(await screen.findByRole("button", { name: "Tidy all" }));
+      expect(await screen.findByTestId("draft")).toHaveTextContent(
+        "claude_code|send|Tidy every partition.",
+      );
+      expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
+    },
+  );
 
   // Delivered lives at /memory/<uid>/delivered with an agent switch.
   acceptance("memory", "a partition has a memories tab and a delivered tab", async () => {

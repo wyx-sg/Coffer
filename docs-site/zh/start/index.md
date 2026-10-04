@@ -38,7 +38,7 @@ Coffer 管理的一切都是**资源**，共七种**类型**。每个资源都�
 | `agent` | 一个已注册的本地编程智能体：Claude Code 或 Codex | [智能体](/zh/guides/agents) |
 | `skill` | 一个 [AgentSkills](https://agentskills.io) 文件夹，投递到各智能体的 `skills/` 目录 | [技能](/zh/guides/skills) |
 | `knowledge` | 一个知识集：`~/.coffer/vault/knowledge/` 下存放 Markdown 文档的文件夹 | [知识](/zh/guides/knowledge) |
-| `memory` | Coffer 从智能体自身记忆中提炼出的一个笔记分区，每个仓库一个，另加 `global` | [记忆](/zh/guides/memory) |
+| `memory` | Coffer 从智能体自身记忆中生成的一个笔记分区，每个仓库一个，另加 `global` | [记忆](/zh/guides/memory) |
 | `channel` | 一个 Telegram 或 SeaTalk 机器人，让你在手机上和智能体聊天 | [消息渠道](/zh/guides/channels) |
 | `provider` | 一份模型提供商配置（协议、base URL、密钥），由 Coffer 写入每个智能体的配置 | [模型提供商](/zh/guides/providers) |
 
@@ -59,7 +59,7 @@ Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/
 ## Coffer 不是什么 {#what-coffer-is-not}
 
 - **不是云服务。** Coffer 没有托管后端，也没有账号。API 只绑定回环地址。云服务只会以你选用的模型提供商和 MCP 服务器的身份出现。如果你在几台机器之间同步保险库，走的是你自己的 git 仓库，而且每台机器都保有完整副本。
-- **不是智能体。** Coffer 不是一个陪你聊天的助手。它的对话页面和消息渠道驱动的是*你的*智能体（Claude Code 或 Codex）。Coffer 自己的模型只跑内部后台任务：知识整理、记忆提炼和语音转写。
+- **不是智能体。** Coffer 不是一个陪你聊天的助手。它的对话页面和消息渠道驱动的是*你的*智能体（Claude Code 或 Codex）。Coffer 只会为转写语音消息运行自己的模型，而且要你配置了才会。
 - **不是编排器。** Coffer 不规划工作，也不在智能体之间传递任务。它是智能体下面的共享层：它们共用的工具、文件和设置。
 - **不替代智能体自己的配置。** 智能体自己的文件仍然是事实来源。Coffer 只写入它管理的、有文档说明的条目，写入是原子的，并在 Coffer 自己的文件夹里留一份备份副本；其余内容只在需要时读取。
 

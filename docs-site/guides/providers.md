@@ -1,11 +1,11 @@
 ---
 title: Model providers
-description: Store a model endpoint and its key once, switch Claude Code or Codex onto it, curate its models, see what requests through it cost, and choose the model Coffer's own engine runs on.
+description: Store a model endpoint and its key once, switch Claude Code or Codex onto it, curate its models, see what requests through it cost, and choose the model Coffer transcribes voice messages with.
 ---
 
 # Model providers
 
-A model provider is a credentialed endpoint — a base URL, a protocol and one encrypted API key — that Coffer can write into your agents' own configuration and also use for its own work. This page covers adding providers, choosing which agents they reach, switching an agent onto one and back, curating the models they offer, reading what requests through them cost, and pointing Coffer's internal engine at one.
+A model provider is a credentialed endpoint — a base URL, a protocol and one encrypted API key — that Coffer can write into your agents' own configuration and also use for its own work. This page covers adding providers, choosing which agents they reach, switching an agent onto one and back, curating the models they offer, reading what requests through them cost, and pointing Coffer's speech-to-text at one.
 
 ## What providers are for
 
@@ -14,7 +14,7 @@ Claude Code reads its endpoint from `settings.json`; Codex reads its from `confi
 - store the endpoint and key once, encrypted;
 - switch an agent onto it in one action, and back to the agent's own login in another;
 - keep every switch in the audit log;
-- reuse the same key for Coffer's own engine.
+- reuse the same key for Coffer's speech-to-text.
 
 A provider is always optional. An agent with no provider switched on runs on its own built-in login, and every Coffer surface still works.
 
@@ -22,9 +22,9 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 **Model providers** is one page with one header — the title, an **Experimental** tag, a line saying what the page is for, and **Add provider** — over two tabs, **Providers** and **Usage**. The header and its **Add provider** button are the same on both tabs. This section is the **Providers** tab, one list beside one provider; the **Usage** tab, `/model-providers?tab=usage`, is described in [Usage](/guides/usage).
 
-- **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer's engine only" for an Ollama-protocol provider), and the marks of the agents running on it. A chip marks the provider Coffer's own engine uses (**Coffer · background model**) and the one that transcribes speech (**Coffer · speech to text**); both are changed in **Settings › General**. Opening the page opens the first provider.
+- **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer only" for an Ollama-protocol provider), and the marks of the agents running on it. A chip marks the provider that transcribes speech (**Coffer · speech to text**); it is changed in **Settings › General**. Opening the page opens the first provider.
 - **The header** of the open provider shows its health, read from listing the endpoint's models when you open it — **Reachable**, **Key rejected** or **Unreachable** — its protocol, host and, when the endpoint answered, how long it took, the **Reach** control, **Test**, **Edit**, and a **⋯** menu with **Delete provider**.
-- **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:38471`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**. **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
+- **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Speech to text** when the provider carries it, which opens **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:38471`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**. **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
 
 The provider's address is `/model-providers/<uid>`.
 
@@ -34,7 +34,7 @@ With no provider yet, the page offers three ways in — **Anthropic or compatibl
 
 Open **Model providers** and click **Add provider**. The dialog has two steps.
 
-1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex, chat and Coffer's engine) or **Anthropic-compatible** (Claude Code, chat and Coffer's engine). Give it a **Name** and paste the **API key**; the key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with the key you typed — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. Missing or malformed fields are named under each field.
+1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex and chat) or **Anthropic-compatible** (Claude Code and chat). Give it a **Name** and paste the **API key**; the key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with the key you typed — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. Missing or malformed fields are named under each field.
 2. **Models.** Tick the models the provider should offer, with search and a type filter. Nothing ticked means every model the endpoint serves is offered. **Add provider** saves it and opens it.
 
 Choosing **Ollama** or **LM Studio** takes the local path instead: no key, and Coffer looks for a runtime on this Mac (see [Local model runtimes](#local-model-runtimes)). The next step stays greyed out until a runtime is chosen or an address is filled in, and the **Name** field appears once a runtime is chosen.
@@ -43,7 +43,7 @@ Choosing **Ollama** or **LM Studio** takes the local path instead: no key, and C
 | --- | --- | --- |
 | `anthropic` | Anthropic Messages API | required |
 | `openai` | OpenAI-compatible API (OpenAI, Gemini's OpenAI endpoint, DeepSeek, OpenRouter, most gateways) | required |
-| `ollama` | a local Ollama server; used only by Coffer's own engine, never projected into an agent | none |
+| `ollama` | a local Ollama server; used only by Coffer itself, never projected into an agent | none |
 | `unknown` | the endpoint's protocol could not be determined | required |
 
 The protocol describes the endpoint. It decides how Coffer lists the endpoint's models and whether a key is needed; it does not decide which agent the provider is written into — that is the provider's reach.
@@ -138,7 +138,7 @@ Reverting to the built-in login removes exactly the keys Coffer wrote. A `model`
 
 A provider can be a model runtime on this machine: **Ollama** (≥ 0.14.0 for Claude Code, ≥ 0.13.4 for Codex), **LM Studio** (≥ 0.4.1 / ≥ 0.3.29), **vLLM** (≥ 0.11.1 / ≥ 0.10.0) or llama.cpp's **llama-server** (Codex support is experimental). Coffer talks to each in its own native protocol through the proxy — no translation — so `mlx_lm.server`, which speaks only Chat Completions, is not supported; use LM Studio's MLX engine.
 
-In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible** when the runtime serves it, or **Ollama API** for Coffer's engine only. The next step starts with the models that can call tools ticked, each showing its context window.
+In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible** when the runtime serves it, or **Ollama API** for Coffer's own use only. The next step starts with the models that can call tools ticked, each showing its context window.
 
 If nothing answers, the dialog says so and offers a prompt for your agent (**Ask an agent**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running.
 
@@ -153,7 +153,7 @@ A gateway account often serves dozens of models when you use two or three. The p
 
 1. Open **Model providers** and choose the provider.
 2. Scroll to **Models**. Coffer lists the endpoint's models when the provider opens, and says when it last did; **Refresh**, beside the section's title, asks again. If listing fails, the title reads **Listing failed · last listed &lt;date&gt;**, a box says what failed, and **Refresh** is the way to try again; your current selection is left alone and still offered. An endpoint that lists nothing says so: leave it like that and every model the endpoint accepts stays available.
-3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong — it reads as plain text with a chevron and opens a menu: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. A search and a **Type** filter narrow the list; a model Coffer's engine, speech to text or an agent uses carries a tag saying so. **Turn all on** and **Turn all off**, beside the search, switch every model the search and filter match in one step; turning all off is refused while it would leave no model on, because an empty list means every model is offered.
+3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong — it reads as plain text with a chevron and opens a menu: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. A search and a **Type** filter narrow the list; a model speech to text or an agent uses carries a tag saying so. **Turn all on** and **Turn all off**, beside the search, switch every model the search and filter match in one step; turning all off is refused while it would leave no model on, because an empty list means every model is offered.
 
 Only switched-on models appear in agent, chat and channel pickers, and chat pickers list text models only. (The section's help tip says so too.)
 
@@ -186,7 +186,7 @@ On the provider's header:
 
 - **Edit** changes the **Name**, the **Protocol** and the **Base URL**, with **Test** before you save. Renaming changes only the label; the page stays where it is. The protocol is locked while an agent runs on the provider. The key is not edited here.
 - **Replace key** (on Overview, or the key-rejected banner) takes a new key, can **Test** it first, and overwrites the value behind the same secret — the agents' config files only name the secret, so they do not change. The new value takes effect at once. See [Secret store](/guides/secret-store).
-- **⋯ › Delete provider** deletes a provider nothing runs on, with its secret, after a confirmation. A provider something runs on is not blocked: **Delete provider** opens a review instead. The left side says what will happen to each user — an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted — and the right side shows exactly the lines Coffer will remove from each agent's config file (for Codex its model, provider table and model-list pointer; your own lines stay). **Delete** applies it: the agents are put back on their own logins first, then the provider goes. If an agent's file changed in the meantime the delete stops with the provider still there.
+- **⋯ › Delete provider** deletes a provider nothing runs on, with its secret, after a confirmation. A provider something runs on is not blocked: **Delete provider** opens a review instead. The left side says what will happen to each user — an agent goes back to its own login, speech to text turns off, the key is deleted — and the right side shows exactly the lines Coffer will remove from each agent's config file (for Codex its model, provider table and model-list pointer; your own lines stay). **Delete** applies it: the agents are put back on their own logins first, then the provider goes. If an agent's file changed in the meantime the delete stops with the provider still there.
 
 - **Replacing** the key overwrites the stored secret at the same ref; nothing that cites it changes.
 - **Waiting for approval.** A new base URL for a connection whose key already goes somewhere, and a key another connection already uses, are saved but held until you approve them in the Coffer app. The old URL stays in use until then; a replaced key is not held.
@@ -200,26 +200,21 @@ The agent's recorded provider is a fact about a file Coffer does not own: the ag
 
 After a [vault sync](/guides/vault-sync) round brings in provider changes from another machine, Coffer re-projects every agent that runs on a provider on this machine from the provider as it now is. A switch made on another machine does not arrive: which provider an agent runs on, like reach, is per machine and never synced.
 
-## Coffer's own engine
+## Speech to text
 
-Some of Coffer's work runs on a model of its own: memory organisation, knowledge curation, and voice transcription for channels. That model borrows the endpoint and key of one provider and names its own model. With nothing configured, knowledge curation and memory distillation fall back to a mechanical pass (see [Knowledge](/guides/knowledge#without-an-internal-model) and [Memory](/guides/memory#how-the-passes-run)), and a voice message reaches the agent as an audio file.
+Coffer makes one model call of its own: transcribing the voice messages that arrive through [channels](/guides/channels). It never runs a model over your knowledge or memory; your own agent does that work when you press **Tidy**. The speech-to-text model borrows the endpoint and key of one provider and names its own model. With nothing configured, a voice message reaches the agent as an audio file.
 
-**Web UI:** open **Settings › General** and find the **Coffer's model** section. It has two pickers, and each one is a provider first and then a model from that provider's list:
+**Web UI:** open **Settings › General** and find the **Speech to text** section. Choose a provider first, then a model from that provider's list of speech models; **Off — do not transcribe** clears the model. It is a provider of its own on purpose: a chat gateway often has no transcription endpoint, so it is chosen separately from the connections your agents run on.
 
-- **Coffer's engine** distils agents' memory and curates knowledge. It lists the provider's chat models. Under it, **Time limit per call** bounds one call to the model; the default option names the number it stands for.
-- **Speech to text** transcribes voice messages that arrive through channels. It lists the provider's speech models, and **Off — do not transcribe** clears the model. It is a separate provider on purpose: a chat gateway often has no transcription endpoint, so the two are set independently and neither falls back to the other.
+A choice saves as soon as you make it; there is no Save button. A line under the picker says where it stands:
 
-A choice saves as soon as you make it; there is no Save button. A line under each picker says where it stands:
-
-- **Not set** — a provider or a model is missing. For the engine, no internal pass runs and distil and curation wait; for speech to text, voice messages reach the agent as audio files, without a transcript.
+- **Not set** — a provider or a model is missing, so voice messages reach the agent as audio files, without a transcript.
 - **Set** — both halves are chosen and have not been tested during this visit.
-- **Answering** or **Failing** — the result of **Test**. For the engine, Test sends one small chat request to the chosen provider and model. For speech to text, a chat request would fail on a speech model, so Test instead asks the provider which models it serves: it passes when the list names your model and fails when it does not. A provider that answers but lists no models reads **Reachable**, because the model can't be checked. A failure shows the reason on that line and changes nothing: the pair stays as you chose it until you pick another one.
+- **Answering** or **Failing** — the result of **Test**. A chat request would fail on a speech model, so Test asks the provider which models it serves: it passes when the list names your model and fails when it does not. A provider that answers but lists no models reads **Reachable**, because the model can't be checked. A failure shows the reason on that line and changes nothing: the pair stays as you chose it until you pick another one.
 
-The passes Coffer runs on its own are switched on the pages they upkeep: curation from the **Automatic** control in the Knowledge header, reading and distilling memory from the one in the Memory header.
+At most one provider carries speech to text; setting it moves the flag from wherever it was. A provider can be switched into agents and carry speech to text at the same time. An `ollama` provider can only ever be used by Coffer itself, never by an agent. When the speech-to-text provider changes, the model is cleared unless the new provider's curated list includes it. The speech-to-text provider has no default: move the flag by choosing another provider.
 
-At most one provider is the internal-engine default, and at most one carries speech to text; setting either moves the flag from wherever it was. A provider can be switched into agents and be the engine's default at the same time. An `ollama` provider can only ever serve the engine. When the engine's provider changes, the engine model is cleared unless the new provider's curated list includes it.
-
-The unattended passes, the per-call time limit and which machine may run knowledge curation are Settings page controls as well. The engine provider and the speech-to-text provider have no default: move the flag by choosing another provider. `coffer daemon status` shows the passes running right now.
+The two memory passes that run on a timer, reading agents' memory and turning it into notes, call no model; they are switched from the **Automatic** control in the Memory header. `coffer daemon status` shows the passes running right now.
 
 ## Troubleshooting
 
@@ -227,7 +222,7 @@ The unattended passes, the per-call time limit and which machine may run knowled
 | --- | --- | --- |
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
 | Switch fails with `PROVIDER_DOES_NOT_REACH_AGENT` | The provider is switched off, or the provider's reach does not name the agent | Switch it on or add the agent to its reach, then switch again. |
-| Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
+| Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use a provider with another protocol for the agent. |
 | The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key. |
 | The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; **Rotate proxy token** in the agent page's **⋯** menu issues a fresh one. |
 | Nothing answers on `127.0.0.1:38471` | The proxy is not running | The daemon restarts a crashed proxy within a few seconds; `coffer daemon status` shows whether the daemon is up. |
@@ -240,4 +235,4 @@ The unattended passes, the per-call time limit and which machine may run knowled
 - [Secret store](/guides/secret-store) — where provider keys are stored
 - [Conversations](/guides/chat) and [Channels](/guides/channels) — where models are picked per conversation
 - [LLM Connections Are Projected Into Each Agent's Own Config File](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md)
-- Specs: [provider-switching](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)
+- Specs: [provider-switching](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md)

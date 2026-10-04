@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without overwriting it", spec provider-switching "Keep an agent on at most one connection", spec provider-switching "Switch one agent at a time", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an agent's connection its config contradicts", spec provider-switching "Converge connections across machines", spec agent-registry "Carry the connection an agent runs on on the agent record", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
+**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Speech-to-Text Settings](internal-engine-settings.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without overwriting it", spec provider-switching "Keep an agent on at most one connection", spec provider-switching "Switch one agent at a time", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an agent's connection its config contradicts", spec provider-switching "Converge connections across machines", spec agent-registry "Carry the connection an agent runs on on the agent record", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
 
 ## Context
 
@@ -36,12 +36,12 @@ gateway. Codex speaks only the OpenAI Responses wire; it refuses to load a
 A connection is a `kind='provider'` resource whose config is `ProviderConfig`
 (`domain/provider/config.py`): `protocol` (`anthropic`, `openai`, `ollama` or
 `unknown`), `base_url`, an optional `secret_ref`, the curated `models` it offers,
-`local_runtime`, and two defaults —
-`internal_default` and `transcribe_default`. The protocol is chosen from provider
+`local_runtime`, and one default flag,
+`transcribe_default`. The protocol is chosen from provider
 presets in the add dialog or set explicitly (`coffer provider add --protocol`). It
 carries no model to run and no flag saying it is switched on: the model is chosen
 where it is used, on the agent record (`AgentConfig.model` and
-`tier_models`), the conversation, or the engine settings; and which connection an
+`tier_models`), the conversation, or the speech-to-text setting; and which connection an
 agent runs on is **one field of the agent record**, `AgentConfig.connection_uid`.
 
 Which agents a connection may reach is its framework-level `scope`
@@ -190,7 +190,7 @@ structural, lets each agent have its own connection, and keeps a machine-local f
 ## Decision
 
 An LLM connection is a `provider` resource — endpoint, protocol, secret
-reference, curated model set and the default flags — with no model of its own and
+reference, curated model set and the speech-to-text default flag — with no model of its own and
 no flag saying it is on. Which connection an agent runs on is the agent record's
 `connection_uid`; switching an agent writes Coffer-managed keys into that agent's
 native config file, chosen by agent type, and sets the field, with the key
@@ -206,8 +206,8 @@ Rules that follow:
 - A new agent type needs a provider projection in its facet; scope decides reach,
   not the protocol.
 - `ollama` connections are internal-only: they start dormant, switching an agent
-  onto one is refused (`PROVIDER_INTERNAL_ONLY`), and they serve only the internal
-  engine.
+  onto one is refused (`PROVIDER_INTERNAL_ONLY`), and they are never written into
+  an agent's config.
 - Changing a live connection's protocol is refused
   (`PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`) while an agent runs on it.
 - A connection's reach and an agent's `connection_uid` are machine-local choices
@@ -216,7 +216,7 @@ Rules that follow:
 ## Consequences
 
 - Surfaces: `/api/v1/providers` (CRUD, `/{uid}/activate`,
-  `/use-builtin/{agent_type}`, the two default flags),
+  `/use-builtin/{agent_type}`, the speech-to-text default flag),
   `coffer provider …`, and the connections page.
 - A running agent keeps its old endpoint until restarted. Claude Code re-invokes
   `apiKeyHelper` periodically; moving between two API-key connections changes only

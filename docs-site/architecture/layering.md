@@ -61,8 +61,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | Cross-kind imports forbidden (one per kind) | Nine symmetric contracts — `mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync` — each forbidding that area's modules from importing any other area's modules. Named exceptions cover pure domain vocabulary only: `provider` and `memory` may read `domain.agent`, and `channel` may read `domain.chat`. `domain.knowledge` and `infrastructure.knowledge` are shared substrate. |
 | Kind-agnostic core does not import kind-specific code | The resource service and its scope, enable, delete, rename, title and kind helpers, the repository ports, the reconciler, the attention list and the event stream, the audit service, the retention service and worker, the builtin tool registry, Coffer's own engine modules, the domain's resource, reconcile, scope and audit modules, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. Two sanctioned exceptions: Alembic's migration environment, which imports every kind's ORM models into one metadata, and the one-time vault migration, which reads every area to move its data. |
 | Engine confinement: markitdown | Only the channel attachment extractor and the knowledge upload converter may import `markitdown` (or `docling`). |
-| Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec` and `fastembed` may not be imported anywhere. Coffer embeds nothing, and a reintroduction has to be a deliberate change to this contract. |
-| LangGraph and LangChain confined to infrastructure/llm | Coffer's own model calls go through `infrastructure/llm/`. Domain, application, and the chat, MCP, channel, knowledge, persistence, secrets, daemon and logging infrastructure packages may not import `langgraph` or any `langchain*` package; they reach a model through injected ports. |
+| Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec`, `fastembed`, `langgraph` and the `langchain*` packages may not be imported anywhere. Coffer embeds nothing and runs no chat model of its own (its one model call is a plain HTTP speech-to-text request), and a reintroduction has to be a deliberate change to this contract. |
 | Claude Agent SDK confined | Domain, application and the other infrastructure packages may not import `claude_agent_sdk`. Its homes are `infrastructure/chat` (the agent adapters) and `infrastructure/agent` (reading the installed agent's catalogue). |
 
 When two kinds genuinely need the same code, it moves to a kind-agnostic package or module at the layer root: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (agent transcript readers shared by `agent` and `memory`), and a small hook-trust module at the domain root (the hook-trust values the `memory` kind reports and the `agent` kind's hooks listing shows). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example the model-catalogue port the chat platform declares, which it uses to read the agent kind's model catalogue without importing it.
@@ -87,8 +86,7 @@ flowchart TB
   C --> R["Resource service, audit, retention"]
   R --> K["Kinds: agent and skill, provider, knowledge, memory, MCP"]
   K --> CH["Chat platform"]
-  CH --> CU["Curation pass"]
-  CU --> CN["Channel kind and runtime"]
+  CH --> CN["Channel kind and runtime"]
   CN --> H["Boot heals and guide refresh"]
   H --> W["Background workers"]
 ```
@@ -139,15 +137,15 @@ backend/coffer/
 │   ├── events/             # the change feed: numbered hints, replay buffer, attention watch
 │   ├── runtime/            # supervised background tasks, event-loop lag probe, correlation ids
 │   ├── secret/             # ref-to-secret resolver
-│   ├── engine/             # which model Coffer's own passes run on
+│   ├── engine/             # Coffer's own settings and speech-to-text resolution
 │   ├── fs/                 # browse, pick, open, editor
 │   ├── mcp/                # gateway, supervisor, discovery, search_tools
 │   ├── agent/              # agent services
 │   ├── skill/              # skill services, builtin-skill seed
-│   ├── knowledge/          # the write tool, curation, guide rendering
+│   ├── knowledge/          # the write tool, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # aggregate, distil, delivery, session-start context
+│   ├── memory/             # aggregate, mechanical distil, tidy hand-off, delivery, session-start context
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, history and restore, problems
@@ -161,7 +159,7 @@ backend/coffer/
 │   ├── platform/           # the only code that knows the host OS
 │   ├── logging/            # structlog setup, log files
 │   ├── media_retention.py  # age sweep for the two attachment media dirs
-│   ├── llm/                # LangChain models, completion, transcription
+│   ├── llm/                # speech-to-text over HTTP
 │   ├── agent_files/        # agent transcript readers shared by two kinds
 │   ├── mcp/                # upstream subprocess and HTTP clients
 │   ├── agent/              # agent config-file store

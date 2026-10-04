@@ -46,7 +46,7 @@ openspec/
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | Coffer 进程：每个保险库一个、发现机制、回环 HTTP 防护、提供界面、日志、终端安装 |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | macOS 桌面壳：窗口、托盘、握手、检测或启动守护进程、`.dmg` |
 | [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | 功能注册表、按机器的开关、关闭对应入口 |
-| [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | Coffer 自己用来思考的模型，以及它无人值守运行的各轮任务 |
+| [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | 语音转文字模型，以及 Coffer 的机械维护任务 |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | 纯文件的知识集及其整理 |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | 聚合在一个端点之后的上游 MCP 服务器 |
 | [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | 把每个智能体的原生记忆聚合成 Coffer 自己的笔记 |

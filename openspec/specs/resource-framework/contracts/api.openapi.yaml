@@ -2061,10 +2061,10 @@ components:
           anyOf:
           - type: integer
           - type: 'null'
-          description: 'For a run that works through several items one pass at a time (knowledge''s Curate now, memory''s Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.'
+          description: 'For a run that works through several items one pass at a time (memory''s Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.'
           title: Done
         kind:
-          description: 'The kind whose pass this is: `memory` or `knowledge`.'
+          description: 'The kind whose pass this is: `memory`.'
           title: Kind
           type: string
         name:

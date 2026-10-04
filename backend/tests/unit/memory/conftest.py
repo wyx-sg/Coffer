@@ -1,4 +1,4 @@
-"""Fakes the memory unit tier shares: resources, audit, readers, completions.
+"""Fakes the memory unit tier shares: resources, audit and readers.
 
 Every file under here drives the real ``infrastructure.memory`` store against
 the memory root, which resolves from the fresh ``HOME`` the suite-wide
@@ -11,10 +11,7 @@ What is faked and what is not is deliberate. ``ResourceService`` and
 ``AuditService`` are fakes because a database is the integration tier's
 business and nothing about aggregation's own decisions needs one. The **store**
 is real, because "what is on disk after a pass" is the whole of what these
-tests assert. The completion port is always a fake, and two of the shapes below
-(:class:`NoModelSelector`, :class:`ExplodingCompletion`) exist to make "no
-model is called" (see "Distil mechanically with no internal connection") a
-structural assertion rather than a hopeful one.
+tests assert.
 """
 
 from __future__ import annotations
@@ -251,73 +248,10 @@ def memory_service(
     readers: dict[str, Any],
     *,
     audit: FakeAudit | None = None,
-    completion: Any = None,
-    model_selector: Any = None,
 ) -> MemoryService:
     return MemoryService(
         resources=resources,  # type: ignore[arg-type]
         audit=audit or FakeAudit(),  # type: ignore[arg-type]
         agent_source_resolver=agent_source_resolver,
         readers=readers,
-        completion=completion,
-        model_selector=model_selector,
     )
-
-
-# --- the internal-engine seam ------------------------------------------------
-
-
-class NoModelSelector:
-    """No internal connection configured — the mechanical distil path."""
-
-    async def get_default(self) -> None:
-        return None
-
-
-class StubModelSelector:
-    """An internal connection is configured; its value is opaque here."""
-
-    def __init__(self, connection: Any = "internal-connection") -> None:
-        self._connection = connection
-
-    async def get_default(self) -> Any:
-        return self._connection
-
-
-class ScriptedCompletion:
-    """Answers queued responses in order; ``"{}"`` once the queue is empty."""
-
-    def __init__(self, responses: Sequence[str]) -> None:
-        self._responses = list(responses)
-        self.calls: list[dict[str, Any]] = []
-
-    async def complete(
-        self,
-        *,
-        system: str,
-        user: str,
-        model: Any,
-        secret_resolver: Any,
-        timeout: float | None = None,
-    ) -> str:
-        # ``timeout`` is recorded, not just tolerated: a bound the operator set
-        # that never reaches the request is a setting that silently does
-        # nothing, which is the failure mode this whole seam exists to end.
-        self.calls.append({"system": system, "user": user, "model": model, "timeout": timeout})
-        return self._responses.pop(0) if self._responses else "{}"
-
-
-class ExplodingCompletion:
-    """Raises if it is called at all — "no model is called" asserted
-    structurally."""
-
-    async def complete(
-        self,
-        *,
-        system: str,
-        user: str,
-        model: Any,
-        secret_resolver: Any,
-        timeout: float | None = None,
-    ) -> str:
-        raise AssertionError("no model may be called without an internal connection")

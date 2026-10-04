@@ -1,7 +1,7 @@
 """Round rules the Sync page and the CLI rely on (spec vault-sync): a quiet
 round makes no commit, the reconciler runs after a round that applied
 something, a stale machine takes a deletion, a hold is asked again once a
-side moves, curation waits while a round waits, the master key never
+side moves, the master key never
 travels, and the routes cover every operation."""
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import pytest
 
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
-from coffer.domain.sync.stops import Answer
 
 from .harness import joined
 
@@ -93,22 +92,6 @@ def test_a_hold_is_asked_again_once_the_files_came_back(tmp_path: Path) -> None:
     got = mac.round()
     assert got.status is not RoundStatus.HELD
     assert mac.state.stop() is None
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="a curation pass is skipped while a round is unresolved"
-)
-def test_curation_is_told_to_wait_while_a_round_waits_for_a_person(tmp_path: Path) -> None:
-    mac, mini = joined(tmp_path, "Mac", "Mini")
-    assert mini.run(mini.service.divergence_outstanding()) is False
-    mac.put(DOC, "Mac rotates on Mondays.\n")
-    mac.round()
-    mini.put(DOC, "Mini rotates on Fridays.\n")
-    assert mini.round().status is RoundStatus.STOPPED
-    assert mini.run(mini.service.divergence_outstanding()) is True
-    mini.run(mini.service.answer(DOC, Answer.MINE))
-    mini.run(mini.service.continue_round())
-    assert mini.run(mini.service.divergence_outstanding()) is False
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="the master key never enters the repository")

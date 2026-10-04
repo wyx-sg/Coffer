@@ -163,7 +163,7 @@ flowchart LR
 - **添加 Codex。** 在**智能体**页面连接 Codex。Codex 无需额外配置就能拿到同样的服务器和技能。见[智能体](/zh/guides/agents)。
 - **整理工具。** 关掉你不想让智能体看到的工具，或把某个服务器限定给特定智能体。见 [MCP 服务器](/zh/guides/mcp-servers)。
 - **保存密钥。** 用密钥引用注册一个需要 API 密钥 的服务器。见[密钥存储](/zh/guides/secret-store)。
-- **共享知识。** 在知识页面创建一个知识集并往里添加 Markdown 文件，或者让智能体把文件写进该知识集的 `.inbox/` 文件夹。见[知识](/zh/guides/knowledge)。
+- **共享知识。** 在知识页面创建一个知识集并往里添加 Markdown 文件，或者让智能体往该知识集里写一篇文档。见[知识](/zh/guides/knowledge)。
 - **切换提供商。** 一步把两个智能体都指向同一个模型网关。见[模型提供商](/zh/guides/providers)。
 - **理解模型。** [核心概念](/zh/start/concepts)解释了这些文档里用到的术语。
 

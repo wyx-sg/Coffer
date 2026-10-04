@@ -8,34 +8,32 @@
 //
 // There is no `search` and no `grep` here because the daemon serves neither
 // (see "Cover knowledge management on REST and the CLI"). New knowledge goes in as MATERIAL — an
-// upload here, an agent's file in `.inbox/` — which waits in the collection's hidden inbox
-// until a curation pass curates it into the documents; with no internal model
-// configured it becomes a document as it is.
+// upload here, an agent's file in `.inbox/` — and becomes a document as it is
+// (see "Promote submitted material at once").
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
 // Resource, so it goes through the kind-agnostic `DELETE /resources/{uid}`
 // (`useDeleteResource`) like every other kind. Only files are deleted here.
 //
-// Two vocabularies meet in this module and both are correct. `curate` addresses
-// a collection, so it takes the collection's `uid`. The file routes address a
-// place on disk, and a collection's directory is named after it, so `path` and
-// `collection` are NAMES — the same strings the tree hands back. A caller that
-// holds a `CollectionOut` has both and picks by what it is asking for.
+// Two vocabularies meet in this module and both are correct. A collection's
+// description addresses it, so it takes the collection's `uid`. The file routes
+// address a place on disk, and a collection's directory is named after it, so
+// `path` and `collection` are NAMES — the same strings the tree hands back. A
+// caller that holds a `CollectionOut` has both and picks by what it is asking for.
 //
 // Transport via the typed client (.agents/frontend.md §4); wire types in
 // `knowledgeTypes.ts`.
 
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
-  ChangeDetailOut,
   ChangeOut,
   ChangesOut,
   CollectionListOut,
   CollectionOut,
-  CurationRunOut,
   DocumentHistoryOut,
   FileOut,
   FileSave,
+  HandoffOut,
   IngestedDocumentOut,
   VersionBodyOut,
   TreeOut,
@@ -69,17 +67,14 @@ export function createCollection(payload: {
  * List ONE level of a collection: the immediate subdirectories and documents
  * under `path`, relative to the knowledge root — `shopee` for the collection
  * itself, `shopee/account` for a folder inside it. The tree descends a level
- * per request. The collection's own `README.md` never appears. A non-empty
- * inbox is listed first at the collection root as a directory with
- * `inbox: true`, and `<collection>/.inbox` lists its items (see "Hide
- * dot-prefixed entries except the inbox").
+ * per request. The collection's own `README.md` never appears, nor does any
+ * dot-prefixed entry (see "Hide every dot-prefixed entry").
  */
 export function getTree(path: string): Promise<TreeOut> {
   return unwrap(getApiClient().GET("/knowledge/tree", { params: { query: { path } } }));
 }
 
-/** One file, whole — a document or an inbox item (`inbox: true`). Carries the
- *  `fingerprint` a save hands back. */
+/** One document, whole. Carries the `fingerprint` a save hands back. */
 export function getFile(path: string): Promise<FileOut> {
   return unwrap(getApiClient().GET("/knowledge/file", { params: { query: { path } } }));
 }
@@ -88,8 +83,7 @@ export function getFile(path: string): Promise<FileOut> {
  * Save an edited document's body; its frontmatter is kept as it is on disk
  * (see "Save a document edited in the web UI"). `expected_fingerprint` is the
  * `fingerprint` the read carried: a file changed since is refused with 409
- * `KNOWLEDGE_FILE_CONFLICT` and left untouched. An inbox item is refused as
- * `KNOWLEDGE_PATH_UNSAFE`. Resolves with the file as saved, new fingerprint
+ * `KNOWLEDGE_FILE_CONFLICT` and left untouched. Resolves with the file as saved, new fingerprint
  * included.
  */
 export function saveFile(payload: FileSave): Promise<FileOut> {
@@ -97,8 +91,7 @@ export function saveFile(payload: FileSave): Promise<FileOut> {
 }
 
 /**
- * Remove ONE document — any of them: the collection is the person's as much
- * as curation's (see "Let only a person delete a document"). `path` is relative to the knowledge
+ * Remove ONE document — any of them (see "Let only a person delete a document"). `path` is relative to the knowledge
  * root, the same string the tree and `getFile` use, and the daemon refuses anything that
  * escapes it.
  *
@@ -110,35 +103,20 @@ export function deleteFile(path: string): Promise<void> {
   return unwrapVoid(getApiClient().DELETE("/knowledge/file", { params: { query: { path } } }));
 }
 
-// --- curation ---------------------------------------------------------------
+// --- tidy ---------------------------------------------------------------------
 
-/**
- * Curate one collection now: the daemon runs one pass per pending item —
- * inbox items oldest first, then documents edited since curation last saw
- * them — until none is left, each pass still bounded, stopping at the first
- * that fails. The answer lists every pass's outcome; progress (n of m) is on
- * the in-flight list (`/upkeep/runs`) while the request is open.
- *
- * `document` curates just that document. With no internal model configured
- * the run comes back `no_model`, having promoted the inbox as it stood — a
- * clean 200. A second run over the same collection is refused with 409
- * `UPKEEP_ALREADY_RUNNING` rather than queued.
- */
-export function curateCollection(uid: string, document?: string | null): Promise<CurationRunOut> {
-  return unwrap(
-    getApiClient().POST("/knowledge/collections/{uid}/curate", {
-      params: { path: { uid } },
-      body: { document: document ?? null },
-    }),
-  );
+/** The prompt that hands tidying every collection to the person's agent: the
+ *  Knowledge page's Tidy all (see "Hand a tidy to the agent"). One collection's
+ *  prompt is the `tidy_handoff` on its read. */
+export function getTidyHandoff(): Promise<HandoffOut> {
+  return unwrap(getApiClient().GET("/knowledge/tidy-handoff"));
 }
 
 // --- history ------------------------------------------------------------------
 
 /**
  * Recent changes across every collection, or one (`collection` is its NAME),
- * newest first, with the items still waiting in each inbox (see "Keep every
- * document's history and undo a pass as a whole").
+ * newest first (see "Follow edits across collections in one feed").
  */
 export function listChanges(params: {
   collection?: string | null;
@@ -154,25 +132,6 @@ export function listChanges(params: {
         },
       },
     }),
-  );
-}
-
-/** One change in full: every document it touched, with its diff. */
-export function getChange(version: string): Promise<ChangeDetailOut> {
-  return unwrap(
-    getApiClient().GET("/knowledge/changes/{version}", { params: { path: { version } } }),
-  );
-}
-
-/**
- * Undo a curation pass as a whole: every document it wrote goes back to how
- * it was before, as a new change naming the user. Refused with 409
- * `KNOWLEDGE_UNDO_CONFLICT` (details name the `document`) when a later change
- * to one of them would be lost; nothing is written then.
- */
-export function undoPass(version: string): Promise<ChangeOut> {
-  return unwrap(
-    getApiClient().POST("/knowledge/changes/{version}/undo", { params: { path: { version } } }),
   );
 }
 
@@ -197,7 +156,7 @@ export function getVersionBody(path: string, version: string): Promise<VersionBo
 
 /**
  * Put back what a delete removed — a document, or a whole collection with its
- * documents, README and waiting items — as one new change naming the user.
+ * documents and README — as one new change naming the user.
  * Refused with 409 when the path (`KNOWLEDGE_RESTORE_CONFLICT`) or the
  * collection's name (`KNOWLEDGE_COLLECTION_EXISTS`) is taken again.
  */
@@ -228,12 +187,10 @@ export function restoreVersion(payload: { path: string; version: string }): Prom
 // --- ingestion ----------------------------------------------------------------
 
 /**
- * Convert an uploaded document into material for a collection. The Markdown
- * extracted from it joins the collection's inbox and is curated into the
- * documents by the next pass (`pending: true`); with no internal model
- * configured it is promoted to a document on the spot and `path` names it.
- * Neither the original nor the extracted Markdown is kept beyond that — the
- * documents are what the collection holds.
+ * Convert an uploaded document into a document of a collection, at once
+ * (see "Promote submitted material at once"); `path` names it. Neither the
+ * original nor the extracted Markdown is kept beyond that — the documents are
+ * what the collection holds.
  */
 export function uploadFile(params: {
   /** The collection's NAME: this lands material in its directory. */

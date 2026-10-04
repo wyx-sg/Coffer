@@ -3,14 +3,14 @@
 // An unused provider is deleted after a ConfirmDialog (its own secret goes
 // with it) and the page returns to the list. A provider in use is NOT blocked:
 // Delete opens a review (the 1060 ChangePreview) — "What will happen" for each
-// user of the provider (an agent goes back to its own login, Coffer's engine
-// pauses, speech to text turns off, the key is deleted) beside the exact lines
+// user of the provider (an agent goes back to its own login, speech to text
+// turns off, the key is deleted) beside the exact lines
 // the daemon removes from each agent's config file — and Delete applies it.
 // The lines are the daemon's own dry run of the removal, never drawn here.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Cpu, KeyRound, Mic, type LucideIcon } from "lucide-react";
+import { KeyRound, Mic, type LucideIcon } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { ChangePreview, type ChangePreviewState } from "@/components/change-preview/ChangePreview";
@@ -61,14 +61,6 @@ function useConsequences(provider: Provider, use: ProviderUse, files: Map<string
         : t("providers.delete.agentBodyNoFile"),
     };
   });
-  if (use.engine) {
-    out.push({
-      key: "engine",
-      lead: <Tile icon={Cpu} />,
-      title: t("providers.delete.engineTitle"),
-      body: t("providers.delete.engineBody"),
-    });
-  }
   if (use.transcribe) {
     out.push({
       key: "transcribe",

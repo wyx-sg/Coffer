@@ -36,7 +36,6 @@ hidden = (
     #                spec channels "Give documents to every agent as extracted
     #                text")
     #   openai     — providers/*
-    #   langgraph  — infrastructure/llm/* (the only importer of langgraph/langchain)
     # The knowledge layer needs no index and no embedding client bundled: it is
     # a directory of markdown files an agent greps (ADR knowledge-is-plain-files).
     # Converters it does need — markitdown below turns an uploaded document into
@@ -56,7 +55,6 @@ hidden = (
     + collect_submodules("pandas")
     + collect_submodules("xlrd")
     + collect_submodules("openai")
-    + collect_submodules("langgraph")
     + [
         # Anyio sniffio backend
         "anyio._backends._asyncio",

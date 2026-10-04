@@ -184,8 +184,6 @@ export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as
 export const knowledgeChangesRootKey = ["knowledge", "changes"] as const;
 export const knowledgeChangesKey = (collection: string | null) =>
   ["knowledge", "changes", "list", collection ?? ""] as const;
-export const knowledgeChangeKey = (version: string) =>
-  ["knowledge", "changes", "detail", version] as const;
 export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
 export const knowledgeVersionDiffKey = (path: string, version: string) =>
   ["knowledge", "history", path, "diff", version] as const;
@@ -206,11 +204,10 @@ export const memoryDeliveredKey = (uid: string) =>
   ["memory", "partitions", uid, "delivered"] as const;
 export const memoryReadingKey = ["memory", "reading"] as const;
 
-// --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---
+// --- upkeep — the long rewrites (memory update) in flight ---
 
-/** Deliberately NOT under `memoryKey` or `knowledgeKey`: one read answers for
- *  every kind, and a pass ending must not drag either kind's whole subtree
- *  into the same invalidation. */
+/** Deliberately NOT under `memoryKey`: one read answers for every kind, and a
+ *  pass ending must not drag a kind's whole subtree into the same invalidation. */
 export const upkeepRunsKey = ["upkeep", "runs"] as const;
 
 // --- chat — conversations, their messages and per-conversation agent config ---

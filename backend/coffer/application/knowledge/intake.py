@@ -1,9 +1,11 @@
-"""Adopt the inbox files an agent wrote with its own file tools (spec knowledge
-"Submit material by writing a file into the inbox").
+"""Adopt the inbox files an agent wrote with its own file tools, and promote what
+waits there (spec knowledge "Adopt a file dropped into the inbox").
 
-An agent adds knowledge by writing ``<collection>/.inbox/<name>.md``. The sweep
-runs this *before* it commits what changed on disk, so the file is committed
-already normalised, and one ``knowledge_written`` event names it.
+An agent adds knowledge by writing ``<collection>/.inbox/<name>.md``; so can another
+machine's sync or an older guide. The sweep runs :func:`adopt_dropped_files`
+*before* it commits what changed on disk, so the file is committed already
+normalised, and one ``knowledge_written`` event names it. :func:`promote_waiting_files`
+then makes each waiting item a document at its collection's root, as one commit.
 
 A file is recognised as written outside Coffer when git has never seen it and
 no open operation owns it — every Coffer surface commits its own writes at once.
@@ -18,8 +20,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from coffer.application.knowledge.recording import recording
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.knowledge.errors import KnowledgeFileNotFound
+from coffer.domain.knowledge.history import OP_PROMOTE, WRITER_AGENT
+from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import inbox
 
 logger = logging.getLogger(__name__)
@@ -75,8 +81,6 @@ async def adopt_dropped_files(service: KnowledgeService) -> list[str]:
                 details={
                     "title": title,
                     "item": name,
-                    "path": None,
-                    "pending": True,
                     "actor_reported": reported,
                 },
             )
@@ -86,4 +90,38 @@ async def adopt_dropped_files(service: KnowledgeService) -> list[str]:
     return adopted
 
 
-__all__ = ["adopt_dropped_files"]
+async def promote_waiting_files(service: KnowledgeService) -> list[str]:
+    """Make every waiting inbox item a document at its collection's root, one
+    commit per item; returns the new documents' paths. Never raises for one
+    bad item."""
+    promoted: list[str] = []
+    for row in await service.collection_rows():
+        collection = row.name
+        names = await asyncio.to_thread(inbox.inbox_items, collection)
+        for name in names:
+            meta = CommitMeta(
+                WRITER_AGENT,
+                OP_PROMOTE,
+                f"Add {name}",
+                actor="system",
+                collection=collection,
+            )
+            try:
+                async with recording(service.history, meta) as tx:
+                    tx.touch(inbox.inbox_path(collection, name))
+                    document = await asyncio.to_thread(inbox.promote, collection, name)
+                    tx.touch(document.path)
+            except (OSError, KnowledgeFileNotFound):
+                logger.warning(
+                    "knowledge.intake.promote_failed",
+                    extra={"collection": collection, "file": name},
+                    exc_info=True,
+                )
+                continue
+            promoted.append(document.path)
+        if names:
+            service.announce(row.uid)
+    return promoted
+
+
+__all__ = ["adopt_dropped_files", "promote_waiting_files"]

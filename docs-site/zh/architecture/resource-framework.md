@@ -234,9 +234,9 @@ sequenceDiagram
 
 已注册的策略、默认值和工作者的执行节奏列在[可观测性](/zh/architecture/observability#retention)中。
 
-## 进行中的整理任务 {#passes-in-flight}
+## 进行中的维护任务 {#passes-in-flight}
 
-长时间运行、由模型驱动的重写——对一个知识集的整理、对一个记忆分区的提炼——在一个进程内的注册表中跟踪，以类型和名字为键，所以同一个目标上永远不会启动第二个任务：整理请求会被拒绝，返回 `UPKEEP_ALREADY_RUNNING`，「更新记忆」和定时器会跳过正忙的目标。没有表也没有租约：守护进程重启会结束所有任务，而一个比它的执行者活得更久的持久化占用，会让目标永远卡住。用 `GET /api/v1/upkeep/runs` 或 `coffer daemon status` 查看它。
+长时间运行的重写——对一个记忆分区的提炼——在一个进程内的注册表中跟踪，以类型和名字为键，所以同一个目标上永远不会启动第二个任务：请求会被拒绝，返回 `UPKEEP_ALREADY_RUNNING`，「更新记忆」和定时器会跳过正忙的目标。没有表也没有租约：守护进程重启会结束所有任务，而一个比它的执行者活得更久的持久化占用，会让目标永远卡住。用 `GET /api/v1/upkeep/runs` 或 `coffer daemon status` 查看它。
 
 ## 权衡与备选方案 {#trade-offs-and-alternatives}
 

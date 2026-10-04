@@ -10,7 +10,6 @@ credential.
 
 from __future__ import annotations
 
-import asyncio
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,8 +21,6 @@ import pytest
 
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.server_config import HttpTransport
-from coffer.domain.provider.config import Protocol, ProviderConfig, ResolvedConnection
-from coffer.infrastructure.llm.langchain_models import build_chat_model
 from coffer.infrastructure.mcp.http_api_client import build_request, send_request
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.provider.introspector import ProviderIntrospector
@@ -57,23 +54,6 @@ async def test_an_http_mcp_upstream_does_not_carry_its_header_to_another_origin(
         with pytest.raises(Exception):  # noqa: B017 - nothing answers MCP here
             await connection.spawn_and_initialize()
         await connection.close()
-        assert origins.first.received(SECRET)
-        assert not origins.second.received(SECRET)
-        assert origins.second.seen == []
-
-
-@pytest.mark.parametrize("protocol", [Protocol.ANTHROPIC, Protocol.OPENAI])
-async def test_the_engines_model_client_does_not_follow_a_redirect(protocol: Protocol) -> None:
-    with redirect_origins() as origins:
-        resolved = ResolvedConnection(
-            config=ProviderConfig(
-                protocol=protocol, base_url=origins.first.url, secret_ref="provider/x/key"
-            ),
-            model="m",
-        )
-        model = build_chat_model(resolved, lambda _ref: SECRET, timeout=5)
-        with pytest.raises(Exception):  # noqa: B017 - a 307 is not a completion
-            await asyncio.wait_for(model.ainvoke("hi"), 20)
         assert origins.first.received(SECRET)
         assert not origins.second.received(SECRET)
         assert origins.second.seen == []

@@ -26,7 +26,6 @@ interface Props {
   use: ProviderUse;
   endpoint: UseQueryResult<EndpointModelsOut>;
   status: ProbeStatus;
-  engineModel: string | null;
   transcribeModel: string | null;
   latencyMs: number | null;
   /** A model id to find in Models (from the Usage tab's link). */
@@ -40,7 +39,6 @@ export function ProviderDetail({
   use,
   endpoint,
   status,
-  engineModel,
   transcribeModel,
   latencyMs,
   focusModel,
@@ -93,7 +91,6 @@ export function ProviderDetail({
           provider={provider}
           use={use}
           endpoint={endpoint}
-          engineModel={engineModel}
           transcribeModel={transcribeModel}
           focusModel={focusModel}
         />

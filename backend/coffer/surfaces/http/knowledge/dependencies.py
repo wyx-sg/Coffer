@@ -55,8 +55,8 @@ def set_history_service(svc: KnowledgeHistoryService) -> None:
 
 
 def get_history_service() -> KnowledgeHistoryService:
-    """FastAPI Depends() target: a collection's history (spec knowledge "Keep
-    every document's history and undo a pass as a whole")."""
+    """FastAPI Depends() target: a collection's history (spec knowledge "Keep every
+    document's history")."""
     if _history_service is None:
         raise RuntimeError("knowledge history service not initialised")
     return _history_service

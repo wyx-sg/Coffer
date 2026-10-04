@@ -12,10 +12,6 @@
 // so each expanded directory mounts another level and fetches its own listing
 // — and directories start CLOSED, except the ones on the way to the open
 // document, so a deep link lands with its document visible in the tree.
-//
-// The collection's `.inbox` is not listed here: it is its own Inbox node above
-// the documents (`KnowledgeCollectionNode`), counted and opened as a view of
-// its own rather than as a folder.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
@@ -77,7 +73,7 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
     );
   }
 
-  const directories = data.directories.filter((d) => !d.inbox);
+  const { directories } = data;
   if (directories.length === 0 && data.files.length === 0) {
     return (
       <p style={indentOf(depth)} className="py-1.5 text-xs text-text-subtle">

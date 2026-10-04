@@ -1,11 +1,11 @@
 ---
 title: Memory
-description: Let Coffer read what each of your agents has learned, distil it into one set of notes per repository, and hand the right notes back at session start and at each prompt. You can read and edit the notes too.
+description: Let Coffer read what each of your agents has learned, turn it into one set of notes per repository, hand the right notes back at session start and at each prompt, and ask your agent to tidy them. You can read and edit the notes too.
 ---
 
 # Memory
 
-Coffer reads the memory your agents already keep — Claude Code's per-project notes, Codex's task groups and profile — distils it into one set of notes per repository plus one global set, and makes those notes available to every agent. It never writes back into an agent's own memory. This page covers what Coffer reads, where the notes live, how agents receive them, how to see delivery working, and how to browse, edit, switch off and rebuild the notes.
+Coffer reads the memory your agents already keep — Claude Code's per-project notes, Codex's task groups and profile — turns it into one set of notes per repository plus one global set, and makes those notes available to every agent. It never writes back into an agent's own memory. This page covers what Coffer reads, where the notes live, how your agent tidies them, how agents receive them, how to see delivery working, and how to browse, edit, switch off and rebuild the notes.
 
 ## What memory aggregation is for
 
@@ -14,7 +14,7 @@ Every agent keeps its own memory, and none can see another's. What Claude Code l
 Coffer closes that gap without taking over either agent's memory:
 
 1. **Read.** Coffer reads each registered agent's native memory files. It never creates, changes, moves or deletes anything there, and never changes an agent's memory settings.
-2. **Distil.** Coffer's own model turns what it read into notes in Coffer's own words — one topic per file — merging lessons that two agents learned separately into one note.
+2. **Distil.** Coffer turns each memory it read into a note of its own, as the agent wrote it — one note per entry, with no model involved. Merging lessons that two agents learned separately into one note is **tidying**, which your agent does when you press **Tidy**.
 3. **Deliver.** An installed hook hands the notes back at two moments: the index for the repository and `global` at session start, and the few notes a prompt names when you send it.
 
 Memory is not [knowledge](/guides/knowledge). Knowledge is what you or an agent deliberately wrote down about the world; memory is what agents learned while working, collected automatically.
@@ -23,7 +23,7 @@ Memory is not [knowledge](/guides/knowledge). Knowledge is what you or an agent 
 | --- | --- | --- |
 | Comes from | agents' own memory files, read-only | you, or an agent writing it down |
 | Organised by | repository, plus `global` | collection |
-| Who writes the stored text | Coffer, distilling | you and agents, directly |
+| Who writes the stored text | Coffer copies each entry into a note; an agent tidies on request | you and agents, directly |
 | Reaches an agent | through a hook: the index at session start, matching notes at each prompt | the agent reads it when the `coffer-guide` skill points there |
 | If the store is lost | rebuilt from the agents' own memory | gone |
 
@@ -63,27 +63,25 @@ Partitions are created by aggregation only; you do not create them.
 | File | What it holds |
 | --- | --- |
 | `MEMORY.md` | The index. Each line gives a note's title, its file, a one-line description written to stand on its own, and the search terms the source supplied, newest first. This is what a session receives. |
-| `notes/<slug>.md` | One note. Frontmatter carries `title`, `description`, `type` (`user`, `feedback` or `project`), `origins` (every agent file the note was built from), `created_at` and `updated_at`, and sometimes `search_terms`. The body is Coffer's own wording. |
-| `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
+| `notes/<slug>.md` | One note. Frontmatter carries `title`, `description`, `type` (`user`, `feedback` or `project`), `origins` (every agent file the note was built from), `created_at` and `updated_at`, and sometimes `search_terms`. The body is the entry as the agent wrote it, unless someone has edited or merged it. |
+| `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. An agent retires a note by marking it (see [Tidy memory](#tidy-memory)); the next pass records it here. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
 | `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI; open it on disk, under `~/.coffer/derived/memory/<partition>/.raw/`. |
 
 Everything under `~/.coffer/derived/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it.
 
 ## How the passes run
 
-Two background passes keep the partitions current. Both are on by default.
+Two background passes keep the partitions current. Both are on by default, and neither calls a model.
 
-| Pass | What it does | Default schedule | Uses a model |
-| --- | --- | --- | --- |
-| **Read from agents** (aggregation) | Reads every registered agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly | No |
-| **Distil memory** | For each partition, routes new entries against the index — merge into a note, open a new note, retire a note, or keep nothing — then rewrites only the notes that changed, and rewrites `MEMORY.md`. | About a minute after start, then every 6 hours | Yes, when configured |
+| Pass | What it does | Default schedule |
+| --- | --- | --- |
+| **Read from agents** (aggregation) | Reads every registered agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly |
+| **Distil memory** | For each partition, turns every new entry into a note of its own, removes the notes an agent marked retired, and rewrites `MEMORY.md`. | About a minute after start, then every 6 hours |
 
-The two passes run on separate timers: distil does not wait for an aggregation (to run both at once, use [Update memory](#run-a-pass-now)), and a partition with no new entries since its last distil costs no model call. Distil is incremental: the routing request carries the new entries and the index lines, never the note bodies, and each touched note is rewritten in its own small request. Two agents' entries about the same lesson, however differently worded, end up in one note whose `origins` name both. When a new entry disagrees with a note, the [newer statement wins unless the older one is shown to be right](#when-two-statements-disagree).
-
-**Without an internal model.** If Coffer's model is not configured (see [Model providers](/guides/providers)), distil still runs, mechanically: each entry becomes a note of its own and `MEMORY.md` is written from their frontmatter. You get a thinner index, not an empty one, and no model is called.
+The two passes run on separate timers: distil does not wait for an aggregation (to run both at once, use [Update memory](#run-a-pass-now)), and a partition with no new entries and nothing to retire costs nothing. Distil is mechanical: each new entry becomes one note, as it stands, and `MEMORY.md` is written from the notes' frontmatter. A later entry on a subject a note already covers opens a note beside it; nothing merges them until an agent tidies the partition.
 
 ::: info What leaves your machine
-Only the distil pass sends memory content anywhere, and only to the model endpoint you configured. Aggregation and delivery send nothing; prompt-time ranking runs inside the daemon.
+Coffer sends no memory content to any model. Aggregation, distil and delivery stay on your machine, and prompt-time ranking runs inside the daemon. When you press **Tidy**, the notes your agent reads go to that agent's own provider, as in any conversation with it.
 :::
 
 ### Change the schedule
@@ -99,7 +97,29 @@ Memory → Update memory
 Memory → choose the partition → Update memory
 ```
 
-**Update memory** runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time. `coffer daemon status` shows what is running now.
+**Update memory** runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries or holds a note an agent marked retired. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time. `coffer daemon status` shows what is running now.
+
+## Tidy memory {#tidy-memory}
+
+Because every entry becomes a note of its own, a partition collects near-duplicates: two agents rarely phrase the same lesson the same way, so you end up with one note per memory each agent wrote. Coffer does not merge them. Your agent does, when you ask.
+
+```text
+Memory → Tidy all                          (every partition, one after another)
+Memory → choose the partition → Tidy
+```
+
+**Tidy** opens a new conversation on your default managed agent with a prompt that names the partition and its folder, and **sends it at once**. **Tidy all**, in the Memory page's header, sends one prompt that names every partition with its notes folder and note count, and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into any agent that has the `coffer-guide` skill.
+
+The prompt points the agent at the **Tidying memory** section of the `coffer-guide` skill. Following it, the agent works through one partition at a time:
+
+1. Reads the partition's `MEMORY.md`, then the notes in full.
+2. **Merges** notes about the same subject: it rewrites the surviving note so it holds every fact of both, appends the merged note's `origins` to the survivor's `origins` unchanged, and deletes the merged note's file. The `origins` are how Coffer knows a memory is already accounted for, so a dropped origin brings the merged note back at the next update.
+3. **Retires** a note that is no longer true by adding `retired:` with the reason to its frontmatter, and `replaced_by:` with the surviving note's file name when there is one. It does not delete the file: the memory the note came from still lives in the agent's own memory, so a deleted note would come back. Coffer records the retirement and removes the file at the next update, and never recreates it. The memory then shows in the partition's **Retired** group.
+4. Keeps one topic and a one-line `description` per note, and reports what it merged and retired.
+
+Where two notes disagree the newer statement wins, unless the older one is shown to be right by a source, a date, a command's output or the code, whoever wrote either. The agent leaves `.raw/`, `MEMORY.md`, `RETIRED.md` and the agents' own memory files alone.
+
+Tidy runs only when you press it or ask your agent. The timers never merge or retire a note on their own.
 
 ## How agents receive memory
 
@@ -207,9 +227,9 @@ Memory → choose the partition
 
 In the web UI a note is called a **memory** (中文 记忆条目): one memory per subject. The **Memory** page carries the **Experimental** tag beside its title; its primary action is **Update memory**, with **Automatic · hourly** beside it. It lists partitions in a table — the partition, its path (**Every project** for `global`), its number of memories, its **Sources** (the agents it was learned from) and a **Distilled** column saying when it was last distilled. The table has no heading of its own; a search box above it filters the rows by partition name and path. Healthy rows are grey; only **Repository missing** is coloured. With no partition yet it shows the first-run welcome **Nothing distilled yet** instead: **Update memory** and the connected agents whose memory Coffer found on this Mac, or, with no agent connected, **Open Agents** to connect one. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it (see [Rebuild a partition](#rebuild-a-partition)).
 
-A partition's page has no back link and no Experimental tag: its title is the partition's name, and the line under it carries the path, the number of memories and when it was last distilled. It has two tabs:
+The Memory page's header carries **Tidy all** beside **Update memory**. A partition's page has no back link and no Experimental tag: its title is the partition's name, the line under it carries the path, the number of memories and when it was last distilled, and its header offers **Tidy** beside **Update memory**. It has two tabs:
 
-- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body (searchable with ⌘F), with **Edit** and **Open in editor** as buttons and a **⋯** menu holding **Reveal in Finder** and **Delete…**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists the memories that were retired. Choose one to read it: the pane shows its full title, a *Retired* tag, the date, the full reason and, when another memory replaced it, a **Replaced by …** link to that memory. A retired memory is read-only, and the group opens by itself when the address names one. While Coffer's engine is not set, a banner explains that each agent's entry stays its own memory until it is set in **Settings › General**, with **Open Settings**. A partition not yet distilled shows no list, only an empty state.
+- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body (searchable with ⌘F), with **Edit** and **Open in editor** as buttons and a **⋯** menu holding **Reveal in Finder** and **Delete…**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists the memories that were retired. Choose one to read it: the pane shows its full title, a *Retired* tag, the date, the full reason and, when another memory replaced it, a **Replaced by …** link to that memory. A retired memory is read-only, and the group opens by itself when the address names one. A partition not yet distilled shows no list, only an empty state.
 - **Delivered** shows the session-start text each agent receives in this partition's project (see [See it working](#see-it-working)).
 
 The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk. The header's **⋯** menu offers **Reveal partition folder**, **Copy path**, **Distil history in Activity** (the Changes tab, where every distil pass is recorded) and, only while the repository is missing, **Delete partition…**.
@@ -220,12 +240,12 @@ A note's `origins` frontmatter names every agent file it was built from, and `.r
 
 A memory that is wrong or incomplete can be fixed by you:
 
-- **In the web UI.** Choose the memory in its partition and select **Edit**, change the body, and save. If the note changed in the meantime — a distil pass rewrote it, or you edited the file elsewhere — Coffer does not overwrite it: it shows a conflict prompt with the note as it is now, so nothing you typed or the pass wrote is lost.
+- **In the web UI.** Choose the memory in its partition and select **Edit**, change the body, and save. If the note changed in the meantime — an agent merged or rewrote it, or you edited the file elsewhere — Coffer does not overwrite it: it shows a conflict prompt with the note as it is now, so nothing you typed or the agent wrote is lost.
 - **On disk.** Open the note under `~/.coffer/derived/memory/<partition>/notes/` in your own editor. The next index line and the next session's delivery carry the change.
 
-An edited note stays as you left it until newer evidence revises it. The next distil pass that routes a new entry to that note starts from your edited text, and follows the rule in [When two statements disagree](#when-two-statements-disagree). An entry from last month that carries no evidence does not overwrite what you wrote today.
+An edited note stays as you left it: the distil pass never rewrites an existing note's body. It changes only when a tidy merges or retires it, under the rule in [When two statements disagree](#when-two-statements-disagree).
 
-Because the tree is derived, rebuilding a partition (see [Rebuild a partition](#rebuild-a-partition)) loses every edit: the notes come back from the agents' own memory, in new wording.
+Because the tree is derived, rebuilding a partition (see [Rebuild a partition](#rebuild-a-partition)) loses every edit and every merge: the notes come back from the agents' own memory, one per entry.
 
 ### Delete a memory {#delete-a-memory}
 
@@ -233,7 +253,7 @@ Choose the memory, open its **⋯** menu and select **Delete…**; Coffer asks f
 
 ### When two statements disagree
 
-When a distil pass finds two statements that disagree — a note and a new entry, or your edit and newer material — the newer statement wins unless the older one is shown to be right by evidence: a source, a date, a command's output or the code. No writer is exempt: a statement is not safe because a person wrote it, and not suspect because an agent did. A superseded statement stays legible: it is retired with the reason and the note that replaced it, or kept in the rewritten body with the date it changed. History and restore remain your way back if a pass gets it wrong.
+When two notes disagree — or your edit and a newer note — the newer statement wins unless the older one is shown to be right by evidence: a source, a date, a command's output or the code. No writer is exempt: a statement is not safe because a person wrote it, and not suspect because an agent did. This is the rule your agent follows when it tidies (see [Tidy memory](#tidy-memory)); the older note is retired with the reason and the note that replaced it, and stays readable in the **Retired** group. Coffer's own passes decide nothing by this rule: they copy entries and carry out the marks an agent leaves.
 
 ### An agent's own memory
 
@@ -249,7 +269,7 @@ Coffer reads every registered agent's memory; there is no per-agent switch for i
 
 ## Rebuild a partition
 
-Because everything under `~/.coffer/derived/memory/` is derived, you can throw a partition away and build it again from the agents' own memory. Delete the partition's folder on disk, then choose **Update memory** in the web UI. The rebuilt partition covers the same subjects from the same sources. Its wording will differ, because notes are a distillation, not a copy, and every edit you made to its notes is gone. Retirements recorded in the deleted `RETIRED.md` are lost with it, so a subject that was retired may come back.
+Because everything under `~/.coffer/derived/memory/` is derived, you can throw a partition away and build it again from the agents' own memory. Delete the partition's folder on disk, then choose **Update memory** in the web UI. The rebuilt partition covers the same subjects from the same sources, one note per entry. Every edit and merge you or an agent made to its notes is gone. Retirements recorded in the deleted `RETIRED.md` are lost with it, so a subject that was retired may come back.
 
 To remove a partition from Coffer entirely — for example one marked **Repository missing** — remove it:
 
@@ -276,9 +296,9 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 
 **A prompt brings in no notes.** Short prompts and nudges never do. Otherwise the prompt's words did not match any note of this repository or `global` well enough; with only a few notes in the store that is normal (see [Limits](#limits)). A note the session was already given is not given again.
 
-**Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings › General → Coffer's model**; entries distilled after that, by **Update memory** or the next sweep, go through the model.
+**Several notes say the same thing.** Each entry becomes a note of its own, so two agents' versions of one lesson sit side by side until someone tidies. Press **Tidy** on the partition, or **Tidy all** in the Memory header.
 
-**My edit to a note disappeared.** Either newer evidence revised the note (the Activity page's Changes tab records each distil pass), or the partition was rebuilt, which loses edits.
+**My edit to a note disappeared.** Either a tidy merged or retired the note (the Retired group shows the reason), or the partition was rebuilt, which loses edits.
 
 ## Related
 
@@ -289,4 +309,5 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 - [MCP tools reference](/reference/mcp-tools)
 - [Memory spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)
 - [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)
+- [Tidying Knowledge and Memory Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md)
 - [Memory reaches a session at two moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)

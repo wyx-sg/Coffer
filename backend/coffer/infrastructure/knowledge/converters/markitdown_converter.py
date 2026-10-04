@@ -1,6 +1,6 @@
 """Default file→Markdown engine via MarkItDown.
 
-Spec knowledge "Convert uploads into material without keeping them" names
+Spec knowledge "Convert uploads into documents without keeping the original" names
 what it must handle; "Carry no vector or embedding dependency" fences who may
 import it.
 

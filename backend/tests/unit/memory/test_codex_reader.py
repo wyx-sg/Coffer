@@ -304,8 +304,7 @@ def test_a_long_bullet_gets_a_trimmed_handle_and_keeps_its_whole_body(
     tmp_path: pathlib.Path,
 ) -> None:
     """The title is a handle for the distil pass, not a title a person reads —
-    the note's title is Coffer's to write (see "Write notes in Coffer's own
-    words")."""
+    the note's title is Coffer's to write (see "Distil each raw entry into a note mechanically")."""
     long_bullet = "x" * 300
     config_dir = tmp_path / "codex"
     memories_dir = config_dir / "memories"

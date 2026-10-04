@@ -1,7 +1,7 @@
 // components/chat/ModelPicker.tsx
 //
 // Per-conversation model picker for a managed agent (the
-// coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs). The
+// model-catalogue-read-from-the-agent ADR). The
 // value is `agent_config.model`, passed through to the agent's CLI. The picker
 // is a FIXED dropdown — never free-text (spec provider-switching "Choose a
 // model from a fixed list").

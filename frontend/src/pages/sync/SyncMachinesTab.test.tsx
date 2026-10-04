@@ -3,7 +3,7 @@
 // The registry table (6.4.24). Its cells carry claims that would be wrong if
 // rendered naively, so each has a test: two machines of one name are both
 // listed and keyed by id; "last seen" comes from the machine's own last
-// round; the curation owner is tagged read-only; a different master key is
+// round; a different master key is
 // flagged (and "no fingerprint yet" is not); Rename is only on this Mac's
 // row, behind its dialog, and Retire only on the others — at once, with an
 // Undo toast.
@@ -23,11 +23,9 @@ vi.mock("@/lib/hooks/useMachines", () => ({
 }));
 const toast = { info: vi.fn(), error: vi.fn(), success: vi.fn() };
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast }) }));
-vi.mock("@/lib/hooks/useInternalEngine", () => ({ useInternalEngineConfig: vi.fn() }));
 
 const { useMachines, useRenameSelf, useRetireMachine, useRestoreMachine } =
   await import("@/lib/hooks/useMachines");
-const { useInternalEngineConfig } = await import("@/lib/hooks/useInternalEngine");
 const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 
 const renameMutate = vi.fn();
@@ -42,9 +40,8 @@ const machine = (over: Partial<Machine> = {}) =>
 const other = (over: Partial<Machine> = {}) =>
   machine({ machine_id: OTHER, name: "Mac mini", is_self: false, ...over });
 
-function seed(machines: Machine[], curator: string | null = null) {
+function seed(machines: Machine[]) {
   mocked(useMachines).mockReturnValue({ data: { machines }, isPending: false });
-  mocked(useInternalEngineConfig).mockReturnValue({ data: { curate_owner_machine_id: curator } });
   mocked(useRenameSelf).mockReturnValue(idleMutation({ mutate: renameMutate }));
   mocked(useRetireMachine).mockReturnValue(idleMutation({ mutate: retireMutate }));
   mocked(useRestoreMachine).mockReturnValue(idleMutation({ mutate: restoreMutate }));
@@ -87,13 +84,6 @@ describe("SyncMachinesTab", () => {
     seed([machine({ last_round_at: null })]);
     render(<SyncMachinesTab />);
     expect(rowFor(LOCAL).getByText("Never")).toBeInTheDocument();
-  });
-
-  test("only the curation owner carries the read-only Runs curation tag", () => {
-    seed([machine(), other()], OTHER);
-    render(<SyncMachinesTab />);
-    expect(rowFor(OTHER).getByText("Runs curation")).toBeInTheDocument();
-    expect(rowFor(LOCAL).queryByText("Runs curation")).not.toBeInTheDocument();
   });
 
   test("each agent is shown by its mark", () => {

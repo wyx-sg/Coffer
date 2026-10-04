@@ -14,7 +14,6 @@ const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   secret_ref: `provider/${uid}`,
   local_runtime: null,
   compatible_agents: ["codex"],
-  internal_default: false,
   transcribe_default: false,
   models: [],
   enabled: true,
@@ -61,10 +60,9 @@ describe("providerUsedBy", () => {
     expect(providerUsedBy(p, [p], [agent("codex", "x")]).agents).toEqual([]);
   });
 
-  test("Coffer's engine and speech to text follow their flags and models", () => {
-    const p = provider("p", { internal_default: true, transcribe_default: true });
-    const use = providerUsedBy(p, [p], [], { model: "gpt-5-mini", transcribe_model: "whisper-1" });
-    expect(use.engine).toEqual({ model: "gpt-5-mini" });
+  test("speech to text follows its flag and model", () => {
+    const p = provider("p", { transcribe_default: true });
+    const use = providerUsedBy(p, [p], [], { transcribe_model: "whisper-1" });
     expect(use.transcribe).toEqual({ model: "whisper-1" });
     expect(isInUse(use)).toBe(true);
   });
@@ -72,7 +70,7 @@ describe("providerUsedBy", () => {
   test("an unused provider is not in use", () => {
     const p = provider("p");
     const use = providerUsedBy(p, [p], [agent("codex", "x")], null);
-    expect(use).toEqual({ agents: [], engine: null, transcribe: null });
+    expect(use).toEqual({ agents: [], transcribe: null });
     expect(isInUse(use)).toBe(false);
   });
 });

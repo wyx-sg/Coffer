@@ -1,8 +1,8 @@
 """Move the vault out of a synchronised folder (spec vault-sync "Move the
 vault out of a synchronised folder").
 
-Rounds, the curation pass and every agent write take the service's one lock
-(``SyncService.lock``), so holding it for the move is what pauses them: the
+Rounds take the service's one lock, so holding it for the move is what
+pauses them: the
 folder is never moved under a half-written commit.
 """
 

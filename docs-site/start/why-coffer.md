@@ -54,8 +54,8 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 **What it means for you.**
 
 - Your knowledge is plain Markdown you can open, grep, version and edit in any tool.
-- Agents add knowledge by writing a Markdown file into a collection's `.inbox/` folder, and change a document by editing it. A curation pass, run by Coffer's own model if you set one up, fills in missing frontmatter and folds new material into the existing documents. When two statements disagree, the newer one wins unless the older is shown to be right.
-- Memory works the other way round. Coffer's distilled memory is pushed, through a hook that you install explicitly for each agent: the index at session start and the notes a prompt names. The [memory guide](/guides/memory) explains how.
+- Agents add knowledge by writing a Markdown document straight into a collection, and change one by editing it. The `coffer-guide` skill tells them where a fact belongs. When a collection gets cluttered, press **Tidy** and your default agent merges, splits and corrects its documents.
+- Memory works the other way round. Coffer's memory notes are pushed, through a hook that you install explicitly for each agent: the index at session start and the notes a prompt names. The [memory guide](/guides/memory) explains how.
 
 ## Secrets are encrypted with a key you hold
 

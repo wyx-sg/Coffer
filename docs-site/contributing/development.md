@@ -14,7 +14,6 @@ This page takes you from a fresh clone to a running daemon and web UI built from
 | Python | 3.12 (`.python-version`; `requires-python = ">=3.12"`) | Backend, CLI, MCP shim, every repository gate |
 | [uv](https://docs.astral.sh/uv/) | any recent | Installing the locked dependency set, `make lock` |
 | Node.js + npm | 20, the version every CI job uses | Web UI, the OpenSpec CLI, Playwright |
-| ripgrep (`rg`) | any | Knowledge curation, used by integration tests (CI installs it) |
 | git | 2.40 or later (`merge-tree --write-tree --merge-base`) | The vault is a git repository: without git the daemon waits in its setup state, and the vault and sync tests run it |
 | Rust toolchain ([rustup](https://rustup.rs)) + Xcode command line tools | stable | Only the desktop shell (`make desktop*`) |
 

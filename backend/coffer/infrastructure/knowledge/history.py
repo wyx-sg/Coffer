@@ -1,6 +1,6 @@
 """Every accepted write to a collection, kept as one vault commit naming its
-writer (spec knowledge "Keep every document's history and undo a pass as a
-whole").
+writer (spec knowledge "Keep every
+document's history").
 
 **Where the history lives.** Knowledge is inside the vault repository, at
 ``vault/knowledge/`` (ADR storage-is-five-classes-by-nature), so its history is
@@ -15,17 +15,15 @@ knowledge-root-relative — which is what every caller and API response speaks.
 
 The vault's ``.git/info/exclude`` ignores every hidden entry under
 ``knowledge/`` except ``.inbox/``: the inbox is tracked, so a submission is a
-commit and the text a pass consumed stays in history after the inbox file is
-deleted.
+commit and the text stays in history after the inbox file is promoted away.
 
 **Who wrote what.** A Coffer operation opens a :class:`Transaction`, touches
 the paths it writes, and commits exactly those. Anything else that changed
 under ``knowledge/`` — a person's own editor, an agent's file tools — is
 committed first, as a ``disk`` write (:meth:`KnowledgeHistory.settle`), so it
-is never attributed to Coffer. A curation pass holds its transaction open for
-minutes; the paths it has touched are *owned* by the vault writer meanwhile,
-and a concurrent settle leaves them alone. A sync round's merge is a ``sync``
-commit by construction, so nothing here marks sync's paths.
+is never attributed to Coffer. The paths an open transaction has touched are
+*owned* by the vault writer meanwhile, and a concurrent settle leaves them alone.
+A sync round's merge is a ``sync`` commit by construction, so nothing here marks sync's paths.
 
 **Never in the way.** Without git every method is a no-op and
 :meth:`available` is false: a write is never refused because it could not be

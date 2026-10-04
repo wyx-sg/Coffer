@@ -237,9 +237,10 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 ## Knowledge, memory and logs without a tool {#memory-and-logs-without-a-tool}
 
 Coffer has no tool for knowledge, memory notes or its own records, because an agent can
-already do all of them with what it has. To add knowledge, write a Markdown file into a
-collection's `.inbox/` folder; Coffer's sweep fills in any missing frontmatter and curates it.
-To change a document or a memory note, edit the file in place.
+already do all of them with what it has. To add knowledge, write a Markdown document straight
+into a collection, as the `coffer-guide` skill describes; a file left in a collection's `.inbox/`
+folder is adopted by Coffer's sweep, which fills in any missing frontmatter and promotes it to a
+document. To change a document or a memory note, edit the file in place.
 
 | To find | Do this |
 | --- | --- |

@@ -178,7 +178,7 @@ def wire_chat(
     the notes a prompt names for a channel turn"); ``None`` wires none.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
-    former ``builtin`` chat persona is retired (ADR coffer-model-is-an-internal-engine).
+    former ``builtin`` chat persona is retired (ADR chat-single-owner-live-mirror).
     """
     # 1. Persistence repos.
     conv_repo = ConversationRepo(sm)

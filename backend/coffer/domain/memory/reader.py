@@ -10,7 +10,7 @@ the two lets the caller hash a file cheaply to decide whether it changed
 A reader's output is a :class:`RawEntry` — **the input layer, not the
 product**. It is written verbatim under the partition's ``.raw/`` ("Keep raw
 entries verbatim and hidden") and the distil pass turns entries into Coffer's
-own notes ("Write notes in Coffer's own words"). That
+own notes ("Distil each raw entry into a note mechanically"). That
 split is why a reader may stay dumb: it is not trying to write anything a
 person will read, only to hand the pass everything the source said,
 including the source's own search terms where it supplies them.
@@ -61,7 +61,7 @@ class RawEntry:
     #: Code's frontmatter ``name``); otherwise derived defensibly by the
     #: reader, which documents the choice where it makes it. It is a handle
     #: for the distil pass, not a title a person will read — the note's title
-    #: is Coffer's to write ("Write notes in Coffer's own words").
+    #: is Coffer's to write ("Distil each raw entry into a note mechanically").
     title: str
     #: Longer human description, same provenance rule as ``title``.
     description: str

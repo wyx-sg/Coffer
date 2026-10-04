@@ -147,7 +147,7 @@ Step by step (two arguments skip all of it: `--version` prints the package versi
 6. **Git.** Before anything else the lifespan looks for git 2.40 or later: on the daemon's own `PATH`, then on the login shell's, because a daemon started from the Dock or by an editor's MCP shim gets a truncated one. A git found only on the login shell's `PATH` is put first on the daemon's. With none, nothing below runs and the daemon waits for git instead; see [Waiting for git](#waiting-for-git).
 7. **Migrations.** The lifespan runs Alembic on `runs.db` off the event loop. If the database's revision is unknown to this build, startup fails with `DB_SCHEMA_TOO_NEW` rather than an opaque Alembic error. If an upgrade is due, the file and its `-wal`/`-shm` companions are first copied to `runs.db.pre-<revision>`, keeping the three newest copies. A current schema copies nothing. See [Persistence](/architecture/persistence).
 8. **Startup sweep.** The startup sweep kills every process tree recorded under `~/.coffer/upstream-pids/` that is still alive with the same command line. A frozen build also terminates other daemon processes provably serving this same vault, meaning the same executable name and the same resolved `~/.coffer`. A process whose vault cannot be read is left alone.
-9. **Wiring.** The lifespan opens the vault repository, starts the vault scanner that settles hand edits, and builds the secret store and master key, the audit and resource services, the retention service, and the internal-engine settings. It creates the builtin-tool registry, wires every resource kind in dependency order, then chat, curation and channels. Chat also schedules a one-shot sweep that marks any message left `streaming` by a crash as `failed`.
+9. **Wiring.** The lifespan opens the vault repository, starts the vault scanner that settles hand edits, and builds the secret store and master key, the audit and resource services, the retention service, and the internal-engine settings document (the aggregate and distil upkeep and the speech-to-text model). It creates the builtin-tool registry, wires every resource kind in dependency order, then chat, the knowledge sweep and channels. Chat also schedules a one-shot sweep that marks any message left `streaming` by a crash as `failed`.
 10. **Boot pass.** The reconciler runs one boot pass over every target it converges: the agents' MCP entries, skill links, provider projections and memory delivery hooks. What it repairs is audited, and a failing pass is logged and never fails startup. Then the builtin `coffer-guide` skill is re-rendered from this build.
 11. **Identity.** The lifespan reads the token, port and start time back from `daemon.json` into the auth dependency and the status route. A `daemon.json` that exists but cannot be read fails startup. Swallowing that error would leave every authenticated route answering 503 while the status route said ready.
 12. **Binary deployment.** A frozen build copies its siblings into `~/.coffer/bin` (see [Binary deployment](#binary-deployment)). From source this does nothing.
@@ -266,15 +266,15 @@ The CLI prints it on stderr before every command. The shim writes it to stderr a
 
 ## Background work
 
-The periodic workers that belong to no single kind start in one place, the HTTP surface's background-worker launcher. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off: curation, distil and aggregate, usage ingest and price refresh, and the sync converge worker each do.
+The periodic workers that belong to no single kind start in one place, the HTTP surface's background-worker launcher. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off: the knowledge sweep, distil and aggregate, usage ingest and price refresh, and the sync converge worker each do.
 
 | Worker | Cadence | What it does |
 | --- | --- | --- |
 | Retention | Immediately, then every 6 h | Prunes each registered log-style table to its policy, and ages out files in `~/.coffer/logs/` (including per-process shim logs). |
 | Vault sync | First round after 30 s, then on the configured remote's interval (default 1 h). With no remote, or a paused one, it re-checks every minute | Runs a sync round with your git remote. A no-op until you configure one. See [Vault sync](/architecture/vault-sync#the-worker). |
-| Knowledge curation | First sweep after 60 s, then every hour by default | Drains each collection's inbox, then documents edited out of band, and re-renders the guide skill. Runs only on the owner machine, and takes the sync round's lock. See [Knowledge](/architecture/knowledge). |
+| Knowledge sweep | Immediately, then every 60 s | Promotes files dropped into a collection's hidden `.inbox/` to documents, commits documents edited out of band, and re-renders the guide skill. Runs on every machine. See [Knowledge](/architecture/knowledge). |
 | Memory aggregation | Immediately, then hourly by default | Reads each agent's native memory into the derived memory tree. See [Memory](/architecture/memory). |
-| Memory distil | First pass after 60 s, then every 6 h by default | Runs the internal-model distil pass over aggregated memory. |
+| Memory distil | First pass after 60 s, then every 6 h by default | Turns each new raw entry in the aggregated memory into a note and renders the index. No model is involved. |
 | Transcript warm | Immediately, then hourly | Keeps the transcript summary cache warm on a thread, so the first visit to an agent's conversations is never the slow one. |
 | Channel runtime | Every 2 s | Reconciles running adapters (Telegram polling, SeaTalk connections) against the channel resources bound to this machine. |
 | MCP session reaper | Every 60 s | Closes `/mcp` sessions idle for more than 30 min, with their per-session supervisors and upstream subprocesses. Tunable with `COFFER_MCP_SESSION_IDLE_S` and `COFFER_MCP_SESSION_REAPER_INTERVAL_S`. |
@@ -288,9 +288,7 @@ The periodic workers that belong to no single kind start in one place, the HTTP 
 | Usage ingest | Every 2 s | Empties the proxy's usage spool into `runs.db`. |
 | Price refresh | First after 60 s, then daily | Refreshes the model price list used to estimate cost. |
 
-The curation, aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart.
-
-Order matters once. Sync is wired before curation starts, because the curation worker takes the sync round's lock, this machine's identity and the pending-round state as parameters. Both rewrite vault content, and a checkout that landed in the middle of a curation pass would leave a torn state.
+The aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart. The sweep's 60 s interval is fixed.
 
 ## Standing down
 
@@ -317,7 +315,7 @@ There is one exit path. `SIGTERM` and `SIGINT` run it. `POST /api/v1/daemon/shut
 Uvicorn then shuts down gracefully with a 10 s bound on open connections. Without that bound, a `/mcp` SSE stream, which never ends on its own, would hold the daemon open forever. The lifespan teardown runs in an order that is load-bearing:
 
 1. Cancel the reconciler's loop first, because a pass writes into agents' config files and must not start while the rest goes down, then the attention watch.
-2. Stop the workers: retention, sync, curation, distil, aggregation, transcript warm, and the skill update check (which also removes staged sources).
+2. Stop the workers: retention, sync, the knowledge sweep, distil, aggregation, transcript warm, and the skill update check (which also removes staged sources).
 3. Stop the channel runtime, cancelling the reconciler before disposing the adapters so an in-flight tick cannot revive them. Channels go early because they are what starts new turns.
 4. Stop the chat turns still running, while the database is still open, so each writes its partial reply as it unwinds.
 5. Give the retention worker 2 s to finish a prune, then cancel it.

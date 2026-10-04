@@ -60,7 +60,7 @@ give the status each code is actually sent with.
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or set the reach from the page of a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
-| `UPKEEP_ALREADY_RUNNING` | 409 | A knowledge curation run is already going for this collection. | Wait for the running run to finish; `coffer daemon status` and the UI show it. |
+| `UPKEEP_ALREADY_RUNNING` | 409 | An upkeep pass (aggregate or distil) is already running for this memory partition; clearing the derived cache while one runs gets it too. | Wait for the running pass to finish; `coffer daemon status` and the UI show it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | Use a table listed in **Settings → Data**. |
 | `ATTENTION_NOT_IGNORABLE` | 409 | The key names no attention item that can be ignored: nothing is listed under it, or the item is a failure rather than a notice. | Refresh the attention list; fix a failure instead of ignoring it. |
 
@@ -169,24 +169,20 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
 | `INGEST_REJECTED` | 400 | The upload cannot be converted. `details.reason` is `unsupported_type`, `scanned_pdf` (a PDF with no text layer) or `empty_conversion`; `details.doc_type` names the type. | Convert to a supported format; run OCR on a scanned PDF. |
-| `KNOWLEDGE_CURATION_HELD` | 409 | Curate now was refused because a sync round is waiting for you (a conflict or a confirmation). | Resolve it in Sync, then run Curate now again. |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | Knowledge history is not recorded on this machine, usually because git is not installed. Writes still work. | Install git; history starts with the next write. |
 | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | No version by that id in the knowledge history, or none for that document. | List versions in the document's history on the Knowledge page. |
-| `KNOWLEDGE_NOT_A_PASS` | 400 | Only a curation pass can be undone, and this version is another kind of change. | Restore the document's earlier version from its history. |
-| `KNOWLEDGE_UNDO_CONFLICT` | 409 | A later change touched one of the pass's documents, named in the message, so the undo was refused and nothing was written. | Edit or restore that document instead. |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | The change you asked to restore deleted no document or collection. | Restore the document's earlier version instead. |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | Putting the deleted document back would overwrite the file now at its path. `details` name the version and the document; nothing was written. | Move or rename the file at that path, then restore again. |
 | `KNOWLEDGE_ERROR` | 400 | Any other knowledge-layer refusal. | Read `message`. |
 | `ENGINE_UNAVAILABLE` | 503 | A binary or converter the operation needs (ripgrep, or a document converter backend) is unavailable. | Reinstall Coffer; the bundled binaries include them. |
-| `GREP_PATTERN_INVALID` | 400 | ripgrep rejected a pattern. | Fix the pattern. |
 
 ## Memory
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `MEMORY_NOTE_NOT_FOUND` | 404 | No note with that slug in the partition. | List notes on the partition's page. |
-| `MEMORY_NOTE_CONFLICT` | 409 | The note changed after you read it (a distil pass rewrote it, or it was edited on disk), so your save was refused and the note left as it is. `details` carry `saved: false` and the note as it is now (its body and fingerprint). | Compare with the current text, then save again with the new fingerprint. |
-| `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have been distilled and removed. |
+| `MEMORY_NOTE_CONFLICT` | 409 | The note changed after you read it (an upkeep pass wrote it, or it was edited on disk), so your save was refused and the note left as it is. `details` carry `saved: false` and the note as it is now (its body and fingerprint). | Compare with the current text, then save again with the new fingerprint. |
+| `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have become a note and been removed. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no memory hook Coffer can install. | None; that agent reads memory notes from the memory root the `coffer-guide` skill names, with its own file tools. |
@@ -220,9 +216,8 @@ give the status each code is actually sent with.
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while an agent runs on it. | Switch each agent running on it back to its own login with **Change model**, edit, then switch again. |
 | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | A connection cannot be switched on for an agent it does not reach: the connection is switched off, or the connection's scope does not name the agent. | Switch the connection on, or add the agent to its scope, then switch again. |
-| `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's internal engine only and cannot be switched on for an agent. | Use it as the internal-engine default instead. |
-| `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag in **Settings › General → Coffer's model**. |
-| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | Another connection is already the speech-to-text default. | Move the flag in **Settings › General → Coffer's model** (**Speech to text**). |
+| `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's own use only and cannot be switched on for an agent. | Use a connection with another protocol for the agent. |
+| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | Another connection is already the speech-to-text default. | Move the flag in **Settings › General → Speech to text**. |
 
 ## The vault
 

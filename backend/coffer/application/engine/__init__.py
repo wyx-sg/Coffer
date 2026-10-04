@@ -1,8 +1,7 @@
-"""Coffer's own LLM engine, above every kind.
+"""Coffer's own settings and speech-to-text resolution, above every kind.
 
-The engine is what Coffer runs on its OWN behalf — knowledge's tidy, memory's
-distil, chat's voice transcription — so it
-belongs to none of them and may import none of them.
+Chat's voice transcription is the one thing Coffer runs a model for on its own
+behalf, so the engine belongs to no kind and may import none of them.
 
 Deliberately import-free: this package sits in the kind-agnostic source list of
 the "Kind-agnostic core does not import kind-specific code" contract, and that

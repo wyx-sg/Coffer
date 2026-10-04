@@ -3,7 +3,7 @@ verbatim and hidden", "Let only aggregation write raw entries").
 
 Its own module because its own directory: ``raw_store.py`` is the only thing
 aggregation writes through, and nothing the distil pass imports. That split is
-what makes "Keep distil out of the raw directory" checkable by reading an
+what makes "Leave the raw directory to aggregation" checkable by reading an
 import list rather than by trusting a comment, and this file holds the property
 the split exists for — **a body comes back exactly as the reader handed it
 over**, CRLF and trailing whitespace included. The moment a round-trip rewrites

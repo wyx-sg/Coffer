@@ -63,9 +63,9 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `resources/<kind>/<name>.json` | 每个资源一个 JSON 文件：`uid`、`kind`、`format_version`、`name`、可选的 `title`、`description`、`config`。身份以文件里的 `uid` 为准，而不是路径。 | 你、守护进程 | 是 | 不能：所有同步的机器上这个资源都会消失。 |
 | `state/mcp-preferences/<server>.json` | 你在某个 MCP 服务器上关掉的工具、提示词和资源，附带该服务器的 uid。 | 你、守护进程 | 是 | 可以：该服务器上的一切都会重新打开。 |
 | `state/channel-peers/<channel>.json` | 与某个消息渠道配对的身份，包括所有者。 | 守护进程 | 是 | 配对关系会丢失。 |
-| `state/settings/internal-engine.json` | Coffer 的模型、整理所有者机器、单次调用超时、转写模型，以及每类维护任务的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
-| `knowledge/<collection>/` | 一个知识集：任意层级嵌套的 Markdown 文档，加一个描述它的 `README.md`。你、你的智能体和 Coffer 的整理任务都会编辑这些文件。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
-| `knowledge/<collection>/.inbox/` | 等待整理进文档的条目：上传文件提取出的文本、智能体写进去的 Markdown 文件、在知识页面添加的文档。 | 守护进程 | 是 | 不能：尚未整理的条目会丢失。 |
+| `state/settings/internal-engine.json` | 单次模型调用的超时、语音转文字模型，以及 aggregate 和 distil 的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
+| `knowledge/<collection>/` | 一个知识集：任意层级嵌套的 Markdown 文档，加一个描述它的 `README.md`。你和你的智能体编辑这些文件；整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
+| `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）收编并升格为文档，之后这个文件就不在了。 | 你、你的智能体、守护进程 | 是 | 不能：尚未升格的文件会丢失。 |
 | `skills/<name>/` | 托管技能的主副本：`SKILL.md`、其他文件，以及 `.coffer.meta.json`（Coffer 的元数据）。智能体拿到的是指向这个目录的符号链接。 | 你、守护进程 | 是 | **不能。** 删掉目录会让投递给智能体的链接失效。 |
 | `secret/<ref>.enc` | 一个密钥的 Fernet 密文，权限 `0600`。从不包含主密钥本身。除非同步远端允许携带密钥，否则不进仓库。 | 守护进程 | 仅在 `--with-secret` 时 | **不能。** 密钥就没了。 |
 | `machines/<machine id>.json` | 每台参与同步的机器一个描述文件：名称、操作系统、主机名、Coffer 版本、上一轮同步、上次收敛的提交、密钥指纹、智能体及其插件。 | 同步（每台机器只写自己的） | 是 | 在**同步**页面的机器列表里用**退役**移除另一台机器。 |
@@ -77,9 +77,8 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | 本机的智能体，每个一个资源文件。 | 守护进程 | 从不 | 该智能体在本机被取消注册。 |
 | `local/reach.json` | 每个资源在本机的生效范围：是否启用，对哪些智能体生效。 | 守护进程 | 从不 | 每个资源恢复为所属类型的默认生效范围。 |
-| `local/engine.json` | 本机上次修改 Coffer 引擎设置的时间。 | 守护进程 | 从不 | 可以。 |
+| `local/engine.json` | 本机上次修改 Coffer 设置文档（模型超时、语音转文字、维护任务）的时间。 | 守护进程 | 从不 | 可以。 |
 | `local/retention.json` | 每张可清理表的保留期限，以及上次清理的时间。 | 守护进程 | 从不 | 可以：使用默认值。 |
-| `local/curation.json` | 每篇知识文档在上次整理完成时的内容，用来察觉之后有人手动改过。 | 守护进程 | 从不 | 整理会把每篇文档重新读一遍。 |
 | `local/skill-source-status.json` | 本机上次在每个从 Git 导入的技能来源处看到的情况。 | 守护进程 | 从不 | 可以：下次检查会补上。 |
 | `local/secret/` | 仅限本机的密文，比如模型代理的令牌。 | 守护进程 | 从不 | 代理令牌会重新生成；使用提供商的智能体会重新读取自己的令牌。 |
 | `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |

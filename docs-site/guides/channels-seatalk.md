@@ -154,7 +154,7 @@ In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactiv
 Everything SeaTalk can attach drives a turn: images, files and documents, video, and voice or audio. Coffer downloads each one with the app's token, since SeaTalk file links require authentication.
 
 - Documents are extracted to text for the agent.
-- Voice is transcribed when speech to text is on (**Settings › General → Coffer's model**); otherwise the agent gets the audio file.
+- Voice is transcribed when speech to text is on (**Settings › General → Speech to text**); otherwise the agent gets the audio file.
 - A file keeps its real filename.
 
 The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an image or file message in the same chat and thread, with any caption as a following message. See [Channels → Sending files back](/guides/channels#sending-files-back).

@@ -11,7 +11,6 @@ argument list, not a getter that happens to be populated by then.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import FastAPI
@@ -65,7 +64,6 @@ async def wire_resource_kinds(
     vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
     secret_store: EncryptedSecretStore,
-    secret_resolver: Callable[[str], str],
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
@@ -125,8 +123,6 @@ async def wire_resource_kinds(
         resource_svc,
         audit,
         builtin_tools,
-        provider.internal_connection,
-        secret_resolver,
         _catalogue_changed,
     )
 
@@ -136,8 +132,6 @@ async def wire_resource_kinds(
         resource_svc,
         audit,
         builtin_tools,
-        provider.internal_connection,
-        secret_resolver,
         agent_skill.agent_service,
         agent_catalog,
     )

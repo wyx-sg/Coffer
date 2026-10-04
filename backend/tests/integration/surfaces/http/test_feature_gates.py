@@ -336,7 +336,6 @@ def test_switching_a_feature_off_and_on_keeps_what_it_holds(home: pathlib.Path) 
             title="Lockfiles",
             description="How dependencies are pinned",
             body="Run uv sync --frozen.",
-            curated=True,
         )
         before = c.get("/api/v1/knowledge/collections").json()
         tree_before = c.get("/api/v1/knowledge/tree").json()

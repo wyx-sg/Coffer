@@ -108,13 +108,11 @@ describe("the version list", () => {
     expect(await screen.findByText("The old layer.")).toBeInTheDocument();
   });
 
-  test("the current version offers no restore; a curation version links to the pass", async () => {
+  test("the current version offers no restore; a curation version keeps its label with no pass link", async () => {
     api.getHistory.mockResolvedValue({ path: GATEWAY.path, versions: [versions[0]] });
     renderTab();
-    expect(await screen.findByRole("link", { name: "See the pass" })).toHaveAttribute(
-      "href",
-      `/knowledge/changes/${PASS.version}`,
-    );
+    expect(await screen.findByRole("button", { name: /^Curation/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull();
     expect(
       await screen.findByRole("button", { name: "Changes in this version" }),
     ).toBeInTheDocument();

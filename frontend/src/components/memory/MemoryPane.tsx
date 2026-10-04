@@ -7,7 +7,7 @@
 // reduced to agent names — never a native path or an agent's original text.
 // The body is a FindableMarkdown (⌘F find; `frontmatter={false}` because the
 // daemon already stripped it).
-// Edit (spec memory "Edit a memory in the web UI or on disk") swaps the body for
+// Edit (spec memory "Edit a memory in the web UI or in an editor") swaps the body for
 // the shared FileTextEditor, with Discard and Save in the header, and a save
 // refused as changed on disk goes through the same Compare / Copy my text /
 // Reload way out the knowledge editor has. Read, it offers MemoryViewActions:

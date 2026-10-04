@@ -67,7 +67,7 @@ export interface paths {
          * @description Create a conversation for the named Coffer-managed agent.
          *
          *     ``agent_key`` is required — chat has no built-in agent (ADR
-         *     coffer-model-is-an-internal-engine); ``agent_config`` is validated by that
+         *     chat-single-owner-live-mirror); ``agent_config`` is validated by that
          *     agent. An unknown agent or an invalid config is rejected with 400.
          */
         post: operations["create_conversation_api_v1_chat_conversations_post"];
@@ -161,7 +161,7 @@ export interface paths {
         /**
          * Set Agent Config
          * @description Set a managed agent's own model for a conversation (ADR
-         *     coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
+         *     chat-single-owner-live-mirror → ADR model-catalogue-read-from-the-agent).
          *
          *     Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
          *     ``session_id`` are preserved, and a body that does not mention ``model``
@@ -472,7 +472,7 @@ export interface components {
          *     An empty or null ``model`` clears the override so the conversation inherits
          *     the active provider profile's projected default. The field is written only
          *     when the body mentions it; ``cwd`` / ``session_id`` are
-         *     preserved (ADR coffer-model-is-an-internal-engine → ADR
+         *     preserved (ADR chat-single-owner-live-mirror → ADR
          *     model-catalogue-read-from-the-agent).
          */
         AgentConfigPatch: {
@@ -665,7 +665,7 @@ export interface components {
          * @description Body for POST /conversations.
          *
          *     ``agent_key`` selects the Coffer-managed agent to talk to (required — chat
-         *     has no built-in agent of its own, ADR coffer-model-is-an-internal-engine).
+         *     has no built-in agent of its own, ADR chat-single-owner-live-mirror).
          *     ``agent_config`` is an opaque, agent-specific configuration object the named
          *     agent validates and stores (e.g. ``cwd`` for ``claude_code`` / ``codex``).
          */

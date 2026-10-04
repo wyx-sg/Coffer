@@ -2,7 +2,7 @@
 //
 // New collection is always available; Upload needs a collection to land in, so
 // it mounts only once one exists. People write through a document's Edit,
-// agents by writing files into `.inbox/`.
+// agents by writing files.
 import { KnowledgeCreateDialog } from "@/components/knowledge/KnowledgeCreateDialog";
 import { KnowledgeUploadDialog } from "@/components/knowledge/KnowledgeUploadDialog";
 import type { CollectionOut } from "@/lib/api/knowledgeTypes";

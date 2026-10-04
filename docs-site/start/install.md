@@ -18,7 +18,6 @@ The one-line installer, the desktop `.dmg` and the release archive all download 
 | **macOS on Apple silicon (arm64)**, for a prebuilt build | The desktop app, the one-line installer and the release archive are built for it only. Any other machine installs [from source](#from-source). |
 | **git 2.40 or later** — required | The vault is a git repository: every change is a commit, and history, undo and sync run on git (sync's merges need 2.40). Without it Coffer still starts, but shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until git is there. Check with `git --version`. |
 | **A coding agent to connect** — Claude Code or Codex | Coffer serves its MCP servers, skills and the rest to your agents. You can install Coffer first and connect an agent afterwards. |
-| **ripgrep (`rg`)** — optional | Faster knowledge search. Without it, Coffer uses a slower built-in search over the same files. |
 | **From source:** Python 3.12 or later, and Node.js 20 | Python runs the daemon and the CLI; Node.js builds the web UI (CI builds it with Node.js 20). |
 
 ## Let your agent install it
@@ -134,7 +133,7 @@ Keep the three binaries together in one directory. `coffer` and `coffer-mcp-shim
 
 ## From source
 
-Besides git, a source install needs Python 3.12 or later and Node.js 20 to build the web UI, and [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is recommended; see [Requirements](#requirements).
+Besides git, a source install needs Python 3.12 or later and Node.js 20 to build the web UI; see [Requirements](#requirements).
 
 ```sh
 git clone https://github.com/wyx-sg/Coffer.git

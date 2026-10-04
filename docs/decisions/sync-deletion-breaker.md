@@ -123,7 +123,7 @@ Hold any round that deletes anything.
 
 Pros: nothing is ever removed unasked.
 
-Cons: deletion is routine — curation merges notes away, users remove resources
+Cons: deletion is routine — an agent's tidy merges notes away, users remove resources
 — so every machine would ask on every round the other machine deleted anything,
 and a prompt that fires constantly is answered without reading.
 

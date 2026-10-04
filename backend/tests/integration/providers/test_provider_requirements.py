@@ -173,16 +173,11 @@ def test_each_provider_operation_records_its_own_audit_event(env: pathlib.Path) 
             ).status_code
             == 200
         )
-        assert c.post(f"/api/v1/providers/{acme}/internal-default").status_code == 200
         assert c.post(f"/api/v1/providers/{other}/transcribe-default").status_code == 200
 
         switched = _audit(c, "provider_switched")
         assert len(switched) == 1
         assert switched[0]["details"]["to"] == "acme"
-
-        internal = _audit(c, "provider_internal_default_set")
-        assert len(internal) == 1
-        assert "acme" in json.dumps(internal[0])
 
         transcribe = _audit(c, "provider_transcribe_default_set")
         assert len(transcribe) == 1
@@ -208,7 +203,6 @@ def test_marking_a_speech_to_text_default_moves_only_its_own_flag(env: pathlib.P
             c,
             {"name": "b", "protocol": "openai", "base_url": "https://gw/v1", "secret_value": "sk"},
         )
-        assert c.post(f"/api/v1/providers/{a}/internal-default").status_code == 200
         assert c.post(f"/api/v1/providers/{a}/transcribe-default").status_code == 200
 
         r = c.post(f"/api/v1/providers/{b}/transcribe-default")
@@ -217,8 +211,8 @@ def test_marking_a_speech_to_text_default_moves_only_its_own_flag(env: pathlib.P
 
         got_a = c.get(f"/api/v1/providers/{a}").json()
         got_b = c.get(f"/api/v1/providers/{b}").json()
-        assert (got_a["internal_default"], got_a["transcribe_default"]) == (True, False)
-        assert (got_b["internal_default"], got_b["transcribe_default"]) == (False, True)
+        assert got_a["transcribe_default"] is False
+        assert got_b["transcribe_default"] is True
 
         moves = [e["details"] for e in _audit(c, "provider_transcribe_default_set")]
         assert {"from": "a", "to": "b"} in moves

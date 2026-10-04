@@ -5,10 +5,8 @@
 // (.agents/frontend.md §3):
 //
 //   /knowledge                              Recent changes, every collection
-//   /knowledge/changes/<version>            one change — a curation pass and its diffs
 //   /knowledge/<uid>                        a collection; `?file=` opens a document
 //   /knowledge/<uid>/history?file=<path>    that document's History tab
-//   /knowledge/<uid>/inbox[?file=<item>]    the collection's Inbox, or one item in it
 //
 // A collection is addressed by its immutable uid (spec web-ui "Lay out every
 // detail page's tabs alike"); a document by its knowledge-root-relative path,
@@ -16,7 +14,7 @@
 
 /** The pane tabs a collection address can carry in its path. `document` is the
  *  default and is never spelled out. */
-export const KNOWLEDGE_TABS = ["document", "history", "inbox"] as const;
+export const KNOWLEDGE_TABS = ["document", "history"] as const;
 export type KnowledgeTab = (typeof KNOWLEDGE_TABS)[number];
 export const DEFAULT_KNOWLEDGE_TAB: KnowledgeTab = "document";
 
@@ -32,11 +30,6 @@ export function collectionPath(uid: string, tab: KnowledgeTab = "document", file
   const segment = tab === DEFAULT_KNOWLEDGE_TAB ? "" : `/${tab}`;
   const query = file ? `?file=${encodeURIComponent(file)}` : "";
   return `${collectionBasePath(uid)}${segment}${query}`;
-}
-
-/** One change's address. */
-export function changePath(version: string): string {
-  return `${KNOWLEDGE_ROOT}/changes/${encodeURIComponent(version)}`;
 }
 
 /** The collection a knowledge-root-relative path lives in: its first segment. */

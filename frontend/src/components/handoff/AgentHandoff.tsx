@@ -7,10 +7,12 @@
 // New conversation with the prompt in its composer (lib/conversations/handoff.ts);
 // the ▾ menu holds Copy prompt, for an agent outside Coffer, and a toast says
 // "Prompt copied". Nothing is sent until the person presses Send — managed
-// agents run with full permissions. With no managed agent available only a
-// Copy prompt button is offered. Knows nothing about what the chore is: the
-// caller passes the prompt.
-import { ChevronDown, Copy, MessageSquarePlus } from "lucide-react";
+// agents run with full permissions — except a button given `autoSend` (Tidy,
+// Tidy all), which the person pressed to have the chore done and which sends
+// the prompt at once. With no managed agent available only a Copy prompt
+// button is offered. Knows nothing about what the chore is: the caller passes
+// the prompt.
+import { ChevronDown, Copy, MessageSquarePlus, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -29,11 +31,14 @@ interface Props {
   /** The "?" beside it; off in a row that already says what the problem is
    *  (Knowledge and Memory failures, after their own Retry / Check again). */
   help?: boolean;
+  /** Name the main button and send the prompt when it is pressed, instead of leaving it in the draft. */
+  autoSend?: { label: string };
 }
 
-export function AgentHandoff({ prompt, size = "default", help = true }: Props) {
+export function AgentHandoff({ prompt, size = "default", help = true, autoSend }: Props) {
   const { t } = useTranslation();
-  const { copy, canAsk, ask } = useAgentHandoff(prompt);
+  const { copy, canAsk, ask } = useAgentHandoff(prompt, { autoSend: !!autoSend });
+  const label = autoSend?.label ?? t("handoff.askAgent");
   const [open, setOpen] = useState(false);
   const small = size === "sm";
 
@@ -48,8 +53,8 @@ export function AgentHandoff({ prompt, size = "default", help = true }: Props) {
             className="rounded-r-none border-r-0"
             onClick={ask}
           >
-            <MessageSquarePlus aria-hidden />
-            {t("handoff.askAgent")}
+            {autoSend ? <Sparkles aria-hidden /> : <MessageSquarePlus aria-hidden />}
+            {label}
           </Button>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -65,7 +70,7 @@ export function AgentHandoff({ prompt, size = "default", help = true }: Props) {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[240px] p-1">
-              <div role="menu" aria-label={t("handoff.askAgent")}>
+              <div role="menu" aria-label={label}>
                 <button
                   type="button"
                   role="menuitem"

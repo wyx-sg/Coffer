@@ -1,16 +1,12 @@
 """Start the daemon's background workers, in one place.
 
 Six timers that outlive a request: retention pruning, the vault sync
-round, the knowledge curation pass, the memory distil pass, the memory
+round, the knowledge sweep, the memory distil pass, the memory
 aggregate pass, and the transcript summary cache warm-up. They are gathered
 here rather than inlined in the lifespan because each needs a different slice
 of the graph, and reading which worker gets what is the only reason to look at
 this code at all.
 
-Order matters once: sync is wired before the curation worker starts, because
-that worker takes the sync round's lock, this machine's identity and whether a
-round waits for a person from the sync graph — as parameters, not by looking
-them up later. Nothing in ``start_sync`` depends on curation.
 """
 
 from __future__ import annotations
@@ -24,7 +20,6 @@ from coffer.application.agent.transcript_warm_worker import TranscriptWarmWorker
 from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
-from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.memory.service import MemoryService
 from coffer.application.platform_port import PlatformPort
@@ -37,8 +32,8 @@ from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
 from coffer.infrastructure.logging.files import prune_log_dir
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
-from coffer.surfaces.http.curation_wiring import start_curation_worker
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
+from coffer.surfaces.http.knowledge_sweep_wiring import start_knowledge_sweep
 from coffer.surfaces.http.memory.distil_state import DistilRunner
 from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_sync, start_sync_worker
@@ -47,14 +42,13 @@ from coffer.surfaces.http.transcript_warm_wiring import start_transcript_warm_wo
 
 @dataclass(frozen=True)
 class BackgroundWorkers:
-    """Every long-lived worker the lifespan must stop, plus the sync graph
-    (returned so the lifespan can see what the curation worker was given)."""
+    """Every long-lived worker the lifespan must stop, plus the sync graph."""
 
     retention_worker: RetentionWorker
     retention_task: asyncio.Task[None]
     sync: SyncWiring
     sync_worker: SyncWorker
-    curation_task: asyncio.Task[None]
+    knowledge_sweep_task: asyncio.Task[None]
     distil_task: asyncio.Task[None]
     aggregate_task: asyncio.Task[None]
     warm_worker: TranscriptWarmWorker
@@ -65,7 +59,6 @@ def start_background_workers(
     *,
     retention_svc: RetentionService,
     knowledge_service: KnowledgeService,
-    curation_pass: CurationPass,
     guide: BuiltinGuide,
     distil: DistilRunner,
     memory_service: MemoryService,
@@ -83,8 +76,7 @@ def start_background_workers(
     retention_task = spawn_restarting(retention_worker.run, name="retention-worker")
 
     # Vault sync (spec vault-sync): a round on the configured remote's
-    # interval, nothing until one is configured. Wired FIRST among the vault
-    # rewriters: the curation worker below takes its lock and state.
+    # interval, nothing until one is configured.
     sync = start_sync(
         resources=resource_svc,
         audit=audit,
@@ -94,16 +86,12 @@ def start_background_workers(
         platform=platform,
     )
     # Every experimental feature's pass reads its switch at the top of each
-    # round and skips it while off (spec experimental-features); the sync graph
-    # is built regardless, because curation takes its lock.
+    # round and skips it while off (spec experimental-features).
     sync_worker = start_sync_worker(sync, features)
 
-    # Curation: a sweep that merges each collection's inbox into its
-    # documents, then carries through any document edited since it was last
-    # curated.
-    curation_task = start_curation_worker(
-        knowledge_service, curation_pass, guide, resource_svc, engine_config, sync, features
-    )
+    # The knowledge sweep: refresh the guide, promote what landed in a
+    # collection's inbox, and commit edits found on disk.
+    knowledge_sweep_task = start_knowledge_sweep(knowledge_service, guide, resource_svc, features)
     distil_task = start_distil_worker(distil, resource_svc, engine_config, features)
     # Aggregation (spec memory "Aggregate on an interval and on demand"): a
     # catch-up pass now, then hourly. It
@@ -119,7 +107,7 @@ def start_background_workers(
         retention_task=retention_task,
         sync=sync,
         sync_worker=sync_worker,
-        curation_task=curation_task,
+        knowledge_sweep_task=knowledge_sweep_task,
         distil_task=distil_task,
         aggregate_task=aggregate_task,
         warm_worker=warm_worker,

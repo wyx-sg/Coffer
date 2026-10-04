@@ -34,7 +34,7 @@ class Conversion:
 class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"
     """No converter handles this file type; nothing was written.
 
-    Spec knowledge "Convert uploads into material without keeping them".
+    Spec knowledge "Convert uploads into documents without keeping the original".
     """
 
     def __init__(self, doc_type: str) -> None:

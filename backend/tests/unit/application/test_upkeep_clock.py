@@ -49,7 +49,6 @@ def test_next_is_the_wait_start_plus_the_interval_as_it_stands_now() -> None:
 
     clock.running("aggregate")
     assert clock.next_due("aggregate", 3600) is None
-    assert clock.next_due("curate", 3600) is None
 
 
 @pytest.mark.acceptance(
@@ -62,21 +61,20 @@ async def test_each_pass_reports_when_it_last_ran_and_when_it_runs_next(
     clock = PassClock()
     monkeypatch.setattr(internal_engine_routes, "PASS_CLOCK", clock)
     clock.waiting("aggregate", now=_T0)
-    clock.waiting("curate", now=_T0)
+    clock.waiting("distil", now=_T0)
     audit = _Audit({"memory_aggregated": _T0.replace(tzinfo=None) - timedelta(minutes=14)})
     cfg = GlobalInternalEngineConfig(
-        model="m", updated_at=_T0, auto_curate_enabled=False, aggregate_interval_s=1800
+        updated_at=_T0, auto_distil_enabled=False, aggregate_interval_s=1800
     )
 
     out = (await internal_engine_routes._to_out(cfg, audit)).upkeep  # type: ignore[arg-type]
 
     assert out["aggregate"].last_pass_at == _T0 - timedelta(minutes=14)
     assert out["aggregate"].next_pass_at == _T0 + timedelta(minutes=30)
-    # Never ran, and no worker waiting on it: neither half is invented.
+    # Never ran: no "last" is invented. Switched off: its timer is waiting,
+    # but no pass is coming.
     assert out["distil"].last_pass_at is None
     assert out["distil"].next_pass_at is None
-    # Switched off: its timer is waiting, but no pass is coming.
-    assert out["curate"].next_pass_at is None
 
 
 async def test_the_workers_record_their_wait_and_clear_it_while_a_pass_runs() -> None:
