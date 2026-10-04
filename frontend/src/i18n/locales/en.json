@@ -5735,7 +5735,6 @@
       "copyRef": "Copy reference ({{reference}})",
       "copied": "Copied {{reference}}",
       "copyFailed": "Couldn't copy to the clipboard",
-      "activity": "View in Activity",
       "delete": "Delete…"
     },
     "add": {

@@ -5735,7 +5735,6 @@
       "copyRef": "复制引用（{{reference}}）",
       "copied": "已复制 {{reference}}",
       "copyFailed": "无法复制到剪贴板",
-      "activity": "在活动中查看",
       "delete": "删除…"
     },
     "add": {

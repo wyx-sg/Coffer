@@ -30,6 +30,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError
+from coffer.domain.model_proxy.state import PROXY_TOKEN_REF_PREFIX
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretInUse
 from coffer.domain.secrets import secret_uri, standalone_name
@@ -100,11 +101,17 @@ async def list_refs(
     a secret nothing references any more shows up as ``unreferenced``. A
     standalone ``secret/<name>`` also lists the skills whose files cite its
     ``coffer://secret/<name>``. A stored ref whose ciphertext this Mac's key
-    cannot open is ``locked``. Presence only — no value is decrypted, so
-    nothing is audited.
+    cannot open is ``locked``. An agent's model-proxy token
+    (``proxy-token/<agent_uid>``) is not listed: Coffer mints it, the agent
+    fetches it, and no person enters, replaces or cites it. Presence only — no
+    value is decrypted, so nothing is audited.
     """
     cited = await resources.cited_secret_refs()
-    rows_stored = await asyncio.to_thread(store.list_refs)
+    rows_stored = [
+        row
+        for row in await asyncio.to_thread(store.list_refs)
+        if not row[0].startswith(PROXY_TOKEN_REF_PREFIX)
+    ]
     stored = {ref for ref, _c, _u in rows_stored}
     created = {ref: c for ref, c, _u in rows_stored}
     last_used = await asyncio.to_thread(store.last_used)
