@@ -3,9 +3,10 @@
 // The partitions list (spec memory "Present a partition as its memories"): one
 // row per repository partition plus `global`, each a `memory` Resource. A row
 // carries its name, the repository path it is keyed on ("Every project" for
-// global) and how many memories it holds.
+// global), how many memories it holds, its sources and its distil state. A
+// search box filters the rows by name and path.
 //
-// There is NO status or reach column, no selection and no search. The `memory`
+// There is NO status or reach column and no selection. The `memory`
 // kind is not toggleable: every partition is served to every agent (spec
 // memory "Serve every partition to every agent"), so a control there would
 // offer a choice with nothing behind it (spec web-ui "Show reach as one button
@@ -18,7 +19,7 @@
 // confirmation is hoisted to table level so closing it cannot click through
 // to the row.
 import { useState } from "react";
-import { AgentSources, distilState, sampleLine } from "@/components/memory/partitionFacts";
+import { AgentSources, distilState } from "@/components/memory/partitionFacts";
 import { useUpkeepRunsOf } from "@/lib/hooks/useUpkeep";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
@@ -52,13 +53,12 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
     {
       key: "name",
       header: t("memory.cols.name"),
-      className: "w-[20%]",
+      className: "w-[24%]",
       cell: (r) => <TruncatedText text={r.name} className="font-medium" />,
     },
     {
       key: "path",
       header: t("memory.cols.path"),
-      className: "w-[22%]",
       cell: (r) =>
         r.repository_path ? (
           <TruncatedPath
@@ -68,16 +68,6 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
         ) : (
           <span className="text-xs text-text-muted">{t("memory.cols.global")}</span>
         ),
-    },
-    {
-      key: "sample",
-      header: t("memory.cols.sample"),
-      cell: (r) => (
-        <TruncatedText
-          text={sampleLine(t, r)}
-          className={r.sample ? "text-sm text-text" : "text-sm text-text-subtle"}
-        />
-      ),
     },
     {
       key: "memories",
@@ -128,6 +118,10 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
         rows={rows}
         isLoading={isLoading}
         columns={columns}
+        search={{
+          accessor: (r) => `${r.name} ${r.repository_path ?? t("memory.cols.global")}`,
+          placeholder: t("memory.partitions.search"),
+        }}
         rowKey={(r) => r.uid}
         onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.uid)}`)}
         // Never shown in practice: with no partitions the page shows the

@@ -1,5 +1,5 @@
 // frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Present a
-// partition as its memories", web-ui "Show memory delivery on the Memory page").
+// partition as its memories").
 //
 // Coffer reads each agent's own memory and distils it into
 // one memory per subject, in partitions — `global` plus one per repository
@@ -11,22 +11,17 @@
 // read, or how far Update memory is. When the last read left an agent unread,
 // a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
 //
-// Two blocks. "Delivered at session start" shows, per agent and over the last
-// seven days, how often memory was delivered and how many memories were read —
-// with no hook detail: the hook's state and Repair live only on the agent's
-// page. "Partitions" is the table, or the first-run state while there are
-// none. The audit trail is the Activity page's, not duplicated here.
+// The body is the partitions table, untitled, or the first-run state while
+// there are none. The audit trail is the Activity page's, not duplicated here.
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Brain } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
-import { MemoryDeliveriesSection } from "@/components/memory/MemoryDeliveriesSection";
 import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
-import { Section, SectionStack } from "@/components/Section";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { ExperimentalTag } from "@/components/ExperimentalTag";
@@ -77,27 +72,18 @@ export function MemoryPage() {
       {firstRun ? (
         <MemoryWelcomePanel />
       ) : (
-        <SectionStack>
-          <MemoryDeliveriesSection />
-          <Section
-            as="h2"
-            gap="snug"
-            labelled
-            title={t("memory.partitions.title")}
-            testId="memory-partitions"
-          >
-            {error ? (
-              <EmptyState
-                icon={Brain}
-                tone="error"
-                title={t("memory.loadFailed")}
-                description={translateApiError(t, error)}
-              />
-            ) : (
-              <MemoryPartitionsTable rows={rows} isLoading={isPending} />
-            )}
-          </Section>
-        </SectionStack>
+        <div data-testid="memory-partitions">
+          {error ? (
+            <EmptyState
+              icon={Brain}
+              tone="error"
+              title={t("memory.loadFailed")}
+              description={translateApiError(t, error)}
+            />
+          ) : (
+            <MemoryPartitionsTable rows={rows} isLoading={isPending} />
+          )}
+        </div>
       )}
     </div>
   );

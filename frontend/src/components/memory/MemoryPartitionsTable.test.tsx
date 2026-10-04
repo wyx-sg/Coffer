@@ -2,8 +2,8 @@
 //
 // The partitions list (spec memory "Present a partition as its memories"): a
 // row per partition with its path ("Every project" for global) and its memory
-// count. No status control, no filter, no selection: every partition is served
-// to every agent. Only a partition whose repository is gone offers Delete, and
+// count, and a search box over name and path. No status control, no selection:
+// every partition is served to every agent. Only a partition whose repository is gone offers Delete, and
 // the delete goes through the kind-agnostic resource route after a confirm.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -52,9 +52,7 @@ describe("MemoryPartitionsTable", () => {
         .closest("tr") as HTMLElement,
     );
     expect(coffer.getByText(pathText("~/work/coffer"))).toBeInTheDocument();
-    // No search box: the design has none.
-    expect(screen.queryByRole("searchbox")).toBeNull();
-    expect(screen.queryByPlaceholderText(/search/i)).toBeNull();
+    expect(screen.getByPlaceholderText("Search partitions")).toBeInTheDocument();
   });
 
   test("only a partition whose repository is gone is marked and offers Delete", () => {

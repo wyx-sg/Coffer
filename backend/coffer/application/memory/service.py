@@ -44,6 +44,7 @@ from coffer.application.memory.aggregate import (
 )
 from coffer.application.memory.distil import DistilResult, distil_partition
 from coffer.application.memory.distil_plan import now
+from coffer.application.memory.index import render_index
 from coffer.application.memory.partition_row import (
     MemoryPartitionConfig,
     PartitionSummary,
@@ -55,9 +56,13 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.reader import MemoryReader
+from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.memory import note_edit, store
 
 KIND_MEMORY = "memory"
+
+#: The reason a hand-deleted memory carries in ``RETIRED.md``.
+DELETED_BY_HAND_REASON = "Deleted by hand"
 
 
 class MemoryService:
@@ -265,6 +270,42 @@ class MemoryService:
         )
         self._say_changed(uid)
         return fingerprint
+
+    async def delete_note(self, uid: str, slug: str, *, actor: str) -> None:
+        """Delete one memory by hand: the file leaves ``notes/``, a record goes
+        into ``RETIRED.md`` carrying the note's raw entry ids (so the next distil
+        pass counts them as accounted for and does not re-open the subject), and
+        ``MEMORY.md`` is rewritten. Raises ``NoteNotFound`` for an unknown slug."""
+        row = await self._resources.get(uid)
+        note = store.read_note(row.name, slug)
+        retired = store.read_retired(row.name)
+        record = RetiredNote(
+            slug=slug,
+            title=note.title or slug,
+            reason=DELETED_BY_HAND_REASON,
+            replaced_by="",
+            retired_at=now(),
+            entry_ids=tuple(o.key for o in note.origins),
+        )
+        # Record first, then remove the file: a crash between the two leaves the
+        # note standing and recorded, never deleted and forgotten.
+        store.write_retired(row.name, [*retired, record])
+        store.delete_note(row.name, slug)
+        store.write_index(
+            row.name,
+            render_index(
+                store.list_notes(row.name),
+                partition=row.name,
+                repository_path=placement_of(row).repository_path,
+            ),
+        )
+        await self._audit.record(
+            AuditEventType.MEMORY_NOTE_DELETED.value,
+            resource=row,
+            actor=actor,
+            details={"partition": row.name, "note": slug},
+        )
+        self._say_changed(uid)
 
     # ----------------------------------------------------------------- #
     # Listing                                                            #

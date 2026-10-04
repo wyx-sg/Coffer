@@ -38,8 +38,6 @@ export type RetiredListOut = Schemas["RetiredListOut"];
 export type DeliveredOut = Schemas["DeliveredOut"];
 
 /** Per agent, the last seven days of memory delivery. */
-export type DeliveryOverviewOut = Schemas["DeliveryOverviewOut"];
-export type AgentDeliveryStatsOut = Schemas["AgentDeliveryStatsOut"];
 
 export type MemoryFileTreeOut = Schemas["FileTreeOut"];
 

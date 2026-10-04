@@ -16,8 +16,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   COFFER,
   DELIVERED,
-  DELIVERIES,
   FILES,
+  GLOBAL,
   GONE,
   NATIVE_PATH,
   NODE_NOTE,
@@ -31,7 +31,13 @@ import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
 import { MemoryPage } from "@/pages/MemoryPage";
 import { acceptance } from "@/test/acceptance";
 
+const fs = vi.hoisted(() => ({
+  open: vi.fn(() => Promise.resolve()),
+  reveal: vi.fn(() => Promise.resolve()),
+}));
+vi.mock("@/lib/fsActions", () => ({ useFsActions: () => fs }));
 vi.mock("@/lib/api/memory", () => ({
+  deleteNote: vi.fn(),
   listPartitions: vi.fn(),
   listNotes: vi.fn(),
   getNote: vi.fn(),
@@ -39,7 +45,6 @@ vi.mock("@/lib/api/memory", () => ({
   listRetired: vi.fn(),
   listPartitionFiles: vi.fn(),
   getDelivered: vi.fn(),
-  getDeliveries: vi.fn(),
   getReading: vi.fn(async () => ({ read_at: null, failures: [] })),
   sync: vi.fn(),
 }));
@@ -67,7 +72,6 @@ function stub({
   vi.mocked(api.listRetired).mockResolvedValue(RETIRED);
   vi.mocked(api.listPartitionFiles).mockResolvedValue(FILES);
   vi.mocked(api.getDelivered).mockResolvedValue(DELIVERED);
-  vi.mocked(api.getDeliveries).mockResolvedValue(DELIVERIES);
   vi.mocked(listUpkeepRuns).mockResolvedValue({
     runs: running
       ? [
@@ -154,7 +158,6 @@ describe("MemoryDetailPage", () => {
     expect(screen.queryByText(/‹ Memory/)).toBeNull();
     expect(screen.queryByText("Experimental")).toBeNull();
     expect(screen.queryByRole("button", { name: /automatic/i })).toBeNull();
-    expect(within(pane).queryByRole("button", { name: /open in editor|reveal/i })).toBeNull();
     assertNoAgentOwnMemory();
   });
 
@@ -179,7 +182,37 @@ describe("MemoryDetailPage", () => {
     expect(within(group).queryByRole("button", { name: /restore/i })).toBeNull();
   });
 
-  test("Edit is the only per-memory action, and there is no status or reach control", async () => {
+  test("a retired memory opens read-only beside the list, and links to its replacement", async () => {
+    renderAt(`/memory/${COFFER.uid}`);
+    const group = await screen.findByTestId("memory-retired");
+    fireEvent.click(within(group).getByRole("button", { name: /retired/i }));
+    fireEvent.click(within(group).getByRole("button", { name: /Use Node 18 for vitest/ }));
+    expect(screen.getByTestId("location")).toHaveTextContent("?retired=0");
+    const pane = await screen.findByTestId("retired-pane");
+    expect(
+      within(pane).getByRole("heading", { name: RETIRED.retired[0].title }),
+    ).toBeInTheDocument();
+    expect(pane).toHaveTextContent(/Retired 2026-09-26/);
+    expect(pane).toHaveTextContent(RETIRED.retired[0].reason);
+    expect(within(pane).queryByRole("button", { name: /^edit/i })).toBeNull();
+    expect(screen.queryByTestId("memory-pane")).toBeNull();
+    fireEvent.click(
+      within(pane).getByRole("button", { name: /Replaced by Use Node 20 for frontend vitest/ }),
+    );
+    expect(await screen.findByTestId("memory-pane")).toBeInTheDocument();
+    expect(screen.queryByTestId("retired-pane")).toBeNull();
+    expect(screen.getByTestId("location")).toHaveTextContent(`?memory=use-node-20`);
+  });
+
+  test("a retired memory named in the URL opens its group and its view", async () => {
+    renderAt(`/memory/${COFFER.uid}?retired=0`);
+    expect(await screen.findByTestId("retired-pane")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("memory-retired")).getByRole("button", { name: /retired/i }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("a memory has Edit and Open in editor, a ⋯ menu, and no status or reach control", async () => {
     renderAt(`/memory/${COFFER.uid}`);
     const pane = await screen.findByTestId("memory-pane");
     const list = screen.getByRole("list", { name: "Memories" });
@@ -187,12 +220,17 @@ describe("MemoryDetailPage", () => {
       within(pane)
         .getAllByRole("button")
         .map((b) => b.textContent?.trim()),
-    ).toEqual(["Edit"]);
-    for (const region of [pane, list, screen.getByTestId("memory-retired")]) {
+    ).toEqual(["Edit", "Open in editor", ""]);
+    for (const region of [list, screen.getByTestId("memory-retired")]) {
       expect(
         within(region).queryByRole("button", { name: /^(delete|restore|hide|pin)\b/i }),
       ).toBeNull();
     }
+    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
+    expect(await screen.findByRole("menuitem", { name: /reveal/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+    // No action sits both on the bar and in the menu.
+    expect(screen.queryByRole("menuitem", { name: /open in editor|edit$/i })).toBeNull();
     // A retired memory offers no Edit.
     expect(
       within(screen.getByTestId("memory-retired")).queryByRole("button", { name: /^edit/i }),
@@ -259,6 +297,8 @@ describe("MemoryDetailPage", () => {
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(`/memory/${COFFER.uid}/delivered`),
     );
+    await screen.findByTestId("memory-delivered-rendered");
+    fireEvent.click(screen.getByRole("button", { name: "Raw" }));
     const text = await screen.findByTestId("memory-delivered-text");
     // Claude Code first, as on the Agents page.
     const radios = screen.getAllByRole("radio");
@@ -280,6 +320,8 @@ describe("MemoryDetailPage", () => {
     "a partition's delivered tab shows each agent's session-start text",
     async () => {
       renderAt(`/memory/${COFFER.uid}/delivered`);
+      await screen.findByTestId("memory-delivered-rendered");
+      fireEvent.click(screen.getByRole("button", { name: "Raw" }));
       const text = await screen.findByTestId("memory-delivered-text");
       expect(text.textContent).toBe(DELIVERED.agents[1].text);
       expect(
@@ -290,6 +332,61 @@ describe("MemoryDetailPage", () => {
       fireEvent.click(screen.getByRole("radio", { name: /codex/i }));
       expect(screen.getByTestId("memory-delivered-text").textContent).toBe(
         DELIVERED.agents[0].text,
+      );
+    },
+  );
+
+  test("Delivered renders the text as Markdown by default, Raw shows it verbatim", async () => {
+    renderAt(`/memory/${COFFER.uid}/delivered`);
+    const rendered = await screen.findByTestId("memory-delivered-rendered");
+    expect(within(rendered).getByRole("heading", { name: "coffer (claude)" })).toBeInTheDocument();
+    expect(within(rendered).getByText("Use Node 20 for frontend vitest").tagName).toBe("LI");
+    expect(screen.queryByTestId("memory-delivered-text")).toBeNull();
+    expect(screen.getByRole("button", { name: "Rendered" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Raw" }));
+    expect(screen.getByTestId("memory-delivered-text").textContent).toBe(DELIVERED.agents[1].text);
+    expect(screen.queryByTestId("memory-delivered-rendered")).toBeNull();
+  });
+
+  acceptance(
+    "web-ui",
+    "a delivered entry links to the memory it came from on its partition's page",
+    async () => {
+      stub({ partitions: [GLOBAL, COFFER] });
+      vi.mocked(api.getDelivered).mockResolvedValue({
+        partition: "coffer",
+        agents: [
+          {
+            ...DELIVERED.agents[1],
+            text: [
+              "## Coffer memory",
+              "Known about you:",
+              "- **Prefers Node 20** (`node-20.md`) — vitest",
+              "Memory for this repository — partition `coffer` (/Users/dev/work/coffer):",
+              "- **Port is 8000** (`port-8000.md`) — daemon",
+              "Memory for this repository — partition `nowhere` (/x):",
+              "- **Orphan** (`orphan.md`) — unknown partition",
+            ].join("\n"),
+          },
+        ],
+      });
+      renderAt(`/memory/${COFFER.uid}/delivered`);
+      const rendered = await screen.findByTestId("memory-delivered-rendered");
+      expect(screen.getByText(/Edit a memory to change what is delivered/)).toBeInTheDocument();
+      const globalLink = await within(rendered).findByRole("link", { name: "node-20.md" });
+      expect(globalLink).toHaveAttribute("href", `/memory/${GLOBAL.uid}?memory=node-20`);
+      // A line whose partition is unknown stays plain code.
+      expect(within(rendered).queryByRole("link", { name: "orphan.md" })).toBeNull();
+      expect(within(rendered).getByText("orphan.md").tagName).toBe("CODE");
+
+      fireEvent.click(within(rendered).getByRole("link", { name: "Port is 8000" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("location")).toHaveTextContent(
+          `/memory/${COFFER.uid}?memory=port-8000`,
+        ),
       );
     },
   );
@@ -337,6 +434,50 @@ describe("MemoryDetailPage", () => {
     await screen.findByRole("heading", { name: "coffer" });
     expect(screen.queryByTestId("scope-control")).toBeNull();
     expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
+  });
+});
+
+describe("a memory's file actions and deletion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stub();
+  });
+
+  test("Open in editor and Reveal act on the memory's own file", async () => {
+    renderAt(`/memory/${COFFER.uid}`);
+    const pane = await screen.findByTestId("memory-pane");
+    fireEvent.click(within(pane).getByRole("button", { name: "Open in editor" }));
+    expect(fs.open).toHaveBeenCalledWith(NODE_NOTE.file_path, expect.anything());
+    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /reveal/i }));
+    expect(fs.reveal).toHaveBeenCalledWith(NODE_NOTE.file_path);
+  });
+
+  acceptance("memory", "a memory deleted by hand is retired and not recreated", async () => {
+    vi.mocked(api.deleteNote).mockResolvedValue(undefined);
+    renderAt(`/memory/${COFFER.uid}`);
+    const pane = await screen.findByTestId("memory-pane");
+    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /delete/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(`Delete “${NODE_NOTE.title}”?`)).toBeInTheDocument();
+    // Nothing is deleted until it is confirmed.
+    expect(api.deleteNote).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete memory" }));
+    await waitFor(() => expect(api.deleteNote).toHaveBeenCalledWith(COFFER.uid, NODE_NOTE.slug));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  test("a refused delete keeps the dialog open and says why", async () => {
+    vi.mocked(api.deleteNote).mockRejectedValue(new ApiError("INTERNAL_ERROR", "disk is full"));
+    renderAt(`/memory/${COFFER.uid}`);
+    const pane = await screen.findByTestId("memory-pane");
+    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /delete/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete memory" }));
+    expect(await within(dialog).findByText(/disk is full|went wrong|error/i)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
 
@@ -484,10 +625,9 @@ acceptance("memory", "browse a partition's memories with a read-only preview", a
   fireEvent.click(toggle);
   expect(within(group).getByText(RETIRED.retired[0].reason)).toBeInTheDocument();
 
-  // None of the agents' own memory, and no file action, edit or delete on a memory.
+  // None of the agents' own memory; a memory's file actions are its own.
   assertNoAgentOwnMemory();
   const pane = screen.getByTestId("memory-pane");
-  expect(within(pane).queryByRole("button", { name: /open in editor|reveal/i })).toBeNull();
   expect(within(pane).getByRole("button", { name: "Edit" })).toBeInTheDocument();
   expect(within(pane).queryByRole("button", { name: /^delete\b/i })).toBeNull();
   expect(within(list).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();

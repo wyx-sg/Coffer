@@ -4,23 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/memory/deliveries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Deliveries */
-        get: operations["deliveries_api_v1_memory_deliveries_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/memory/hook": {
         parameters: {
             query?: never;
@@ -146,7 +129,13 @@ export interface paths {
          */
         put: operations["save_note_api_v1_memory_partitions__uid__notes__slug__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Note
+         * @description Delete one memory by hand. The file leaves ``notes/`` and ``RETIRED.md``
+         *     gains a "Deleted by hand" record carrying the note's raw entry ids, so the
+         *     next distil pass does not re-open it. An unknown slug is a 404.
+         */
+        delete: operations["delete_note_api_v1_memory_partitions__uid__notes__slug__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -226,30 +215,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AgentDeliveryStatsOut */
-        AgentDeliveryStatsOut: {
-            /** Agent Name */
-            agent_name: string;
-            /** Agent Type */
-            agent_type: string;
-            /** Agent Uid */
-            agent_uid: string;
-            /** By Moment */
-            by_moment: {
-                [key: string]: number;
-            };
-            /** Deliveries */
-            deliveries: number;
-            /** Last Delivered At */
-            last_delivered_at: string | null;
-            /** Notes Read */
-            notes_read: number | null;
-            /**
-             * Notes Read Status
-             * @enum {string}
-             */
-            notes_read_status: "available" | "unavailable";
-        };
         /**
          * AggregationResultOut
          * @description What one Update memory action did: its aggregation pass, then which
@@ -297,13 +262,6 @@ export interface components {
             event: string;
             /** Text */
             text: string;
-        };
-        /** DeliveryOverviewOut */
-        DeliveryOverviewOut: {
-            /** Agents */
-            agents: components["schemas"]["AgentDeliveryStatsOut"][];
-            /** Window Days */
-            window_days: number;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -545,8 +503,6 @@ export interface components {
             repository_key: string;
             /** Repository Path */
             repository_path: string;
-            /** Sample */
-            sample: string | null;
             /** Sources */
             sources: string[];
             /** Uid */
@@ -637,46 +593,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    deliveries_api_v1_memory_deliveries_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeliveryOverviewOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     hook_fire_api_v1_memory_hook_post: {
         parameters: {
             query?: never;
@@ -956,6 +872,47 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
                 };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_note_api_v1_memory_partitions__uid__notes__slug__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

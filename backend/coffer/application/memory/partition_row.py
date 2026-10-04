@@ -76,8 +76,6 @@ class PartitionSummary:
     #: has — what the table's Distil column and the header's "distilled 2 h ago"
     #: read (spec memory "Present a partition as its memories").
     distilled_at: datetime | None = None
-    #: One memory to show the partition by: the most recently updated one's line.
-    sample: str | None = None
     #: The agents (resource names) this partition's memory came from.
     sources: tuple[str, ...] = ()
     #: Raw entries read from the agents that no distil pass has decided on yet,
@@ -121,7 +119,6 @@ def summary_of(row: Resource, placement: Placement) -> PartitionSummary:
         note_count=len(notes),
         unresolvable=is_unresolvable(placement),
         distilled_at=_distilled_at(row.name),
-        sample=(newest.description or newest.title) if newest is not None else None,
         sources=tuple(sorted(a for a in agents if a)),
         waiting_entries=len(waiting),
         waiting_agents=tuple(sorted({e.agent for e in waiting if e.agent})),

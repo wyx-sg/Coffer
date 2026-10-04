@@ -780,6 +780,7 @@
       "memory_delivery_removed": "已移除 {{resource}} 的记忆投递",
       "memory_distilled": "提炼了记忆分区 {{resource}}",
       "memory_note_edited": "编辑了 {{resource}} 中的一条记忆",
+      "memory_note_deleted": "删除了 {{resource}} 中的一条记忆",
       "provider_internal_default_set": "把 {{resource}} 设为内部引擎的默认模型提供商",
       "provider_transcribe_default_set": "把 {{resource}} 设为 Coffer 转写语音所用的模型提供商",
       "provider_projection_refused": "拒绝把 {{resource}} 投射到智能体",
@@ -3468,25 +3469,10 @@
     "syncDone": "读到 {{count}} 条新条目，更新了 {{partitions}} 个分区。",
     "syncFailures": "{{count}} 个来源解析失败——详见活动页面。",
     "loadFailed": "加载分区失败",
-    "deliveries": {
-      "title": "会话开始时投递",
-      "window_one": "最近 {{count}} 天",
-      "window_other": "最近 {{count}} 天",
-      "delivered_one": "最近 {{days}} 天投递 {{count}} 次",
-      "delivered_other": "最近 {{days}} 天投递 {{count}} 次",
-      "read_one": "读了 {{count}} 条记忆条目",
-      "read_other": "读了 {{count}} 条记忆条目",
-      "readUnavailable": "读取条数不可用",
-      "readUnavailableHint": "Coffer 读不到这个智能体的会话记录，所以数不出它的会话打开过哪些记忆条目。",
-      "last": "最近一次 {{when}}",
-      "notDelivered": "最近 {{days}} 天没有投递",
-      "none": "还没有智能体连接到 Coffer，记忆不会投递给任何智能体。",
-      "loadFailed": "加载投递情况失败。"
-    },
     "partitions": {
-      "title": "分区",
       "memories_one": "{{count}} 条记忆条目",
-      "memories_other": "{{count}} 条记忆条目"
+      "memories_other": "{{count}} 条记忆条目",
+      "search": "搜索分区"
     },
     "cols": {
       "name": "分区",
@@ -3494,7 +3480,6 @@
       "global": "所有项目",
       "memories": "记忆条目",
       "unresolvable": "仓库已不在",
-      "sample": "示例记忆",
       "sources": "来源",
       "distil": "已提炼"
     },
@@ -3540,7 +3525,16 @@
       "listLabel": "记忆条目",
       "retired": "已退役",
       "readOnly": "只读",
+      "retiredListLabel": "已退役的记忆",
+      "retiredOn": "退役于 {{date}}",
+      "replacedBy": "已由「{{title}}」取代 →",
       "learnedBy": "学自 {{agents}} · 更新于 {{date}}",
+      "more": "{{title}} 的更多操作",
+      "deleteMenu": "删除…",
+      "deleteTitle": "删除“{{title}}”？",
+      "deleteBody": "这条记忆会从列表中消失，之后的会话不会再收到它。Coffer 会在「已退役」里留一条记录，下次更新不会再从各智能体自己的记忆里重新学回来。",
+      "deleteConfirm": "删除记忆",
+      "deleted": "已删除“{{title}}”",
       "updated": "更新于 {{date}}",
       "select": "选择一条记忆条目查看。",
       "loadFailed": "加载记忆条目失败。",
@@ -3555,13 +3549,17 @@
       "link": "打开设置"
     },
     "delivered": {
+      "viewLabel": "显示方式",
+      "rendered": "渲染",
+      "raw": "原文",
       "agentsLabel": "智能体",
       "intro": "在 {{path}} 中开始的会话会收到的内容 · 只读",
       "introGlobal": "每个会话开始时收到的内容 · 只读",
       "copy": "复制",
       "none": "还没有智能体连接到 Coffer，没有会话会以这个分区的记忆条目开始。",
       "loadFailed": "加载投递内容失败。",
-      "size": "{{size}} 个字符 · 未截断"
+      "size": "{{size}} 个字符 · 未截断",
+      "editHint": "编辑来源记忆即可改变投递的内容"
     },
     "automatic": {
       "title": "自动读取记忆",
@@ -3570,8 +3568,6 @@
       "never": "尚未读取"
     },
     "allAgents": "所有智能体",
-    "waiting_one": "已从 {{agents}} 读取 {{count}} 条，等待提炼",
-    "waiting_other": "已从 {{agents}} 读取 {{count}} 条，等待提炼",
     "distil": {
       "done": "{{when}}提炼",
       "never": "从未",

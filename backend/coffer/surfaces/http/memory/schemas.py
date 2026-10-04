@@ -61,8 +61,6 @@ class PartitionOut(BaseModel):
     #: When a distil pass last finished over this partition; ``null`` if none
     #: has ("Present a partition as its memories").
     distilled_at: datetime | None = None
-    #: One memory's line to show the partition by — the most recently updated.
-    sample: str | None = None
     #: The agents (resource names) this partition's memory came from.
     sources: list[str] = Field(default_factory=list)
     #: Entries read from the agents that no distil pass has decided on yet, and

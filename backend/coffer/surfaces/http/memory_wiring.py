@@ -236,9 +236,7 @@ def wire_memory_kind(
             retrieval=retrieval,
         )
     )
-    set_memory_stats_service(
-        DeliveryStatsService(memory=service, delivery=delivery_service, audit=audit)
-    )
+    set_memory_stats_service(DeliveryStatsService(memory=service, delivery=delivery_service))
 
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
     return MemoryWiring(

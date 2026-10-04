@@ -92,6 +92,7 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
     MEMORY_NOTE_EDITED = "memory_note_edited"
+    MEMORY_NOTE_DELETED = "memory_note_deleted"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"

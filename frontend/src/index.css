@@ -300,7 +300,7 @@
   }
 
   /* Chat markdown code blocks: the wrapping <pre> owns the padding + the code
-     fill (MarkdownContent); highlight.js only colours the text, so neutralise
+     fill (Markdown density="chat"); highlight.js only colours the text, so neutralise
      its own background + inner padding here. */
   .markdown-body pre code.hljs {
     @apply bg-transparent p-0;
