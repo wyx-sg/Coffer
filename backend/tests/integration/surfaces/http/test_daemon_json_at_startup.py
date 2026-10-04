@@ -53,7 +53,7 @@ async def test_unreadable_daemon_json_fails_startup(tmp_path: Path, monkeypatch,
 @pytest.mark.asyncio
 async def test_daemon_json_missing_a_field_fails_startup(tmp_path: Path, monkeypatch) -> None:
     path = _point_at(tmp_path, monkeypatch)
-    path.write_text(json.dumps({"version": 1, "pid": 1, "port": 8000}))  # no token
+    path.write_text(json.dumps({"version": 1, "pid": 1, "port": 38470}))  # no token
     app = create_app()
     with pytest.raises(RuntimeError, match="unreadable"):
         async with app.router.lifespan_context(app):

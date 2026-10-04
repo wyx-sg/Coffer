@@ -26,7 +26,7 @@ def _setup_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A throwaway HOME, plus the port-range override every daemon test needs.
 
     ``daemon start`` pre-flights the port it is about to bind, which with no
-    override is the real 8000 — the port the developer's own daemon is usually
+    override is the real 38470 — the port the developer's own daemon is usually
     sitting on. These tests fake ``Popen`` and care about the spawn plumbing,
     not the port, so they pin a range of their own (as test_daemon_lifecycle.py
     does) rather than contending for a port they never intended to use.

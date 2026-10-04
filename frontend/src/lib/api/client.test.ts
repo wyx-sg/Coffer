@@ -61,7 +61,7 @@ describe("getApiClient", () => {
   test("sends the request once a supplier has named the API", async () => {
     servedFrom("tauri://localhost");
     (window as unknown as Record<string, unknown>).__COFFER_BASE_URL__ =
-      "http://127.0.0.1:8000/api/v1";
+      "http://127.0.0.1:38470/api/v1";
     resetApiClient();
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -71,11 +71,11 @@ describe("getApiClient", () => {
 
     expect(fetchSpy).toHaveBeenCalled();
     const request = fetchSpy.mock.calls[0][0] as Request;
-    expect(request.url).toBe("http://127.0.0.1:8000/api/v1/daemon/status");
+    expect(request.url).toBe("http://127.0.0.1:38470/api/v1/daemon/status");
   });
 
   test("sends the token and the actor on every request", async () => {
-    servedFrom("http://127.0.0.1:8000");
+    servedFrom("http://127.0.0.1:38470");
     (window as unknown as Record<string, unknown>).__COFFER_TOKEN__ = "tok-1";
     resetApiClient();
     const fetchSpy = vi
@@ -93,7 +93,7 @@ describe("getApiClient", () => {
 
 describe("unwrap", () => {
   const settled = (body: unknown, status: number) => {
-    servedFrom("http://127.0.0.1:8000");
+    servedFrom("http://127.0.0.1:38470");
     resetApiClient();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(body === undefined ? null : JSON.stringify(body), {

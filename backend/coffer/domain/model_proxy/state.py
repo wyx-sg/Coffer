@@ -107,7 +107,7 @@ def upstream_root(base_url: str) -> str:
 
 #: The port the proxy binds when ``daemon-config.json`` names none — fixed, so
 #: the base URL written into the agents' files never moves on its own.
-DEFAULT_PROXY_PORT = 8001
+DEFAULT_PROXY_PORT = 38471
 
 #: The path each wire's clients are pointed at, under the proxy's root.
 WIRE_PATHS = {Wire.ANTHROPIC: "/anthropic", Wire.OPENAI: "/openai/v1"}

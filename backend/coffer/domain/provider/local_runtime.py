@@ -50,7 +50,7 @@ MIN_VERSIONS: dict[Runtime, dict[str, tuple[int, ...] | None]] = {
 SMALL_WINDOW = 64_000
 
 #: Default ports probed when no base URL is given. vLLM's default 8000 is
-#: the Coffer daemon's own port, so vLLM is only found on a URL the user gives.
+#: shared by many development servers, so vLLM is only found on a URL the user gives.
 DEFAULT_PORTS: dict[Runtime, int] = {
     Runtime.OLLAMA: 11434,
     Runtime.LMSTUDIO: 1234,

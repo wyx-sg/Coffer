@@ -85,7 +85,7 @@ export const NOTES: NoteListOut = {
       ...NOTE_BASE,
       key: "coffer/daemon-port",
       slug: "daemon-port",
-      title: "Daemon port is fixed at 8000",
+      title: "Daemon port is fixed at 38470",
       description: "Read from daemon-config.json before the DB opens.",
       file_path: "/Users/dev/.coffer/memory/partitions/coffer/notes/daemon-port.md",
     },

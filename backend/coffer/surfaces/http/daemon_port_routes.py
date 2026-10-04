@@ -29,7 +29,7 @@ def _port_out() -> DaemonPortOut:
     bound = daemon_port.get_port()
     # Pending only when a port was saved and this daemon is not on it. With
     # nothing saved there is nothing to apply: a daemon the test suite started
-    # in its port range answers elsewhere than 8000 without anything pending.
+    # in its port range answers elsewhere than 38470 without anything pending.
     saved = daemon_config.read_fixed_port() is not None
     return DaemonPortOut(port=configured, bound_port=bound, pending=saved and configured != bound)
 

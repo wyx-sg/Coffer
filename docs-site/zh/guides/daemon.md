@@ -35,7 +35,7 @@ coffer daemon restart    # stop (if running), then start
 ```text
 status:  ready
 version: 0.2.0
-port:    8000
+port:    38470
 pid:     41822
 ```
 
@@ -50,11 +50,11 @@ pid:     41822
 - `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。
 - 在守护进程绑定前读取的设置（端口），要靠 `restart` 才能生效。
 
-要打开守护进程提供的界面，在浏览器里访问 `http://127.0.0.1:<port>`；端口在 `~/.coffer/daemon.json` 里（默认 8000）。[桌面应用](/zh/guides/desktop-app)会替你打开。
+要打开守护进程提供的界面，在浏览器里访问 `http://127.0.0.1:<port>`；端口在 `~/.coffer/daemon.json` 里（默认 38470）。[桌面应用](/zh/guides/desktop-app)会替你打开。
 
 ## 选择端口 {#choose-the-port}
 
-守护进程默认监听 **8000 端口**，从不扫描其他端口。固定端口能让界面的书签一直可用，也能让浏览器为该源保存的内容（界面语言、每页行数、侧边栏状态、首选编辑器）不会因为端口变动而重置。
+守护进程默认监听 **38470 端口**，从不扫描其他端口。固定端口能让界面的书签一直可用，也能让浏览器为该源保存的内容（界面语言、每页行数、侧边栏状态、首选编辑器）不会因为端口变动而重置。
 
 要改端口：
 
@@ -62,7 +62,7 @@ pid:     41822
 coffer config get daemon.port        # the configured port
 coffer config set daemon.port 8765   # always bind 8765 from now on
 coffer daemon restart                # apply it (or Restart now on Settings → Daemon)
-coffer config unset daemon.port      # back to 8000
+coffer config unset daemon.port      # back to 38470
 ```
 
 `daemon.port` 接受 1024 到 65535 的端口。该设置写入 `~/.coffer/daemon-config.json`，守护进程在绑定前读取它，所以这些命令在没有守护进程时也能用。这是有意为之：最需要改端口的时候，恰恰是守护进程因端口被占而起不来的时候。**设置 → 守护进程** 通过运行中的守护进程写同一个文件，点它的 **立即重启** 让改动生效，页面随后从新端口重新加载。
@@ -74,8 +74,8 @@ coffer config unset daemon.port      # back to 8000
 如果端口被其他进程占用，守护进程宁可拒绝启动也不会换端口，并指出是谁占用了它：
 
 ```text
-port 8000 is the port Coffer's daemon binds, but something else is already using it.
-  held by: pid 5120  python3 -m http.server 8000
+port 38470 is the port Coffer's daemon binds, but something else is already using it.
+  held by: pid 5120  python3 -m http.server 38470
   fix one of:
     stop that process, then    coffer daemon start
     use a different port       coffer config set daemon.port <port>

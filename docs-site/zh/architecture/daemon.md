@@ -27,7 +27,7 @@ Coffer 每个保险库运行一个常驻守护进程，其他每个部分都是�
 | 发现机制就是一个文件 `~/.coffer/daemon.json`，权限 `0600`。 | 每个客户端读到的端口和令牌都是同一个答案。原子写入，永远不会读到写了一半的内容。 |
 | 探测、绑定、发布和就绪都在同一把独占 `flock` 下进行，一直持有到守护进程开始提供 HTTP 服务。 | 两个竞争的拉起只会产生一个守护进程。 |
 | 存活检测用 HTTP 状态调用，从不用 TCP 连接。 | 崩溃之后，一个无关的进程可能占着记录的端口。 |
-| 端口是固定的（除非你指定别的，否则是 `8000`），守护进程宁可拒绝启动也不换端口。 | Web 界面的书签一直有效，浏览器按源保存的状态在重启后也还在。 |
+| 端口是固定的（除非你指定别的，否则是 `38470`），守护进程宁可拒绝启动也不换端口。 | Web 界面的书签一直有效，浏览器按源保存的状态在重启后也还在。 |
 | 版本不一致只检测和报告，从不据此行动。 | 守护进程会跨越升级继续运行。悄悄杀掉它会断开所有附着的 MCP 客户端。 |
 | 守护进程从不因为闲置而自行退出。 | 没有打开 Coffer 窗口时智能体也需要它。闲置退出会让下一个调用方承担冷启动。 |
 
@@ -61,7 +61,7 @@ flowchart LR
 | 进程 | 生命周期 | 作用 |
 | --- | --- | --- |
 | `coffer-daemon` | 常驻，每个保险库一个 | 在 `127.0.0.1:<port>` 上提供 REST API（`/api/v1/*`）、MCP 端点（`/mcp`）和构建好的 Web 界面。它拥有全部状态，是唯一的 SQLite 写入者。从源码运行时是 Python 包里的守护进程入口模块。冻结构建运行 `coffer-daemon` 二进制。 |
-| 本地模型代理 | 常驻，比守护进程活得久 | 正式构建里是 `coffer-daemon proxy`（从源码运行时是包里的代理入口模块），守护进程唯一的兄弟进程，在 `127.0.0.1:8001` 上。使用 API 密钥 或本地提供商的智能体把模型请求发给它；它用真实的 key 转发到上游，并把用量记录写入缓冲区，供守护进程摄取。守护进程拉起它，在自己重启后通过 `~/.coffer/proxy.json` 重新附着到它，并在它崩溃后重启它。见[本地模型代理](/zh/architecture/model-proxy)。 |
+| 本地模型代理 | 常驻，比守护进程活得久 | 正式构建里是 `coffer-daemon proxy`（从源码运行时是包里的代理入口模块），守护进程唯一的兄弟进程，在 `127.0.0.1:38471` 上。使用 API 密钥 或本地提供商的智能体把模型请求发给它；它用真实的 key 转发到上游，并把用量记录写入缓冲区，供守护进程摄取。守护进程拉起它，在自己重启后通过 `~/.coffer/proxy.json` 重新附着到它，并在它崩溃后重启它。见[本地模型代理](/zh/architecture/model-proxy)。 |
 | `coffer` 命令行 | 一条命令 | 通过回环 HTTP 调用守护进程，带上 `daemon.json` 里的令牌和 `X-Coffer-Actor: cli` 请求头，所以它的修改会以命令行身份记入审计。 |
 | `coffer-mcp-shim` | 一个 MCP 客户端会话 | 一个 stdio ↔ HTTP/SSE 转发器。智能体把它当作 stdio MCP 服务器启动，它把每行 JSON-RPC 转发给 `/mcp`。见 [MCP 网关](/zh/architecture/mcp-gateway)。 |
 | 桌面壳 | 应用运行期间 | 一个 Tauri 2 应用，把同一份前端构建作为本地资源加载，并通过 IPC 把守护进程的 URL 和令牌交给它。它会检测或拉起守护进程，但守护进程比应用活得久：退出应用不会停止守护进程。见[桌面应用](/zh/guides/desktop-app)。 |
@@ -90,7 +90,7 @@ flowchart LR
 {
   "version": 1,
   "pid": 48213,
-  "port": 8000,
+  "port": 38470,
   "token": "q3V0…",
   "started_at": "2026-09-24T08:12:40.118204+00:00",
   "binary_path": "/Users/you/.coffer/bin/0.1.1/coffer-daemon"
@@ -117,7 +117,7 @@ sequenceDiagram
     E->>L: 释放
     E-->>E: 以 0 退出
   end
-  E->>C: 读取固定端口，否则用 8000
+  E->>C: 读取固定端口，否则用 38470
   E->>E: 绑定 127.0.0.1:port，否则拒绝
   E->>J: 写入 pid、port、新令牌（0600）
   E->>U: 在预先绑定的 fd 上提供服务
@@ -141,7 +141,7 @@ sequenceDiagram
 1. **环境清理。** 守护进程移除它继承来的每个智能体 home 变量（`CLAUDE_CONFIG_DIR`、`CODEX_HOME`，取自智能体描述符）。否则，从导出了这类变量的 shell 启动的守护进程，会让智能体跑在那个目录上，而 Coffer 却把技能和配置投递到登记的目录里。它还会把 `RLIMIT_NOFILE` 软上限提高到接近硬上限，最多 8192，因为由 GUI 应用启动的守护进程继承到的上限大约只有 256。
 2. **拉起锁。** 它在 `~/.coffer/daemon.lock` 上取一把独占 `flock`。锁挂在打开的描述符上，所以文件在两次运行之间一直留在磁盘上。
 3. **存活探测。** 在锁内，它对 `daemon.json` 记录的端口调用 `GET /api/v1/daemon/status`，超时 15 s。超时必须长于一个正在预热的守护进程可能给出的最慢状态响应，因为超时看起来和「没人在线」一模一样。如果有守护进程应答，新进程释放锁并以 0 退出。
-4. **绑定。** 它从 `daemon-config.json` 读取端口（指定的端口，否则 `8000`），用 `SO_REUSEADDR` 精确绑定 `127.0.0.1:<port>`。它重试四次，间隔 0.3 s，让重启能熬过即将退出的守护进程的最后时刻。如果端口仍被占用，它以端口被占用的错误失败，打印一条写明占用者 pid 和命令行的消息，并以退出码 2 退出。
+4. **绑定。** 它从 `daemon-config.json` 读取端口（指定的端口，否则 `38470`），用 `SO_REUSEADDR` 精确绑定 `127.0.0.1:<port>`。它重试四次，间隔 0.3 s，让重启能熬过即将退出的守护进程的最后时刻。如果端口仍被占用，它以端口被占用的错误失败，打印一条写明占用者 pid 和命令行的消息，并以退出码 2 退出。
 5. **发布。** 它生成一个新的随机令牌（URL 安全，取自 32 个随机字节）并写入 `daemon.json`。socket 保持打开，它的文件描述符交给 uvicorn，所以已发布的端口从不会被释放再重新绑定。否则其他进程可能在中间抢走端口并收到令牌。
 6. **迁移。** lifespan 首先拒绝两种 home：状态仍保存在 `coffer.db` 里的（`VAULT_MIGRATION_REQUIRED`，提示 `coffer migrate`），以及被回滚的升级留在挂起状态的（`VAULT_MIGRATION_ON_HOLD`，提示 `--resume`）。然后它在事件循环之外对 `runs.db` 运行 Alembic。如果数据库的修订号本构建不认识，启动以 `DB_SCHEMA_TOO_NEW` 失败，而不是抛出一个看不懂的 Alembic 错误。如果需要升级，会先把文件及其 `-wal`/`-shm` 伴随文件复制为 `runs.db.pre-<revision>`，保留最新三份。schema 已是最新时什么都不复制。见[持久化](/zh/architecture/persistence)。
 7. **启动清扫。** 启动清扫会杀掉 `~/.coffer/upstream-pids/` 下记录的、仍以相同命令行存活的每棵进程树。冻结构建还会终止其他可证明在为同一个保险库服务的守护进程，即可执行文件名相同、解析后的 `~/.coffer` 也相同。读不出保险库的进程不会被动。
@@ -225,13 +225,13 @@ sequenceDiagram
 
 ## 固定端口 {#fixed-port}
 
-守护进程绑定一个端口，从不换。什么都没配置时这个端口是 `8000`。你可以指定 1024 到 65535 之间的另一个端口：
+守护进程绑定一个端口，从不换。什么都没配置时这个端口是 `38470`。你可以指定 1024 到 65535 之间的另一个端口：
 
 ```sh
 coffer config get daemon.port      # the port the next start will bind
 coffer config set daemon.port 8765 # write it to daemon-config.json
 coffer daemon restart              # a running daemon owns its socket; restart to move
-coffer config unset daemon.port    # back to 8000
+coffer config unset daemon.port    # back to 38470
 ```
 
 `daemon.port` 这个键在没有守护进程运行时也能用，因为你恰恰是在守护进程起不来时才去改端口。因此 `coffer config set daemon.port` 直接写进绑定前设置文件，而不经过路由，`coffer config` 也只承载这类键。Web 界面通过运行中的守护进程访问同一个文件：`GET /api/v1/daemon/port` 返回已保存的端口、实际绑定的端口，以及是否有待重启生效的改动；`PUT /api/v1/daemon/port` 保存下次启动的端口，绑不上的端口会被拒绝。

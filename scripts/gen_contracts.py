@@ -236,7 +236,7 @@ def contract_for(
             "version": document["info"]["version"],
             "description": _DESCRIPTION.format(title=title),
         },
-        "servers": [{"url": "http://127.0.0.1:8000"}],
+        "servers": [{"url": "http://127.0.0.1:38470"}],
         "paths": _sorted(operations),
     }
     reachable = _reachable_schemas(operations, schemas)

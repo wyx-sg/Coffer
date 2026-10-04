@@ -18,11 +18,11 @@ description: Coffer 常见问题的症状、原因和解决办法：守护进程
 **症状。** `coffer daemon start`（或任何命令）打印：
 
 ```text
-port 8000 is the port Coffer's daemon binds, but something else is already using it.
+port 38470 is the port Coffer's daemon binds, but something else is already using it.
   held by: pid 5120  node server.js
 ```
 
-**原因。** Coffer 绑定一个固定端口（除非你改过，否则是 8000），并且从不换到别的端口。
+**原因。** Coffer 绑定一个固定端口（除非你改过，否则是 38470），并且从不换到别的端口。
 
 **解决办法。** 停掉消息里指出的进程，或者把 Coffer 换到另一个端口并重启：
 
@@ -133,7 +133,7 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 **原因。** 浏览器按 origin 保存这些偏好，而 origin 包含端口。守护进程现在的端口和以前不同，所以浏览器把它当成了另一个网站。
 
-**解决办法。** 固定一个端口：`coffer config get daemon.port` 告诉你配置的端口；`coffer config unset daemon.port` 恢复为 8000。
+**解决办法。** 固定一个端口：`coffer config get daemon.port` 告诉你配置的端口；`coffer config unset daemon.port` 恢复为 38470。
 
 ### 因为功能已关闭，页面或工具不见了 {#a-page-or-tool-is-missing-because-a-feature-is-switched-off}
 

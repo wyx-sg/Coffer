@@ -112,7 +112,7 @@ def test_claude_code_provider_projection_is_frozen() -> None:
         "{\n"
         f'  "apiKeyHelper": "{_CLI} proxy token --agent-uid {_AGENT_UID}",\n'
         '  "env": {\n'
-        '    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8001/anthropic",\n'
+        '    "ANTHROPIC_BASE_URL": "http://127.0.0.1:38471/anthropic",\n'
         '    "NO_PROXY": "127.0.0.1,localhost"\n'
         "  }\n"
         "}\n"
@@ -125,7 +125,7 @@ def test_codex_provider_block_is_frozen() -> None:
         "\n"
         "[model_providers.coffer]\n"
         'name = "Coffer (gw)"\n'
-        'base_url = "http://127.0.0.1:8001/openai/v1"\n'
+        'base_url = "http://127.0.0.1:38471/openai/v1"\n'
         'wire_api = "responses"\n'
         "supports_websockets = false\n"
         "requires_openai_auth = false\n"

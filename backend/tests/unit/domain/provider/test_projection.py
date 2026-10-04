@@ -225,7 +225,7 @@ def test_the_proxy_form_names_no_key_in_the_environment() -> None:
     user_policy = '[shell_environment_policy]\nexclude = ["AWS_*"]\n'
     out = apply_codex_provider(
         user_policy,
-        base_url="http://127.0.0.1:8001/openai/v1",
+        base_url="http://127.0.0.1:38471/openai/v1",
         model="m",
         display_name="x",
         auth=CodexAuthCommand("/opt/coffer", ("proxy", "token", "--agent-uid", "a1")),

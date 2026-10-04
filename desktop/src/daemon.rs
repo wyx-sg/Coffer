@@ -361,7 +361,7 @@ mod tests {
     fn the_base_url_is_the_loopback_api_root() {
         // The one address the webview is given, and the only one the CSP
         // admits (`connect-src http://127.0.0.1:*`).
-        assert_eq!(base_url_for(8000), "http://127.0.0.1:8000/api/v1");
+        assert_eq!(base_url_for(38470), "http://127.0.0.1:38470/api/v1");
     }
 
     /// The ready-wait is what a restart hands its caller a connection from,

@@ -148,7 +148,7 @@ When something goes wrong in a session, the agent can read Coffer's history itse
 Every HTTP request the daemon serves gets a trace id. The daemon stamps it as `trace_id` on every log record the request produces and returns it in the `X-Coffer-Trace` header of every response, error responses included. To find what happened during one failed request:
 
 ```sh
-curl -si -H "X-Coffer-Token: $TOKEN" http://127.0.0.1:8000/api/v1/resources/nope \
+curl -si -H "X-Coffer-Token: $TOKEN" http://127.0.0.1:38470/api/v1/resources/nope \
   | grep -i x-coffer-trace
 # x-coffer-trace: 3f9c0a6e2b7d4e1f9a0c5b2d8e7f6a1c
 

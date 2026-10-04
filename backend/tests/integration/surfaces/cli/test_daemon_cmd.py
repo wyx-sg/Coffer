@@ -9,7 +9,7 @@ state that key has to remain usable in.
 
 The default port is stood in for by a monkeypatched ``DEFAULT_PORT`` wherever a
 test needs to hold it, because the developer's own daemon is usually on the
-real 8000 and a test must not have to win it.
+real 38470 and a test must not have to win it.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ def test_start_skips_the_pre_flight_under_the_range_override(
 ) -> None:
     """A test daemon scans a range of its own, so there is no port to pre-check.
 
-    Without this the pre-flight would diagnose 8000 — a port the start under
+    Without this the pre-flight would diagnose 38470 — a port the start under
     the override was never going to touch — and refuse to spawn every test
     daemon on a developer's machine whose real daemon is up.
     """
@@ -184,14 +184,14 @@ def test_port_set_writes_the_file_even_with_a_daemon_running(
     will not start cannot be served by the daemon — and the CLI writes the file
     in every state instead of only as a fallback.
     """
-    _live(monkeypatch, 8000)
+    _live(monkeypatch, 38470)
 
     res = runner.invoke(app, ["config", "set", "daemon.port", "8123"])
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] == 8123
     # The daemon owns its bound socket and cannot move, so the user is told
     # the change is still owed a restart.
-    assert "8000" in res.output
+    assert "38470" in res.output
     assert "coffer daemon restart" in res.output
 
 

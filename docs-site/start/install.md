@@ -40,7 +40,7 @@ The agent reads this page, chooses the path that fits your machine and checks th
 
 Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source (Python 3.12 or later).
 
-Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (at `http://127.0.0.1:8000/`), and the desktop app also gives you the CLI.
+Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (at `http://127.0.0.1:38470/`), and the desktop app also gives you the CLI.
 
 ## Desktop app
 
@@ -139,7 +139,7 @@ cd frontend && npm install && npm run build && cd ..
 ```
 
 ::: tip Contributor setup
-`make install` creates `.venv`, installs the backend with its development extras, and installs the frontend's npm dependencies. `make dev` then runs the daemon on port 8000 and the Vite dev server on port 5173 with hot reload. See [Development setup](/contributing/development).
+`make install` creates `.venv`, installs the backend with its development extras, and installs the frontend's npm dependencies. `make dev` then runs the daemon on port 38470 and the Vite dev server on port 5173 with hot reload. See [Development setup](/contributing/development).
 :::
 
 ### Frozen binaries and the app from source
@@ -177,11 +177,11 @@ coffer daemon status
 ```text
 status:  ready
 version: 0.2.0
-port:    8000
+port:    38470
 pid:     48213
 ```
 
-Your version and PID will differ. Then open `http://127.0.0.1:8000/` in your browser, or open the desktop app. The page the daemon serves already carries the API token, so you are signed in with no further step.
+Your version and PID will differ. Then open `http://127.0.0.1:38470/` in your browser, or open the desktop app. The page the daemon serves already carries the API token, so you are signed in with no further step.
 
 ## Start and keep the daemon running
 
@@ -193,7 +193,7 @@ You rarely need to start the daemon yourself:
 
 Once started, the daemon keeps running until you stop it or another daemon replaces it. To have macOS start it at login and restart it after a crash, turn on **Start at login** in **Settings › Daemon**.
 
-The daemon binds `127.0.0.1:8000`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer config set daemon.port <port>` and go back with `coffer config unset daemon.port`. See [Running the daemon](/guides/daemon).
+The daemon binds `127.0.0.1:38470`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer config set daemon.port <port>` and go back with `coffer config unset daemon.port`. See [Running the daemon](/guides/daemon).
 
 ## Upgrade
 

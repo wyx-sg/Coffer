@@ -177,7 +177,7 @@ The boundary holds only in a release signed with Coffer's Developer ID, under th
 
 ## Loopback binding
 
-The daemon binds `127.0.0.1` and nothing else. Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. Coffer listens on one other socket: the [local model proxy](/architecture/model-proxy), the daemon's sibling process, binds `127.0.0.1:8001` (`proxy_port` in `daemon-config.json`) and nothing else, and runs Host and Origin checks of its own (see [below](#the-model-proxy-listener)). Nothing else listens: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
+The daemon binds `127.0.0.1` and nothing else. Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. Coffer listens on one other socket: the [local model proxy](/architecture/model-proxy), the daemon's sibling process, binds `127.0.0.1:38471` (`proxy_port` in `daemon-config.json`) and nothing else, and runs Host and Origin checks of its own (see [below](#the-model-proxy-listener)). Nothing else listens: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
 
 ## The Host and Origin checks
 
@@ -187,11 +187,11 @@ Binding to loopback stops remote hosts. It does not stop a browser, because any 
 
 Suppose an attacker controls `evil.example` and re-points its DNS name at `127.0.0.1`. To the browser, the page is still same-origin with `evil.example`, so CORS never applies and the page can read the response body. The daemon puts its API token into the web UI's `index.html` (see below), so one request for `/` from that page would take the token, and with it everything the API can do: change Coffer's configuration, register a server, run up your provider bill.
 
-DNS rebinding does not change the `Host` header. A rebound request still says `Host: evil.example:8000`. So the daemon accepts a request only when `Host` names `127.0.0.1`, `localhost` or `[::1]` **and** the port the request arrived on. It refuses anything else, including a request with no `Host` and a loopback name on another port:
+DNS rebinding does not change the `Host` header. A rebound request still says `Host: evil.example:38470`. So the daemon accepts a request only when `Host` names `127.0.0.1`, `localhost` or `[::1]` **and** the port the request arrived on. It refuses anything else, including a request with no `Host` and a loopback name on another port:
 
 ```text
 HTTP/1.1 403 Forbidden
-{"error": {"code": "HOST_NOT_ALLOWED", "message": "Coffer only answers requests addressed to 127.0.0.1:8000 or localhost:8000; this one named evil.example:8000.", "details": null}}
+{"error": {"code": "HOST_NOT_ALLOWED", "message": "Coffer only answers requests addressed to 127.0.0.1:38470 or localhost:38470; this one named evil.example:38470.", "details": null}}
 ```
 
 ### Origin: requests from other sites
@@ -244,7 +244,7 @@ The web UI needs the token too, and a URL is the wrong channel: it ends up in br
 
 - The document is served `Cache-Control: no-store`, with no ETag or Last-Modified, so a restarted daemon's browser never gets the previous daemon's token from a cache. Hashed files under `/assets` keep normal caching.
 - The page persists nothing: reload after a daemon restart and it is authenticated against the new daemon.
-- The address you open, `http://127.0.0.1:8000/` by default, carries no credential. The token arrives only in the page body.
+- The address you open, `http://127.0.0.1:38470/` by default, carries no credential. The token arrives only in the page body.
 
 The token in the page is exactly what makes the [Host check](#host-dns-rebinding) mandatory; neither exists without the other.
 

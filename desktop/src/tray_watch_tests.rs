@@ -30,7 +30,7 @@ fn a_launch_allows_a_cold_daemon_a_few_probes() {
 #[test]
 fn a_daemon_that_stops_answering_is_offline_at_once() {
     let was = Daemon::Running {
-        port: 8000,
+        port: 38470,
         version: "1.0.0".into(),
     };
     assert_eq!(next_daemon(&was, None, 1), Daemon::Offline);
@@ -38,8 +38,8 @@ fn a_daemon_that_stops_answering_is_offline_at_once() {
 
 #[test]
 fn the_status_version_is_read_and_absent_is_empty() {
-    assert_eq!(parse_version(r#"{"version":"1.0.0","port":8000}"#), "1.0.0");
-    assert_eq!(parse_version(r#"{"port":8000}"#), "");
+    assert_eq!(parse_version(r#"{"version":"1.0.0","port":38470}"#), "1.0.0");
+    assert_eq!(parse_version(r#"{"port":38470}"#), "");
     assert_eq!(parse_version("not json"), "");
 }
 

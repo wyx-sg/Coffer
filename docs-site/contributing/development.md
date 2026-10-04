@@ -54,7 +54,7 @@ make dev
 `make dev` starts the daemon from `backend/` through its real entry point, `python -m coffer.infrastructure.daemon.entry`, with `COFFER_DEV_CORS=1`. It waits until `~/.coffer/daemon.json` exists and `GET /api/v1/daemon/status` answers, and then starts Vite on `http://localhost:5173`. A Vite plugin reads `daemon.json` and injects the daemon's port and API token into the page, so the UI is signed in without any setup. Press Ctrl-C to stop both processes. Backend changes need a restart, because the daemon runs without auto-reload.
 
 ::: danger `make dev` uses your real vault
-Run as-is, `make dev` reads and writes `~/.coffer`, which holds your real vault (configuration, knowledge, skills and secrets), history and memory. It also writes to your agents' configuration under your home directory, such as `~/.claude`. It also binds port 8000. If an installed Coffer is already running there, the dev daemon refuses to start and does not fall back to another port. Use a sandbox, as described next.
+Run as-is, `make dev` reads and writes `~/.coffer`, which holds your real vault (configuration, knowledge, skills and secrets), history and memory. It also writes to your agents' configuration under your home directory, such as `~/.claude`. It also binds port 38470. If an installed Coffer is already running there, the dev daemon refuses to start and does not fall back to another port. Use a sandbox, as described next.
 :::
 
 Always start the daemon through `coffer.infrastructure.daemon.entry`, never with a bare `uvicorn coffer.main:app`. The entry point allocates the port, mints the API token and writes `daemon.json`. Without it every token-gated endpoint answers `503`.
@@ -69,7 +69,7 @@ export COFFER_PORT_RANGE_START=18150 COFFER_PORT_RANGE_END=18159
 make dev
 ```
 
-With a port range set, the daemon binds the first free port in the range instead of insisting on 8000. `make dev` and the Vite plugin both read the chosen port from the sandbox's `daemon.json`. In a second terminal, export the same three variables and use the CLI against the sandbox:
+With a port range set, the daemon binds the first free port in the range instead of insisting on 38470. `make dev` and the Vite plugin both read the chosen port from the sandbox's `daemon.json`. In a second terminal, export the same three variables and use the CLI against the sandbox:
 
 ```sh
 .venv/bin/coffer daemon status
@@ -82,7 +82,7 @@ port:    18150
 ```
 
 ::: warning Export the variables in every shell
-A `coffer` command that needs a daemon starts one when it finds none. If you run the CLI with your real `HOME`, it talks to your real vault. If you run it with the sandbox `HOME` but without the port range, it tries to start a second daemon on port 8000.
+A `coffer` command that needs a daemon starts one when it finds none. If you run the CLI with your real `HOME`, it talks to your real vault. If you run it with the sandbox `HOME` but without the port range, it tries to start a second daemon on port 38470.
 :::
 
 Vite always serves on port 5173 (`strictPort`). If another checkout's `make dev` already holds that port, the frontend half fails with `Port 5173 is already in use`, and the daemon half keeps running.
@@ -93,7 +93,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 
 | Variable | Effect |
 | --- | --- |
-| `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | Bind the first free port in this range instead of the configured fixed port (default 8000) |
+| `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | Bind the first free port in this range instead of the configured fixed port (default 38470) |
 | `COFFER_DEV_CORS=1` | Allow the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`, plus the desktop shell's origins. Without it the daemon refuses requests from those origins with `403 ORIGIN_NOT_ALLOWED` |
 | `COFFER_CORS_ORIGINS` | Comma-separated list that replaces the CORS allowlist entirely, shell origins included. Use it when your UI runs on any other origin |
 | `HOME` | Every Coffer tree — the vault, `local/`, `content/`, `derived/`, `runs.db` — resolves from it; there is no per-tree override. A sandbox `HOME` is a separate Coffer |
@@ -225,7 +225,7 @@ Keep these caveats in mind:
 - **The stash is shared too.** `git stash` in one worktree pushes to the same stack every other worktree sees, and a bare `git stash pop` can apply someone else's work. Prefer a temporary WIP commit. If you must stash, name the entry (`git stash push -m "<tag>"`) and apply it by its SHA.
 - **Give each worktree its own `.venv`.** The backend is installed editable, so a `.venv` symlinked from another checkout imports that checkout's code. Your tests would then pass against the wrong tree. Two gates guard against this: `make lint` runs `lint-imports` with `PYTHONPATH=backend`, and `e2e/scripts/start_daemon.sh` refuses to start if `coffer` resolves outside this checkout. Everything else simply tests whatever the venv points at.
 - **One session per worktree.** Two editors or agents writing to the same worktree overwrite each other's uncommitted changes.
-- **Sandbox the daemon.** Worktrees share your `HOME`, so two `make dev` runs fight over `~/.coffer` and port 8000. Use the throwaway-vault recipe above.
+- **Sandbox the daemon.** Worktrees share your `HOME`, so two `make dev` runs fight over `~/.coffer` and port 38470. Use the throwaway-vault recipe above.
 
 ## Related
 

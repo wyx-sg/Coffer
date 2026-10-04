@@ -25,7 +25,7 @@ const STATUS = {
   channel: "stable",
   status: "ready",
   started_at: "2026-05-01T08:00:00Z",
-  port: 8000,
+  port: 38470,
   executable: "/Applications/Coffer.app/Contents/MacOS/coffer-daemon",
   machine_id: "m-1",
   machine_name: "work-mac",
@@ -91,7 +91,7 @@ describe("AboutPage", () => {
     expect(screen.queryByRole("button", { name: /shut\s*down|stop daemon/i })).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(container.textContent).not.toMatch(/resource kinds/i);
-    expect(screen.queryByText("8000")).not.toBeInTheDocument();
+    expect(screen.queryByText("38470")).not.toBeInTheDocument();
   });
 
   test("falls back to '—' for the version before /daemon/status resolves", () => {
@@ -121,7 +121,7 @@ describe("AboutPage", () => {
     expect(text).toContain("Coffer: 0.7.42");
     expect(text).not.toMatch(/channel/i);
     expect(text).toMatch(/Host: browser/);
-    expect(text).toContain("Daemon: running on port 8000");
+    expect(text).toContain("Daemon: running on port 38470");
     expect(text).toContain("Features: knowledge, sync");
     expect(text).not.toContain("tok-must-not-leak");
     expect(text).not.toMatch(/token|secret/i);

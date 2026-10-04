@@ -90,7 +90,7 @@ Both put `coffer`, `coffer-daemon` and `coffer-mcp-shim` in `~/.coffer/bin`. The
 ## Quickstart
 
 ```sh
-coffer daemon start                  # start the daemon; the web UI is at http://127.0.0.1:8000/, signed in
+coffer daemon start                  # start the daemon; the web UI is at http://127.0.0.1:38470/, signed in
 ```
 
 In the web UI (or the desktop app):
@@ -119,7 +119,7 @@ flowchart LR
   D -.->|"skill links, provider switch, memory hook"| agents
 ```
 
-- **`coffer-daemon`** holds all state and serves the MCP endpoint, the management API and the web UI on `127.0.0.1` (port 8000 by default).
+- **`coffer-daemon`** holds all state and serves the MCP endpoint, the management API and the web UI on `127.0.0.1` (port 38470 by default).
 - **`coffer-mcp-shim`** is what each agent starts as an ordinary stdio MCP server. It finds the daemon, starting one if needed, and forwards the session.
 - **The vault** (`~/.coffer/vault`) is a git repository of plain files: one JSON file per resource, skill folders, knowledge collections, and secrets as ciphertext. You can edit any of it by hand, and every change has a history. Machine-local settings and the history database (`runs.db`) sit beside it.
 

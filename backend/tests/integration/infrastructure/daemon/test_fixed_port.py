@@ -1,13 +1,13 @@
 """The daemon binds one port, or it does not start (spec daemon "Bind a fixed, settable port").
 
-The daemon has exactly one port: the one the user pinned, or 8000 when they
+The daemon has exactly one port: the one the user pinned, or 38470 when they
 pinned none. There is no scan left on a user-facing start, so the two
 behaviours worth pinning are the two the user experiences — the port does not
 move between restarts, and when it cannot be had the daemon says so instead of
 quietly turning up somewhere else.
 
 The default is exercised through a monkeypatched ``DEFAULT_PORT`` rather than
-against the real 8000: a developer's own Coffer daemon is usually sitting on
+against the real 38470: a developer's own Coffer daemon is usually sitting on
 that port, and a test that fought it for ownership would fail for a reason that
 has nothing to do with the code under test.
 """
@@ -28,7 +28,7 @@ from coffer.infrastructure.daemon.port_alloc import PortInUse
 # worker can take the same port in between, so they run on one worker.
 pytestmark = pytest.mark.xdist_group("daemon-ports")
 
-# High, out of the way of both the real 8000 and the ranges other tests in this
+# High, out of the way of both the real 38470 and the ranges other tests in this
 # suite pin for themselves.
 _FIXED_PORT = 59650
 _HELD_PORT = 59651
@@ -119,16 +119,16 @@ def test_the_default_port_is_8000() -> None:
     """The number itself is the contract.
 
     A bookmark, the docs, and the browser localStorage keyed by this origin all
-    name 8000; changing it is a user-visible break, not an implementation
+    name 38470; changing it is a user-visible break, not an implementation
     detail, so it is asserted here rather than only read from the constant.
     """
-    assert daemon_config.DEFAULT_PORT == 8000
+    assert daemon_config.DEFAULT_PORT == 38470
 
 
 def test_no_configured_port_binds_the_default_and_never_scans(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With nothing configured the daemon takes 8000 — it does not go looking.
+    """With nothing configured the daemon takes 38470 — it does not go looking.
 
     This is the inversion ADR "The Desktop Shell Returns" asked for: the old
     behaviour scanned 8000-8009 here, which left the UI's origin free to drift
@@ -165,7 +165,7 @@ def test_an_unconfigured_daemon_binds_the_default_on_every_start(
     keyed to that origin, with nothing on screen connecting the two events.
 
     ``DEFAULT_PORT`` is stood in for by a high port so the test does not have to
-    win the real 8000 from the developer's own running daemon; what is under
+    win the real 38470 from the developer's own running daemon; what is under
     test is that the same number comes back twice, not which number it is.
     """
     monkeypatch.setattr(daemon_config, "DEFAULT_PORT", _STAND_IN_DEFAULT)

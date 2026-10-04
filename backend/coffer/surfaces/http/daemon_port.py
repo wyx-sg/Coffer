@@ -7,7 +7,7 @@ routes and, through them, everything the status page reads.
 
 from __future__ import annotations
 
-_PORT = 8000  # set by composition root
+_PORT = 38470  # set by composition root
 
 
 def set_port(port: int) -> None:

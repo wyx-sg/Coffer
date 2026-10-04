@@ -10,12 +10,12 @@ vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({ POST: post }),
 }));
-vi.mock("@/lib/auth", () => ({ getCofferBaseUrl: () => "http://127.0.0.1:8000/api/v1" }));
+vi.mock("@/lib/auth", () => ({ getCofferBaseUrl: () => "http://127.0.0.1:38470/api/v1" }));
 
 const { restartFromBrowser, RestartTimedOut, RESTART_READY_TIMEOUT_MS, restartErrorText } =
   await import("./daemonRestart");
 
-function deps(fetchFn: typeof fetch, href = "http://127.0.0.1:8000/settings/daemon") {
+function deps(fetchFn: typeof fetch, href = "http://127.0.0.1:38470/settings/daemon") {
   let now = 0;
   const load = vi.fn();
   return {
@@ -40,7 +40,7 @@ beforeEach(() => post.mockReset());
 
 describe("restartFromBrowser", () => {
   acceptance("web-ui", "a browser restarts the daemon from the daemon tab", async () => {
-    post.mockResolvedValue({ data: { port: 8000 } });
+    post.mockResolvedValue({ data: { port: 38470 } });
     // The old daemon answers, goes away, then its successor answers with a new start time.
     const answers = [
       json({ started_at: "old" }),
@@ -58,7 +58,7 @@ describe("restartFromBrowser", () => {
     await restartFromBrowser(d);
 
     expect(post).toHaveBeenCalledWith("/daemon/restart");
-    expect(load).toHaveBeenCalledWith("http://127.0.0.1:8000/settings/daemon");
+    expect(load).toHaveBeenCalledWith("http://127.0.0.1:38470/settings/daemon");
   });
 
   test("a restart onto a saved port reloads the page from the new origin", async () => {
@@ -78,7 +78,7 @@ describe("restartFromBrowser", () => {
   });
 
   test("a successor that never answers times out and loads nothing", async () => {
-    post.mockResolvedValue({ data: { port: 8000 } });
+    post.mockResolvedValue({ data: { port: 38470 } });
     const fetchFn = vi.fn(async () => json({ started_at: "old" })) as unknown as typeof fetch;
     const { deps: d, load } = deps(fetchFn);
 

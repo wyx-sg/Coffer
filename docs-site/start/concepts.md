@@ -39,7 +39,7 @@ flowchart TB
 
 ## Daemon
 
-`coffer-daemon` is the one long-running process that owns all of Coffer's state. It listens on `127.0.0.1`, on port 8000 unless you set a different one. It serves the REST API under `/api/v1`, the MCP endpoint at `/mcp`, and the web UI. It is the only process that writes Coffer's state (you can also edit the vault's files by hand, and the daemon picks the edits up). The CLI, the shim and the desktop app are all clients that find the daemon through `~/.coffer/daemon.json` and start one if none is running.
+`coffer-daemon` is the one long-running process that owns all of Coffer's state. It listens on `127.0.0.1`, on port 38470 unless you set a different one. It serves the REST API under `/api/v1`, the MCP endpoint at `/mcp`, and the web UI. It is the only process that writes Coffer's state (you can also edit the vault's files by hand, and the daemon picks the edits up). The CLI, the shim and the desktop app are all clients that find the daemon through `~/.coffer/daemon.json` and start one if none is running.
 
 Guide: [Running the daemon](/guides/daemon). Architecture: [Daemon and processes](/architecture/daemon).
 

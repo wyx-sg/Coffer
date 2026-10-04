@@ -88,7 +88,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 | 名称 | 默认值 | 作用 |
 | --- | --- | --- |
-| `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 未设置 | 绑定该范围内第一个空闲端口，而不是配置的单一端口。优先级高于 `daemon-config.json`。只设置一端时，另一端回退到 `8000` 或 `8009`。 |
+| `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 未设置 | 绑定该范围内第一个空闲端口，而不是配置的单一端口。优先级高于 `daemon-config.json`。只设置一端时，另一端回退到 `38470` 或 `8009`。 |
 | `COFFER_EVAL_CAPTURE` | 未设置 | 把每次 `coffer__search_tools` 查询及其结果以 JSON 行的形式记录下来，供评测工具使用。`1`、`true` 或 `yes` 写入 `~/.coffer/eval-capture.jsonl`；其他任何非假值都被当作输出路径。 |
 | `COFFER_RUN_BENCHMARKS` | 未设置 | `1` 运行慢到进不了 `make verify` 的性能预算测试，比如调和单轮成本（`make verify-benchmark`）。 |
 
@@ -112,7 +112,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 ```json
 {
   "port": 8123,
-  "proxy_port": 8001,
+  "proxy_port": 38471,
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
   "features": {},
@@ -122,8 +122,8 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 
 | 键 | 类型 | 默认值 | 作用 | 修改方式 |
 | --- | --- | --- | --- | --- |
-| `port` | 1024–65535 的整数，或 `null` | `8000` | 守护进程绑定的唯一端口。守护进程宁可拒绝启动也不会换到别的端口。下次启动时生效。 | **设置 › 守护进程 → 端口**；守护进程起不来时用 `coffer config set daemon.port <port>` 和 `coffer config unset daemon.port` |
-| `proxy_port` | 1024–65535 的整数，或 `null` | `8001` | [本地模型代理](/zh/architecture/model-proxy)在 `127.0.0.1` 上绑定的端口，也是投射到智能体配置中的端口。无效值会被忽略并记警告，改用默认值。代理下次启动时生效。 | 编辑文件 |
+| `port` | 1024–65535 的整数，或 `null` | `38470` | 守护进程绑定的唯一端口。守护进程宁可拒绝启动也不会换到别的端口。下次启动时生效。 | **设置 › 守护进程 → 端口**；守护进程起不来时用 `coffer config set daemon.port <port>` 和 `coffer config unset daemon.port` |
+| `proxy_port` | 1024–65535 的整数，或 `null` | `38471` | [本地模型代理](/zh/architecture/model-proxy)在 `127.0.0.1` 上绑定的端口，也是投射到智能体配置中的端口。无效值会被忽略并记警告，改用默认值。代理下次启动时生效。 | 编辑文件 |
 | `machine_name` | 字符串 | 去掉 `.local` 的主机名 | 本机在保险库同步中的显示名称。可随意修改；没有任何东西引用它。 | **同步** 页面 |
 | `machine_id` | 字符串 | 由主机派生 | 由主机派生的机器 id 的缓存，在同步的保险库中用来指代本机。删除后会重新算出同一个值。 | 由守护进程写入 |
 | `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能** |

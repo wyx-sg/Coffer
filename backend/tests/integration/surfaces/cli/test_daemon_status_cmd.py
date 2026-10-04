@@ -111,7 +111,7 @@ def live_daemon(tmp_path, monkeypatch):
         info = DaemonInfo(
             version=1,
             pid=4242,
-            port=8000,
+            port=38470,
             token=_TOKEN,
             started_at=datetime.now(tz=UTC),
             binary_path="/test",
@@ -187,14 +187,14 @@ def test_the_status_probe_carries_what_the_shell_shows(live_daemon, monkeypatch)
 
     from coffer.surfaces.http import daemon_port
 
-    monkeypatch.setattr(daemon_port, "_PORT", 8000)
+    monkeypatch.setattr(daemon_port, "_PORT", 38470)
     client, _info = cli_client.client_or_exit()
     with client:
         r = client.get("/daemon/status", headers={"X-Coffer-Token": ""})
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ready"
-    assert body["port"] == 8000
+    assert body["port"] == 38470
     assert body["started_at"]
     assert body["version"]
     assert body["executable"]

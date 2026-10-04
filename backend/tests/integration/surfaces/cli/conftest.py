@@ -67,7 +67,7 @@ class _FakeScopedConfig(BaseModel):
 
 
 _TOKEN = "test-token"
-_PORT = 8000
+_PORT = 38470
 
 
 def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]

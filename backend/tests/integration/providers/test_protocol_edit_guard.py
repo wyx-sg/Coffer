@@ -101,7 +101,7 @@ def test_patch_refuses_to_move_the_wire_of_a_live_connection(tmp_path, monkeypat
         assert _switch(c, uid).status_code == 200
         projected = (cfg / "settings.json").read_text()
         assert json.loads(projected)["env"]["ANTHROPIC_BASE_URL"] == (
-            "http://127.0.0.1:8001/anthropic"
+            "http://127.0.0.1:38471/anthropic"
         )
 
         bad = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})

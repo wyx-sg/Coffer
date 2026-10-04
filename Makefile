@@ -69,7 +69,7 @@ help:
 	@echo "  make desktop-stage-binaries  stage externalBin placeholders so cargo can compile"
 	@echo ""
 	@echo "  Dev:"
-	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
+	@echo "  make dev                   run backend (:38470) + frontend (:5173) in parallel"
 	@echo "  make contracts             regenerate every spec's contracts/api.openapi.yaml from the Pydantic models, then the frontend types"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
 	@echo "  make docs-reference        regenerate the docs site's CLI reference pages (en and zh)"
@@ -329,7 +329,7 @@ lock:
 	}
 	uv lock --project $(BACKEND)
 
-# Run backend (:8000) + frontend (:5173) in parallel for browser dev.
+# Run backend (:38470) + frontend (:5173) in parallel for browser dev.
 #
 # The backend MUST go through `coffer.infrastructure.daemon.entry` rather
 # than `uvicorn coffer.main:app` directly: entry.py is what allocates the
@@ -350,7 +350,7 @@ lock:
 # cofferDevTokenInjection finds no daemon.json, and injects no token — so
 # the page bakes in the wrong base URL and shows "Failed to fetch" forever.
 dev:
-	@echo "Starting backend (:8000) and frontend (:5173). Ctrl-C to stop both."
+	@echo "Starting backend (:38470) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
 	DAEMON_JSON="$$HOME/.coffer/daemon.json"; \
 	(cd $(BACKEND) && COFFER_DEV_CORS=1 PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
@@ -364,7 +364,7 @@ dev:
 		sleep 1; \
 		_elapsed=$$(($$_elapsed + 1)); \
 	done; \
-	_port=$$($(PY) -c "import json,sys; d=json.load(open('$$DAEMON_JSON')); print(d.get('port',8000))" 2>/dev/null || echo 8000); \
+	_port=$$($(PY) -c "import json,sys; d=json.load(open('$$DAEMON_JSON')); print(d.get('port',38470))" 2>/dev/null || echo 38470); \
 	until curl -sf "http://127.0.0.1:$$_port/api/v1/daemon/status" >/dev/null 2>&1; do \
 		if [ $$_elapsed -ge 30 ]; then \
 			echo "dev: daemon HTTP not ready on port $$_port within 30 s — aborting."; \

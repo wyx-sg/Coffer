@@ -69,7 +69,7 @@ def test_second_daemon_picks_free_port_and_clients_discover(
     next free port" until that scenario was inverted: a real start now binds
     one port and refuses to move, and the scenario that replaced it lives in
     test_fixed_port.py. The test stays because the override is what keeps the
-    suite's own daemons off 8000, and fall-forward is the whole of its value.
+    suite's own daemons off 38470, and fall-forward is the whole of its value.
     """
     home = tmp_path / "home"
     home.mkdir()

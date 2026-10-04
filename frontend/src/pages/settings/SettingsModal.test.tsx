@@ -44,7 +44,7 @@ beforeEach(() => {
             cache: { bytes: 0 },
             status: "ready",
             version: "0.0.0",
-            port: 8000,
+            port: 38470,
             started_at: "2026-01-01T00:00:00Z",
             features: { knowledge: false, memory: false, sync: false, models: false },
             totals: { input_tokens: 0, output_tokens: 0 },

@@ -22,16 +22,16 @@ description: 走 API 密钥 或本地连接的智能体如何到达它的模型�
 ## 整体形状 {#the-shape}
 
 ```
-Claude Code ──► http://127.0.0.1:8001/anthropic/v1/messages ──┐
+Claude Code ──► http://127.0.0.1:38471/anthropic/v1/messages ──┐
                  (apiKeyHelper: coffer proxy token …)          │   same wire,
                                                                ├─► same bytes ──► the connection's endpoint
-Codex ──► http://127.0.0.1:8001/openai/v1/responses ───────────┘   + the real key
+Codex ──► http://127.0.0.1:38471/openai/v1/responses ───────────┘   + the real key
            (auth: coffer proxy token …)
 ```
 
 - **一个独立进程，用守护进程的二进制。** 正式构建里代理以 `coffer-daemon proxy` 运行，所以不需要构建和签名第四个二进制；从源码运行时是 `python -m coffer.infrastructure.model_proxy.entry`。它是独立进程，因为守护进程每次升级都会重启，并在启动时跑迁移。如果代理在守护进程内部，每次重启都会切断所有进行中的模型流，包括用户自己终端里的会话。
 - **由守护进程监管。** 守护进程启动时读取 `~/.coffer/proxy.json`（`port`、`pid`、`started_at`、`version` 和一个控制令牌，权限 `0600`）。如果那里有同版本的代理在响应，守护进程就重新挂接它。如果代理来自另一个构建，守护进程会让它排空，等它退出后替换掉。如果没有代理在运行，守护进程就启动一个。每隔几秒一次健康检查，会重启崩溃的代理。守护进程停止时，只是停止*监管*；代理继续运行。
-- **固定端口。** 代理默认绑定 `127.0.0.1:8001`（`daemon-config.json` 里的 `proxy_port`）。固定端口让写进智能体文件里的 URL 不会自己变。没有绑定其他网卡的选项。
+- **固定端口。** 代理默认绑定 `127.0.0.1:38471`（`daemon-config.json` 里的 `proxy_port`）。固定端口让写进智能体文件里的 URL 不会自己变。没有绑定其他网卡的选项。
 
 ## 智能体拿到了什么 {#what-the-agents-are-given}
 

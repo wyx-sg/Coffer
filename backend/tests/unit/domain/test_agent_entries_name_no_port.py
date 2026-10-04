@@ -22,11 +22,11 @@ def test_the_mcp_entry_names_the_shim_and_no_port() -> None:
     entry = json.loads(text)["mcpServers"]["coffer"]
     assert entry["command"].endswith("coffer-mcp-shim")
     rendered = json.dumps(entry)
-    for port in ("8000", "8123", "127.0.0.1", "localhost"):
+    for port in ("38470", "8123", "127.0.0.1", "localhost"):
         assert port not in rendered
 
 
 def test_the_delivery_hook_names_no_port() -> None:
     command = entry_command("a-1", cli="/Users/u/.coffer/bin/coffer")
-    for port in ("8000", "8123", "127.0.0.1", "localhost", "--port"):
+    for port in ("38470", "8123", "127.0.0.1", "localhost", "--port"):
         assert port not in command

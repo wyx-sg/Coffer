@@ -37,7 +37,7 @@ vi.mock("./shell/SidebarFooter", () => ({ SidebarFooter: () => null }));
 vi.mock("./secret/PendingApprovalsSheet", () => ({ PendingApprovalsSheet: () => null }));
 vi.mock("./palette/CommandPalette", () => ({ CommandPalette: () => null }));
 
-const RUNNING = { status: "ready", port: 8000, version: "1.0.0" };
+const RUNNING = { status: "ready", port: 38470, version: "1.0.0" };
 
 /** A page with state of its own, so a remount would show as a reset count. */
 function Page() {

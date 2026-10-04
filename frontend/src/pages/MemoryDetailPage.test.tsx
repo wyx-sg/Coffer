@@ -160,7 +160,7 @@ describe("MemoryDetailPage", () => {
 
   test("choosing a memory puts it in the URL and shows it", async () => {
     renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: /Daemon port is fixed at 8000/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Daemon port is fixed at 38470/ }));
     expect(await screen.findByRole("heading", { name: PORT_NOTE.title })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent(`?memory=${PORT_NOTE.slug}`);
     expect(await screen.findByTestId("memory-meta")).toHaveTextContent(/^Learned by Claude Code ·/);

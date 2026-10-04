@@ -29,7 +29,7 @@ coffer daemon start
 daemon started (pid=48213)
 ```
 
-Then open `http://127.0.0.1:8000/` in your browser, or open the Coffer desktop app. The daemon writes its API token into the page it serves, so you are already signed in. If a daemon is already running, the command prints `daemon already running`.
+Then open `http://127.0.0.1:38470/` in your browser, or open the Coffer desktop app. The daemon writes its API token into the page it serves, so you are already signed in. If a daemon is already running, the command prints `daemon already running`.
 
 ### Register Claude Code
 

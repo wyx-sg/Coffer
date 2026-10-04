@@ -1,7 +1,7 @@
 """CORS preflight behaviour for browser-origin write requests.
 
 The Vite dev UI talks to the daemon cross-origin (``localhost:5173`` →
-``127.0.0.1:8000``). Any non-simple request (JSON body, custom header) triggers
+``127.0.0.1:38470``). Any non-simple request (JSON body, custom header) triggers
 a CORS preflight; the browser blocks the real request unless the preflight
 allows its method. ``PUT`` was missing from the allowlist, so every ``PUT``
 endpoint (secret settings, agent config files, sync/embedding config, …)

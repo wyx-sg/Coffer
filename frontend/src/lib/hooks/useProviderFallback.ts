@@ -79,7 +79,7 @@ export function useProxyRoute(agentUid: string, model: string | null, enabled = 
   });
 }
 
-/** The proxy's address, for "Agents reach it through Coffer's proxy · 127.0.0.1:8001". */
+/** The proxy's address, for "Agents reach it through Coffer's proxy · 127.0.0.1:38471". */
 export function useProxyAddress(): string {
   const status = useQuery({
     queryKey: proxyStatusKey,

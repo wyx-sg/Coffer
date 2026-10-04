@@ -4,7 +4,7 @@
 and a refusal naming its holder when that port is not to be had.
 :func:`bind_free_socket` is the scan, which survives only
 for the ``COFFER_PORT_RANGE_*`` override the test suite pins so its own daemons
-do not queue up for 8000 — so the tests below are the last thing keeping that
+do not queue up for 38470 — so the tests below are the last thing keeping that
 path honest.
 """
 
@@ -160,7 +160,7 @@ def test_conflict_message_names_a_coffer_daemon_squatter(monkeypatch):
     second reading and explicitly conditioned on the daemon being another
     vault's."""
     monkeypatch.setattr(port_alloc, "pid_is_coffer_daemon", lambda pid: True)
-    message = fixed_port_conflict_message(8000, PortHolder(pid=4321, command="/x/coffer-daemon"))
+    message = fixed_port_conflict_message(38470, PortHolder(pid=4321, command="/x/coffer-daemon"))
     assert "pid 4321" in message
     assert "still starting up" in message
     assert "coffer daemon status" in message
@@ -178,7 +178,7 @@ def test_conflict_message_names_a_coffer_daemon_squatter(monkeypatch):
 def test_conflict_message_stays_quiet_about_an_unrelated_squatter(monkeypatch):
     """No kill advice for someone else's dev server — it is not ours to stop."""
     monkeypatch.setattr(port_alloc, "pid_is_coffer_daemon", lambda pid: False)
-    message = fixed_port_conflict_message(8000, PortHolder(pid=4321, command="node vite"))
+    message = fixed_port_conflict_message(38470, PortHolder(pid=4321, command="node vite"))
     assert "pid 4321" in message
     assert "kill 4321" not in message
 
@@ -195,7 +195,7 @@ def test_conflict_message_survives_an_unidentifiable_holder():
 def test_conflict_message_offers_clear_only_where_it_would_do_something():
     """Clearing the setting means "go back to the default", not "go back to
     picking a port", so it is a way out of a squatted 9000 and no way out at
-    all of a squatted 8000 — and a message that offered it anyway would send
+    all of a squatted 38470 — and a message that offered it anyway would send
     the user to a command that changes nothing."""
     holder = PortHolder(pid=4321, command="node vite")
 

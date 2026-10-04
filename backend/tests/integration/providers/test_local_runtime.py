@@ -177,7 +177,7 @@ def test_create_a_keyless_local_runtime_connection(tmp_path, monkeypatch):
     settings = json.loads((cfg / "settings.json").read_text())
     assert settings["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
     assert settings["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "65536"
-    assert settings["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8001/anthropic"
+    assert settings["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:38471/anthropic"
 
 
 @pytest.mark.acceptance(

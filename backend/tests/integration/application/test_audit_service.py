@@ -73,13 +73,13 @@ async def test_record_decomposes_the_resource(tmp_path):
 async def test_record_without_a_resource_uses_system_actor_default(tmp_path):
     """Resource-less events default to actor='system' and name no resource."""
     svc, engine = await _service(tmp_path)
-    await svc.record(AuditEventType.TOKEN_ROTATED.value, details={"port": 8000})
+    await svc.record(AuditEventType.TOKEN_ROTATED.value, details={"port": 38470})
     entries = await svc.query()
     assert entries[0].resource_uid is None
     assert entries[0].resource_kind is None
     assert entries[0].resource_name is None
     assert entries[0].actor == "system"
-    assert entries[0].details == {"port": 8000}
+    assert entries[0].details == {"port": 38470}
     await engine.dispose()
 
 

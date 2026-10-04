@@ -284,7 +284,7 @@ async def test_the_same_state_under_an_import_is_projected(env: _Env) -> None:
     doc = json.loads(env.settings.read_text(encoding="utf-8"))
     # The agent is pointed at the local proxy with its own token helper; the
     # connection's endpoint stays with the proxy.
-    assert doc["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8001/anthropic"
+    assert doc["env"]["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:38471/anthropic"
     assert " proxy token --agent-uid " in doc["apiKeyHelper"]
     assert await env.repairs() == [(AuditEventType.PROVIDER_PROJECTION_REPAIRED.value, "sync")]
 

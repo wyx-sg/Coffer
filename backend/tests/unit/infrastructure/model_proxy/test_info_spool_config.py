@@ -30,7 +30,7 @@ def _record(n: int) -> UsageRecord:
 
 
 def test_proxy_info_round_trip_is_private_and_owned(tmp_path: Path) -> None:
-    info = info_mod.ProxyInfo(port=8001, pid=4242, started_at="t", version="v", control_token="c")
+    info = info_mod.ProxyInfo(port=38471, pid=4242, started_at="t", version="v", control_token="c")
     info_mod.write_info(info, tmp_path)
     path = info_mod.info_path(tmp_path)
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -86,23 +86,23 @@ def test_orphaned_parts_of_dead_writers_are_finalized(tmp_path: Path) -> None:
 
 def test_proxy_port_setting(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert config.read_proxy_port() is None and config.effective_proxy_port() == 8001
+    assert config.read_proxy_port() is None and config.effective_proxy_port() == 38471
     config.write_fixed_port(9000)
     config.write_proxy_port(9001)
     assert config.effective_proxy_port() == 9001 and config.effective_port() == 9000
     with pytest.raises(config.InvalidPort):
         config.write_proxy_port(80)
     config.write_proxy_port(None)
-    assert config.effective_proxy_port() == 8001 and config.effective_port() == 9000
+    assert config.effective_proxy_port() == 38471 and config.effective_port() == 9000
     config.config_path().write_text(json.dumps({"proxy_port": "x"}))
-    assert config.effective_proxy_port() == 8001
+    assert config.effective_proxy_port() == 38471
 
 
 def test_loopback_authority_predicates() -> None:
-    assert split_authority("[::1]:8001") == ("::1", 8001)
-    assert is_allowed_host("127.0.0.1:8001", 8001)
-    assert is_allowed_host("localhost:8001", 8001)
-    assert not is_allowed_host("localhost:8000", 8001)
-    assert not is_allowed_host("evil.example:8001", 8001)
-    assert is_allowed_host("evil.example:8001", 8001, ("evil.example",))
-    assert is_allowed_host(None, 8001, ("*",)) and not is_allowed_host(None, 8001)
+    assert split_authority("[::1]:38471") == ("::1", 38471)
+    assert is_allowed_host("127.0.0.1:38471", 38471)
+    assert is_allowed_host("localhost:38471", 38471)
+    assert not is_allowed_host("localhost:38470", 38471)
+    assert not is_allowed_host("evil.example:38471", 38471)
+    assert is_allowed_host("evil.example:38471", 38471, ("evil.example",))
+    assert is_allowed_host(None, 38471, ("*",)) and not is_allowed_host(None, 38471)

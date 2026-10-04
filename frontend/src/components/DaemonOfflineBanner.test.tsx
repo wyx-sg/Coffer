@@ -262,7 +262,7 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
     // The shell waited for the replacement to answer, so what it returns is
     // a working connection — and installing that, rather than asking for one
     // again, is what keeps a restart to a single daemon.
-    const connection = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh-token" };
+    const connection = { baseUrl: "http://127.0.0.1:38470/api/v1", token: "fresh-token" };
     const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true, ...connection });
     const applyMock = vi.fn();
     const connectMock = vi.fn();

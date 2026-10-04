@@ -137,7 +137,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | `daemon.json` | 正在运行的守护进程的运行时状态：`version`、`pid`、`port`、`token`、`started_at`、`binary_path`。权限 `0600`。每个客户端（CLI、shim、桌面应用、Web 界面开发服务器）都从这里读端口和 API 令牌。守护进程退出时删除。 | 守护进程 | 否 | 仅在没有守护进程运行时可以。过期的文件会被识别并忽略。 |
 | `daemon.lock` | `flock` 锁文件，让“检测或启动”串行执行，两个客户端就不会启动两个守护进程。按设计在两次运行之间留在磁盘上。 | 守护进程、CLI、shim | 否 | 没有守护进程正在启动时可以。 |
-| `daemon-config.json` | 打开数据库之前读取的设置：`port`、`proxy_port`、`machine_name`、`machine_id`（缓存）、`features`。权限 `0600`。见[配置](/zh/reference/configuration#daemon-config-json)。 | 守护进程、CLI | 否（有意只属于本机） | 可以：守护进程会回退到 8000 端口、主机名和默认值（每个实验功能都关闭）。 |
+| `daemon-config.json` | 打开数据库之前读取的设置：`port`、`proxy_port`、`machine_name`、`machine_id`（缓存）、`features`。权限 `0600`。见[配置](/zh/reference/configuration#daemon-config-json)。 | 守护进程、CLI | 否（有意只属于本机） | 可以：守护进程会回退到 38470 端口、主机名和默认值（每个实验功能都关闭）。 |
 | `proxy.json` | 正在运行的[模型代理](/zh/architecture/model-proxy)的运行时状态：`port`、`pid`、`started_at`、`version` 和 `control_token`，后者是守护进程用来向代理推送状态、通知它排空的令牌。权限 `0600`。代理绑定好 socket 后写入；退出时仅当文件里记录的仍是自己的 pid 才删除。代理能活过守护进程重启，新的守护进程通过这个文件找到它。 | 模型代理 | 否 | 仅在没有代理运行时可以。 |
 | `proxy-usage/<pid>-<start>-<seq>.jsonl`（打开期间为 `.jsonl.part`） | 模型代理的用量记录，每行一个 JSON 对象，只含元数据。代理从不打开数据库；守护进程会导入每个写完的文件。`COFFER_PROXY_SPOOL_DIR` 可以挪动这个目录。 | 模型代理、守护进程 | 否 | 已写完但尚未导入的文件会从用量报告中丢失。 |
 | `upstream-pids/<server-uid>-<pid>.json` | 守护进程启动的每个上游 MCP 服务器进程一个文件，这样崩溃后下一个守护进程能回收孤儿进程。 | 守护进程 | 否 | 守护进程停止时可以。 |

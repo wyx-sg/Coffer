@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn a_running_daemon_wins_over_everything_else_including_the_bundle() {
         let got = resolved(
-            Some((8000, "tok".into())),
+            Some((38470, "tok".into())),
             some("/A/Coffer.app/Contents/MacOS/coffer-daemon"),
             some("/h/.coffer/bin/coffer-daemon"),
             some("/usr/local/bin/coffer-daemon"),
@@ -185,7 +185,7 @@ mod tests {
         assert_eq!(
             got,
             Ok(DaemonSource::Running {
-                port: 8000,
+                port: 38470,
                 token: "tok".into()
             })
         );
@@ -261,7 +261,7 @@ mod tests {
         use std::cell::Cell;
         let touched = Cell::new(false);
         let got = resolve_daemon_source(
-            || Some((8000, "tok".to_string())),
+            || Some((38470, "tok".to_string())),
             || {
                 touched.set(true);
                 None

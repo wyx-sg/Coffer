@@ -32,10 +32,20 @@ Two further constraints decide *where* a port setting can live:
 
 ## Options Considered
 
-### Option A — Fixed default 8000, overridable in a pre-database config file, refuse rather than fall back (chosen)
+### Option A — Fixed default 38470, overridable in a pre-database config file, refuse rather than fall back (chosen)
 
-With nothing configured the daemon binds exactly `127.0.0.1:8000`
-(`DEFAULT_PORT` in `infrastructure/daemon/config.py`). A user who needs another
+With nothing configured the daemon binds exactly `127.0.0.1:38470`
+(`DEFAULT_PORT` in `infrastructure/daemon/config.py`). The default is
+deliberately uncommon: the first version of this design fixed 8000, the most
+commonly squatted development port (Django, FastAPI, Jupyter and vLLM all
+start there, as does whatever a person left running), so the refuse-to-start
+path fired on the first launch of a machine that had nothing wrong with it.
+38470 is unassigned in IANA's service-name and port-number registry and below
+the ephemeral range macOS and IANA use (49152 and up). Linux's default range
+(32768–60999) does contain it, so a Linux machine can in principle hand it to an
+outgoing connection; that is rare and surfaces as the named startup refusal
+below rather than a silent move. The local model proxy's default is the
+next port, 38471, for the same reason. A user who needs another
 port sets it with `coffer config set daemon.port <n>`, which writes it into
 `~/.coffer/daemon-config.json` — mode `0600`, merged rather than replaced, read
 with nothing but the standard library before the bind. If the port cannot be
@@ -47,8 +57,9 @@ failing port is not the default — `coffer config unset daemon.port`.
 Pros: the origin never moves, so bookmarks and browser-stored preferences
 survive restarts; a conflict is visible and named instead of silent; the setting
 is reachable when the daemon is down, which is exactly when it is needed. Cons:
-a machine whose 8000 is permanently taken cannot start Coffer until the user
-runs one command. This is the conventional choice for local services with a web
+a machine whose 38470 is permanently taken cannot start Coffer until the user
+runs one command, and a person who bookmarked the old default loses the
+bookmark once (and the origin-keyed browser state with it) at the upgrade. This is the conventional choice for local services with a web
 UI — Ollama, Syncthing, Grafana, Home Assistant and Tailscale all fix a default
 and let it be changed — and it wins because a predictable origin is worth more
 than an automatic one.
@@ -63,7 +74,7 @@ development tools that print their URL on every start and that nobody
 bookmarks. Loses. The scan survives only as the `COFFER_PORT_RANGE_START` /
 `COFFER_PORT_RANGE_END` override (`bootstrap._bind_port`,
 `port_alloc.bind_free_socket`), which the test suite sets so concurrent test
-daemons stay away from the real 8000; no user-facing surface sets it.
+daemons stay away from the real default; no user-facing surface sets it.
 
 ### Option C — Scan by default, with an optional user-pinned port
 
@@ -107,7 +118,7 @@ back. Loses.
 ## Decision
 
 The daemon binds exactly one loopback port: the one in
-`~/.coffer/daemon-config.json` if the user set one, otherwise 8000. It never
+`~/.coffer/daemon-config.json` if the user set one, otherwise 38470. It never
 falls back. If the port is taken it refuses to start and names the holder and
 the fixes; a Coffer daemon found holding it is identified as such and is not
 killed automatically, since it is most often the user's own daemon still
@@ -122,18 +133,27 @@ The file carries no `version` key: nothing would read it.
 An unreadable file warns and falls back to the default rather than stopping the
 boot, since a daemon that cannot boot cannot be repaired from the UI it serves.
 
-The setting is changed from the CLI only
-(`coffer config get|set|unset daemon.port`), which works with no daemon running. It has no REST route or settings panel: a
-port that is correct by default does not earn one, and the escape hatch belongs
-where a squatted port is diagnosed. A change takes effect at the next start;
-`coffer daemon restart` applies it.
+The setting is changed from the CLI
+(`coffer config get|set|unset daemon.port`), which works with no daemon running
+and is the escape hatch where a squatted port is diagnosed, or from Settings →
+Daemon (`PUT /api/v1/daemon/port`), which validates the value, refuses a port
+another process holds and writes the same file. A change takes effect at the
+next start; `coffer daemon restart`, or the Restart now beside the field,
+applies it. In the desktop shell that restart reads `~/.coffer/daemon.json`
+afresh while it waits for the replacement and hands the page the connection
+that file names, so the window follows the daemon to the new port.
 
 ## Consequences
 
 - A bookmark to the UI works across restarts, and so do the preferences the
   browser stored against that origin. The desktop shell gains nothing from it
-  directly (its page origin is `tauri://localhost`), but the browser host the
-  shell does not replace does.
+  directly (its page origin is `tauri://localhost`, and it reads the port from
+  the discovery file), but the browser host the shell does not replace does.
+- The default is a one-time break for anyone upgrading from 8000: the bookmark
+  and the origin-keyed browser state reset once, and the upgrade guide says so.
+  Agents follow by themselves, because the shim reads `daemon.json` and the
+  model proxy's address in each agent's config is derived from the configured
+  proxy port by the reconciler.
 - A port conflict is a startup failure, not a silent move. The daemon does not
   start until the user acts. [Detect-or-Spawn](daemon-detect-or-spawn.md)'s
   client-side pre-check prints the same message before spawning.

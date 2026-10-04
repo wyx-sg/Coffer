@@ -32,7 +32,7 @@ const getApiClientMock = vi.mocked(getApiClient);
 
 const STATUS = {
   status: "ready",
-  port: 8000,
+  port: 38470,
   version: "0.4.2",
   channel: "stable",
   started_at: "2026-09-27T10:00:00Z",
@@ -51,11 +51,11 @@ type Answer = { data?: unknown; error?: unknown };
 
 function mockApi({
   status = { data: STATUS } as Answer | "pending",
-  port = { port: 8000, bound_port: 8000, pending: false },
+  port = { port: 38470, bound_port: 38470, pending: false },
   put = vi.fn(
     async (path: string, { body }: { body: { port: number } }): Promise<Answer> =>
       path === "/daemon/port"
-        ? { data: { port: body.port, bound_port: 8000, pending: body.port !== 8000 } }
+        ? { data: { port: body.port, bound_port: 38470, pending: body.port !== 38470 } }
         : { data: { login_service_supported: true, login_service_installed: false } },
   ),
 } = {}) {
@@ -95,7 +95,7 @@ describe("DaemonSettings", () => {
     mockApi();
     renderTab();
     const card = await screen.findByTestId("settings-daemon-status");
-    expect(within(card).getByText("Running on 127.0.0.1:8000")).toBeInTheDocument();
+    expect(within(card).getByText("Running on 127.0.0.1:38470")).toBeInTheDocument();
     expect(within(card).getByTestId("settings-daemon-status-line")).toHaveTextContent(
       /^Up \d+ days? · pid 51233 · 2 agents connected$/,
     );
@@ -138,7 +138,7 @@ describe("DaemonSettings", () => {
     const { put } = mockApi();
     renderTab();
     const field = await screen.findByRole("textbox", { name: /^port$/i });
-    await waitFor(() => expect(field).toHaveValue("8000"));
+    await waitFor(() => expect(field).toHaveValue("38470"));
     fireEvent.change(field, { target: { value: "8123" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(put).toHaveBeenCalledWith("/daemon/port", { body: { port: 8123 } }));
@@ -147,11 +147,11 @@ describe("DaemonSettings", () => {
       within(pending).getByText(/port 8123 saved — takes effect after coffer restarts/i),
     ).toBeInTheDocument();
     expect(within(pending).getByRole("button", { name: /restart now/i })).toBeInTheDocument();
-    expect(screen.getByText("Running on 127.0.0.1:8000")).toBeInTheDocument();
+    expect(screen.getByText("Running on 127.0.0.1:38470")).toBeInTheDocument();
   });
 
   test("in a browser the pending port offers Restart now too", async () => {
-    mockApi({ port: { port: 8123, bound_port: 8000, pending: true } });
+    mockApi({ port: { port: 8123, bound_port: 38470, pending: true } });
     renderTab();
     const pending = await screen.findByTestId("settings-daemon-port-pending");
     expect(within(pending).queryByText("coffer daemon restart")).toBeNull();
@@ -174,7 +174,7 @@ describe("DaemonSettings", () => {
     mockApi({ put });
     renderTab();
     const field = await screen.findByRole("textbox", { name: /^port$/i });
-    await waitFor(() => expect(field).toHaveValue("8000"));
+    await waitFor(() => expect(field).toHaveValue("38470"));
     fireEvent.change(field, { target: { value: "9000" } });
     fireEvent.keyDown(field, { key: "Enter" });
     expect(

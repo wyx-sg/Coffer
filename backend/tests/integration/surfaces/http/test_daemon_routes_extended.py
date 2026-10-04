@@ -30,7 +30,7 @@ def _restore_home():
         os.environ["HOME"] = prior
 
 
-async def _client(tmp_path: Path, *, port: int = 8000):
+async def _client(tmp_path: Path, *, port: int = 38470):
     monkeypatched_home = tmp_path / "home"
     monkeypatched_home.mkdir()
     os.environ["HOME"] = str(monkeypatched_home)
@@ -150,7 +150,7 @@ async def test_shutdown_signals_termination(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-async def _client_with_audit(tmp_path: Path, *, port: int = 8000):
+async def _client_with_audit(tmp_path: Path, *, port: int = 38470):
     """Build a minimal app that includes the audit dependency override."""
     monkeypatched_home = tmp_path / "home"
     monkeypatched_home.mkdir()

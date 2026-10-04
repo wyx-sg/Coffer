@@ -5,7 +5,7 @@ Every probe is a GET (or Ollama's read-only ``POST /api/show``) against a
 loopback address: nothing is pulled, loaded or downloaded, and a non-loopback
 URL is refused before anything is sent. The fingerprint decides the runtime,
 never the port — 8080 is shared by llama-server and mlx_lm.server, and vLLM's
-default 8000 is Coffer's own daemon port.
+default 8000 is shared by many development servers.
 
 What is read per model is the window the runtime actually SERVES where it says
 (Ollama ``/api/ps`` once a model is loaded, LM Studio's loaded instance,

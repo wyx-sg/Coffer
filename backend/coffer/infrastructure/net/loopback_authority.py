@@ -27,7 +27,7 @@ def split_authority(authority: str) -> tuple[str, int | None] | None:
     """``(hostname, port)`` of a ``Host`` header; port None when absent.
 
     None when the value is not a well-formed authority. Handles
-    ``127.0.0.1:8000``, ``[::1]:8000``, ``[::1]`` and ``localhost``.
+    ``127.0.0.1:38470``, ``[::1]:38470``, ``[::1]`` and ``localhost``.
     """
     value = authority.strip()
     if not value:

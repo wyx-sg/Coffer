@@ -125,7 +125,7 @@ describe("useMcpAddFlow", () => {
   });
 
   test("the built-in server is read from /mcp/builtin", async () => {
-    const builtin = { name: "coffer", url: "http://127.0.0.1:8000/mcp", tools: [] };
+    const builtin = { name: "coffer", url: "http://127.0.0.1:38470/mcp", tools: [] };
     const GET = vi.fn().mockResolvedValue({ data: builtin, error: undefined });
     useClient({ GET });
     const { wrapper } = setup();

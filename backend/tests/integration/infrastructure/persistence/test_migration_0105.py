@@ -25,7 +25,7 @@ def _at_0104(tmp_path, monkeypatch, db_name: str):  # type: ignore[no-untyped-de
     db_path = tmp_path / db_name
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     (tmp_path / "daemon-config.json").write_text(
-        json.dumps({"version": 1, "port": 8000, "machine_id": "b7a5160dc1ef128f"})
+        json.dumps({"version": 1, "port": 38470, "machine_id": "b7a5160dc1ef128f"})
     )
     cfg = _alembic_config()
     command.upgrade(cfg, "0104")

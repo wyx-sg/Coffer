@@ -90,7 +90,7 @@ Coffer 免费且开源，采用 MIT 许可证。唯一的费用是你本来就�
 
 不能。守护进程只绑定回环地址，所以它的界面和 API 只能在运行它的机器上访问，别处都不行。要从手机访问你的智能体，请用[消息渠道](/zh/guides/channels)：Telegram 或 SeaTalk。
 
-## 为什么是 8000 端口，能改吗？ {#why-port-8000-and-can-i-change-it}
+## 为什么是 38470 端口，能改吗？ {#why-port-38470-and-can-i-change-it}
 
 固定端口能让书签一直可用，也能保住浏览器为界面存储的偏好设置。用 `coffer config set daemon.port <port>` 修改，然后运行 `coffer daemon restart`。见[选择端口](/zh/guides/daemon#choose-the-port)。
 

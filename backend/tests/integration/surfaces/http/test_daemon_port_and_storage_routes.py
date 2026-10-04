@@ -50,7 +50,7 @@ def audit() -> _Audit:
 
 @pytest.fixture
 def client(home, audit, monkeypatch):
-    monkeypatch.setattr(daemon_port, "_PORT", 8000)
+    monkeypatch.setattr(daemon_port, "_PORT", 38470)
     set_active_token(TOKEN)
     app = FastAPI()
     err_handlers.register(app)
@@ -76,17 +76,17 @@ async def test_the_port_reads_the_default_and_the_bound_port(client):
     async with client:
         r = await client.get("/api/v1/daemon/port")
     assert r.status_code == 200
-    assert r.json() == {"port": 8000, "bound_port": 8000, "pending": False}
+    assert r.json() == {"port": 38470, "bound_port": 38470, "pending": False}
 
 
 @pytest.mark.asyncio
 async def test_nothing_is_pending_while_no_port_is_saved(client, monkeypatch):
-    # A daemon started in a test port range answers elsewhere than 8000 with
+    # A daemon started in a test port range answers elsewhere than 38470 with
     # nothing saved: there is nothing to apply at the next start.
     monkeypatch.setattr(daemon_port, "_PORT", 18300)
     async with client:
         r = await client.get("/api/v1/daemon/port")
-    assert r.json() == {"port": 8000, "bound_port": 18300, "pending": False}
+    assert r.json() == {"port": 38470, "bound_port": 18300, "pending": False}
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_a_port_set_from_the_settings_page_is_pending_until_restart(client
         async with client:
             r = await client.put("/api/v1/daemon/port", json={"port": 8123})
             assert r.status_code == 200
-            assert r.json() == {"port": 8123, "bound_port": 8000, "pending": True}
+            assert r.json() == {"port": 8123, "bound_port": 38470, "pending": True}
             assert _config(home)["port"] == 8123
 
             refused = await client.put("/api/v1/daemon/port", json={"port": taken})

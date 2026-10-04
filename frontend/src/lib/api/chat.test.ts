@@ -15,7 +15,7 @@ let fetchSpy: MockInstance<typeof fetch>;
 
 beforeEach(() => {
   (window as unknown as Record<string, unknown>).__COFFER_BASE_URL__ =
-    "http://127.0.0.1:8000/api/v1";
+    "http://127.0.0.1:38470/api/v1";
   resetApiClient();
   fetchSpy = vi.spyOn(globalThis, "fetch");
 });

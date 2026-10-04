@@ -39,7 +39,7 @@ flowchart TB
 
 ## 守护进程 {#daemon}
 
-`coffer-daemon` 是唯一的常驻进程，持有 Coffer 的全部状态。它监听 `127.0.0.1`，端口默认 8000，除非你另行设置。它在 `/api/v1` 下提供 REST API，在 `/mcp` 提供 MCP 端点，同时提供 Web 界面。它是唯一写入 Coffer 状态的进程（你也可以手动编辑保险库里的文件，守护进程会读到这些改动）。CLI、shim 和桌面应用都是客户端，它们通过 `~/.coffer/daemon.json` 找到守护进程，没有运行的就启动一个。
+`coffer-daemon` 是唯一的常驻进程，持有 Coffer 的全部状态。它监听 `127.0.0.1`，端口默认 38470，除非你另行设置。它在 `/api/v1` 下提供 REST API，在 `/mcp` 提供 MCP 端点，同时提供 Web 界面。它是唯一写入 Coffer 状态的进程（你也可以手动编辑保险库里的文件，守护进程会读到这些改动）。CLI、shim 和桌面应用都是客户端，它们通过 `~/.coffer/daemon.json` 找到守护进程，没有运行的就启动一个。
 
 指南：[运行守护进程](/zh/guides/daemon)。架构：[守护进程与进程](/zh/architecture/daemon)。
 

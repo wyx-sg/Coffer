@@ -88,4 +88,4 @@ def test_a_tagged_release_reads_neither_environment_variable(
     monkeypatch.setenv("COFFER_ALLOWED_HOSTS", "*")
 
     assert cross_origin_allowlist() == list(SHELL_ORIGINS)
-    assert not host_guard.is_allowed_host("evil.example:8000", 8000)
+    assert not host_guard.is_allowed_host("evil.example:38470", 38470)

@@ -41,7 +41,7 @@ def _codex_with_coffer(catalog: pathlib.Path) -> str:
         f'model_catalog_json = "{catalog}"\n' + _USER_CODEX + "\n"
         "[model_providers.coffer]\n"
         'name = "Coffer (acme)"\n'
-        'base_url = "http://127.0.0.1:8000/proxy/v1"\n'
+        'base_url = "http://127.0.0.1:38470/proxy/v1"\n'
         'wire_api = "responses"\n'
         "supports_websockets = false\n"
         "requires_openai_auth = false\n"
@@ -85,7 +85,7 @@ def test_preview_lists_exactly_the_coffer_lines_and_writes_nothing(env: pathlib.
             f'model_catalog_json = "{catalog}"',
             "[model_providers.coffer]",
             'name = "Coffer (acme)"',
-            'base_url = "http://127.0.0.1:8000/proxy/v1"',
+            'base_url = "http://127.0.0.1:38470/proxy/v1"',
             'wire_api = "responses"',
             "supports_websockets = false",
             "requires_openai_auth = false",
