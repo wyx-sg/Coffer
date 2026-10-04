@@ -20,19 +20,17 @@ import { decorate, defaultOrder, filterItems } from "./secretListView";
 
 interface Props {
   rows: SecretRef[];
-  /** Refs whose new value, or whose adding, waits for approval. */
-  waiting: ReadonlySet<string>;
   isLoading: boolean;
   onAction: (action: SecretRowAction, row: SecretRef) => void;
 }
 
-export function SecretsBrowser({ rows, waiting, isLoading, onAction }: Props) {
+export function SecretsBrowser({ rows, isLoading, onAction }: Props) {
   const { t } = useTranslation();
   const { state, update, clear } = useSecretListState();
   const [sort, setSort] = useSortParam();
   const [selectedRefs, setSelectedRefs] = useState<ReadonlySet<string>>(new Set());
 
-  const items = useMemo(() => decorate(rows, waiting), [rows, waiting]);
+  const items = useMemo(() => decorate(rows), [rows]);
   const shown = useMemo(() => defaultOrder(filterItems(items, state)), [items, state]);
   // A secret that has gone from the list (deleted, or filtered out by a reload) is no longer ticked.
   const selected = useMemo(

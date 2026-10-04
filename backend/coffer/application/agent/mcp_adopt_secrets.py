@@ -3,8 +3,7 @@ secret-like environment values to the secret store on adoption").
 
 Adopting only ever CREATES refs. Writing over one that exists would change what
 every resource citing it receives, a rollback would delete it under them, and a
-standalone ``secret/<name>`` is added only with a person's approval (spec secret
-"Hold a new standalone secret until a person approves it").
+standalone ``secret/<name>`` is a person's to name, not an adopt's.
 """
 
 from __future__ import annotations

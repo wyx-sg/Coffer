@@ -322,8 +322,18 @@
       "toastAddedMany_other": "已添加 {{count}} 个服务器",
       "toastPartial": "已添加 {{total}} 个中的 {{done}} 个服务器——{{names}} 未添加：{{reason}}",
       "approvalTitle": "等待批准",
-      "approvalBody": "已添加。{{names}} 的密钥在 Coffer 应用中获批后生效。",
       "openApprovals": "打开待批准项",
+      "approval": {
+        "sub_one": "{{names}} 已添加。它的密钥将发往新的位置，需要批准后才能启动。",
+        "sub_other": "{{names}} 已添加。它们的密钥将发往新的位置，需要批准后才能启动。",
+        "head_one": "{{keys}} 需要批准",
+        "head_other": "{{keys}} 需要批准",
+        "body_one": "密钥将发往新的位置，批准之前 Coffer 会先保管它，请在 Coffer 应用中批准。在此之前 {{names}} 显示在「需要处理」中，智能体无法调用它的工具。",
+        "body_other": "密钥将发往新的位置，批准之前 Coffer 会先保管它们，请在 Coffer 应用中批准。在此之前 {{names}} 显示在「需要处理」中，智能体无法调用它们的工具。",
+        "added": "已添加 · {{reach}}",
+        "secret": "密钥",
+        "waiting": "等待批准"
+      },
       "descriptionPlaceholder": "可选——给自己的备注",
       "test": {
         "passed": "测试通过，用时 {{seconds}} 秒",
@@ -358,17 +368,6 @@
       "renameTail_other": "重命名 {{names}} 即可一并添加。",
       "failedTail_one": "{{names}} 未能添加，原因见其卡片。",
       "failedTail_other": "{{names}} 未能添加，原因见各自的卡片。",
-      "approval": {
-        "sub_one": "{{names}} 已添加。它的一个密钥需要批准后才能启动。",
-        "sub_other": "{{names}} 已添加。它们的密钥需要批准后才能启动。",
-        "head_one": "{{keys}} 正在等待批准",
-        "head_other": "{{keys}} 正在等待批准",
-        "body_one": "批准之前 Coffer 会先保管该值。在此之前 {{names}} 显示在「需要处理」中，智能体无法调用它的工具。",
-        "body_other": "批准之前 Coffer 会先保管该值。在此之前 {{names}} 显示在「需要处理」中，智能体无法调用它们的工具。",
-        "added": "已添加 · {{reach}}",
-        "secret": "密钥",
-        "waiting": "等待批准"
-      },
       "toastTestedOff_one": "测试通过 · {{count}} 个工具",
       "toastTestedOff_other": "测试通过 · {{count}} 个工具"
     },
@@ -5860,13 +5859,9 @@
       "savedNotChanged": "已保存 · 文件未修改",
       "retry": "重试"
     },
-    "pending": {
-      "toast": "已保存，等待批准 · 新值已密封保存，在 Coffer 桌面应用中批准后生效"
-    },
     "time": {
       "never": "从未"
     },
-    "savedAwaitingApproval": "已保存。新密钥在 Coffer 应用中批准后生效。",
     "approvals": {
       "title_one": "{{count}} 项改动等待批准",
       "title_other": "{{count}} 项改动等待批准",
@@ -5878,9 +5873,7 @@
       "reject": "拒绝",
       "op": {
         "bind": "新的使用处",
-        "replace_value": "新的值",
-        "disable_protection": "关闭保护",
-        "add_secret": "新密钥"
+        "disable_protection": "关闭保护"
       },
       "review": "查看",
       "change": "改动",
@@ -5889,18 +5882,13 @@
         "cli": "你 · 在命令行中",
         "api": "通过 API"
       },
-      "nothingYet": "暂无",
       "approveEllipsis": "批准…",
       "approveInApp": "请在 Coffer 桌面应用中批准",
       "approved": {
-        "add_secret": "已批准 · 已添加 {{name}}",
-        "replace_value": "已批准 · {{name}} 已使用新值",
         "bind": "已批准 · {{name}} 会发送给 {{destination}}",
         "disable_protection": "已批准 · 密钥改动不再需要批准"
       },
       "rejected": {
-        "add_secret": "已拒绝 · 未添加 {{name}}",
-        "replace_value": "已拒绝 · {{name}} 保留当前值",
         "bind": "已拒绝 · {{name}} 不会发送给 {{destination}}",
         "disable_protection": "已拒绝 · 密钥改动仍需批准"
       },
@@ -5926,7 +5914,6 @@
       "goesTo": "去向",
       "at": "时间",
       "result": "结果",
-      "usedBy": "使用方：{{names}}",
       "sentTo": "发送到 {{where}}",
       "selectAll": "全选改动",
       "selectHint": "选择改动后可只处理其中几项",
@@ -5953,10 +5940,6 @@
         "title_other": "{{n}} 项改动等待批准",
         "andMore": "{{names}} 等另外 {{n}} 个",
         "what": {
-          "replace_value_one": "{{names}} 的新值。",
-          "replace_value_other": "{{names}} 的新值。",
-          "add_secret_one": "新密钥 {{names}}。",
-          "add_secret_other": "新密钥 {{names}}。",
           "bind_one": "{{names}} 的新用途。",
           "bind_other": "{{names}} 的新用途。",
           "disable_protection_one": "正在关闭密钥改动的批准要求。",
@@ -6225,8 +6208,6 @@
       "replace": "更换密钥",
       "rejected": "被拒",
       "none": "无需密钥——这个提供商不需要。",
-      "pending": "等待在 Coffer 应用中批准",
-      "review": "查看",
       "noneValue": "无",
       "noneLocal": "本地运行时不需要密钥。",
       "replaceOpen": "更换密钥…"
@@ -6342,8 +6323,7 @@
       "title": "更换 API Key",
       "secret": "密钥",
       "newKey": "新密钥",
-      "hint": "只写不读。Coffer 会覆盖钥匙串加密存储中这个密钥的值，之后不再显示。",
-      "pendingBody": "这个密钥正在使用，新值要等你在 Coffer 应用中批准后才生效。在此之前旧密钥继续可用。"
+      "hint": "只写不读。Coffer 会覆盖钥匙串加密存储中这个密钥的值，之后不再显示。"
     },
     "delete": {
       "title": "删除 {{name}}？",

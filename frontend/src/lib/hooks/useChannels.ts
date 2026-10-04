@@ -193,17 +193,11 @@ export function useUpdateChannel() {
     // The apply hands back the channel it wrote: the uid to refresh the status
     // under, and the name to put in the toast. Two answers, two fields — the
     // one string that used to serve both is exactly what this change split.
-    onSuccess: ({ uid, name, awaitingApproval }) => {
+    onSuccess: ({ uid, name }) => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
       void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
-      if (awaitingApproval) {
-        // The new secret is stored sealed; the channel keeps the old one until
-        // someone approves in the Coffer app.
-        toast.info(t("secrets.savedAwaitingApproval"));
-      } else {
-        toast.success(t("channels.edit.saved", { name }));
-      }
+      toast.success(t("channels.edit.saved", { name }));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

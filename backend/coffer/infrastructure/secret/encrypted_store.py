@@ -285,16 +285,6 @@ class EncryptedSecretStore:
                 out.append(ref)
         return out
 
-    def seal(self, value: str) -> bytes:
-        """Encrypt a value that is not stored yet — a replacement awaiting approval."""
-        return self._fernet.encrypt(value.encode())
-
-    def unseal(self, token: bytes) -> str:
-        try:
-            return self._fernet.decrypt(token).decode()
-        except InvalidToken as e:
-            raise SecretUnreadable("<pending replacement>") from e
-
     # --- the files ---------------------------------------------------------------
 
     def _files(self) -> dict[str, Path]:

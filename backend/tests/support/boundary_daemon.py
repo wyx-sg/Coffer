@@ -65,11 +65,8 @@ class BoundaryDaemon:
     # --- convenience ---------------------------------------------------------
 
     def store(self, ref: str, value: str) -> None:
-        """Store a value; a new standalone secret is approved as the app would."""
+        """Store a value (a new ref, standalone or not, is written at once)."""
         r = self.client.post("/api/v1/secrets", json={"ref": ref, "value": value})
-        if r.status_code == 202 and r.json()["approval"]["op"] == "add_secret":
-            self.approve(r.json()["approval"]["id"])
-            return
         assert r.status_code == 204, r.text
 
     def value(self, ref: str) -> str | None:

@@ -322,8 +322,18 @@
       "toastAddedMany_other": "Added {{count}} servers",
       "toastPartial": "Added {{done}} of {{total}} servers — {{names}} wasn't added: {{reason}}",
       "approvalTitle": "Waiting for approval",
-      "approvalBody": "Added. The secrets of {{names}} take effect once they are approved in the Coffer app.",
       "openApprovals": "Open approvals",
+      "approval": {
+        "sub_one": "{{names}} is added. Its secret goes to a new place and needs approval before it can start.",
+        "sub_other": "{{names}} are added. Their secrets go to a new place and need approval before they can start.",
+        "head_one": "{{keys}} needs approval",
+        "head_other": "{{keys}} need approval",
+        "body_one": "The secret goes to a new place, so Coffer holds it until you approve it in the Coffer app. Until then {{names}} shows under Needs attention and agents can't call its tools.",
+        "body_other": "The secrets go to a new place, so Coffer holds them until you approve them in the Coffer app. Until then {{names}} show under Needs attention and agents can't call their tools.",
+        "added": "Added · {{reach}}",
+        "secret": "secret",
+        "waiting": "Waiting for approval"
+      },
       "descriptionPlaceholder": "Optional — a note for yourself",
       "test": {
         "passed": "Test passed in {{seconds}} s",
@@ -358,17 +368,6 @@
       "renameTail_other": "Rename {{names}} to add them too.",
       "failedTail_one": "{{names}} could not be added; the reason is on its card.",
       "failedTail_other": "{{names}} could not be added; the reasons are on their cards.",
-      "approval": {
-        "sub_one": "{{names}} is added. One of its secrets needs an approval before it can start.",
-        "sub_other": "{{names}} are added. Their secrets need an approval before they can start.",
-        "head_one": "{{keys}} waits for approval",
-        "head_other": "{{keys}} wait for approval",
-        "body_one": "Coffer holds the value until you approve it. Until then {{names}} shows under Needs attention and agents can't call its tools.",
-        "body_other": "Coffer holds the value until you approve it. Until then {{names}} show under Needs attention and agents can't call its tools.",
-        "added": "Added · {{reach}}",
-        "secret": "secret",
-        "waiting": "Waiting for approval"
-      },
       "toastTestedOff_one": "Test passed · {{count}} tool",
       "toastTestedOff_other": "Test passed · {{count}} tools"
     },
@@ -5860,13 +5859,9 @@
       "savedNotChanged": "Saved · file not changed",
       "retry": "Retry"
     },
-    "pending": {
-      "toast": "Saved, waiting for approval · the new value is stored sealed and takes effect once approved in the Coffer desktop app"
-    },
     "time": {
       "never": "Never"
     },
-    "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
     "approvals": {
       "title_one": "{{count}} change waiting for approval",
       "title_other": "{{count}} changes waiting for approval",
@@ -5878,9 +5873,7 @@
       "reject": "Reject",
       "op": {
         "bind": "New use",
-        "replace_value": "New value",
-        "disable_protection": "Turn off protection",
-        "add_secret": "New secret"
+        "disable_protection": "Turn off protection"
       },
       "review": "Review",
       "change": "Change",
@@ -5889,18 +5882,13 @@
         "cli": "You · on the command line",
         "api": "Through the API"
       },
-      "nothingYet": "Nothing yet",
       "approveEllipsis": "Approve…",
       "approveInApp": "Approve in the Coffer desktop app",
       "approved": {
-        "add_secret": "Approved · {{name}} added",
-        "replace_value": "Approved · {{name}} has its new value",
         "bind": "Approved · {{name}} goes to {{destination}}",
         "disable_protection": "Approved · secret changes no longer wait for approval"
       },
       "rejected": {
-        "add_secret": "Rejected · {{name}} was not added",
-        "replace_value": "Rejected · {{name}} keeps its current value",
         "bind": "Rejected · {{name}} is not sent to {{destination}}",
         "disable_protection": "Rejected · secret changes still wait for approval"
       },
@@ -5926,7 +5914,6 @@
       "goesTo": "Goes to",
       "at": "At",
       "result": "Result",
-      "usedBy": "Used by {{names}}",
       "sentTo": "Sent to {{where}}",
       "selectAll": "Select all changes",
       "selectHint": "Select changes to answer some of them",
@@ -5953,10 +5940,6 @@
         "title_other": "{{n}} changes waiting for approval",
         "andMore": "{{names}} and {{n}} more",
         "what": {
-          "replace_value_one": "A new value for {{names}}.",
-          "replace_value_other": "New values for {{names}}.",
-          "add_secret_one": "A new secret {{names}}.",
-          "add_secret_other": "New secrets {{names}}.",
           "bind_one": "A new use of {{names}}.",
           "bind_other": "New uses of {{names}}.",
           "disable_protection_one": "Turning off approval for secret changes.",
@@ -6225,8 +6208,6 @@
       "replace": "Replace key",
       "rejected": "Rejected",
       "none": "No key needed — this provider takes none.",
-      "pending": "Waiting for approval in the Coffer app",
-      "review": "Review",
       "noneValue": "None",
       "noneLocal": "A local runtime takes no key.",
       "replaceOpen": "Replace key…"
@@ -6342,8 +6323,7 @@
       "title": "Replace API key",
       "secret": "Secret",
       "newKey": "New key",
-      "hint": "Write-only. Coffer overwrites the secret's value in its keychain-encrypted store and never shows it again.",
-      "pendingBody": "This key is in use, so the new value waits until you approve it in the Coffer app. The old key keeps working until then."
+      "hint": "Write-only. Coffer overwrites the secret's value in its keychain-encrypted store and never shows it again."
     },
     "delete": {
       "title": "Delete {{name}}?",

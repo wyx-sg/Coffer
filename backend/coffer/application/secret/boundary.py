@@ -274,60 +274,6 @@ class SecretBoundary:
                 )
         return created
 
-    # --- replacing a value that is in use ------------------------------------
-
-    def in_use(self, ref: str) -> bool:
-        """Whether replacing ``ref``'s value changes what an approved place gets."""
-        return is_standalone_ref(ref) or self._store.has_any_binding(ref)
-
-    def awaiting_value(self, ref: str) -> bool:
-        """Whether a new value for ``ref`` is held, sealed, for a person to approve.
-
-        A destination may be registered citing such a ref: the value arrives with
-        the approval, and until then the destination simply has no secret.
-        """
-        return bool(self._store.pending_of_op("add_secret", ref))
-
-    def write(self, ref: str, value: str, *, actor: str) -> SecretApproval | None:
-        """Store ``value`` now, or hold it, sealed, for the desktop app.
-
-        A new standalone secret (``secret/<name>`` with no value on this
-        machine) waits as ``add_secret``: once stored, any ``coffer run`` can
-        hand it to a child, so a person decides whether it exists. Replacing
-        the value of a ref an approved destination receives — or of a
-        standalone secret — changes what that destination gets, so it waits
-        as ``replace_value``. Any other ref (a resource's own, new or never
-        sent anywhere) is written at once: the caller supplied the value.
-        """
-        if not self.protections_on():
-            self._values.set(ref, value)
-            return None
-        if not self._values.exists(ref):
-            if not is_standalone_ref(ref):
-                self._values.set(ref, value)
-                return None
-            op = "add_secret"
-        elif self.in_use(ref):
-            op = "replace_value"
-        else:
-            self._values.set(ref, value)
-            return None
-        # A newer value for the same secret replaces the one still waiting.
-        for waiting in self._store.pending_of_op("add_secret", ref) + self._store.pending_of_op(
-            "replace_value", ref
-        ):
-            self._store.decide(waiting.id, "superseded", by="system", at=self._stamp())
-        approval = SecretApproval(
-            id=_secrets.token_hex(8),
-            op=op,  # type: ignore[arg-type]
-            status="pending",
-            created_at=self._stamp(),
-            requested_by=actor,
-            ref=ref,
-        )
-        self._store.create_approval(approval, self._values.seal(value))
-        return approval
-
     # --- deciding -----------------------------------------------------------
 
     def get(self, approval_id: str) -> SecretApproval:
@@ -341,17 +287,6 @@ class SecretBoundary:
         approval = self.get(approval_id)
         if approval.status != "pending":
             raise ApprovalNotPending(approval_id, approval.status)
-        if approval.op in ("add_secret", "replace_value"):
-            # Apply, then record: an approval is "approved" only once the value is
-            # in the store. A master key that no longer opens the sealed value, a
-            # vault lock timeout or a git error leaves it pending, sealed, to try
-            # again instead of losing the new value behind an "approved" row.
-            sealed = self._store.pending_ciphertext(approval_id)
-            assert approval.ref and sealed is not None
-            self._values.set(approval.ref, self._values.unseal(sealed))
-            if not self._store.decide(approval_id, "approved", by=actor, at=self._stamp()):
-                raise ApprovalNotPending(approval_id, self.get(approval_id).status)
-            return self.get(approval_id)
         if not self._store.decide(approval_id, "approved", by=actor, at=self._stamp()):
             raise ApprovalNotPending(approval_id, self.get(approval_id).status)
         if approval.op == "bind":

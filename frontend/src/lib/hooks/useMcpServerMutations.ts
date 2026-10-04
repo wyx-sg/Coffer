@@ -2,8 +2,7 @@
 // writes (edit, add from the paste box / form / review, test connection).
 // Enable/disable/delete are kind-agnostic and live in useResourceMutations.ts.
 //
-// None of these toast on error (a saved edit whose secret waits for approval
-// toasts that, since it is not a failure): each caller renders the failure inline where
+// None of these toast on error: each caller renders the failure inline where
 // the user acted (the edit dialog's alert, the import dialog's callout, the
 // detail page's test-failure banner), and a toast would repeat the same text.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,25 +12,18 @@ import { mcpServersApi, type McpTestResult } from "@/lib/api/mcpServers";
 import { mcpStatusKey, pendingApprovalsKey, resourcesKey } from "@/lib/api/queryKeys";
 import { saveMcpServerEdit, type SaveArgs } from "@/lib/mcp/editMcpServerSave";
 import { importMcpServers, type ImportMcpServersArgs } from "@/lib/mcp/importMcpServers";
-import { useToast } from "@/components/ui/toast";
 
 /** Save the edit dialog: rotate secrets, then PATCH the resource. The
  *  caller closes the dialog via `mutate(args, { onSuccess })`. */
 export function useSaveMcpServerEdit() {
   const qc = useQueryClient();
   const { t } = useTranslation();
-  const { toast } = useToast();
   return useMutation({
     mutationFn: (args: Omit<SaveArgs, "t">) => saveMcpServerEdit({ ...args, t }),
-    onSuccess: ({ awaitingApproval }) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
       // A changed command or URL waits for approval from the save on.
       void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
-      // Saved, but a replaced secret keeps its old value until someone
-      // approves in the Coffer app — say so, since the dialog just closes.
-      if (awaitingApproval) {
-        toast.info(t("secrets.pending.toast"));
-      }
     },
   });
 }

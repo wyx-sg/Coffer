@@ -101,14 +101,10 @@ def test_an_approved_key_reaches_the_running_proxy(
     assert _send(proxy, token).status_code == 200
     assert _keys(first_up) == ["sk-first-key"]
 
-    # A new key for a key in use waits; the proxy keeps sending the old one.
+    # A new key for a key in use is stored at once; the proxy picks it up.
     rotated = d.client.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-second-key"})
     assert rotated.status_code == 200, rotated.text
-    assert _send(proxy, token).status_code == 200
-    assert _keys(first_up)[-1] == "sk-first-key"
-
-    [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
-    d.approve(replace["id"])
+    assert d.pending(destination_uid=uid) == []
 
     def sent_new_key() -> bool:
         _send(proxy, token)

@@ -58,10 +58,8 @@ export function NewSecretDialog({ open, onOpenChange, defaultName = "", onCreate
   const submit = async () => {
     if (!canSubmit) return;
     try {
-      const out = await set.mutateAsync({ ref: secretRef(trimmed), value });
-      toast.success(
-        out?.approval ? t("secrets.pending.toast") : t("secrets.add.added", { name: trimmed }),
-      );
+      await set.mutateAsync({ ref: secretRef(trimmed), value });
+      toast.success(t("secrets.add.added", { name: trimmed }));
       onCreated(trimmed);
       onOpenChange(false);
     } catch {

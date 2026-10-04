@@ -53,7 +53,6 @@ from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.secret_approval_routes import router as approval_router
 from coffer.surfaces.http.secret_boundary_wiring import (
     get_presence_grants,
-    get_secret_boundary,
 )
 from coffer.surfaces.http.secret_composition import (
     get_master_key_manager,
@@ -259,18 +258,12 @@ async def import_plaintext(
 ) -> SecretImportOut:
     """Move plaintext findings into the store, replacing each with its reference."""
 
-    boundary = get_secret_boundary()
-
     def put(name: str, value: str) -> bool | str:
         ref = secret_ref(name)
         existing = store.peek(ref)
         if existing is not None:
             return bool(existing == value)
-        # A new standalone secret waits for a person (spec secret "Hold a new
-        # standalone secret until a person approves it"): the file keeps its
-        # value until the approval is applied, and importing again then moves it.
-        if boundary.write(ref, value, actor=actor) is not None:
-            return f"secret {name!r} waits for approval in the desktop app"
+        store.set(ref, value)
         # Read back and compare: the file is rewritten only once the store
         # provably holds the same bytes.
         return bool(store.peek(ref) == value)

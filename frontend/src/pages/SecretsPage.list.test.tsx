@@ -201,26 +201,25 @@ describe("SecretsPage list", () => {
     expect(await screen.findByText("key")).toBeInTheDocument();
   });
 
-  test("a waiting approval puts its row first, with its status word", async () => {
-    api.pendingApprovals.mockResolvedValue({
-      approvals: [
+  test("a destination waiting for approval puts its row first, with its status word", async () => {
+    api.list.mockResolvedValue({
+      refs: [
+        JIRA,
+        SEATALK,
         {
-          id: "a1",
-          op: "replace_value",
-          status: "pending",
-          description: "",
-          created_at: "2026-09-30T08:00:00Z",
-          requested_by: "ui",
-          ref: GROQ.ref,
-          destination_kind: null,
-          destination_label: null,
-          destination_uid: null,
-          slot: null,
-          target: null,
-          target_fingerprint: null,
-          decided_at: null,
-          decided_by: null,
+          ...GROQ,
+          bindings: [
+            {
+              approval_id: "a1",
+              destination_kind: "provider",
+              destination_uid: "b7b7",
+              slot: "key",
+              status: "pending",
+            },
+          ],
         },
+        OLD_A,
+        OLD_B,
       ],
     });
     renderPage();

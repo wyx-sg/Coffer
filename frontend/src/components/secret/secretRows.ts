@@ -115,15 +115,6 @@ export function isMissingHere(row: SecretRef): boolean {
   return !row.present || row.locked;
 }
 
-/** The refs whose new value, or whose adding, waits for approval. */
-export function refsWaiting(approvals: readonly Approval[] | undefined): Set<string> {
-  const out = new Set<string>();
-  for (const a of approvals ?? []) {
-    if ((a.op === "replace_value" || a.op === "add_secret") && a.ref) out.add(a.ref);
-  }
-  return out;
-}
-
 /** The citers a `409 SECRET_IN_USE` names (`details.resources`), as citers. */
 export function citersFromRefusal(details: unknown): Citer[] {
   const resources =

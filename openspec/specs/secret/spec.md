@@ -186,15 +186,29 @@ of "Verify the destination before relocating the master key".
 
 ### Requirement: Store a secret through the API
 `POST /api/v1/secrets` MUST store `{ref, value}`, answer `204`, and record a `secret_set`
-audit entry carrying the ref only — except when the ref's value is in use, when it MUST answer
-`202` with a pending approval instead (see "Hold a replaced value in use until a person approves
-it").
+audit entry carrying the ref only, plus whether it replaced a value. A new ref and a replacement
+are both stored at once, with no approval, because a caller that supplies a value already has it;
+where a value may go is decided at each destination (see "Hold a secret for a new destination
+until a person approves it"). A replacement MUST reach whatever holds the old value, such as the
+model proxy, which is refreshed with the new one; the consumers that read a secret when they use
+it, an MCP server's next spawn or a channel adapter's next start, get the new value then.
 
 #### Scenario: storing a secret answers 204 and audits the ref only
 - **GIVEN** a running daemon
 - **WHEN** the user posts `{ref, value}` to `/api/v1/secrets`
 - **THEN** the response is `204` and the ref reads back present
 - **AND** a `secret_set` audit entry names the ref and does not contain the value
+
+#### Scenario: replacing a value in use stores it at once
+- **GIVEN** a secret an approved MCP server receives
+- **WHEN** a new value is posted for its ref
+- **THEN** the answer is `204`, the store holds the new value, and no approval waits
+- **AND** the `secret_set` audit entry names the ref and says it replaced a value, without either value
+
+#### Scenario: adding a standalone secret stores it at once
+- **GIVEN** the protection is on and no secret named `npm-publish-token`
+- **WHEN** a value is posted for `secret/npm-publish-token`
+- **THEN** the answer is `204`, the value reads back from the store, and no approval waits
 
 ### Requirement: Probe presence without decrypting or auditing
 `GET /api/v1/secrets/{ref}/exists` MUST report presence without decrypting, and MUST NOT audit.
@@ -438,11 +452,6 @@ superseded those nothing asks for any more.
 - **THEN** the first answers `SECRET_BINDING_REJECTED` (409, a refusal, not a wait) and the web UI says it was refused instead of showing a pending approval
 - **AND** until then checking again raises no fresh approval for the same target; the changed target drops the old refusal and a fresh pending approval for it waits for a person
 
-#### Scenario: an approval that cannot be applied stays pending
-- **GIVEN** a pending replacement whose sealed value the current master key cannot open
-- **WHEN** it is approved with a presence grant
-- **THEN** the approval is not recorded as approved, it stays pending with its sealed value, and the old value is unchanged
-
 #### Scenario: changing where a secret goes asks again
 - **GIVEN** an MCP server whose secret is approved for its command line
 - **WHEN** its command is changed to another program
@@ -452,8 +461,8 @@ superseded those nothing asks for any more.
 #### Scenario: moving a provider connection's base URL asks again
 - **GIVEN** a provider connection whose key the model proxy already receives
 - **WHEN** its base URL is changed, and separately its key is replaced
-- **THEN** the key is not handed to the proxy or the engine for the new URL until the approval naming that URL is applied, and the replaced key waits sealed until its own approval is applied
-- **AND** once each is approved the proxy is refreshed with the key
+- **THEN** the replaced key is stored at once, but it is not handed to the proxy or the engine for the new URL until the approval naming that URL is applied
+- **AND** once that approval is applied the proxy is refreshed with the key
 
 #### Scenario: adopting an MCP entry never replaces or deletes a secret it did not create
 - **GIVEN** a registered server citing a secret ref, and an agent's config entry whose adoption maps a secret key to that same ref
@@ -485,48 +494,24 @@ The secret boundary MUST be applied when a destination is **registered or change
 - **WHEN** its command is changed and saved
 - **THEN** the pending approval naming the new command line exists as soon as the save answers, before any spawn or listing
 
-### Requirement: Answer a pending approval on the command line by waiting or exiting
-The command line is the one surface that saves a secret and then waits on a person: `coffer
-secret set` MUST print `waiting for approval in the Coffer app` with what waits and its approval
-id, and exit `9`, when the value it stores is held for approval (a new standalone secret, or a
-replacement of a value a destination already receives); with `--wait` it MUST poll until the person
-answers, exiting `0` once approved and non-zero once rejected. What a change waits on includes a
-pending replacement of the value of a secret that a destination cites, not only a pending binding
-to it. The command line neither lists nor answers approvals: they are listed on the Secrets page
-and `GET /api/v1/secrets/approvals`, refused with the Reject button or `POST .../reject`, and
-approved only in the desktop app, so no command approves.
+### Requirement: Report a pending approval on the command line by exiting
+A command whose change leaves a secret waiting for a person MUST say so on standard error and exit
+`9`, which an agent reads as "tell the developer, do not retry": a registration that cites a
+secret from a new destination answers `SECRET_BINDING_PENDING`. Storing a value with `coffer
+secret set` waits for nobody, so it has no `--wait` and never exits `9`. The command line neither
+lists nor answers approvals: they are listed on the Secrets page and `GET /api/v1/secrets/approvals`,
+refused with the Reject button or `POST .../reject`, and approved only in the desktop app, so no
+command approves.
 
-#### Scenario: the command line reports a pending approval and exits 9
+#### Scenario: a command whose change leaves a binding waiting exits 9
 - **GIVEN** a secret already sent to one MCP server
-- **WHEN** the user stores a new value for it with `coffer secret set`
-- **THEN** the command prints "waiting for approval in the Coffer app" naming the approval, and exits `9`
-- **AND** `GET /api/v1/secrets/approvals` lists that approval
+- **WHEN** a command registers a second server citing it and the daemon answers `SECRET_BINDING_PENDING`
+- **THEN** the command prints the daemon's message and exits `9`
 
-#### Scenario: the command line waits for the approval with --wait
-- **GIVEN** a `coffer secret set` run with `--wait` whose change waits for approval
-- **WHEN** the approval is applied in the desktop app
-- **THEN** the command reports it approved and exits `0`
-
-#### Scenario: the command line reports a pending provider key and exits 9
-- **GIVEN** a provider connection whose key is stored under a ref and in use
-- **WHEN** the user stores a replacement value for that ref with `coffer secret set`
-- **THEN** the command prints "waiting for approval in the Coffer app" naming its approval and exits `9`, while the stored key keeps its old value
-- **AND** changing the connection's description alone waits for nothing
-
-### Requirement: Hold a replaced value in use until a person approves it
-`POST /api/v1/secrets` on a ref an approved destination receives, or on a
-standalone `secret/` name that already has a value, MUST NOT replace the value:
-it MUST answer `202` with a pending `replace_value` approval and keep the new
-value only as ciphertext until the approval is applied, and drop it when the
-approval is decided either way. Writing a new ref that is not a standalone
-secret, or one nothing receives, MUST store it at once (`204`); a new standalone
-secret waits as "Hold a new standalone secret until a person approves it" says.
-
-#### Scenario: replacing a value in use waits for approval
-- **GIVEN** a secret an approved MCP server receives
-- **WHEN** a new value is posted for its ref
-- **THEN** the answer is `202` naming a pending approval, the store still holds the old value, and nothing in the database holds the new value in plaintext
-- **AND** applying the approval with a presence grant replaces the value
+#### Scenario: storing a replacement value with the command line waits for nobody
+- **GIVEN** a secret sent to an MCP server, and a provider connection's key stored under a ref
+- **WHEN** the user stores a new value for each ref with `coffer secret set`
+- **THEN** each command prints `stored: <ref>` and exits `0`, the store holds the new value, and no approval waits
 
 ### Requirement: Turn the protection off only through the desktop app
 `secrets.require_approval` (`GET|PUT /api/v1/settings/secret-boundary`) MUST
@@ -630,9 +615,7 @@ managed agent is available, Ask an agent beside them.
 finding ids and an optional dry run) MUST store each chosen value as `secret/<proposed name>`,
 confirm the store reads back the same value, and only then replace the value in
 its file with the reference, atomically and keeping the file's mode; a name that
-is new waits for approval like any new standalone secret (the finding is skipped
-as waiting, the value is not stored and its file is untouched, and importing
-again once the approval is applied moves it); a name already holding a different
+is new MUST be stored at once; a name already holding a different
 value MUST be skipped with its file untouched; a
 file that cannot be rewritten MUST leave its findings skipped as `stored` —
 naming the secret the value is now stored as, the file still holding it — while
@@ -654,12 +637,12 @@ the file; a dry run writes nothing. Each value stored MUST be audited as
 #### Scenario: importing moves a value and leaves a reference
 - **GIVEN** those findings
 - **WHEN** they are imported
-- **THEN** a dry run changed nothing, and the first import stores nothing and leaves every file as it was, with one pending `add_secret` approval per name
-- **AND** once those approvals are applied with a presence grant, importing again makes each value read back from the store under its standalone name and each file cite `coffer://secret/<name>` in place of the value with its mode unchanged
+- **THEN** a dry run changed nothing, and a real import stores each value under its standalone name with no approval to answer
+- **AND** each value reads back from the store and each file cites `coffer://secret/<name>` in place of the value with its mode unchanged
 
 #### Scenario: a file that cannot be rewritten keeps its key and says so
 - **GIVEN** a plaintext secrets file in a folder Coffer cannot write
-- **WHEN** its finding is imported, after the approval that new secret waits for was applied
+- **WHEN** its finding is imported
 - **THEN** nothing is reported moved, the finding is skipped as `stored` naming its secret and why, the file is unchanged, the store holds the value and one `secret_imported` entry names it
 - **AND** importing the same finding again once the folder is writable moves it and rewrites the file
 
@@ -703,8 +686,7 @@ start until they have a value") whose **Add values** opens one dialog with a
 field per missing secret, where a field left empty stays missing and **Save N
 values** stores the rest. The banner offers no master-key import: importing a
 key replaces this Mac's own, so it lives in the sync join flow and in Settings ›
-Security. Adding a value MUST be an ordinary write of the ref, subject to the
-same approvals as any other write, and reveal MUST be unavailable for such a
+Security. Adding a value MUST be an ordinary write of the ref, stored at once like any other write, and reveal MUST be unavailable for such a
 row. The same set is listed on Overview (see "List secrets with no value here
 and waiting approvals on Overview"), and the banner's × ignores it exactly as
 Ignore does there.
@@ -715,11 +697,10 @@ Ignore does there.
 - **THEN** the first is present and `locked`, the second is not `locked`
 - **AND** no value is decrypted and no audit entry is written
 
-#### Scenario: a value added for a locked secret replaces it once approved
+#### Scenario: a value added for a locked secret replaces it at once
 - **GIVEN** a locked standalone secret
 - **WHEN** a new value is posted for its ref
-- **THEN** the answer is `202` naming a pending `replace_value` approval and the row stays `locked`
-- **AND** once the approval is applied with a presence grant the row is no longer `locked` and the store reads back the new value
+- **THEN** the answer is `204`, the row is no longer `locked` and the store reads back the new value
 
 #### Scenario: a secret this Mac cannot open is missing on this Mac
 - **GIVEN** a locked secret and a cited secret the store does not hold
@@ -727,34 +708,18 @@ Ignore does there.
 - **THEN** both rows read "Missing on this Mac" with Add value, and a banner says 2 secrets have no value on this Mac and offers Add values, with no link to import a master key
 - **AND** Reveal is unavailable for the locked row, and Add value posts the new value for its ref
 
-### Requirement: Hold a new standalone secret until a person approves it
-`POST /api/v1/secrets` on a standalone `secret/<name>` that has no value on
-this Mac MUST NOT store it while the protection is on: it MUST answer `202` with
-a pending `add_secret` approval ("New secret") holding the value only as
-ciphertext; applying the approval with a presence grant stores the value, and
-rejecting it drops the ciphertext and stores nothing. A newer value for the same
-name MUST supersede the approval still waiting. With the protection off the
-secret MUST be stored at once. `coffer secret set` MUST report the wait as it
-reports any other pending approval.
-
-#### Scenario: adding a standalone secret waits for approval
-- **GIVEN** the protection is on and no secret named `npm-publish-token`
-- **WHEN** a value is posted for `secret/npm-publish-token`
-- **THEN** the answer is `202` naming a pending `add_secret` approval, the store holds nothing under the name, and nothing holds the value in plaintext
-- **AND** the approval reads "Approve the new secret npm-publish-token?" labelled New secret and used by nothing yet, and applying it with a presence grant stores the value
-
 ### Requirement: Show each change waiting for approval as the question it asks
 The web UI MUST show every pending approval as the question it asks — a new
-value, a new secret, a new use, or turning the protection off — naming the
+use, or turning the protection off — naming the
 secret, who asked and when, and what uses the secret. The Secrets page MUST carry
-a banner "N changes waiting for approval" with **Review**, and mark a row whose
-new value, or whose adding, waits as "Waiting for approval". In the desktop app
+a banner "N changes waiting for approval" with **Review**, and mark a row
+whose new use waits as "Waiting for approval". In the desktop app
 **Approve…** MUST run the shell's presence check (Touch ID or the login
 password); in a browser Approve MUST be disabled, naming the desktop app, while
 **Reject** stays available.
 
 #### Scenario: a browser can reject a change but not approve it
-- **GIVEN** a pending new value for a secret, opened in a browser
+- **GIVEN** a pending new use of a secret, opened in a browser
 - **WHEN** the approvals window shows it
 - **THEN** Approve is disabled and says to approve in the Coffer desktop app
 - **AND** Reject is enabled and refuses the approval over REST
@@ -847,7 +812,7 @@ beside the boundary's (see "Keep the boundary's bindings, approvals and switch o
 ### Requirement: Keep the boundary's bindings, approvals and switch on this machine
 The secret boundary's state MUST be files of this machine, under `~/.coffer/local/secret-boundary/`:
 `bindings.json` (which destination and target each ref is approved for), `approvals.json` (the
-approvals asked and answered, a pending replacement's sealed value with them), `settings.json` (the
+approvals asked and answered), `settings.json` (the
 `require_approval` switch), `times.json` (when this machine first stored each ref) and
 `last-used.json` (when a consumer last had each ref decrypted here). Each MUST be written
 atomically with mode `0600`, and none of them MUST ever be written into the vault or travel with

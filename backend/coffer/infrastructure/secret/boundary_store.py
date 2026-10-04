@@ -10,9 +10,7 @@ and changed under its file's lock (``JsonStore``):
 
 - ``bindings.json`` — ``{"bindings": [binding, ...]}``, unique on
   ``(ref, destination_kind, destination_uid, slot)``;
-- ``approvals.json`` — ``{"approvals": [approval, ...]}``; a pending value
-  replacement carries its ciphertext base64-encoded in ``pending_ciphertext``,
-  already encrypted with the secret store's key, and loses it once decided;
+- ``approvals.json`` — ``{"approvals": [approval, ...]}``;
 - ``settings.json`` — ``{key: value}``.
 
 The gate is consulted from the synchronous ``SecretResolver.materialize``
@@ -22,7 +20,6 @@ plaintext is ever written here.
 
 from __future__ import annotations
 
-import base64
 import dataclasses
 from collections.abc import Callable
 from pathlib import Path
@@ -34,7 +31,6 @@ from coffer.infrastructure.vault.json_store import JsonStore
 
 _BINDINGS = "bindings"
 _APPROVALS = "approvals"
-_PENDING = "pending_ciphertext"
 _BINDING_FIELDS = tuple(f.name for f in dataclasses.fields(SecretBinding))
 _APPROVAL_FIELDS = tuple(f.name for f in dataclasses.fields(SecretApproval))
 
@@ -113,9 +109,8 @@ class FileBoundaryStore:
 
     # --- approvals ----------------------------------------------------------
 
-    def create_approval(self, approval: SecretApproval, ciphertext: bytes | None = None) -> None:
+    def create_approval(self, approval: SecretApproval) -> None:
         row = dataclasses.asdict(approval)
-        row[_PENDING] = base64.b64encode(ciphertext).decode("ascii") if ciphertext else None
 
         def insert(doc: dict[str, Any]) -> None:
             rows = doc.get(_APPROVALS, [])
@@ -129,13 +124,6 @@ class FileBoundaryStore:
         for row in self._approval_rows():
             if row["id"] == approval_id:
                 return _approval(row)
-        return None
-
-    def pending_ciphertext(self, approval_id: str) -> bytes | None:
-        for row in self._approval_rows():
-            if row["id"] == approval_id:
-                sealed = row.get(_PENDING)
-                return base64.b64decode(sealed) if sealed else None
         return None
 
     def find_open_bind(
@@ -180,8 +168,7 @@ class FileBoundaryStore:
         ``status``; False when it was not in that state.
 
         Compare-and-set on the status under the file's lock, so two answers to
-        one approval cannot both take effect. A decided approval drops any
-        value it held.
+        one approval cannot both take effect.
         """
         moved = False
 
@@ -190,7 +177,6 @@ class FileBoundaryStore:
             for row in doc.get(_APPROVALS, []):
                 if row["id"] == approval_id and row["status"] == only_from:
                     row.update(status=status, decided_at=at, decided_by=by)
-                    row[_PENDING] = None
                     moved = True
                     return
 

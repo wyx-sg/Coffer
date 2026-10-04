@@ -27,6 +27,7 @@ const { agentsApi } = await import("@/lib/api/agents");
 type Call = [string, { body?: Record<string, unknown>; params?: unknown }?];
 let calls: Call[];
 let existing: string[];
+let getOverride: ((path: string) => unknown) | null;
 let postOverride: ((path: string, init: Call[1]) => unknown) | null;
 
 const CLAUDE = { uid: "a-claude", name: "claude-code", type: "claude_code", state: "installed" };
@@ -46,12 +47,14 @@ function installClient() {
     return Promise.resolve({ data: {}, error: undefined });
   });
   const GET = vi.fn((path: string) =>
-    Promise.resolve({
-      data:
-        path === "/secrets"
-          ? { refs: [] }
-          : { resources: existing.map((name) => ({ uid: `x-${name}`, name })) },
-    }),
+    Promise.resolve(
+      getOverride?.(path) ?? {
+        data:
+          path === "/secrets"
+            ? { refs: [] }
+            : { resources: existing.map((name) => ({ uid: `x-${name}`, name })) },
+      },
+    ),
   );
   vi.mocked(getApiClient).mockReturnValue({
     GET,
@@ -114,6 +117,7 @@ beforeEach(() => {
   calls = [];
   existing = [];
   postOverride = null;
+  getOverride = null;
   installClient();
   vi.mocked(agentsApi.list).mockResolvedValue({ items: [CLAUDE] } as never);
   vi.mocked(agentsApi.mcpEntries).mockResolvedValue({ items: [], parse_errors: [] } as never);
@@ -430,23 +434,41 @@ describe("AddMcpServerDialog — form", () => {
     });
   });
 
-  acceptance("web-ui", "a secret held for approval is said before the dialog lets go", async () => {
-    postOverride = (path) =>
-      path === "/secrets" ? { data: { approval: { id: "ap-1" } }, error: undefined } : undefined;
-    renderDialog();
-    paste("GITHUB_TOKEN=ghp_x npx -y @modelcontextprotocol/server-github");
-    await continueWhenRead();
-    fireEvent.click(screen.getByRole("button", { name: "Add server" }));
-    expect(await screen.findByText("GITHUB_TOKEN waits for approval")).toBeInTheDocument();
-    expect(
-      screen.getByText(/github is added\. One of its secrets needs an approval/),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open approvals" })).toBeInTheDocument();
-    // Done is the only way on.
-    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
-    await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("github"));
-  });
+  acceptance(
+    "web-ui",
+    "a server citing an existing secret says it waits for approval before the dialog lets go",
+    async () => {
+      getOverride = (path) =>
+        path === "/secrets/approvals"
+          ? {
+              data: {
+                approvals: [
+                  {
+                    id: "ap-1",
+                    op: "bind",
+                    status: "pending",
+                    destination_uid: "u-github",
+                    ref: "secret/github-token",
+                  },
+                ],
+              },
+            }
+          : undefined;
+      renderDialog();
+      paste("GITHUB_TOKEN=ghp_x npx -y @modelcontextprotocol/server-github");
+      await continueWhenRead();
+      fireEvent.click(screen.getByRole("button", { name: "Add server" }));
+      expect(await screen.findByText("GITHUB_TOKEN needs approval")).toBeInTheDocument();
+      expect(
+        screen.getByText(/github is added\. Its secret goes to a new place/),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Open approvals" })).toBeInTheDocument();
+      // Done is the only way on.
+      expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+      await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("github"));
+    },
+  );
 });
 
 acceptance("web-ui", "the import review shows each server's fixed name", async () => {

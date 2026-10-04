@@ -119,8 +119,7 @@ stopped. The Channels page's **Reconnect** action MUST call it.
 Replacing a secret under its existing ref MUST restart the adapter that uses it
 without anyone asking: the daemon notices that the stored value changed and
 rebuilds the adapter and, for SeaTalk, reconnects the websocket with the new
-secret. A replaced value held for approval changes nothing until it is approved,
-and the restart follows the approval. Adapters, failure state and pending
+secret. Adapters, failure state and pending
 pairing codes are all keyed by the channel's `uid`, so renaming a channel never
 restarts it.
 

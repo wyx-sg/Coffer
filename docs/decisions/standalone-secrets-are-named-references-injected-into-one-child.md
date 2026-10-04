@@ -143,10 +143,10 @@ and the initial environment of any same-user process is readable with `ps eww`
   commands can move to `coffer run --env-file`, and hands that rewrite to the
   person's agent as a prompt that carries no value. No plaintext backup is kept:
   the values are in the store, which is backed up with the vault. A new
-  standalone secret, and the replacement of a value already in use, wait for an
-  approval in the desktop app
+  standalone secret, and the replacement of a value already in use, are stored at once: writing
+  stays open
   ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)),
-  so an import of a new name is applied once that approval is.
+  so an import of a name is applied at once.
 
 Pros: the secret never enters an environment the agent or its other children
 can see, which is the one exposure the measurements show is automatic; one

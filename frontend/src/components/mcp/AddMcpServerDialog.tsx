@@ -9,8 +9,8 @@
 // this dialog. Adding registers each server, then writes its secrets, then its
 // reach (importMcpServers.ts). One server added → its page, where it is tested once;
 // several → stay open, test each in the background, and a batch that only partly
-// went in stays on the review (board 4.1.26). A secret the daemon holds for
-// approval (202) is said before the dialog lets go (board 4.1.29).
+// went in stays on the review (board 4.1.26). A secret that goes to a new
+// place and waits for approval is said before the dialog lets go (board 4.1.29).
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";

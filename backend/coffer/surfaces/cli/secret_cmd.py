@@ -29,7 +29,6 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._approvals import WAIT_OPTION, settle
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Manage encrypted secrets.")
@@ -57,7 +56,6 @@ def set_secret(
             "(UNSAFE — visible in shell history; prefer stdin)"
         ),
     ),
-    wait: bool = WAIT_OPTION,
 ) -> None:
     """Store a secret in the encrypted secret store (via the daemon).
 
@@ -83,11 +81,6 @@ def set_secret(
     with c:
         r = c.post("/secrets", json={"ref": ref, "value": secret})
         _cli_client.check(r, verbose=verbose)
-        if r.status_code == 202:
-            # The value replaces one an approved destination receives: it waits,
-            # sealed, for the Coffer app (spec secret "Hold a replaced
-            # value in use until a person approves it").
-            settle(c, [r.json()["approval"]], wait=wait, verbose=verbose)
     typer.echo(f"stored: {ref}")
 
 

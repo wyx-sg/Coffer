@@ -3,10 +3,8 @@
 // The name is fixed once added, because files cite it (spec secret
 // "Resolve standalone secrets into one child with coffer run"). A name that
 // already exists is caught before sending, with a way to replace that
-// secret's value instead. The value is never shown back. A new secret waits,
-// sealed, for approval in the Coffer app (202, spec secret "Hold a new
-// standalone secret until a person approves it"): the dialog closes on a toast
-// that says so, and the approvals banner offers Review.
+// secret's value instead. The value is never shown back. A new secret is
+// stored at once (spec secret "Store a secret through the API").
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -62,10 +60,8 @@ export function AddSecretDialog({ open, onOpenChange, existing, onReplaceInstead
   const submit = async () => {
     if (!canSubmit) return;
     try {
-      const out = await set.mutateAsync({ ref: `${SECRET_PREFIX}${trimmed}`, value });
-      toast.success(
-        out?.approval ? t("secrets.pending.toast") : t("secrets.add.added", { name: trimmed }),
-      );
+      await set.mutateAsync({ ref: `${SECRET_PREFIX}${trimmed}`, value });
+      toast.success(t("secrets.add.added", { name: trimmed }));
       onOpenChange(false);
     } catch {
       // Shown inline from the mutation's error.

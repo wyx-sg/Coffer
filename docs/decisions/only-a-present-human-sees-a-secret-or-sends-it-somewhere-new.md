@@ -129,12 +129,12 @@ before**.
    a target that moved, records its pending approval in the same call. Bindings
    are also evaluated at the moment of use (spawn, adapter start, push), which
    catches changes that reach the vault behind Coffer's back; a binding met only
-   there is never counted as supplied. Replacing a value
-   already in use, adding a new standalone secret (it would reach any `coffer
-   run` child at once) and switching the protection off wait for an approval the
-   same way; rejecting needs no grant. The CLI prints "waiting for approval in
-   the Coffer app" and exits `9`, or waits with `--wait`. Pending bindings are
-   attention items on the Overview.
+   there is never counted as supplied. Switching the protection off waits for
+   an approval the same way; writing a value does not, whether it is a new
+   standalone secret or a replacement of one in use (rule 1: writing stays
+   open). Rejecting needs no grant. A command whose change leaves a binding
+   waiting prints "waiting for approval in the Coffer app" and exits `9`.
+   Pending bindings are attention items on the Overview.
 3. **Turning these protections off takes the human.** Any setting that would
    weaken rule 1 or rule 2 (`secrets.require_approval`) switches off only
    through an approval applied in the desktop app, signed the same way. No
@@ -342,7 +342,7 @@ Rules a future change must respect:
 
 - The secret spec states each rule as operable behaviour: no plaintext on any
   route, command or tool, the presence-gated reveal, key backup and approval, the
-  pending binding with its signed approval, and the held replacement value.
+  pending binding with its signed approval.
   The desktop shell gains reveal, key export and approval signing — each
   something a browser cannot do, since each needs a LocalAuthentication
   presence check ([The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md)).

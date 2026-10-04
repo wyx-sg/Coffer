@@ -433,7 +433,7 @@ describe("ProviderDetailPage", () => {
     expect(api.update).not.toHaveBeenCalled();
   });
 
-  test("Replace key checks the pasted key, then waits for approval when the key is in use", async () => {
+  test("Replace key checks the pasted key, then stores it and closes", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
     serve(makeProvider());
     api.update.mockResolvedValue(makeProvider());
@@ -453,17 +453,9 @@ describe("ProviderDetailPage", () => {
     );
     expect(await dialog.findByText(/The new key works — 1 model listed/)).toBeInTheDocument();
 
-    pendingApprovals.mockResolvedValue({
-      approvals: [{ id: "ap1", op: "replace_value", ref: "provider/acme", status: "pending" }],
-    });
     fireEvent.click(dialog.getByRole("button", { name: "Replace key" }));
     await waitFor(() => expect(api.update).toHaveBeenCalledWith(UID, { secret_value: "sk-new" }));
-    expect(await dialog.findByText("Waiting for approval in the Coffer app")).toBeInTheDocument();
-    const opened = vi.fn();
-    window.addEventListener("coffer:open-approvals", opened);
-    fireEvent.click(dialog.getByRole("button", { name: "Review" }));
-    expect(opened).toHaveBeenCalledTimes(1);
-    window.removeEventListener("coffer:open-approvals", opened);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   test("Deleting a provider Coffer's engine runs on names what changes, then deletes it", async () => {

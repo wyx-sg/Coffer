@@ -19,11 +19,7 @@ import { ApiError } from "@/lib/api/errors";
 import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import type { components } from "@/lib/api/types";
-import {
-  persistNewSecrets,
-  secretRef,
-  type KeyValueSecretRow,
-} from "@/lib/secretValue";
+import { persistNewSecrets, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
 import { isMintedSecretRef } from "@/lib/secretRef";
 import { keptRows, plainMapOfRows, secretRefsForSave, secretRefsOf } from "@/lib/mcp/serverRows";
 import { withTimeouts, type Timeouts } from "@/lib/mcp/serverTimeouts";
@@ -126,7 +122,7 @@ export async function saveMcpServerEdit({
   timeouts,
   title,
   t,
-}: SaveArgs): Promise<{ orphanWarnings: string[]; awaitingApproval: boolean }> {
+}: SaveArgs): Promise<{ orphanWarnings: string[] }> {
   let config: Record<string, unknown>;
   try {
     config = JSON.parse(configText) as Record<string, unknown>;
@@ -149,11 +145,10 @@ export async function saveMcpServerEdit({
   // pointing at a secret that was never stored; they are removed again when the
   // PATCH below fails.
   const newlyWrittenRefs: string[] = [];
-  let awaitingApproval = false;
   for (const r of kept) {
     if (r.value.kind !== "new") continue;
     newlyWrittenRefs.push(secretRef(r.value.name));
-    if ((await persistNewSecrets([r.value])).waiting) awaitingApproval = true;
+    await persistNewSecrets([r.value]);
   }
 
   const transport = {
@@ -197,5 +192,5 @@ export async function saveMcpServerEdit({
       }
     }
   }
-  return { orphanWarnings, awaitingApproval };
+  return { orphanWarnings };
 }

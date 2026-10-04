@@ -1,13 +1,10 @@
 // e2e/web/specs/shell_secrets.spec.ts
 //
 // The Secrets page at /secrets against a real daemon. Adding a secret from the
-// page waits for approval in the desktop app: the approvals window asks
-// "Approve the new secret …?", a browser can only reject it, and a rejected
-// secret is never listed. A secret an MCP server cites lists under In use
-// naming that server, and Delete then says what still uses it instead of
-// deleting; an unused secret is deleted from its ⋯ menu. Those two store a
-// resource-style ref (`e2e/<name>`), which is written at once, because a new
-// standalone secret needs the app's approval. Only data this file creates is
+// page stores it at once, with nothing to approve. A secret an MCP server cites
+// lists under In use naming that server, and Delete then says what still uses
+// it instead of deleting; an unused secret is deleted from its ⋯ menu. Those
+// two store a resource-style ref (`e2e/<name>`). Only data this file creates is
 // touched, and each test removes it.
 //
 // Reveal and Approve need the desktop app's presence check, so a browser only
@@ -90,8 +87,8 @@ async function registerCitingServer(
   if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
 }
 
-/** Refuse what waits on `ref`. A secret sent somewhere new, or a new
- *  standalone secret, waits for approval in the desktop app, and the approvals
+/** Refuse what waits on `ref`. A secret sent somewhere new waits for approval
+ *  in the desktop app, and the approvals
  *  window a browser opens for it would cover this page and every later spec's.
  *  Rejecting withholds the value; the citation, which is what this spec reads,
  *  stays. */
@@ -105,7 +102,7 @@ async function rejectApprovalsFor(ref: string): Promise<void> {
   }
 }
 
-test("adding a secret waits for approval, and a browser can only reject it", async ({
+test("adding a secret stores it at once, with nothing to approve", async ({
   page,
 }) => {
   const name = generateUniqueName("e2e-secret");
@@ -122,23 +119,12 @@ test("adding a secret waits for approval, and a browser can only reject it", asy
     await expect(dialog).toContainText(`coffer://secret/${name}`);
     await dialog.getByRole("button", { name: "Add secret" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText(/Saved, waiting for approval/)).toBeVisible();
 
-    // The approvals window opens by itself with the one question.
-    const approval = page.getByRole("dialog", {
-      name: `Approve the new secret ${name}?`,
-    });
-    await expect(approval).toContainText("New secret");
-    await expect(
-      approval.getByRole("button", { name: /^Approve$/ }),
-    ).toBeDisabled();
-    // No value is on the page.
+    // It is listed, no approval waits, and no value is on the page.
+    await expect(page.getByText(name, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Saved, waiting for approval/)).toHaveCount(0);
     await expect(page.getByText("e2e-not-a-real-value")).toHaveCount(0);
-    await approval.getByRole("button", { name: /^Reject$/ }).click();
-    await expect(approval).toBeHidden();
-    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
   } finally {
-    await rejectApprovalsFor(`secret/${name}`);
     await api(`/secrets/secret/${encodeURIComponent(name)}`, {
       method: "DELETE",
     });

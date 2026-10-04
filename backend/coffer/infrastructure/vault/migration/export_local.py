@@ -96,6 +96,10 @@ def write_secrets(txn: LayoutCommit, home: Path, state: LegacyState) -> int:
     return carried
 
 
+#: A value awaiting approval is stored at once now, so only these approvals are carried.
+_KEPT_APPROVALS = ("bind", "disable_protection")
+
+
 def write_boundary(home: Path, state: LegacyState) -> int:
     """Bindings, approvals and switches, through the boundary store."""
     store = FileBoundaryStore(home)
@@ -104,15 +108,15 @@ def write_boundary(home: Path, state: LegacyState) -> int:
             f.name: row.get(f.name) for f in dataclasses.fields(SecretBinding)
         }
         store.put_binding(SecretBinding(**binding))
-    for row in state.secret_approvals:
-        pending = row.get("pending_ciphertext")
+    carried = [r for r in state.secret_approvals if r.get("op") in _KEPT_APPROVALS]
+    for row in carried:
         fields: dict[str, Any] = {
             f.name: row.get(f.name) for f in dataclasses.fields(SecretApproval)
         }
-        store.create_approval(SecretApproval(**fields), bytes(pending) if pending else None)
+        store.create_approval(SecretApproval(**fields))
     for key, value in sorted(state.secret_settings.items()):
         store.set_setting(key, value)
-    return len(state.secret_bindings) + len(state.secret_approvals) + len(state.secret_settings)
+    return len(state.secret_bindings) + len(carried) + len(state.secret_settings)
 
 
 def write_retention(state: LegacyState) -> int:

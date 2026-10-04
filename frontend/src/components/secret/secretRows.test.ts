@@ -10,7 +10,6 @@ import {
   isMissingHere,
   isValidSecretName,
   referenceOf,
-  refsWaiting,
 } from "./secretRows";
 import { shortDate } from "./secretTimes";
 
@@ -91,31 +90,6 @@ describe("secretRows", () => {
     expect(isMissingHere(ref({ ref: "a" }))).toBe(false);
     expect(isMissingHere(ref({ ref: "a", present: false }))).toBe(true);
     expect(isMissingHere(ref({ ref: "a", locked: true }))).toBe(true);
-  });
-
-  test("only a new value or a new secret marks a ref as waiting", () => {
-    const base = {
-      status: "pending" as const,
-      description: "",
-      created_at: "",
-      requested_by: "ui",
-      decided_at: null,
-      decided_by: null,
-      destination_kind: null,
-      destination_label: null,
-      destination_uid: null,
-      ref: null,
-      slot: null,
-      target: null,
-      target_fingerprint: null,
-    };
-    const waiting = refsWaiting([
-      { ...base, id: "1", op: "replace_value", ref: "secret/a" },
-      { ...base, id: "2", op: "add_secret", ref: "secret/b" },
-      { ...base, id: "3", op: "bind", ref: "secret/c" },
-      { ...base, id: "4", op: "disable_protection" },
-    ]);
-    expect([...waiting].sort()).toEqual(["secret/a", "secret/b"]);
   });
 
   test("a created day is the US short date, with the year once it is a past year", () => {

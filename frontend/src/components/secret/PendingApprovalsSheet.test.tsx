@@ -43,16 +43,16 @@ const rejectManyMock = vi.mocked(secretsApi.rejectApprovals);
 function approval(over: Partial<Approval> = {}): Approval {
   return {
     id: "apr-1",
-    op: "replace_value",
+    op: "bind",
     status: "pending",
-    description: "replace the value of secret 'secret/github-token'",
+    description: "send secret 'secret/github-token' to mcp_server 'github'",
     created_at: "2026-09-30T08:00:00Z",
     requested_by: "cli",
     ref: "secret/github-token",
-    destination_kind: null,
-    destination_label: null,
-    destination_uid: null,
-    slot: null,
+    destination_kind: "mcp_server",
+    destination_label: "github",
+    destination_uid: "u-gh",
+    slot: "TOKEN",
     target: null,
     target_fingerprint: null,
     decided_at: null,
@@ -109,29 +109,17 @@ describe("PendingApprovalsSheet", () => {
     expect(secretsMock).not.toHaveBeenCalled();
   });
 
-  test("one waiting change is a table row with who asked and what uses the secret", async () => {
+  test("one waiting change is a table row with who asked and where the secret goes", async () => {
     renderSheet();
     const dialog = await screen.findByRole("dialog", { name: "1 change waiting for approval" });
     const row = within(dialog).getByTestId("approval-row");
-    expect(row).toHaveTextContent("New value");
+    expect(row).toHaveTextContent("New use");
     expect(row).toHaveTextContent("github-token");
     expect(row).toHaveTextContent("You · on the command line");
-    await waitFor(() => expect(row).toHaveTextContent("Used by github, release-notes"));
+    expect(row).toHaveTextContent("Sent to MCP server github (TOKEN)");
     for (const head of ["Change", "Secret", "Goes to", "Requested by", "At"]) {
       expect(within(dialog).getByRole("columnheader", { name: head })).toBeInTheDocument();
     }
-  });
-
-  acceptance("secret", "adding a standalone secret waits for approval", async () => {
-    listMock.mockResolvedValue({
-      approvals: [approval({ op: "add_secret", ref: "secret/npm-publish-token" })],
-    });
-    renderSheet();
-    const dialog = await screen.findByRole("dialog");
-    const row = within(dialog).getByTestId("approval-row");
-    expect(row).toHaveTextContent("New secret");
-    expect(row).toHaveTextContent("npm-publish-token");
-    expect(row).toHaveTextContent("Nothing yet");
   });
 
   test("a change sent somewhere says where, with the slot and the target", async () => {
@@ -169,13 +157,13 @@ describe("PendingApprovalsSheet", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  test("reject calls the route from any host, and the toast says the secret keeps its value", async () => {
+  test("reject calls the route from any host, and the toast says where the secret is not sent", async () => {
     renderSheet();
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Reject" }));
     await waitFor(() => expect(rejectManyMock).toHaveBeenCalledWith(["apr-1"]));
     expect(
-      await screen.findByText("Rejected · github-token keeps its current value"),
+      await screen.findByText("Rejected · github-token is not sent to github"),
     ).toBeInTheDocument();
   });
 
@@ -220,7 +208,7 @@ describe("PendingApprovalsSheet", () => {
         slot: "TOKEN",
         target: "stdio beta.sh",
       }),
-      approval({ id: "c", op: "add_secret", ref: "secret/npm-publish-token" }),
+      approval({ id: "c", op: "bind", ref: "secret/npm-publish-token" }),
     ];
     beforeEach(() => {
       inShell = true;

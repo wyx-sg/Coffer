@@ -96,7 +96,6 @@ from coffer.surfaces.http.reconcile_wiring import (
 )
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.secret_boundary_wiring import (
-    awaiting_secret_value,
     remember_destination_sources,
 )
 from coffer.surfaces.http.secret_composition import (
@@ -178,7 +177,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         audit=audit,
         # Probed before persisting (spec mcp-gateway "Manage MCP servers as resources").
         secrets=secret_store,
-        awaiting_secret=awaiting_secret_value,
     )
 
     retention_svc = build_retention_service(sm, audit=audit)

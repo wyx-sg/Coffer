@@ -95,18 +95,15 @@ export function useUpdateProvider() {
 // afterwards, while `providerKey(uid)` answers the same row before and after.
 // The detail page's URL does not change either, so nothing navigates.
 
-/** Replace a provider's key. A key already in use does not change at once: the
- *  daemon seals the new value behind a pending `replace_value` approval, so the
- *  pending list is refetched and the caller shows the waiting state.
+/** Replace a provider's key; the new value is stored at once.
  *  No onError toast: the Replace dialog renders the failure inline. */
 export function useReplaceProviderKey() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { uid: string; secret: string }) =>
       providersApi.update(vars.uid, { secret_value: vars.secret }),
-    onSuccess: async () => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: providersKey });
-      await qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
   });
 }

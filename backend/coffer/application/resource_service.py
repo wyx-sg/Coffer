@@ -27,7 +27,7 @@ import builtins
 import inspect
 import logging
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -76,14 +76,12 @@ class ResourceService:
         audit: AuditService,
         secrets: _SecretStorePort | None = None,
         bindings: BindingSettlerPort | None = None,
-        awaiting_secret: Callable[[str], bool] | None = None,
     ) -> None:
         self._kinds = kinds
         self._repo = repo
         self._audit = audit
         self._secrets = secrets
         self._bindings = bindings
-        self._awaiting_secret = awaiting_secret  # see resource_secret_ops
 
     def set_binding_settler(self, settler: BindingSettlerPort | None) -> None:
         """Install the post-register seam, once every kind has declared where
@@ -94,9 +92,7 @@ class ResourceService:
     async def _probe_secrets(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise SecretMissing if a cited secret_ref has no value (resource_secret_ops)."""
         if self._secrets is not None:
-            await resource_secret_ops.probe_secrets(
-                self._secrets, self._awaiting_secret, kind_def, config
-            )
+            await resource_secret_ops.probe_secrets(self._secrets, kind_def, config)
 
     def _require_kind(self, kind: str) -> Kind:
         if kind not in self._kinds:

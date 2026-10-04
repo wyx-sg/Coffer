@@ -44,8 +44,20 @@ const POSTMAN = ref({
   ref: "postman.AUTHORIZATION",
   cited_by: [{ kind: "custom_tool", name: "postman", uid: "p1" }],
 });
+// A destination is waiting for approval to receive it.
+const GROQ_WAITING = ref({
+  ...GROQ,
+  bindings: [
+    {
+      approval_id: "a1",
+      destination_kind: "provider",
+      destination_uid: "b7b7",
+      slot: "key",
+      status: "pending" as const,
+    },
+  ],
+});
 const OLD = ref({ ref: "secret/old-key", uri: "coffer://secret/old-key", unreferenced: true });
-const ALL = [JIRA, SEATALK, GROQ, POSTMAN, OLD];
 
 describe("secret names", () => {
   test("a ref shows its last segment, and a dotted name drops its owner's prefix", () => {
@@ -58,7 +70,7 @@ describe("secret names", () => {
 });
 
 describe("secret list view", () => {
-  const items = decorate(ALL, new Set([GROQ.ref]));
+  const items = decorate([JIRA, SEATALK, GROQ_WAITING, POSTMAN, OLD]);
 
   test("status keeps in use or not used", () => {
     const only = (status: SecretListState["status"]) =>
@@ -76,10 +88,14 @@ describe("secret list view", () => {
   });
 
   test("the default order puts no-value and waiting rows first, then names", () => {
-    const withMissing = decorate(
-      [...ALL, ref({ ref: "secret/zeta", uri: "coffer://secret/zeta", present: false })],
-      new Set([GROQ.ref]),
-    );
+    const withMissing = decorate([
+      JIRA,
+      SEATALK,
+      GROQ_WAITING,
+      POSTMAN,
+      OLD,
+      ref({ ref: "secret/zeta", uri: "coffer://secret/zeta", present: false }),
+    ]);
     expect(defaultOrder(withMissing).map((i) => i.short)).toEqual([
       "key",
       "zeta",
@@ -92,7 +108,7 @@ describe("secret list view", () => {
 
   test("only a stored secret nothing uses and nothing waits on can be deleted", () => {
     expect(items.filter(isDeletable).map((i) => i.short)).toEqual(["old-key"]);
-    const waiting = decorate([OLD], new Set([OLD.ref]));
+    const waiting = decorate([{ ...OLD, bindings: GROQ_WAITING.bindings }]);
     expect(isDeletable(waiting[0])).toBe(false);
   });
 });

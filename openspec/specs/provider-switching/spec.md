@@ -122,15 +122,16 @@ existing vault entry and creates none. For `anthropic` / `openai` / `unknown`, e
 ### Requirement: Rotate a connection's secret in place
 On `PATCH` with `secret_value`, the system MUST rotate the stored secret (overwrite the vault entry)
 without changing the ref. A connection's key is bound to its base URL when the connection is registered,
-so the new value waits sealed for a person's approval before it overwrites the old one
-([secret](../secret/spec.md) "Hold a replaced value in use until a person approves it").
+and the new value is stored at once, with no approval
+([secret](../secret/spec.md) "Store a secret through the API"). The key still reaches a new
+base URL only after that URL is approved.
 `secret_ref` itself is immutable on `PATCH`.
 
 #### Scenario: rotate a connection's secret without changing its ref
 - **GIVEN** a connection created with an inline secret
 - **WHEN** the user patches it with a new `secret_value`
 - **THEN** its `secret_ref` is unchanged
-- **AND** the vault entry at that ref holds the new secret, which is what the connection's key resolves to, once the replacement is approved
+- **AND** the vault entry at that ref holds the new secret, which is what the connection's key resolves to
 
 ### Requirement: Delete an owned secret with its connection
 On delete, if the connection owns its secret ref (nothing else cites it), the system MUST delete

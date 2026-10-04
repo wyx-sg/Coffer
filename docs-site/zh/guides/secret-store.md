@@ -95,7 +95,7 @@ printf '%s' "$NEW_TOKEN" | coffer secret set github/token
 
 该条记录原地重新加密，创建时间保持不变。所有引用该 ref 的地方，下次解析时就会用新值——对 MCP 服务器来说，是下一个会话启动它的时候。在密钥页面上，行菜单里的 **替换值…** 对任何 ref 都能做到。
 
-替换一个已经有去处在接收的值——或者任何独立的 `secret/<name>`——要等你在桌面应用里批准，因为比如把消息渠道的机器人令牌换成别人的，就会把你的对话转走。批准之前，旧值继续使用，新值加密后等待；`set` 打印 `waiting for approval in the Coffer app` 并以 `9` 退出，或者加 `--wait` 等待。新的 ref、或者没有任何去处接收的 ref，会立即存入。
+替换会立即存入，不需要批准，和任何写入一样：能提供值的人本来就拥有它。它作为一次替换被审计，从不记录值。
 
 ## 删除密钥 {#delete-a-secret}
 
@@ -180,7 +180,7 @@ Coffer 目前还没有发布用 Apple Developer ID 签名的二进制，所以�
 | 启动时报 `SECRET_LOCKED` | 钥匙串无法读取——它被锁住了，或者提示框被关掉了 | 解锁钥匙串，再次启动守护进程。 |
 | `SECRET_UNREADABLE`，并指出某个 ref | 密文用当前主密钥解不开——通常是另一台机器的主密钥加密的 | 导入对应的主密钥，或者重新设置该 ref 的值。 |
 | `SECRET_IN_USE` | 仍有资源引用该 ref | 解除或删除报错中列出的资源。 |
-| `waiting for approval in the Coffer app`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方，或替换了一个正在使用的值 | 在桌面应用中批准；审批对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `waiting for approval in the Coffer app`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方 | 在桌面应用中批准；审批对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `PRESENCE_GRANT_INVALID` | 在桌面应用之外尝试了显示值、备份主密钥或审批 | 到桌面应用里去做。 |
 | MCP 服务器启动失败，提示缺少某个密钥 | 引用的 ref 不在存储中 | `coffer secret set <ref>`。 |
 

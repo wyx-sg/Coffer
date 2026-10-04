@@ -91,24 +91,6 @@ const OLD = ref({
   readable_by_local_processes: true,
 });
 
-const PENDING = {
-  id: "apr-new",
-  op: "add_secret" as const,
-  status: "pending" as const,
-  description: "add the new secret 'npm-publish-token'",
-  created_at: "2026-09-30T08:00:00Z",
-  requested_by: "ui",
-  ref: "secret/npm-publish-token",
-  destination_kind: null,
-  destination_label: null,
-  destination_uid: null,
-  slot: null,
-  target: null,
-  target_fingerprint: null,
-  decided_at: null,
-  decided_by: null,
-};
-
 function Where() {
   const location = useLocation();
   return <p data-testid="where">{location.pathname}</p>;
@@ -208,9 +190,6 @@ describe("SecretsPage", () => {
       cited_by: [{ kind: "mcp_server", name: "sentry", uid: "u-se" }],
     });
     api.list.mockResolvedValue({ refs: [GITHUB, OPENAI, locked] });
-    api.set.mockResolvedValueOnce({
-      approval: { ...PENDING, op: "replace_value", ref: locked.ref },
-    });
     renderPage();
     const banner = await screen.findByTestId("secrets-missing-banner");
     expect(banner).toHaveTextContent("2 secrets have no value on this Mac");
@@ -232,7 +211,7 @@ describe("SecretsPage", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add a value for sentry-token" });
     fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "sntr" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add value" }));
-    expect(await screen.findByText(/Saved, waiting for approval/)).toBeInTheDocument();
+    expect(await screen.findByText("Added a value for sentry-token")).toBeInTheDocument();
     expect(api.set).toHaveBeenCalledWith("secret/sentry-token", "sntr");
   });
 
@@ -338,54 +317,31 @@ describe("SecretsPage", () => {
     expect(api.set).toHaveBeenCalledWith("secret/npm-publish-token", "npm_x");
   });
 
-  test("a new secret waiting for approval says so, and the banner offers Review", async () => {
-    api.set.mockResolvedValueOnce({ approval: PENDING });
-    renderPage();
-    await screen.findByText("seatalk-app-secret");
-    fireEvent.click(screen.getByRole("button", { name: "Add secret" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add secret" });
-    fireEvent.change(within(dialog).getByLabelText("Name"), {
-      target: { value: "npm-publish-token" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "npm_x" } });
-    api.pendingApprovals.mockResolvedValue({ approvals: [PENDING] });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add secret" }));
-    expect(await screen.findByText(/Saved, waiting for approval/)).toBeInTheDocument();
-    const entry = await screen.findByTestId("pending-approvals-entry");
-    expect(entry).toHaveTextContent("1 change waiting for approval");
-    expect(entry).toHaveTextContent("A new secret npm-publish-token.");
-    expect(within(entry).getByRole("button", { name: "Review" })).toBeInTheDocument();
-  });
-
-  test("a secret whose new value waits is marked on its row", async () => {
-    api.pendingApprovals.mockResolvedValue({
-      approvals: [{ ...PENDING, op: "replace_value", ref: SEATALK.ref }],
+  test("a secret whose new destination waits is marked on its row", async () => {
+    api.list.mockResolvedValue({
+      refs: [
+        GITHUB,
+        {
+          ...SEATALK,
+          bindings: [
+            {
+              approval_id: "a1",
+              destination_kind: "channel",
+              destination_uid: "u-st",
+              slot: "app_secret",
+              status: "pending",
+            },
+          ],
+        },
+      ],
     });
     renderPage();
     const row = (await screen.findByText("seatalk-app-secret")).closest("tr")!;
     expect(await within(row).findByText("Waiting for approval")).toBeInTheDocument();
   });
 
-  test("a replaced value that waits for approval says so instead of claiming it took effect", async () => {
-    api.set.mockResolvedValueOnce({
-      approval: {
-        id: "apr-1",
-        op: "replace_value",
-        status: "pending",
-        description: "",
-        created_at: "2026-09-30T08:00:00Z",
-        requested_by: "web",
-        ref: SEATALK.ref,
-        destination_kind: null,
-        destination_label: null,
-        destination_uid: null,
-        slot: null,
-        target: null,
-        target_fingerprint: null,
-        decided_at: null,
-        decided_by: null,
-      },
-    });
+  test("replacing a value stores it at once and says so", async () => {
+    api.set.mockResolvedValueOnce(undefined);
     renderPage();
     await screen.findByText("seatalk-app-secret");
     openMenu("seatalk-app-secret");
@@ -396,7 +352,7 @@ describe("SecretsPage", () => {
     expect(dialog).toHaveTextContent("Channel SeaTalk");
     fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "new" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Replace value" }));
-    expect(await screen.findByText(/Saved, waiting for approval/)).toBeInTheDocument();
+    expect(await screen.findByText("Replaced the value of seatalk-app-secret")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new");
   });
