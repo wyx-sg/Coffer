@@ -10,10 +10,13 @@ At most one item per enabled agent, the most basic problem first:
   own files raised (a config file that does not parse);
 - ``agent_partial`` — some of the parts Coffer writes into it are in place
   and some are not;
-- ``agent_hook_attention`` — connected, but Coffer's memory hook needs the
-  person: the agent has not approved it, approved an earlier command, or it has
-  never fired. Only while the memory feature is on: with it off Coffer
-  installs no hook, so its absence is not a problem;
+- ``agent_hook_attention`` — connected, and the agent will run Coffer's memory
+  hook (no review step, or it approved this definition), yet the hook has never
+  fired. Only while the memory feature is on: with it off Coffer installs no
+  hook, so its absence is not a problem. A hook the agent will not run —
+  unapproved, approved for an earlier command, switched off, an unreadable
+  trust record — is the reconciler's memory-hook target's to report
+  (``hook_untrusted`` and its siblings), so it is not listed twice;
 - ``agent_not_connected`` — none are. Informational: an agent the person
   chose not to connect is not broken.
 """
@@ -35,6 +38,9 @@ from coffer.domain.hook_trust import HookTrust
 from coffer.domain.resource import Resource
 
 KIND = "agent"
+
+#: The trust values under which the agent runs Coffer's hook.
+_RUNS = frozenset({HookTrust.NOT_REQUIRED, HookTrust.TRUSTED})
 
 
 class AgentListPort(Protocol):
@@ -153,24 +159,22 @@ class AgentAttentionSource:
         return await self._hook_item(agent.uid, title)
 
     async def _hook_item(self, uid: str, title: str) -> AttentionItem | None:
-        """A connected agent whose Coffer hook is current but is not doing its job."""
+        """A connected agent that runs Coffer's hook, but the hook never fired."""
         if self._hooks is None or (self._memory_on is not None and not self._memory_on()):
             return None
         hook = await self._hooks.coffer_hook(uid)
         if hook is None:
             return None
-        if hook.trust in (HookTrust.UNTRUSTED, HookTrust.MODIFIED):
-            reason = "It has not approved Coffer's memory hook."
-        elif hook.trust is not HookTrust.DISABLED and hook.last_fired_at is None:
-            reason = "Coffer's memory hook has never fired."
-        else:
+        # Any other trust is the reconciler's hook_untrusted family: reporting
+        # it here too put the same problem on Overview twice.
+        if hook.trust not in _RUNS or hook.last_fired_at is not None:
             return None
         return AttentionItem(
             kind=KIND,
             uid=uid,
             title=title,
             reason_code="agent_hook_attention",
-            reason=reason,
+            reason="Coffer's memory hook has never fired.",
             severity=Severity.WARNING,
             action=_check(uid),
         )
