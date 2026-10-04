@@ -191,7 +191,10 @@ describe("AgentDetailPage", () => {
       mockRoute({ rowState });
       const { unmount } = renderAt();
       expect(screen.getByText(word)).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "New conversation" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "New conversation" })).toHaveAttribute(
+        "href",
+        "/conversations/new",
+      );
       for (const name of ["Connect", "Repair", "Turn on", "Check again"]) {
         expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
       }

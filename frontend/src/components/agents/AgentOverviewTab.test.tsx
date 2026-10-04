@@ -200,7 +200,7 @@ describe("AgentOverviewTab — connection card", () => {
     expect(screen.getByText("MCP entry")).toBeInTheDocument();
     expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
     expect(screen.getByText("Memory hook")).toBeInTheDocument();
-    expect(screen.getByText(/fired 2h ago/)).toBeInTheDocument();
+    expect(screen.queryByText(/fired/)).toBeNull();
     expect(screen.getAllByText("Current")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /Connect|Repair|Turn on|Disconnect/ })).toBeNull();
   });
@@ -339,10 +339,10 @@ describe("AgentOverviewTab — tiles, model, details", () => {
     },
   );
 
-  test("a null effort reads Chosen by the agent", async () => {
+  test("a null effort reads Built-in default", async () => {
     renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
     expect(await screen.findByText("Effort")).toBeInTheDocument();
-    expect(screen.getAllByText("Chosen by the agent").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Built-in default").length).toBeGreaterThan(0);
   });
 
   test("details carry version first, config directory, uid and registered date", async () => {

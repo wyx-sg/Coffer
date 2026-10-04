@@ -147,7 +147,7 @@ describe("ChangeModelDialog", () => {
       renderDialog();
       const dialog = await screen.findByRole("dialog");
       await screen.findByRole("button", { name: "High" });
-      for (const label of ["Provider", "Model", "Effort", "Model per tier"]) {
+      for (const label of ["Provider", "Default model", "Effort", "Model per tier"]) {
         expect(within(dialog).getByText(label)).toBeInTheDocument();
       }
       expect(
@@ -171,7 +171,7 @@ describe("ChangeModelDialog", () => {
     renderDialog({ ...AGENT, uid: "u-cx", type: "codex", config_dir: "/Users/me/.codex" });
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Provider")).toBeInTheDocument();
-    expect(within(dialog).getByText("Model")).toBeInTheDocument();
+    expect(within(dialog).getByText("Default model")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "High" })).toBeNull();
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
   });
@@ -183,7 +183,7 @@ describe("ChangeModelDialog", () => {
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.click(await screen.findByRole("option", { name: /built-in login/i }));
     await waitFor(() => expect(within(dialog).queryByText("Effort")).toBeNull());
-    expect(within(dialog).queryByText("Model")).toBeNull();
+    expect(within(dialog).queryByText("Default model")).toBeNull();
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
     expect(within(dialog).getByText(/picks its model and effort itself/)).toBeInTheDocument();
   });
