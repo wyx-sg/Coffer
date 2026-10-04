@@ -216,7 +216,7 @@ async def test_a_question_pauses_the_turn_and_the_answer_goes_back_to_the_agent(
 
     block = await _until_pending(conv.id)
     assert block.status == "pending" and block.questions[0].question.startswith("Apply this")
-    assert questions.needs_you(conv.id) and questions.needs_you_conversations() == {conv.id}
+    assert questions.needs_you(conv.id)
     assert provider.adapters[0].outcome is None  # the turn is waiting, not running on
 
     answered = await questions.answer_question(

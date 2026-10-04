@@ -1510,15 +1510,14 @@ chat, and a cancelled one to "Not answered".
 ### Requirement: Show which conversations wait on you
 A conversation with a pending question MUST carry `needs_you` in the list, and its
 row MUST show the status "Needs you" (warning colour) where a running one shows
-"Running", in its usual place by time — no separate group or filter. The sidebar's
-Conversations item MUST show a count of conversations with a pending question,
-updated when a question is raised or closed.
+"Running", in its usual place by time — no separate group or filter. The sidebar
+MUST NOT carry a count for it.
 
-#### Scenario: a waiting conversation is marked and counted
+#### Scenario: a waiting conversation is marked
 - **GIVEN** two conversations, one waiting on a question
-- **WHEN** the Conversations page and the sidebar render
-- **THEN** that row shows "Needs you", the other does not, and the Conversations item shows 1
-- **AND** once the question is answered the status and the count go away
+- **WHEN** the Conversations page renders
+- **THEN** that row shows "Needs you" and the other does not
+- **AND** once the question is answered the status goes away
 
 ### Requirement: Record what each reply changed in each file
 For every assistant reply, the daemon MUST record a unified diff per file the

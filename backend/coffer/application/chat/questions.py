@@ -204,11 +204,6 @@ def needs_you(conversation_id: str) -> bool:
     return pending_question_for(conversation_id) is not None
 
 
-def needs_you_conversations() -> set[str]:
-    """The conversations with a pending question."""
-    return {p.ctx.conversation_id for p in _PENDING.values()}
-
-
 # ---------------------------------------------------------------------------
 # Raise / close
 # ---------------------------------------------------------------------------
@@ -386,7 +381,6 @@ __all__ = [
     "clear_all",
     "close_turn",
     "needs_you",
-    "needs_you_conversations",
     "pending_question_for",
     "raise_question",
     "register_turn",

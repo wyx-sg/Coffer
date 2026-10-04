@@ -205,7 +205,6 @@ for (const route of ROUTES) {
 /** The agent detail page, one route per tab, for a Claude Code agent added on the fresh daemon. */
 const AGENT_TABS = [
   ["overview", ""],
-  ["model", "/model"],
   ["skills", "/skills"],
   ["mcp-servers", "/mcp-servers"],
   ["plugins", "/plugins"],
@@ -253,7 +252,7 @@ test.describe("agent detail", () => {
           new RegExp(`/agents/claude_code${suffix}$`),
         );
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-        await expect(page.getByRole("tab")).toHaveCount(9);
+        await expect(page.getByRole("tab")).toHaveCount(6);
         await settle(page);
         await expect(page).toHaveScreenshot(`agent-${tab}-${theme}.png`, {
           fullPage: false,
