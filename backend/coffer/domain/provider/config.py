@@ -104,7 +104,7 @@ class CuratedModel(BaseModel):
     modality: Modality = Modality.TEXT
     #: The context window the endpoint serves this model with, in tokens —
     #: read from the endpoint where it reports one (a local runtime's served
-    #: window), otherwise entered by the user. ``None`` is unknown, and an
+    #: window); the person never chooses it. ``None`` is unknown, and an
     #: unknown window is left out of what Coffer writes rather than guessed
     #: (spec provider-switching "Record a context window and effort levels with
     #: each curated model").

@@ -40,7 +40,6 @@ def _switch(body: ModelSwitchIn) -> model_switch.ModelSwitch:
         model=body.model,
         effort=body.effort,
         tier_models=body.tier_models,
-        context_window=body.context_window,
     )
 
 

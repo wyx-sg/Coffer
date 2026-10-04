@@ -785,8 +785,6 @@ export interface components {
             agent_type: components["schemas"]["AgentType"];
             /** Connection Uid */
             connection_uid?: string | null;
-            /** Context Window */
-            context_window?: number | null;
             /** Effort */
             effort?: string | null;
             /** Model */

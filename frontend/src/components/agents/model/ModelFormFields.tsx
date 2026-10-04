@@ -2,13 +2,11 @@
 //
 // Which fields show follows the agent and the provider: the built-in login is a
 // provider and one line (it sets no model, effort or tiers); a provider adds
-// Model, a Context window for a local model whose runtime reports none, Effort
-// (only the levels the chosen model reports) and, for Claude Code, Model per
+// Model, Effort (only the levels the chosen model reports) and, for Claude Code, Model per
 // tier. Codex has one model per session, so no tiers.
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
 import {
@@ -19,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AgentType } from "@/lib/api/agents";
-import { BUILTIN, SMALL_WINDOW, type ConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
+import { BUILTIN, type ConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { displayName } from "@/lib/resourceTitle";
 
@@ -126,37 +124,12 @@ export function ModelFormFields({
             </Select>
           </Field>
 
-          {c.showWindow ? <WindowField draft={c} /> : null}
-
           <EffortField agentType={agentType} draft={c} />
 
           {c.showTiers ? <TierFields draft={c} /> : null}
         </>
       )}
     </>
-  );
-}
-
-function WindowField({ draft: c }: { draft: ConnectionDraft }) {
-  const { t } = useTranslation();
-  const small = c.windowTokens !== null && c.windowTokens < SMALL_WINDOW;
-  const runtime = c.draftConnObj ? displayName(c.draftConnObj) : "";
-  return (
-    <Field label={t(`${K}.window.label`)} htmlFor="change-model-window">
-      <div className="flex items-center gap-2.5">
-        <Input
-          id="change-model-window"
-          inputMode="numeric"
-          className="w-[140px] font-mono text-xs"
-          value={c.draftWindow}
-          onChange={(e) => c.setWindow(e.target.value.replace(/\D/g, ""))}
-        />
-        <span className="text-sm text-text-muted">{t(`${K}.window.tokens`)}</span>
-      </div>
-      <span className={small ? "text-xs text-warning" : HINT}>
-        {t(`${K}.window.${small ? "small" : "hint"}`, { runtime })}
-      </span>
-    </Field>
   );
 }
 

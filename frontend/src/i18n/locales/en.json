@@ -2463,12 +2463,6 @@
         "label": "Model",
         "placeholder": "Select a model"
       },
-      "window": {
-        "label": "Context window",
-        "tokens": "tokens",
-        "hint": "{{runtime}} doesn’t report it. Coffer writes it so the agent compacts at the right point.",
-        "small": "{{runtime}} doesn’t report it. Below 64k tokens the agent compacts often."
-      },
       "effort": {
         "label": "Effort",
         "default": "Default",

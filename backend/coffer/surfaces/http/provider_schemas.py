@@ -367,8 +367,6 @@ class ModelSwitchIn(BaseModel):
     model: str | None = None
     effort: str | None = None
     tier_models: dict[str, str] | None = None
-    #: A local model's context window in tokens, when its runtime reports none.
-    context_window: int | None = None
     seen: dict[str, str] | None = None
 
 

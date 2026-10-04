@@ -1873,11 +1873,6 @@ components:
           - type: string
           - type: 'null'
           title: Connection Uid
-        context_window:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Context Window
         effort:
           anyOf:
           - type: string

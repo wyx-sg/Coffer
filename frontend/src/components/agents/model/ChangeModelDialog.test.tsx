@@ -141,7 +141,7 @@ describe("ChangeModelDialog", () => {
 
   acceptance(
     "provider-switching",
-    "the Change model dialog shows only provider, model, effort, tiers and a context window",
+    "the Change model dialog shows only provider, model, effort, tiers",
     async () => {
       // Claude Code on a non-Claude connection: provider, model, effort and the tiers.
       renderDialog();

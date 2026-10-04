@@ -2463,12 +2463,6 @@
         "label": "模型",
         "placeholder": "选择模型"
       },
-      "window": {
-        "label": "上下文窗口",
-        "tokens": "tokens",
-        "hint": "{{runtime}} 不上报这个值。Coffer 会写入它，让智能体在合适的位置压缩。",
-        "small": "{{runtime}} 不上报这个值。低于 64k tokens 时智能体会频繁压缩。"
-      },
       "effort": {
         "label": "推理强度",
         "default": "默认",
