@@ -1,7 +1,8 @@
-// src/components/skills/SkillReachFilter.tsx — the Skills list's reach filter: every skill, or only those reaching one agent.
+// src/components/reach/AgentReachFilter.tsx — a library list's reach filter (Skills, MCP servers):
+// everything, or only what reaches one agent.
 //
 // It reads and writes the page's `?agent=` (lib/agents/agentFilter.ts), so the
-// link from an agent's Skills tab lands with that agent already chosen here.
+// link from an agent's Skills or MCP servers tab lands with that agent already chosen here.
 import { useTranslation } from "react-i18next";
 
 import {
@@ -18,7 +19,7 @@ import { useAgents } from "@/lib/hooks/useAgents";
 
 const ALL = "__all__";
 
-export function SkillReachFilter({ filter }: { filter: AgentFilter | null }) {
+export function AgentReachFilter({ filter }: { filter: AgentFilter | null }) {
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
   const setAgent = useSetAgentFilter();
@@ -27,14 +28,13 @@ export function SkillReachFilter({ filter }: { filter: AgentFilter | null }) {
     <Select value={value} onValueChange={(v) => setAgent(v === ALL ? null : v)}>
       <SelectTrigger
         className="h-control-sm w-auto max-w-56 gap-1.5 text-xs"
-        aria-label={t("skills.reachFilter.label")}
-        data-testid="skill-reach-filter"
+        aria-label={t("reachFilter.label")}
       >
-        <span className="text-text-muted">{t("skills.reachFilter.label")}:</span>
+        <span className="text-text-muted">{t("reachFilter.label")}:</span>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>{t("skills.reachFilter.all")}</SelectItem>
+        <SelectItem value={ALL}>{t("reachFilter.all")}</SelectItem>
         {agents.map((a) => (
           <SelectItem key={a.uid} value={a.uid}>
             {agentTypeLabel(a.type)}

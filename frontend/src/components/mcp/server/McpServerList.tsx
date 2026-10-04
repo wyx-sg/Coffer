@@ -1,6 +1,7 @@
 // src/components/mcp/server/McpServerList.tsx — the left pane of the MCP servers page (design 4.1.01).
 //
-// "Filter servers" (name, title and command or URL), then the servers grouped
+// "Filter servers" (name and title) and under it the Reach filter (every
+// server, or those reaching one agent; `?agent=`), then the servers grouped
 // by what needs the user — Needs attention (failing, launcher missing, secret
 // missing, each with its reason), Not checked yet, Healthy, Off — then Built-in (Coffer's own `coffer` server, read-only). The search
 // filters every row, the built-in one included. While rows are ticked the
@@ -11,8 +12,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { SearchInput } from "@/components/SearchInput";
+import { AgentReachFilter } from "@/components/reach/AgentReachFilter";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
 import type { ResourceOut } from "@/lib/api/resources";
@@ -111,11 +112,9 @@ export function McpServerList({
               placeholder={t("mcp.page.filter")}
               ariaLabel={t("mcp.page.filter")}
             />
-            {agentFilter ? (
-              <div className="flex items-center gap-2">
-                <AgentFilterPill filter={agentFilter} />
-              </div>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <AgentReachFilter filter={agentFilter} />
+            </div>
           </>
         )}
       </div>

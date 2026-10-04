@@ -648,13 +648,20 @@ once any is ticked. Ticking a row puts the selection bar at the top of the list:
 "N of M selected", **Reach** (the bulk control of "Apply reach to a whole
 selection"), **Delete** and a clear (×); a select-all row appears and ticks every
 listed server. The built-in server has no checkbox and is not counted, and Esc
-clears the selection. The list's search is its only filter.
+clears the selection. Over the list sit its search and a Reach filter — every
+server, or only the servers that reach one chosen agent — which reads and writes
+the same `agent` query parameter the agent's MCP servers tab links with; the
+built-in server reaches every agent and stays listed.
 
 #### Scenario: ticking a server puts the selection bar at the top
 - **GIVEN** the MCP servers list
 - **WHEN** the user ticks one row
 - **THEN** the bar at the top reads "1 of N selected" with Reach, Delete and a clear control
-- **AND** the list offers no reach filter
+
+#### Scenario: the Reach filter narrows the servers to one agent
+- **GIVEN** a server on for every agent and one limited to Codex
+- **WHEN** the user chooses Claude Code in the MCP servers list's Reach filter
+- **THEN** only the server on for every agent and the built-in server are listed, and the address carries `?agent=<Claude Code's uid>`
 
 ### Requirement: Keep a failed save and a partial batch in the MCP dialogs
 The Add server and Edit dialogs MUST test the form as typed before it is saved
@@ -685,7 +692,7 @@ naming the secret. A success is a toast that says what was kept or added.
 - **THEN** the dialog says the secret waits for approval before it closes
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box — its only filter — and a client-side pager so a large vault stays navigable; the skills list works the same way, and no list offers a filter by reach.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource

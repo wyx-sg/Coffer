@@ -19,8 +19,8 @@ import { RefreshCw } from "lucide-react";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
 import { SearchInput } from "@/components/SearchInput";
+import { AgentReachFilter } from "@/components/reach/AgentReachFilter";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
-import { SkillReachFilter } from "@/components/skills/SkillReachFilter";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
@@ -135,7 +135,7 @@ export function SkillLibrary({
               </Button>
             </div>
             <div className="flex items-center gap-2">
-              <SkillReachFilter filter={agentFilter} />
+              <AgentReachFilter filter={agentFilter} />
             </div>
           </>
         )}
