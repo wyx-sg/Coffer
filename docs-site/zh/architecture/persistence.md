@@ -99,7 +99,7 @@ flowchart LR
 - **生效范围不在文件里。** 一个资源在这里是否启用、对哪些智能体启用，记录在 `local/reach.json`。
 - **`updated_at` 不在文件里。** 它是文件在本机的修改时间，不再保留修订计数器或索引。
 
-Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一个另一台机器可能改动的受跟踪 `.gitignore`：编辑器和系统的杂项文件、知识集里的隐藏条目（`.inbox/` 除外），以及 `secret/`（除非你的同步远端携带密钥）。
+Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一个另一台机器可能改动的受跟踪 `.gitignore`：编辑器和系统的杂项文件、skill 脚本运行时生成的东西（字节码、`*.log`、`node_modules/`、`.venv/` 和工具缓存）、知识集里的隐藏条目（`.inbox/` 除外），以及 `secret/`（除非你的同步远端携带密钥）。
 
 ### 本地 {#local}
 

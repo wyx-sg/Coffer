@@ -79,7 +79,8 @@ is kept and committed but belongs to no area Coffer reads.
 
 `vault/.git/info/exclude` — never a tracked `.gitignore` another machine could
 change — keeps out editor and system litter (`.DS_Store`, `.*.tmp`, `.*.swp`,
-`*~`, `.#*`, `__pycache__/`, `*.py[co]`), every hidden entry under `knowledge/`
+`*~`, `.#*`), what a skill's scripts generate (`__pycache__/`, `*.py[co]`, `*.log`,
+`node_modules/`, `.venv/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`), every hidden entry under `knowledge/`
 except `.inbox`, and `/secret/` unless the sync remote has `include_secret`.
 
 ### `manifest.json`
