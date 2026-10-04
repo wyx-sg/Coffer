@@ -2408,7 +2408,9 @@
       "search": "搜索会话",
       "project": "项目",
       "projectChosen": "项目：{{project}}",
-      "allProjects": "所有项目"
+      "allProjects": "所有项目",
+      "searchProjects": "搜索项目",
+      "noProjects": "没有匹配的项目"
     },
     "changeModel": {
       "title": "更改 {{name}} 的模型",

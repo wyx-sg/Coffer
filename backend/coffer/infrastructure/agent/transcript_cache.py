@@ -31,6 +31,13 @@ from coffer.infrastructure.agent import paths
 
 log = logging.getLogger(__name__)
 
+#: Bumped whenever the parsers derive summaries differently (2: attachment
+#: markers no longer reach titles), so a sidecar written by older parsers is
+#: discarded whole instead of serving its stale titles. Stored under a reserved
+#: key — transcript paths are absolute, so it can never collide with one.
+FORMAT_VERSION = 2
+_FORMAT_KEY = "__format__"
+
 #: ``{absolute transcript path: (mtime, size, summary)}`` — the reader's cache.
 CacheEntry = tuple[float, int, TranscriptSession]
 
@@ -107,10 +114,12 @@ def load() -> dict[str, CacheEntry]:
     except (OSError, ValueError):
         log.debug("transcript_cache: unreadable sidecar at %s; starting cold", path)
         return {}
-    if not isinstance(data, dict):
+    if not isinstance(data, dict) or data.get(_FORMAT_KEY) != FORMAT_VERSION:
         return {}
     out: dict[str, CacheEntry] = {}
     for key, raw in data.items():
+        if key == _FORMAT_KEY:
+            continue
         entry = _to_entry(str(key), raw)
         if entry is not None:
             out[str(key)] = entry
@@ -128,7 +137,8 @@ def save(entries: dict[str, CacheEntry]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(f".{path.name}.tmp")
-        payload = {key: _from_entry(entry) for key, entry in entries.items()}
+        payload: dict[str, Any] = {key: _from_entry(entry) for key, entry in entries.items()}
+        payload[_FORMAT_KEY] = FORMAT_VERSION
         tmp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
         tmp.replace(path)
     except OSError:

@@ -2408,7 +2408,9 @@
       "search": "Search sessions",
       "project": "Project",
       "projectChosen": "Project: {{project}}",
-      "allProjects": "All projects"
+      "allProjects": "All projects",
+      "searchProjects": "Search projects",
+      "noProjects": "No matching project"
     },
     "changeModel": {
       "title": "Change {{name}}’s model",
