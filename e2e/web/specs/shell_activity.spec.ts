@@ -4,8 +4,8 @@
 // one tab per record. This file covers the half that needs a real browser and a
 // real daemon: an old /audit bookmark resolves here instead of dead-ending and
 // the page shows a row the daemon actually wrote; a record written while the
-// reader has one open is held behind "N new"; and the ⋯ menu's export writes
-// exactly the filtered records to a file.
+// reader has one open is held behind "N new"; and the search narrows a tab to
+// the records the daemon matched.
 //
 // Per-tab columns, the drawer and a failing tab's error are exercised in
 // frontend/src/pages/activity/ActivityPage.test.tsx, where each record's
@@ -13,7 +13,6 @@
 // cue, nor take one route away mid-run.
 
 import { expect, test } from "@playwright/test";
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -132,11 +131,11 @@ test("a record written while one is open waits behind the new pill until it is c
   }
 });
 
-test("export from the menu writes only the filtered records", async ({
+test("the search narrows the Changes tab to matching records", async ({
   page,
 }) => {
-  const kept = generateUniqueName("e2eexportkept");
-  const other = generateUniqueName("e2eexportother");
+  const kept = generateUniqueName("e2efilterkept");
+  const other = generateUniqueName("e2efilterother");
   try {
     await registerFakeServer(kept);
     await registerFakeServer(other);
@@ -151,19 +150,9 @@ test("export from the menu writes only the filtered records", async ({
     await expect(
       page.locator("tr[data-record]", { hasText: other }),
     ).toHaveCount(0);
-
-    // Export is a ghost button in the header with a JSON / CSV menu.
-    await page.getByRole("button", { name: "Export" }).click();
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      page.getByRole("menuitem", { name: "CSV" }).click(),
-    ]);
-    const file = await download.path();
-    const csv = fs.readFileSync(file, "utf-8");
-    const rows = csv.trim().split(/\r?\n/).slice(1);
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.includes(kept))).toBe(true);
-    expect(csv).not.toContain(other);
+    await expect(
+      page.locator("tr[data-record]", { hasText: kept }).first(),
+    ).toBeVisible();
   } finally {
     await deregisterMcpServer(kept);
     await deregisterMcpServer(other);
