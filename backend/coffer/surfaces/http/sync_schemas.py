@@ -17,7 +17,6 @@ from coffer.domain.sync.remote import (
     BRANCH_PATTERN,
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
-    DEFAULT_USERNAME,
     MIN_INTERVAL_SECONDS,
     URL_PATTERN,
     SyncRemoteInvalid,
@@ -86,6 +85,19 @@ class RoundOut(BaseModel):
     folded: int = 0
 
 
+class RoundFileDiffOut(BaseModel):
+    """One file a round applied or pushed. ``text`` carries the unified
+    ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
+    carry no content at all (never ciphertext)."""
+
+    path: str
+    side: Literal["applied", "pushed"]
+    kind: Literal["text", "secret", "binary", "too_large"]
+    diff: str | None = None
+    added: int = 0
+    removed: int = 0
+
+
 class SyncRunListOut(BaseModel):
     """A page of the history, newest first, and how many rounds it holds."""
 
@@ -108,19 +120,10 @@ def _branch(value: str) -> str:
         raise ValueError(str(exc)) from exc
 
 
-#: A username git can send: no blank, colon, at-sign or slash.
-USERNAME_PATTERN = r"^[^\s:@/]+$"
-
-
 class SyncRemoteIn(BaseModel):
     url: str = Field(min_length=1, pattern=URL_PATTERN)
     branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
     secret_ref: str | None = None
-    #: The username an HTTPS token is sent with (Bitbucket and Azure DevOps
-    #: need a real one; GitHub and GitLab ignore it).
-    username: str = Field(
-        default=DEFAULT_USERNAME, min_length=1, max_length=128, pattern=USERNAME_PATTERN
-    )
     #: Whether ``secret/`` (ciphertext only) travels with the vault.
     include_secret: bool = False
     interval_seconds: int = Field(default=DEFAULT_INTERVAL_SECONDS, ge=MIN_INTERVAL_SECONDS)
@@ -141,7 +144,6 @@ class SyncRemoteOut(BaseModel):
     url: str
     branch: str
     secret_ref: str | None
-    username: str
     include_secret: bool
     interval_seconds: int
     enabled: bool
@@ -162,9 +164,6 @@ class RemoteCheckIn(BaseModel):
     url: str = Field(min_length=1, pattern=URL_PATTERN)
     branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
     secret_ref: str | None = None
-    username: str = Field(
-        default=DEFAULT_USERNAME, min_length=1, max_length=128, pattern=USERNAME_PATTERN
-    )
 
     @field_validator("url")
     @classmethod

@@ -20,6 +20,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useSyncRuns: vi.fn(),
   useRollbackPlan: vi.fn(),
   useRollbackRound: vi.fn(),
+  useRoundFileDiff: vi.fn(() => ({ data: undefined, isLoading: false, error: null })),
 }));
 vi.mock("@/lib/hooks/useSyncStop", () => ({
   useSyncStop: vi.fn(),
@@ -507,9 +508,16 @@ describe("SyncStatusTab — Rounds", () => {
       loadMore,
     });
     renderTab(makeStatus());
-    expect(screen.getByText("Showing 1 of 130")).toBeInTheDocument();
+    expect(screen.getByText("Loaded 1 of 130 rounds")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  test("with every round loaded the footer still counts rounds", () => {
+    seedRuns([makeRound({ id: 9, status: "pulled", applied: APPLIED })], { total: 1 });
+    renderTab(makeStatus());
+    expect(screen.getByText("Loaded 1 of 1 rounds")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
   });
 
   test("an empty history says so; a failing one fails inside the tab", () => {

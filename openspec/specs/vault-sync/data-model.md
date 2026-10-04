@@ -31,7 +31,6 @@ remote. Machine-local and never committed.
   "url": "https://github.com/me/vault.git",
   "branch": "main",
   "secret_ref": "secret/github",
-  "username": "coffer",
   "include_secret": false,
   "interval_seconds": 3600,
   "enabled": true
@@ -43,7 +42,6 @@ remote. Machine-local and never committed.
 | `url` | str | the user's own repository; must not start with `-` or contain whitespace (`SYNC_REMOTE_INVALID`, 422) |
 | `branch` | str | default `main`; checked against git's branch-name rules |
 | `secret_ref` | str? | a **reference** into the secret store, never a secret. Its value reaches git through a per-invocation credential helper, resolved through the secret boundary with destination `sync_remote` / `remote`, target `git <url>` — a token for a URL it was never approved for waits for a person (the round is `auth_failed` until then) |
-| `username` | str | default `coffer`; the name an HTTPS token is sent with. GitHub and GitLab ignore it; Bitbucket needs one such as `x-token-auth`, Azure DevOps a real one. Non-blank, no spaces, `:`, `@` or `/`, at most 128 characters |
 | `include_secret` | bool | whether `vault/secret/` is committed and pushed at all; default off. Off, `/secret/` is in `vault/.git/info/exclude` |
 | `interval_seconds` | int | default 3600; positive, raised to at least 60 |
 | `enabled` | bool | `false` pauses the timer; the remote and history are kept, and "Sync now" still runs a round |

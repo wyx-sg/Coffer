@@ -81,7 +81,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `local/skill-source-status.json` | 本机上次在每个从 Git 导入的技能来源处看到的情况。 | 守护进程 | 从不 | 可以：下次检查会补上。 |
 | `local/secret/` | 仅限本机的密文，比如模型代理的令牌。 | 守护进程 | 从不 | 代理令牌会重新生成；使用提供商的智能体会重新读取自己的令牌。 |
 | `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
-| `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、用户名、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
+| `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
 | `local/sync/round.json` | 一轮停下的同步、一次保留，或一次加入尚待选择的项目，以及你目前的回答。 | 守护进程 | 从不 | 下一轮会重新提问。 |
 
 本机文件解析失败时，会被挪到一边改名为 `<name>.unreadable-<n>`，并按空文件读取。

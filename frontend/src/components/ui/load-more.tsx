@@ -64,6 +64,8 @@ interface FooterProps {
   autoLoad?: boolean;
   /** Text beside the count (e.g. what the next page holds). */
   hint?: React.ReactNode;
+  /** Replaces the default "N loaded" / "Showing N of M" text. */
+  countLabel?: (loaded: number, total?: number) => string;
   className?: string;
 }
 
@@ -77,6 +79,7 @@ export function LoadMoreFooter({
   moreLabel,
   autoLoad = false,
   hint,
+  countLabel,
   className,
 }: FooterProps) {
   const { t } = useTranslation();
@@ -88,9 +91,11 @@ export function LoadMoreFooter({
       ) : null}
       <div className={cn("flex flex-wrap items-center gap-3 text-xs text-text-muted", className)}>
         <span>
-          {total !== undefined
-            ? t("pagination.showing", { shown: loaded, total })
-            : t("pagination.loaded", { count: loaded })}
+          {countLabel
+            ? countLabel(loaded, total)
+            : total !== undefined
+              ? t("pagination.showing", { shown: loaded, total })
+              : t("pagination.loaded", { count: loaded })}
         </span>
         {hasMore ? (
           <Button variant="outline" size="sm" loading={loading} onClick={onMore}>

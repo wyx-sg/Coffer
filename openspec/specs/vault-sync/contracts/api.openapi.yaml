@@ -1027,6 +1027,71 @@ paths:
       summary: Get Run
       tags:
       - sync
+  /api/v1/sync/runs/{run_id}/diff:
+    get:
+      description: |-
+        One file a round applied here or pushed, line by line, computed from the
+        vault's history (nothing stored). A secret, a binary file and one over the
+        size cap carry a ``kind`` and no content. 404 ``SYNC_ROUND_FILE_NOT_LISTED``
+        for a path the round did not list, 409 ``SYNC_ROUND_DIFF_UNAVAILABLE`` when
+        its commits are gone.
+      operationId: get_run_file_diff_api_v1_sync_runs__run_id__diff_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: integer
+      - description: A file the round listed on that side; else 404.
+        in: query
+        name: path
+        required: true
+        schema:
+          description: A file the round listed on that side; else 404.
+          title: Path
+          type: string
+      - description: Which list the path is in.
+        in: query
+        name: side
+        required: true
+        schema:
+          description: Which list the path is in.
+          enum:
+          - applied
+          - pushed
+          title: Side
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundFileDiffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Run File Diff
+      tags:
+      - sync
   /api/v1/sync/runs/{run_id}/rollback:
     post:
       description: |-
@@ -2289,13 +2354,6 @@ components:
           pattern: ^[^-\s]\S*$
           title: Url
           type: string
-        username:
-          default: coffer
-          maxLength: 128
-          minLength: 1
-          pattern: ^[^\s:@/]+$
-          title: Username
-          type: string
       required:
       - url
       title: RemoteCheckIn
@@ -2369,6 +2427,51 @@ components:
       - reverses
       - kept
       title: RollbackPlanOut
+      type: object
+    RoundFileDiffOut:
+      description: |-
+        One file a round applied or pushed. ``text`` carries the unified
+        ``diff`` and its line counts; ``secret``, ``binary`` and ``too_large``
+        carry no content at all (never ciphertext).
+      properties:
+        added:
+          default: 0
+          title: Added
+          type: integer
+        diff:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Diff
+        kind:
+          enum:
+          - text
+          - secret
+          - binary
+          - too_large
+          title: Kind
+          type: string
+        path:
+          title: Path
+          type: string
+        removed:
+          default: 0
+          title: Removed
+          type: integer
+        side:
+          enum:
+          - applied
+          - pushed
+          title: Side
+          type: string
+      required:
+      - path
+      - side
+      - kind
+      - diff
+      - added
+      - removed
+      title: RoundFileDiffOut
       type: object
     RoundOut:
       description: |-
@@ -2658,13 +2761,6 @@ components:
           pattern: ^[^-\s]\S*$
           title: Url
           type: string
-        username:
-          default: coffer
-          maxLength: 128
-          minLength: 1
-          pattern: ^[^\s:@/]+$
-          title: Username
-          type: string
       required:
       - url
       title: SyncRemoteIn
@@ -2691,14 +2787,10 @@ components:
         url:
           title: Url
           type: string
-        username:
-          title: Username
-          type: string
       required:
       - url
       - branch
       - secret_ref
-      - username
       - include_secret
       - interval_seconds
       - enabled

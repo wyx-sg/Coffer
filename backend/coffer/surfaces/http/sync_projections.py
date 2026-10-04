@@ -84,7 +84,6 @@ def remote_out(remote: SyncRemote) -> SyncRemoteOut:
         url=remote.url,
         branch=remote.branch,
         secret_ref=remote.secret_ref,
-        username=remote.username,
         include_secret=remote.include_secret,
         interval_seconds=remote.interval_seconds,
         enabled=remote.enabled,

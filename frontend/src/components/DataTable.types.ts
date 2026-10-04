@@ -74,6 +74,8 @@ interface InfiniteRows {
   /** A later page is loading. */
   loading: boolean;
   onMore: () => void;
+  /** The footer's count wording, when "Showing N of M" would name the wrong thing (rows folded from rounds, say). */
+  countLabel?: (loaded: number, total?: number) => string;
 }
 
 /** Server-driven pagination: the caller passes one page of `rows` and owns the

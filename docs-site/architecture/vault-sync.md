@@ -155,6 +155,10 @@ A file a new machine's join left different is settled per file or all at once: *
 
 Treating a returning machine as new looks conservative and is a data-loss bug: a union has no base to disagree with, so every deletion the fleet made while the machine was away comes back. That is why the descriptor records the last converged commit.
 
+## File diffs in the round drawer
+
+A file the round listed as applied or pushed opens to its line-by-line diff in the drawer. Nothing is stored for it: `GET /api/v1/sync/runs/{id}/diff?path=&side=applied|pushed` reads two commits the round record already holds. `applied` compares `from_commit` with `to_commit`; `pushed` compares the remote tip the push went on top of (the newest commit the round pulled, or `from_commit` for a round that only pushed) with `to_commit`. The path must be one the round lists for that side (`SYNC_ROUND_FILE_NOT_LISTED`), so the route never reads an arbitrary vault file. A file under `secret/` answers `kind: "secret"` with no content, a non-text file `binary`, one over 200 KB or a diff over 2000 lines `too_large`; commits that are gone answer `SYNC_ROUND_DIFF_UNAVAILABLE`.
+
 ## Rollback
 
 **Roll back to before this round** in the round's drawer puts back what one round changed, from its snapshot, as a new `user` commit on this machine that the next round pushes. Only the paths that round changed are touched, and a file edited since the round is kept and listed. The plan is shown first. A round that applied nothing, and a rollback itself, cannot be rolled back.
@@ -199,7 +203,7 @@ The knowledge [curation pass](/architecture/knowledge) also rewrites vault conte
 
 Coffer shells out to the real `git`, so the remote stays an ordinary repository you can clone and inspect.
 
-- **The push token** is resolved from the secret store for one call and reaches git through a credential helper given on the command line that reads it from the environment. It is never in the URL, argv, `.git/config` or any recorded error. The username sent with it defaults to `coffer`; GitHub and GitLab ignore it for a token, while Bitbucket and Azure DevOps need a real one. A token pointed at a URL it has not been approved for waits for a person's approval, and rounds report `auth_failed` until then.
+- **The push token** is resolved from the secret store for one call and reaches git through a credential helper given on the command line that reads it from the environment. It is never in the URL, argv, `.git/config` or any recorded error. The username sent with it follows the remote's host: `x-token-auth` for `bitbucket.org`, `oauth2` for a host whose name contains `gitlab`, and `coffer` for any other (GitHub and Azure DevOps ignore it). A token pointed at a URL it has not been approved for waits for a person's approval, and rounds report `auth_failed` until then.
 - **Your git configuration cannot change what a round does.** Global and system config point at `/dev/null`, hooks are off, signing is off, and the commit identity is supplied by Coffer.
 - **Git is looked up once.** The `git` on your `PATH` may be a launcher rather than git itself: the one macOS puts in `/usr/bin` looks up the developer tools on every call, which can take most of a second on a busy machine. A round makes hundreds of calls, so Coffer asks that `git` once where its own binary lives and runs that binary from then on.
 - **No value can be read as an option.** The remote URL may not start with `-`, the branch must pass git's ref-name rules, and positional arguments sit behind `--`.

@@ -1762,6 +1762,8 @@
     "SYNC_REMOTE_FAILED": "远端无法连接、拒绝了凭据，或拒绝了推送。",
     "SYNC_REMOTE_INVALID": "无法使用这个仓库地址或分支。",
     "SYNC_ROUND_NOT_FOUND": "这台机器的历史中没有该轮次。",
+    "SYNC_ROUND_FILE_NOT_LISTED": "该轮次在这一侧没有改动这个文件。",
+    "SYNC_ROUND_DIFF_UNAVAILABLE": "这个轮次的文件版本已不可用。",
     "VAULT_FILE_INVALID": "修改被拒绝：文件将不再有效。未写入任何内容。",
     "VAULT_FILE_STALE": "文件在你加载后已被修改。请重新加载后再试。",
     "VAULT_GIT_FAILED": "读写 vault 时 git 出错。",
@@ -4618,8 +4620,6 @@
       "secretMissing": "本机没有它的值",
       "secretPlaceholder": "选择一个密钥",
       "secretEmpty": "还没有密钥——先在「密钥」页面添加。",
-      "username": "用户名",
-      "usernameHint": "发送令牌时使用的用户名。GitLab 需要 oauth2 或你的账号名。留空则使用默认值。",
       "cadence": {
         "label": "同步频率",
         "minutes_one": "每 {{count}} 分钟",
@@ -4849,6 +4849,8 @@
       "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
     },
     "rounds": {
+      "loadedCount": "已加载 {{loaded}} 轮",
+      "loadedOfTotal": "已加载 {{loaded}} / {{total}} 轮",
       "today": "今天",
       "yesterday": "昨天",
       "title": "轮次",
@@ -4915,6 +4917,11 @@
       "nothingApplied": "这台 Mac 上没有任何改动。",
       "pushed": "推送",
       "nothingPushed": "这台 Mac 没有需要推送的内容。",
+      "showDiff": "显示 {{path}} 的改动",
+      "diffSecret": "已加密，不展示内容",
+      "diffBinary": "二进制文件，无法逐行显示",
+      "diffTooLarge": "改动太大，不逐行显示",
+      "diffEmpty": "没有可显示的行改动。",
       "rollBack": "回滚到这一轮之前",
       "viewActivity": "在活动中查看"
     },

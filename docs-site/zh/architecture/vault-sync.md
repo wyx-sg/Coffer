@@ -155,6 +155,10 @@ sequenceDiagram
 
 把回归的机器当作新机器看起来很保守，实际上是一个会丢数据的 bug：并集没有可以产生分歧的基准，所以在这台机器离开期间整个机群做过的每一次删除都会回来。这就是描述文件要记录上次收敛提交的原因。
 
+## 轮次抽屉里的文件差异 {#file-diffs-in-the-round-drawer}
+
+这一轮列为已应用或已推送的文件，可以在抽屉里展开成逐行差异。这些差异不额外存储：`GET /api/v1/sync/runs/{id}/diff?path=&side=applied|pushed` 读取轮次记录里已有的两个提交。`applied` 比较 `from_commit` 与 `to_commit`；`pushed` 比较推送时所基于的远端 tip（这一轮拉取的最新提交，只推送的一轮则是 `from_commit`）与 `to_commit`。路径必须是这一轮在该侧列出的文件（否则 `SYNC_ROUND_FILE_NOT_LISTED`），所以这个路由不会读取任意保险库文件。`secret/` 下的文件返回 `kind: "secret"` 且没有任何内容，非文本文件返回 `binary`，超过 200 KB 的文件或超过 2000 行的差异返回 `too_large`；提交已不在时返回 `SYNC_ROUND_DIFF_UNAVAILABLE`。
+
 ## 回滚 {#rollback}
 
 该轮抽屉里的**回滚到这一轮之前**会根据快照把一轮同步改动的内容放回去，作为本机上一个新的 `user` 提交，由下一轮推送出去。只触及那一轮改动过的路径，该轮之后被编辑过的文件会被保留并列出来。会先显示计划。什么都没应用的一轮，以及回滚本身，都不能再回滚。
@@ -199,7 +203,7 @@ sequenceDiagram
 
 Coffer 调用真正的 `git`，所以远端始终是一个你可以克隆和查看的普通仓库。
 
-- **推送令牌**为一次调用从密钥存储中解析出来，通过命令行上给出的一个凭据助手到达 git，该助手从环境变量中读取它。它从不出现在 URL、argv、`.git/config` 或任何记录下来的错误里。随它发送的用户名默认为 `coffer`；GitHub 和 GitLab 在使用令牌时会忽略它，而 Bitbucket 和 Azure DevOps 需要真实的用户名。一个指向未经批准 URL 的令牌会等待人的批准，在此之前各轮都报告 `auth_failed`。
+- **推送令牌**为一次调用从密钥存储中解析出来，通过命令行上给出的一个凭据助手到达 git，该助手从环境变量中读取它。它从不出现在 URL、argv、`.git/config` 或任何记录下来的错误里。随它发送的用户名由远端的主机决定：`bitbucket.org` 为 `x-token-auth`，名称含 `gitlab` 的主机为 `oauth2`，其他一律为 `coffer`（GitHub 和 Azure DevOps 会忽略它）。一个指向未经批准 URL 的令牌会等待人的批准，在此之前各轮都报告 `auth_failed`。
 - **你的 git 配置改变不了一轮同步的行为。** 全局和系统配置指向 `/dev/null`，Hook 关闭，签名关闭，提交身份由 Coffer 提供。
 - **git 只查找一次。** 你 `PATH` 上的 `git` 可能只是一个启动器，而不是 git 本身：macOS 放在 `/usr/bin` 的那个每次调用都要查找一遍开发者工具，机器忙的时候这一步可能要将近一秒。一轮同步要调用 git 几百次，所以 Coffer 只问一次这个 `git` 它真正的程序在哪里，之后一直直接运行那个程序。
 - **任何值都不会被当作选项读取。** 远端 URL 不能以 `-` 开头，分支名必须符合 git 的 ref 命名规则，位置参数都放在 `--` 之后。

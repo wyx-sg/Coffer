@@ -20,10 +20,7 @@ export function McpBuiltinRow({ server, to, current }: Props) {
   const { t } = useTranslation();
   return (
     <section className="mb-3" aria-label={t("mcp.builtin.group")}>
-      <h2 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted">
-        {t("mcp.builtin.group")}
-        <span className="ml-auto font-book">1</span>
-      </h2>
+      <h2 className="px-2.5 pb-1 text-2xs font-semibold text-text-muted">{t("mcp.builtin.group")}</h2>
       <ul className="flex flex-col gap-0.5">
         <li
           data-testid="mcp-builtin-row"

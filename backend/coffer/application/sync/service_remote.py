@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from coffer.domain.secret_errors import SecretMissing
 from coffer.domain.sync.errors import SyncNothingToRestore, SyncRemoteExists
-from coffer.domain.sync.remote import DEFAULT_USERNAME, SyncRemote
+from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.stops import conflict_from_json, stop_from_json, to_json
 from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 
@@ -148,13 +148,11 @@ class RemoteMixin:
         await self._locked(reinstate)
         return remote
 
-    async def check_remote(
-        self, url: str, branch: str, secret_ref: str | None, username: str = DEFAULT_USERNAME
-    ) -> RemoteCheck:
+    async def check_remote(self, url: str, branch: str, secret_ref: str | None) -> RemoteCheck:
         """What the remote at ``url`` holds on ``branch``, without keeping it."""
         from coffer.application.sync.views import RemoteCheck
 
-        candidate = SyncRemote(url=url, branch=branch, secret_ref=secret_ref, username=username)
+        candidate = SyncRemote(url=url, branch=branch, secret_ref=secret_ref)
         try:
             await self._token.bind(candidate, actor="user")
             token = await self._token.token_for(candidate)

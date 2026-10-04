@@ -1762,6 +1762,8 @@
     "SYNC_REMOTE_FAILED": "The remote could not be reached, refused the credential, or refused the push.",
     "SYNC_REMOTE_INVALID": "That repository URL or branch can't be used.",
     "SYNC_ROUND_NOT_FOUND": "That round is not in this machine's history.",
+    "SYNC_ROUND_FILE_NOT_LISTED": "That round's file was not changed on that side.",
+    "SYNC_ROUND_DIFF_UNAVAILABLE": "This round's file versions are no longer available.",
     "VAULT_FILE_INVALID": "The change was refused: the file would not be valid. Nothing was written.",
     "VAULT_FILE_STALE": "The file changed since you loaded it. Reload and try again.",
     "VAULT_GIT_FAILED": "git failed while reading or writing the vault.",
@@ -4618,8 +4620,6 @@
       "secretMissing": "No value on this Mac",
       "secretPlaceholder": "Choose a secret",
       "secretEmpty": "No secrets yet — add one in Secrets.",
-      "username": "User name",
-      "usernameHint": "The user name the token is sent with. GitLab needs oauth2 or your account name. Empty uses the default.",
       "cadence": {
         "label": "Run a round",
         "minutes_one": "Every {{count}} minute",
@@ -4849,6 +4849,8 @@
       "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
     },
     "rounds": {
+      "loadedCount": "Loaded {{loaded}} rounds",
+      "loadedOfTotal": "Loaded {{loaded}} of {{total}} rounds",
       "today": "Today",
       "yesterday": "Yesterday",
       "loadFailed": "Couldn't load the rounds",
@@ -4915,6 +4917,11 @@
       "nothingApplied": "Nothing changed on this Mac.",
       "pushed": "Pushed",
       "nothingPushed": "Nothing from this Mac to push.",
+      "showDiff": "Show changes to {{path}}",
+      "diffSecret": "Encrypted — contents not shown",
+      "diffBinary": "Binary file — no line-by-line diff",
+      "diffTooLarge": "Too large to show line by line",
+      "diffEmpty": "No line changes to show.",
       "rollBack": "Roll back to before this round",
       "viewActivity": "View in Activity"
     },

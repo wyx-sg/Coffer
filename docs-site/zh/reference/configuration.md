@@ -100,7 +100,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | --- | --- | --- |
 | `CLAUDE_CONFIG_DIR` | Claude Code 的轮次 | 当已注册智能体的配置目录不是 `~/.claude` 时，让 Claude Code 指向它。 |
 | `CODEX_HOME` | Codex 的轮次 | 当已注册智能体的配置目录不是 `~/.codex` 时，让 Codex 指向它。 |
-| `COFFER_GIT_TOKEN`、`COFFER_GIT_USERNAME` | 保险库同步期间的 `git` | 同步远端的令牌及随之发送的用户名，由 credential helper 在运行时读取，所以令牌永远不会出现在 `argv` 中或磁盘上。 |
+| `COFFER_GIT_TOKEN`、`COFFER_GIT_USERNAME` | 保险库同步期间的 `git` | 同步远端的令牌及据远端主机推导出的、随之发送的用户名，由 credential helper 在运行时读取，所以令牌永远不会出现在 `argv` 中或磁盘上。 |
 | `PATH`、`HOME` | 开机自启服务 | 安装服务时从你的登录 shell 采集，这样守护进程能找到 `npx`、`uvx` 等上游启动器。 |
 
 桌面应用读取 `HOME`（或 `USERPROFILE`）、`SHELL` 和 `PATH`，用来定位 `~/.coffer` 并探测登录 shell 的 `PATH`；它自己不定义任何变量。
@@ -211,7 +211,6 @@ COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 | --- | --- | --- |
 | **同步频率** | 每小时 | 自动同步轮次的频率（从每分钟到每几天的列表）。以秒存储；至少为 `60`：更小的值会被 API 拒绝。 |
 | **密钥** | 无 | 保存推送令牌的密钥。 |
-| **用户名** | `coffer` | 与 HTTPS 令牌一起发送的用户名。GitHub 和 GitLab 会忽略它；Bitbucket 和 Azure DevOps 需要真实的用户名。 |
 | **包含加密的密钥** | 关 | 提交并推送 `vault/secret/`（只有密文，绝不含主密钥）。 |
 | **只在我点「立即同步」时**（**同步频率**下的一个选项） | 关 | 暂停定时器；远端及其历史保留，**立即同步** 仍能执行一轮。 |
 

@@ -213,6 +213,7 @@ export function DataTable<T>({
           loading={infinite.loading}
           onMore={infinite.onMore}
           autoLoad
+          countLabel={infinite.countLabel}
         />
       ) : (
         <DataTableLoadMore

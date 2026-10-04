@@ -99,7 +99,6 @@ describe("SyncRemoteTab", () => {
       url: "https://git.example.com/me/vault.git",
       branch: "vault",
       secret_ref: "secret/github-deploy-key",
-      username: "coffer",
       include_secret: false,
       interval_seconds: 3600,
       enabled: true,
@@ -136,24 +135,6 @@ describe("SyncRemoteTab", () => {
     renderTab();
     expect(screen.getByLabelText("Secret")).toHaveTextContent("github-deploy-key");
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
-  });
-
-  acceptance("vault-sync", "a token is sent with the username the remote names", () => {
-    const { unmount } = renderTab(status({ username: "coffer" }));
-    const user = screen.getByLabelText("User name");
-    expect(user).toHaveValue("");
-    fireEvent.change(user, { target: { value: "oauth2" } });
-    fireEvent.blur(user);
-    expect(sent()).toMatchObject({ username: "oauth2" });
-    unmount();
-
-    // An SSH remote has no user-name field, and keeps the stored one unchanged.
-    save.mockClear();
-    renderTab(status({ url: "git@github.com:me/vault.git", username: "stored-name" }));
-    expect(screen.queryByLabelText("User name")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Branch"), { target: { value: "vault" } });
-    fireEvent.blur(screen.getByLabelText("Branch"));
-    expect(sent()).toMatchObject({ username: "stored-name", branch: "vault" });
   });
 
   test("Only when I press Sync now pauses the remote; a cadence resumes it", () => {

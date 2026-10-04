@@ -183,3 +183,20 @@ export function useRollbackPlan(runId: number | null, enabled: boolean) {
 export function useRollbackRound() {
   return useRoundMutation<number>((runId) => syncApi.rollback(runId), { toastErrors: false });
 }
+
+/** A round's file as a diff, fetched when its row is opened. A round's commits
+ * never change, so the answer is kept. */
+export function useRoundFileDiff(
+  runId: number,
+  path: string,
+  side: "applied" | "pushed",
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...syncRunsKey, runId, "diff", side, path],
+    queryFn: () => syncApi.runDiff(runId, path, side),
+    enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}

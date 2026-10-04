@@ -49,7 +49,7 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
   const [errors, setErrors] = useState<FormErrors>({});
   const [empty, setEmpty] = useState(false);
 
-  const input = () => toRemoteInput(draft, null);
+  const input = () => toRemoteInput(draft);
 
   if (empty) {
     return (
@@ -87,7 +87,7 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
     if (found.url) return;
     const body = input();
     check.mutate(
-      { url: body.url, branch: body.branch, secret_ref: body.secret_ref, username: body.username },
+      { url: body.url, branch: body.branch, secret_ref: body.secret_ref },
       {
         onSuccess: (result) => {
           if (result.result === "empty") setEmpty(true);
