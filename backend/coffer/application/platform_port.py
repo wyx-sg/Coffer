@@ -40,6 +40,16 @@ class PrivilegedPaths:
     firmlink_root: str | None
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class TerminalLaunch:
+    """How to start a command in a terminal window: the argv to run and any
+    files that must exist first (a launcher that reads its instructions from a
+    file). Built by the host; the application writes the files and spawns."""
+
+    argv: list[str]
+    files: tuple[tuple[Path, str], ...] = ()
+
+
 class PlatformPort(Protocol):
     """What the application needs to know about the host operating system."""
 
@@ -70,4 +80,16 @@ class PlatformPort(Protocol):
         its executable; which one applies, and how installation is detected,
         is the host's business.
         """
+        ...
+
+    def terminal_launch_value(self, *, app_bundle: str | None, command: str | None) -> str | None:
+        """The ``terminal`` value that launches an installed terminal, or None
+        (the terminal counterpart of :meth:`editor_launch_value`)."""
+        ...
+
+    def terminal_launch(self, launcher: str | None, *, command: str, cwd: str) -> TerminalLaunch:
+        """How to run the shell ``command`` in a new window of ``launcher`` (a
+        value :meth:`terminal_launch_value` returned; None is the host's system
+        terminal). Raises ``FsTerminalInvalid`` for a launcher it does not know and
+        ``FsTerminalFailed`` when the host has no terminal to use."""
         ...

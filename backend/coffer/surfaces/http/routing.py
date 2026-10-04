@@ -48,6 +48,7 @@ from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
 from coffer.surfaces.http.feature_routes import router as feature_router
 from coffer.surfaces.http.fs_routes import router as fs_router
+from coffer.surfaces.http.fs_terminal_routes import router as fs_terminal_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge import history_router as knowledge_history_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
@@ -126,6 +127,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_session_router,
         agent_unmanaged_skill_router,
         fs_router,
+        fs_terminal_router,
         skill_copy_router,  # before skill_router: /skills/orphans is not a uid
         skill_delete_router,  # DELETE /skills/{uid} and the bulk delete
         skill_router,

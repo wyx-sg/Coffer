@@ -82,6 +82,10 @@ _STATUS: dict[str, int] = {
     "SHIM_NOT_FOUND": 422,
     "FS_PATH_NOT_BROWSABLE": 400,
     "FS_PATH_NOT_OPENABLE": 400,
+    # spec daemon "Open an agent session in a terminal"
+    "SESSION_IN_USE": 409,
+    "FS_TERMINAL_INVALID": 400,
+    "FS_TERMINAL_FAILED": 502,
     "INTERNAL_ERROR": 500,
     "UNKNOWN_PRUNABLE_TABLE": 404,
     "UNAUTHENTICATED": 401,

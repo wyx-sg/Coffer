@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from coffer.domain.chat.errors import SESSION_IN_USE_MESSAGE as SESSION_IN_USE_MESSAGE
 from coffer.domain.chat.question import QuestionBlock
 
 
@@ -84,6 +85,12 @@ STREAM_ENDED_MESSAGE = "the agent stopped responding before finishing the turn"
 #: that produced no event for the configured window (the agent process is
 #: then terminated); the partial reply is kept.
 TURN_TIMEOUT = "turn_timeout"
+
+#: ``TurnError.code`` when a native session is open somewhere else (a terminal
+#: running ``claude --resume <id>`` or ``codex resume <id>``) and the turn was
+#: refused instead of forking it (spec chat "Run a session in one place at a
+#: time"). The message is what the chat is told, word for word.
+SESSION_IN_USE = "session_in_use"
 
 
 @dataclass(frozen=True)

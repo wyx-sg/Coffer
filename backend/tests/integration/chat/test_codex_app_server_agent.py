@@ -19,6 +19,8 @@ import pytest
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    SESSION_IN_USE,
+    SESSION_IN_USE_MESSAGE,
     STREAM_ENDED_MESSAGE,
     TextDelta,
     TurnDone,
@@ -87,6 +89,7 @@ class FakeCodexAppServer:
         turn_id: str = "turn-1",
         frames: list[_Frame] | None = None,
         fail_methods: set[str] | None = None,
+        fail_messages: dict[str, str] | None = None,
         die_on_methods: set[str] | None = None,
         model: str | None = None,
     ) -> None:
@@ -100,6 +103,8 @@ class FakeCodexAppServer:
         # Requests answered with a JSON-RPC error instead of a result (e.g. a
         # ``thread/resume`` naming a thread this app-server has forgotten).
         self._fail_methods = fail_methods or set()
+        # Overrides the default error message of a failing request.
+        self._fail_messages = fail_messages or {}
         # Requests on which the peer process "dies": its stdout closes with no
         # reply, the transport failure a crashed app-server produces.
         self._die_on_methods = die_on_methods or set()
@@ -165,7 +170,12 @@ class FakeCodexAppServer:
                 {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "error": {"code": -32600, "message": f"{method} failed: no such thread"},
+                    "error": {
+                        "code": -32600,
+                        "message": self._fail_messages.get(
+                            method, f"{method} failed: no such thread"
+                        ),
+                    },
                 }
             )
             return
@@ -830,3 +840,31 @@ async def test_document_without_extractor_degrades_to_a_path_note(tmp_path: Any)
 
 async def _collect_stream(stream: Any) -> list[Any]:
     return [ev async for ev in stream]
+
+
+_ACTIVE_WRITER = "thread t-1 already has an active writer"
+
+
+@pytest.mark.acceptance(spec="chat", scenario="Codex's active-writer error is the same refusal")
+@pytest.mark.parametrize("failing", ["thread/resume", "turn/start"])
+@pytest.mark.asyncio
+async def test_an_active_writer_error_is_the_session_in_use_refusal(failing: str):
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(
+        frames=_basic_frames(),
+        fail_methods={failing},
+        fail_messages={failing: _ACTIVE_WRITER},
+    )
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="t-1")
+
+    events = await _collect(adapter, "hi")
+
+    assert events[-1] == TurnError(code=SESSION_IN_USE, message=SESSION_IN_USE_MESSAGE)
+    assert [e for e in events if isinstance(e, TurnError)] == [events[-1]]
+    # The busy thread is not forked into a fresh one, and its id is kept.
+    assert "thread/start" not in [m for m, _ in server.requests]
+    assert saved == []

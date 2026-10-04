@@ -153,26 +153,30 @@ class NativeSessionService:
             items=page.items, next_cursor=next_cursor, total=page.total, conversations=linked
         )
 
-    async def rename(self, agent_uid: str, session_id: str, title: str) -> None:
+    async def rename(
+        self, agent_uid: str, session_id: str, title: str, *, sync_index: bool = True
+    ) -> None:
         """Give the session a new title, in the agent's own store; a conversation
-        pointing at it takes the title too."""
+        pointing at it takes the title too (``sync_index=False`` when the caller
+        is that conversation's owner and sets the index row itself)."""
         _require_id(session_id)
         clean = title.strip()
         if not clean:
             raise NativeSessionInvalid("title must not be empty")
         _agent, cfg, source = await self._resolve(agent_uid)
         await source.rename(cfg.resolved_config_dir(), session_id, clean)
-        if self._conversations is not None:
+        if sync_index and self._conversations is not None:
             await self._conversations.retitle(session_id, clean)
 
-    async def delete(self, agent_uid: str, session_id: str) -> None:
+    async def delete(self, agent_uid: str, session_id: str, *, sync_index: bool = True) -> None:
         """Delete the session from the agent's own store (permanent); a
-        conversation pointing at it loses its turn and its index row. Nothing of
-        Coffer's changes when the agent refuses."""
+        conversation pointing at it loses its turn and its index row
+        (``sync_index=False`` when the caller owns that conversation and removes
+        the row itself). Nothing of Coffer's changes when the agent refuses."""
         _require_id(session_id)
         _agent, cfg, source = await self._resolve(agent_uid)
         await source.delete(cfg.resolved_config_dir(), session_id)
-        if self._conversations is not None:
+        if sync_index and self._conversations is not None:
             await self._conversations.forget(session_id)
 
     async def _resolve(self, agent_uid: str) -> tuple[Resource, AgentConfig, NativeSessionSource]:

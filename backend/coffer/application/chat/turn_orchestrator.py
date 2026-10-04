@@ -32,6 +32,7 @@ import logging
 from collections.abc import Callable, Sequence
 
 from coffer.application.chat import questions
+from coffer.application.chat.ports import SessionInUsePort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_runner import (
@@ -56,7 +57,13 @@ from coffer.application.chat.turn_state import held_conversations as held_conver
 from coffer.application.runtime import correlation
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.attachment import Attachment
-from coffer.domain.chat.events import AgentEvent, TurnError
+from coffer.domain.chat.errors import SessionInUse
+from coffer.domain.chat.events import (
+    SESSION_IN_USE,
+    SESSION_IN_USE_MESSAGE,
+    AgentEvent,
+    TurnError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -70,9 +77,13 @@ class TurnOrchestrator:
         chat_service: ChatService,
         registry: AgentProviderRegistry,
         idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
+        session_in_use: SessionInUsePort | None = None,
     ) -> None:
         self._chat = chat_service
         self._registry = registry
+        # Asked before a turn resumes a native session (spec chat "Run a session
+        # in one place at a time"); ``None`` never refuses.
+        self._session_in_use = session_in_use
         # How long a turn may go without producing an event before the watchdog
         # cancels it (``turn_runner``); ``None`` disables the watchdog.
         self._idle_timeout = idle_timeout
@@ -127,7 +138,7 @@ class TurnOrchestrator:
         state.paused = False
         if start_now and not is_stopping():
             try:
-                await self._begin_turn(conversation_id, message)
+                started = await self._begin_turn(conversation_id, message)
             except TurnsStopping:
                 pass  # the daemon began stopping mid-start: hold it in the queue
             except BaseException:
@@ -136,6 +147,8 @@ class TurnOrchestrator:
                 evict_if_idle(conversation_id)
                 raise
             else:
+                if not started:
+                    evict_if_idle(conversation_id)
                 return False
         # Held while the daemon stops — the in-memory queue goes with it.
         state.queue.append(message)
@@ -199,7 +212,7 @@ class TurnOrchestrator:
             return
         message = state.queue.pop(0)
         try:
-            await self._begin_turn(conversation_id, message)
+            started = await self._begin_turn(conversation_id, message)
         except TurnsStopping:
             state.queue.insert(0, message)
             state.paused = True
@@ -218,12 +231,17 @@ class TurnOrchestrator:
                 failed.put_nowait(error)
                 failed.put_nowait(None)
                 message.on_start(failed)
+        else:
+            if not started:
+                # Refused (the session is open elsewhere): the message is not
+                # retried; the ones behind it each get their own answer.
+                await self._maybe_advance(conversation_id)
 
     async def _begin_turn(
         self,
         conversation_id: str,
         message: PendingMessage,
-    ) -> None:
+    ) -> bool:
         """Reserve the slot, build the adapter, name and touch the conversation,
         spawn the turn task. Callers guarantee no turn is currently active.
 
@@ -233,7 +251,12 @@ class TurnOrchestrator:
 
         Raises ``TurnsStopping`` once the daemon has begun stopping its turns —
         checked on entry and again just before the conversation is touched, so
-        a start that raced ``stop_all_turns`` changes nothing and spawns nothing."""
+        a start that raced ``stop_all_turns`` changes nothing and spawns nothing.
+
+        Returns ``True`` when the turn started and ``False`` when it was refused
+        because its native session is open outside the daemon: the message's
+        renderer (``on_start``) is handed a stream that carries the refusal and
+        ends. A message with no renderer raises ``SessionInUse`` instead."""
         if is_stopping():
             raise TurnsStopping(conversation_id)
         state = state_for(conversation_id)
@@ -249,6 +272,13 @@ class TurnOrchestrator:
         turn = questions.register_turn(conversation_id)
         try:
             conv = await self._chat.get_conversation(conversation_id)
+            session_id = conv.agent_config.session_id
+            if (
+                session_id
+                and self._session_in_use is not None
+                and await self._session_in_use.in_use(session_id)
+            ):
+                raise SessionInUse(session_id)
             provider = self._registry.get(conv.agent_key)
             adapter = await provider.build_adapter(conversation_id)
             if is_stopping():
@@ -256,13 +286,19 @@ class TurnOrchestrator:
             await self._chat.begin_turn(
                 conversation_id, text=message.text, title_hint=message.title_hint
             )
-        except BaseException:
+        except BaseException as exc:
             # Anything failed before the task spawned — release the reservation.
             questions.release_turn(turn)
             if state.active is active:
                 state.active = None
             if primary_queue is not None:
                 primary_queue.put_nowait(None)
+            if isinstance(exc, SessionInUse) and message.on_start is not None:
+                refused: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
+                refused.put_nowait(TurnError(code=SESSION_IN_USE, message=SESSION_IN_USE_MESSAGE))
+                refused.put_nowait(None)
+                message.on_start(refused)
+                return False
             raise
 
         # Bound around the spawn: the turn task and whatever ``on_start`` spawns
@@ -286,6 +322,7 @@ class TurnOrchestrator:
             if message.on_start is not None and primary_queue is not None:
                 # After the task exists, so a renderer that stops the turn finds it.
                 message.on_start(primary_queue)
+        return True
 
     def _advance_callback(self, conversation_id: str) -> Callable[[asyncio.Task[None]], None]:
         def _cb(_task: asyncio.Task[None]) -> None:
