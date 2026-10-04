@@ -66,7 +66,7 @@ Coffer 每次检查时都从技能文件夹读取 `requires:`，所以你在编�
 
 ## 智能体看到什么 {#what-your-agents-see}
 
-这台机器上的每个智能体都能读到同一份清单。[`coffer-guide` 技能](/zh/guides/coffer-guide)会告诉它运行 `coffer cli list`，打印 Coffer 管理的每个命令——它是做什么的（你手动添加时填的标题和描述）、谁需要它、在这台机器上是否就绪——这样智能体在认定某个工具不可用之前会先查这里，也能知道你做某件事用的是哪个工具。`coffer cli list --json` 还会给出需要你处理的命令的交接提示词。这条命令读的是 Coffer 上次检查的结果，它不会触发检查，也不会跑登录检查，所以装完东西后要点 **重新检查**。
+这台机器上的每个智能体都能读到同一份清单。[`coffer-guide` 技能](/zh/guides/skills#the-built-in-coffer-guide-skill)会告诉它运行 `coffer cli list`，打印 Coffer 管理的每个命令——它是做什么的（你手动添加时填的标题和描述）、谁需要它、在这台机器上是否就绪——这样智能体在认定某个工具不可用之前会先查这里，也能知道你做某件事用的是哪个工具。`coffer cli list --json` 还会给出需要你处理的命令的交接提示词。这条命令读的是 Coffer 上次检查的结果，它不会触发检查，也不会跑登录检查，所以装完东西后要点 **重新检查**。
 
 ## 把安装交给你的智能体 {#hand-the-install-to-your-agent}
 

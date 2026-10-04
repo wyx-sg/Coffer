@@ -66,7 +66,7 @@ A skill's own page has a **Requires** tab listing what that skill declares, each
 
 ## What your agents see
 
-Every agent on this machine can read the same list. The [`coffer-guide` skill](/guides/coffer-guide) tells it to run `coffer cli list`, which prints every command Coffer manages — what each is for (the title and description you gave a CLI you added), who needs it and whether it is ready on this machine — so an agent checks there before deciding a tool is unavailable, and learns which tool you use for a job. `coffer cli list --json` adds the hand-off prompt for any command that needs you. The command reads what Coffer found at its last check; it runs no check and no login check, so press **Check again** after you install something.
+Every agent on this machine can read the same list. The [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill) tells it to run `coffer cli list`, which prints every command Coffer manages — what each is for (the title and description you gave a CLI you added), who needs it and whether it is ready on this machine — so an agent checks there before deciding a tool is unavailable, and learns which tool you use for a job. `coffer cli list --json` adds the hand-off prompt for any command that needs you. The command reads what Coffer found at its last check; it runs no check and no login check, so press **Check again** after you install something.
 
 ## Hand the install to your agent
 
