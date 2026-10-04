@@ -66,6 +66,7 @@ export function McpBuiltinPane({ basePath }: { basePath: string }) {
         basePath={basePath}
         overview={
           <McpOverviewTab
+            invocationsHref={`${basePath}/invocations`}
             name={server.name}
             enabled
             builtin

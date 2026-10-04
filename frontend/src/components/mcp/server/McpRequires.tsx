@@ -2,7 +2,8 @@
 //
 // One row per thing: the launcher (a CLI, found or not, with its version) and
 // each secret its environment or headers cite (set, missing here, or waiting
-// for approval), each with a link to the page that owns it. A Streamable HTTP
+// for approval), named as the Secrets page names it, each with a link to the
+// page that owns it (a secret's opens the Secrets list searched for it). A Streamable HTTP
 // server has no launcher row. Nothing to show when it needs nothing.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -23,37 +24,53 @@ export function McpRequires({ requires }: { requires: readonly Requirement[] }) 
     <Section title={t("mcp.page.requires.title")} gap="snug" labelled compact>
       <p className="-mt-1 text-xs text-text-muted">{t("mcp.page.requires.sub")}</p>
       <ul className="flex flex-col border-b border-border-subtle">
-        {requires.map((r) => (
-          <li
-            key={`${r.kind}:${r.name}`}
-            className="grid min-h-9 grid-cols-[160px_72px_minmax(0,1fr)_128px] items-center gap-3 border-t border-border-subtle"
-          >
-            <span className="truncate font-mono text-xs font-label text-text">{r.name}</span>
-            <span className="text-xs text-text-muted">
-              {t(r.kind === "cli" ? "mcp.page.requires.cli" : "mcp.page.requires.secret")}
-            </span>
-            <span
-              className={cn(
-                "text-xs",
-                OK.has(r.status) ? "text-text-muted" : toneTextClass("warn"),
-              )}
+        {requires.map((r) => {
+          // A secret row names the secret itself (what the Secrets page lists), not the
+          // environment variable or header that carries it; the link opens the list on it.
+          const secret = r.kind === "secret" ? (r.secret ?? r.name) : null;
+          return (
+            <li
+              key={`${r.kind}:${r.name}`}
+              className="grid min-h-9 grid-cols-[160px_72px_minmax(0,1fr)_128px] items-center gap-3 border-t border-border-subtle"
             >
-              {r.status === "found" && r.version
-                ? t("mcp.page.requires.foundVersion", { version: r.version })
-                : t(`mcp.page.requires.status.${r.status}`)}
-            </span>
-            <span className="text-right">
-              <Link
-                to={r.kind === "cli" ? `/clis/${encodeURIComponent(r.name)}` : "/secrets"}
-                className="text-xs font-label text-accent-text hover:underline"
+              <span
+                className="truncate font-mono text-xs font-label text-text"
+                title={secret !== null && secret !== r.name ? r.name : undefined}
               >
-                {t(
-                  r.kind === "cli" ? "mcp.page.requires.viewClis" : "mcp.page.requires.viewSecrets",
+                {secret ?? r.name}
+              </span>
+              <span className="text-xs text-text-muted">
+                {t(r.kind === "cli" ? "mcp.page.requires.cli" : "mcp.page.requires.secret")}
+              </span>
+              <span
+                className={cn(
+                  "text-xs",
+                  OK.has(r.status) ? "text-text-muted" : toneTextClass("warn"),
                 )}
-              </Link>
-            </span>
-          </li>
-        ))}
+              >
+                {r.status === "found" && r.version
+                  ? t("mcp.page.requires.foundVersion", { version: r.version })
+                  : t(`mcp.page.requires.status.${r.status}`)}
+              </span>
+              <span className="text-right">
+                <Link
+                  to={
+                    secret === null
+                      ? `/clis/${encodeURIComponent(r.name)}`
+                      : `/secrets?q=${encodeURIComponent(secret)}`
+                  }
+                  className="text-xs font-label text-accent-text hover:underline"
+                >
+                  {t(
+                    r.kind === "cli"
+                      ? "mcp.page.requires.viewClis"
+                      : "mcp.page.requires.viewSecrets",
+                  )}
+                </Link>
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </Section>
   );

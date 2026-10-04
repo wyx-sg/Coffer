@@ -51,13 +51,7 @@ export function sectionGroups(
   filter: string,
 ): { section: GroupSection; groups: CustomToolGroup[] }[] {
   const q = filter.trim().toLowerCase();
-  const matching = groups.filter(
-    (g) =>
-      !q ||
-      g.name.toLowerCase().includes(q) ||
-      hostOf(g.base_url).toLowerCase().includes(q) ||
-      g.tools.some((tool) => tool.name.toLowerCase().includes(q)),
-  );
+  const matching = groups.filter((g) => !q || g.name.toLowerCase().includes(q));
   const sorted = [...matching].sort(
     (a, b) => HEALTH_RANK[a.health] - HEALTH_RANK[b.health] || a.name.localeCompare(b.name),
   );

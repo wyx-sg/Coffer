@@ -84,7 +84,7 @@ export function SkillLibrary({
     const out: Record<SkillGroup, SkillOut[]> = { attention: [], inUse: [], off: [], builtin: [] };
     for (const s of skills) {
       if (agentFilter && !agentFilter.matches(s)) continue;
-      if (q && !`${s.name} ${s.description}`.toLowerCase().includes(q)) continue;
+      if (q && !s.name.toLowerCase().includes(q)) continue;
       out[skillGroup(s, skillProblems(s, clis, drift).length > 0)].push(s);
     }
     return out;

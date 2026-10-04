@@ -173,7 +173,10 @@ describe("SecretsPage list", () => {
     expect(rows[1]).toContain("github");
     fireEvent.change(find, { target: { value: "skill-3" } });
     expect(screen.getAllByRole("link")).toHaveLength(1);
+    // Names only: the type ("MCP server") matches nothing.
     fireEvent.change(find, { target: { value: "mcp" } });
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    fireEvent.change(find, { target: { value: "git" } });
     expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 

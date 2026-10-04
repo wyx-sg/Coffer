@@ -73,7 +73,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
         <AgentKindTab
           rows={rows}
           searchPlaceholder={t("agents.skillsTab.search")}
-          searchText={(row) => `${row.name} ${row.item.reason ?? ""} ${row.item.path}`}
+          searchText={(row) => row.name}
           isLoading={unmanaged.isPending}
           error={unmanaged.error}
           onRetry={() => void unmanaged.refetch()}
