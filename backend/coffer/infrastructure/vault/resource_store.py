@@ -177,7 +177,8 @@ class FileResourceRepo:
             name=doc.name,
             description=doc.description,
             config=config,
-            enabled=reach.enabled,
+            # A kind with no switch is always on, whatever an old reach record says.
+            enabled=reach.enabled or not getattr(self._kinds.get(doc.kind), "toggleable", True),
             created_at=created,
             updated_at=modified or created,
             scope=reach.scope,

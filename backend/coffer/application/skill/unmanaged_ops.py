@@ -160,7 +160,7 @@ async def adopt_unmanaged(
     enabled: bool = True,
     scope: Scope | None = None,
 ) -> Resource:
-    """Adopt an unmanaged skill folder into the master store.
+    """Adopt an unmanaged skill into the master store folder into the master store.
 
     ``name`` registers it under another name than its SKILL.md front matter
     carries (the front matter of the master copy is rewritten, the folder it
@@ -172,12 +172,12 @@ async def adopt_unmanaged(
     agent's canonical delivery location ``<config_dir>/skills/<name>`` —
     in-place replacement when adopting from there, consolidation when
     adopting from ``~/.agents/skills`` (the original is removed; Codex reads
-    both locations, so the skill stays visible). See spec skill-manager "Adopt an unmanaged skill".
+    both locations, so the skill stays visible). See spec skill-manager "Adopt an
+    unmanaged skill into the master store".
     The delivery pass ``register_from_validated`` asks for leaves THIS agent
     alone while the original folder still occupies the link path (foreign
     content is never clobbered) — that is why the rmtree happens first and
-    the link is made after it, directly: adoption links in place even into a
-    disabled agent, which the reconciler would not.
+    the link is made after it, directly.
     """
     from coffer.application.skill.lifecycle_ops import register_from_validated
 
@@ -229,8 +229,8 @@ async def adopt_unmanaged(
     link = service._resolve_agent_skill_dir(agent) / resource.name
     written = await deliver(service, skill=resource, agent=agent, link=link)
     if written.created is not None:
-        # Adoption is the one delivery made outside the reconciler (it links
-        # in place even into a disabled agent), so it records its own event.
+        # Adoption is the one delivery made outside the reconciler, so it
+        # records its own event.
         await service._audit.record(
             AuditEventType.SKILL_BOUND.value,
             resource=resource,

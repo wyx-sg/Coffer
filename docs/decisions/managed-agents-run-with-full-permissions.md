@@ -137,18 +137,18 @@ token on the web. There is no approval relay, approval UI, approval route or
 approval audit event.
 
 Which agents may be driven at all is part of the same gate. Chat offers and
-runs **managed, enabled agents only**: an agent that is unmanaged (a CLI found
-on the PATH that no registered agent stands behind) or disabled is not offered
+runs **managed agents only**: an agent that is unmanaged (a CLI found
+on the PATH that no registered agent stands behind) is not offered
 on any surface and a turn on it is refused (`agent_not_managed`,
 `infrastructure/chat/adapter_support.py`), rather than run against the CLI's
 own default config directory. A full-permission turn therefore only ever runs
 in a config directory Coffer knows about, with the skills and MCP entry Coffer
-delivered there (spec chat "Ship Claude Code and Codex subprocess providers on
+delivered there (spec chat "Run Claude Code and Codex as subprocess providers on
 the type's one agent").
 
 A future change must keep these properties:
 
-- Only managed, enabled agents are offered and run turns.
+- Only managed agents are offered and run turns.
 - Channel inbound stays outbound-only or authenticated. A public, unauthenticated
   inbound path would turn "only the owner can issue instructions" into an
   assumption.

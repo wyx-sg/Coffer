@@ -24,14 +24,12 @@
     "state": {
       "connected": "Connected",
       "not-connected": "Not connected to Coffer",
-      "not-installed": "Not installed",
-      "disabled": "Off"
+      "not-installed": "Not installed"
     },
     "stateInline": {
       "connected": "connected",
       "not-connected": "not connected to Coffer",
-      "not-installed": "not installed",
-      "disabled": "off"
+      "not-installed": "not installed"
     }
   },
   "changePreview": {
@@ -1085,20 +1083,10 @@
       "years_other": "{{count}} years"
     },
     "daemonLog": {
-      "following": "following",
-      "newestFirst": "newest first",
-      "reveal": "Open in Finder",
       "showCall": "Show the MCP call"
     },
     "reconnecting": "Reconnecting…",
-    "tabFailed": "Couldn't be loaded",
-    "export": {
-      "label": "Export",
-      "json": "JSON",
-      "csv": "CSV",
-      "done_one": "Exported {{count}} record",
-      "done_other": "Exported {{count}} records"
-    }
+    "tabFailed": "Couldn't be loaded"
   },
   "settings": {
     "title": "Settings",
@@ -1708,7 +1696,7 @@
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "Another connection is already Coffer's internal-engine default — move the default to this connection instead of setting the flag directly",
     "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be turned on for an agent",
-    "PROVIDER_DOES_NOT_REACH_AGENT": "The connection can't be turned on for this agent — the connection or the agent is turned off, or the connection's scope doesn't name the agent",
+    "PROVIDER_DOES_NOT_REACH_AGENT": "The connection can't be turned on for this agent — the connection is turned off, or its scope doesn't name the agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "An agent is running on this connection, so its wire format can't change — put that agent back on its built-in login first, then edit the wire, then switch it onto the connection again",
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "Another connection is already Coffer's speech-to-text default — move the default to this connection instead of setting the flag directly",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
@@ -2137,6 +2125,12 @@
         "title_other": "{{count}} servers through Coffer",
         "open": "Open MCP servers"
       },
+      "fromCofferTools": {
+        "description": "{{agent}} reaches these through Coffer’s one MCP entry. Manage them on the Custom tools page.",
+        "title_one": "{{count}} custom tool group through Coffer",
+        "title_other": "{{count}} custom tool groups through Coffer",
+        "open": "Open Custom tools"
+      },
       "own": {
         "title": "{{agent}}’s own MCP servers",
         "description": "Entries in {{agent}}’s own config that bypass Coffer. Adopt one to route it through Coffer.",
@@ -2249,7 +2243,6 @@
       "not_installed": "Not installed",
       "config_left_behind": "Config left behind",
       "not_found": "Not found",
-      "disabled": "Off",
       "connected": "Connected",
       "needs_repair": "Needs repair",
       "not_connected": "Not connected",
@@ -2282,13 +2275,11 @@
           "mcpMissing": "The <code>coffer</code> entry is missing from <code>{{mcpFile}}</code>, so {{name}} can’t reach Coffer’s tools.",
           "hookStale": "The memory hook runs a command this Coffer no longer accepts, so sessions start without memory.",
           "hookMissing": "The memory hook is missing from <code>{{hookFile}}</code>, so sessions start without memory.",
-          "hookUntrusted": "{{name}} runs only hooks you approve. Approve Coffer’s hook in {{name}}’s /hooks, then check again.",
-          "disabled": "Coffer serves {{name}} nothing while it’s off. Its entry and hook stay in place."
+          "hookUntrusted": "{{name}} runs only hooks you approve. Approve Coffer’s hook in {{name}}’s /hooks, then check again."
         },
         "action": {
           "connect": "Connect",
           "repair": "Repair",
-          "enable": "Turn on",
           "checkAgain": "Check again"
         },
         "part": {
@@ -2304,7 +2295,6 @@
           "stale": "Out of date",
           "missing": "Missing",
           "notSet": "Not set",
-          "idle": "Idle",
           "untrusted": "Not approved"
         }
       },
@@ -2327,7 +2317,6 @@
           "memory": "Memory",
           "config": "Config files"
         },
-        "disabledLine": "None while off · {{count}} would reach it",
         "toReview": "{{count}} to review",
         "mcp": {
           "line": "{{coffer}} through Coffer · {{own}} in {{file}}",
@@ -2585,7 +2574,6 @@
         "hookStale": "Memory hook is out of date",
         "hookMissing": "Memory hook not written",
         "gone": "{{dir}} and its program are gone",
-        "disabled": "Off in Coffer",
         "notOnThisMac": "Not on this Mac",
         "keptNotOnPath": "{{dir}} kept · {{program}} not on PATH"
       }
@@ -2593,9 +2581,7 @@
     "pending": {
       "adding": "Adding…",
       "connecting": "Connecting…",
-      "disconnecting": "Disconnecting…",
-      "enabling": "Turning on…",
-      "disabling": "Turning off…"
+      "disconnecting": "Disconnecting…"
     },
     "rowMenu": {
       "label": "More actions for {{name}}",
@@ -2605,9 +2591,7 @@
       "copyUid": "Copy uid",
       "connect": "Connect",
       "repair": "Repair",
-      "disconnect": "Disconnect…",
-      "enable": "Turn on",
-      "disable": "Turn off"
+      "disconnect": "Disconnect…"
     },
     "change": {
       "title": "Review changes",
@@ -2776,7 +2760,6 @@
       "reason": {
         "skillOff": "The skill is off.",
         "outsideReach": "Not ticked.",
-        "agentOff": "The agent is off.",
         "agentMissing": "The agent is not installed on this machine.",
         "pending": "No copy recorded yet. Check again to look at the agent’s folder."
       },
@@ -3640,9 +3623,6 @@
     },
     "title": "Conversations",
     "thinking": "Thinking…",
-    "message": {
-      "tokens": "{{prompt}} in · {{completion}} out"
-    },
     "history": {
       "rename": "Rename",
       "delete": "Delete…",
@@ -3720,8 +3700,8 @@
       "workspaceFull": "Coffer’s workspace (~/.coffer/content/workspace)",
       "workspacePicker": {
         "label": "Workspace",
-        "choose": "Choose a folder…",
-        "typePath": "Or type a folder path",
+        "choose": "Choose…",
+        "typePath": "Type or paste a folder path",
         "use": "Use"
       }
     },
@@ -4050,14 +4030,9 @@
         "title": "Replies and conversations"
       },
       "directories": {
-        "description": "Where new conversations start, and what /dir may switch to. With none allowed, /dir is off."
+        "description": "/dir may switch to these and the folders under them; new conversations start in the default. With no default they start in Coffer's workspace; with no directories /dir is off."
       },
       "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct the channel's file under `~/.coffer/vault/resources/channel/`, or delete the channel and add it again.",
-      "saveState": {
-        "saving": "Saving…",
-        "saved": "Saved",
-        "error": "Couldn't save"
-      },
       "machine": {
         "runsOn": "Runs on",
         "hint": "Exactly one Mac holds the bot's connection."
@@ -4246,16 +4221,14 @@
       },
       "directories": {
         "title": "Working directories",
-        "default": "Default",
-        "defaultHint": "Where new conversations start.",
-        "defaultPlaceholder": "Coffer workspace (~/.coffer/content/workspace)",
-        "allowed": "Allowed for /dir",
-        "allowedHint": "/dir offers only these and the folders under them.",
+        "list": "Directories",
         "defaultTag": "default",
-        "remove": "Remove",
+        "setDefault": "Set as default",
+        "setDefaultAria": "Set {{path}} as the default",
+        "unsetDefault": "Unset default",
+        "unsetDefaultAria": "Stop starting new conversations in {{path}}",
         "removeAria": "Remove {{path}}",
         "add": "Add directory…",
-        "notAbsolute": "\"{{path}}\" is not an absolute path — start it with /.",
         "tooMany": "At most {{max}} directories."
       }
     },
@@ -4288,8 +4261,6 @@
     "off": "Off",
     "everywhere": "All agents",
     "restricted": "Chosen agents",
-    "inherited": "Same as the group",
-    "inheritedSub": "Follows the group’s agents",
     "filterAgents": "Filter agents",
     "noMatch": "No agent matches.",
     "applying": "Applying…",
@@ -5242,6 +5213,11 @@
       "toolCount_one": "{{count}} tool",
       "toolCount_other": "{{count}} tools",
       "filter": "Filter groups",
+      "bulkLabel": "Selected custom tool groups",
+      "clearSelection": "Clear selection",
+      "deleteManyTitle_one": "Delete {{count}} group?",
+      "deleteManyTitle_other": "Delete {{count}} groups?",
+      "deleteManyBody": "Agents lose their tools on their next call. The secrets and the call history stay.",
       "section": {
         "attention": "Needs attention",
         "healthy": "Healthy",
@@ -5296,7 +5272,7 @@
       "baseUrl": "Base URL",
       "baseUrlHelp": "Each request's path is added to it.",
       "availableTo": "Available to",
-      "availableToHelp": "The default for every tool in the group; one tool can be given to fewer agents.",
+      "availableToHelp": "Every tool in the group is available to these agents.",
       "headers": "Headers",
       "headersHelp": "Coffer adds these to every call; secret values stay in Coffer's keychain and agents never see them."
     },
@@ -5326,7 +5302,7 @@
       "section": "{{section}} · {{count}} of {{total}}",
       "pickNote": "Each operation you pick becomes one tool. Reads start picked; operations that change data start unpicked.",
       "baseUrlMissing": "The spec names no server; each request's path is added to this URL.",
-      "availableToHelp": "The default for every tool in the group.",
+      "availableToHelp": "Every tool in the group is available to these agents.",
       "try": "Try an operation",
       "tryNone": "Pick an operation first.",
       "tryPick": "Operation to try",
@@ -5427,9 +5403,8 @@
       "addRequest": "Add request",
       "heading": "Tools",
       "description": "Each tool is one request; agents see {{prefix}}.",
-      "groupGives": "{{group}} gives it to {{agents}}",
-      "reachFootnote": "To stop it for every agent, turn its switch off in the table.",
-      "reachOf": "Available to: {{name}}",
+      "filter": "Filter tools",
+      "noMatch": "No tool matches “{{query}}”",
       "edit": "Edit {{name}}"
     },
     "editor": {
@@ -5978,7 +5953,6 @@
     }
   },
   "usage": {
-    "exportCsv": "Export CSV",
     "noPrice": "—",
     "error": "Couldn't load API-key usage.",
     "presets": {
@@ -6555,13 +6529,13 @@
   },
   "drawer": {
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "resize": "Resize the drawer"
   },
   "filters": {
     "clear": "Clear",
     "clearLabel": "Clear {{label}}",
     "clearAll": "Clear filters",
-    "only": "Only",
     "noMatches": "No matches",
     "timeRange": {
       "label": "Time range",

@@ -1,7 +1,8 @@
 // src/components/chat/DraftWorkspacePicker.tsx — the folder chip in the draft's
 // header, as a picker: Coffer's own workspace, the folders recent conversations
-// started in, "Choose a folder…" (the host's native dialog, or the in-app
-// folder browser), and a field to type or paste a path. The path is cut with an
+// started in, and one row for any other folder — a field to type or paste a
+// path, whose one button is "Choose…" (the host's native dialog, or the in-app
+// folder browser) while it is empty and "Use" once it holds a path. The path is cut with an
 // ellipsis in the chip and whole in its tooltip. Only the draft has it: once the
 // first message is sent the folder is fixed.
 import { useState } from "react";
@@ -85,15 +86,10 @@ export function DraftWorkspacePicker({ cwd, onChange }: Props) {
             </WorkspaceRow>
           ))}
         </ul>
-        <div className="border-t border-border-subtle pt-2">
-          <FolderPicker
-            value={cwd}
-            onChange={choose}
-            label={t("conversations.draft.workspacePicker.choose")}
-          />
-        </div>
+        {/* One row for any other folder: type or paste a path and Use it, or
+            leave the field empty and Choose… one. */}
         <form
-          className="flex items-center gap-1.5"
+          className="flex items-center gap-1.5 border-t border-border-subtle pt-2"
           onSubmit={(e) => {
             e.preventDefault();
             submitTyped();
@@ -106,9 +102,17 @@ export function DraftWorkspacePicker({ cwd, onChange }: Props) {
             placeholder={t("conversations.draft.workspacePicker.typePath")}
             className="min-w-0 font-mono text-xs"
           />
-          <Button type="submit" variant="outline" disabled={!typed.trim()}>
-            {t("conversations.draft.workspacePicker.use")}
-          </Button>
+          {typed.trim() ? (
+            <Button type="submit" variant="outline" className="shrink-0">
+              {t("conversations.draft.workspacePicker.use")}
+            </Button>
+          ) : (
+            <FolderPicker
+              value={cwd}
+              onChange={choose}
+              label={t("conversations.draft.workspacePicker.choose")}
+            />
+          )}
         </form>
       </PopoverContent>
     </Popover>

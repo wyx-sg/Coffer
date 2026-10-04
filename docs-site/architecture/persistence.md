@@ -107,7 +107,6 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ~/.coffer/local/
 ├── resources/agent/<name>.json   agents are machine-local resources
 ├── reach.json                    {uid: {enabled, agents, projects}}
-├── tool-reach.json               custom tools' per-tool reach
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
 ├── curation.json                 the content each knowledge document had when curation settled it

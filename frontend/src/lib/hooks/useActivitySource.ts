@@ -39,18 +39,13 @@ const HEAD_POLL_MS = 5_000;
 /** How often a count is re-read. */
 const COUNT_POLL_MS = 60_000;
 
-/** The file the daemon log is read from, once its first page has been. */
-interface Read extends ListPage<ActivityRecord> {
-  path?: string;
-}
-
 async function readPage(
   spec: SourceParams,
   limit: number,
   cursor: string | null,
   signal: AbortSignal,
   withTotal = false,
-): Promise<Read> {
+): Promise<ListPage<ActivityRecord>> {
   if (spec.source === "change") {
     const out = await fetchAuditPage(spec.params, limit, cursor, signal);
     return { items: out.entries.map(fromAudit), next: out.next_cursor, total: out.total };
@@ -65,7 +60,6 @@ async function readPage(
     next: out.next_cursor ?? null,
     total: out.total ?? undefined,
     totalIsFloor: out.total_is_floor,
-    path: out.path,
   };
 }
 
@@ -98,8 +92,6 @@ export interface ActivitySourceState {
   refreshHead: () => void;
   /** The time of the oldest loaded record, for merging several logs. */
   oldestAt: number | undefined;
-  /** The daemon log's file, once it has been read. */
-  path: string | undefined;
 }
 
 export function useActivitySource(spec: SourceParams, enabled: boolean): ActivitySourceState {
@@ -192,7 +184,6 @@ export function useActivitySource(spec: SourceParams, enabled: boolean): Activit
     isLoadingOlder: pages.isLoadingMore,
     refreshHead: () => void refetchHead(),
     oldestAt: oldest ? recordTimeMs(oldest) : undefined,
-    path: head.data?.path,
   };
 }
 

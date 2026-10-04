@@ -130,7 +130,7 @@ class SkillService:
         """Ask the reconciler for a ``skill_link`` pass now (``Trigger.CHANGE``).
 
         Every front door that changes what an agent should hold — an import,
-        a skill's ``enabled`` / ``scope``, an agent registered, switched or
+        a skill's ``enabled`` / ``scope``, an agent registered or
         moved, the builtin seed — calls this after its own write, so the
         delivery is in place when the call returns. Delivery itself is the
         ``skill_link`` target's (``link_reconcile``); ``None`` when no

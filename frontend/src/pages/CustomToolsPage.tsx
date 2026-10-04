@@ -25,6 +25,7 @@ export function CustomToolsPage() {
   const { group: selected } = useParams<{ group?: string }>();
   const { data, isPending, error, refetch } = useCustomToolGroups();
   const [adding, setAdding] = useState<AddStart | null>(null);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const groups = data ?? [];
   const firstRun = !isPending && !error && groups.length === 0;
 
@@ -61,6 +62,11 @@ export function CustomToolsPage() {
               onRetry={() => void refetch()}
               selected={selected}
               onOpen={(name) => navigate(`/custom-tools/${encodeURIComponent(name)}`)}
+              picked={picked}
+              onPickedChange={setPicked}
+              onDeleted={(names) => {
+                if (selected && names.includes(selected)) navigate("/custom-tools");
+              }}
             />
           }
           detail={

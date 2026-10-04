@@ -58,7 +58,7 @@ neither built a search engine to do it:
 
 ### Option A — Read the agents' memory, distil it into Coffer's own notes, deliver them through hooks (chosen)
 
-Coffer reads each enabled agent's native memory read-only, keeps what it read
+Coffer reads each registered agent's native memory read-only, keeps what it read
 verbatim in a hidden `.raw/`, and has its internal model distil it into notes of
 its own — one topic per file, partitioned by repository plus `global` — merging
 across agents by meaning. Delivery is by hook, at two moments (decided in
@@ -149,14 +149,14 @@ Multi-term, fuzzy or embedding search behind `coffer__recall`.
 
 ## Decision
 
-**Coffer never writes an agent's native memory. It reads each enabled agent's
+**Coffer never writes an agent's native memory. It reads each registered agent's
 memory read-only, distils it into notes of its own — one topic per file, filed
 by repository — and delivers them through hooks: the index of that set plus
 the path to read the bodies as files at session start, then the notes a prompt
 names.**
 
-1. **Read, never write.** Coffer reads the native memory of each registered,
-   enabled agent from a path derived from its own `config_dir`, and modifies
+1. **Read, never write.** Coffer reads the native memory of each registered
+   agent from a path derived from its own `config_dir`, and modifies
    nothing there — not a file, not a format, not the agent's memory setting. It
    reads no transcripts or rollouts. Where a source states its own search terms,
    as Codex's summary does, those travel with the entry.

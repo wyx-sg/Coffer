@@ -2,7 +2,8 @@
 //
 // Boards 2.1.25–2.1.30, 2.1.59. "From Coffer" is one row — how many registered
 // servers reach this agent through Coffer's one MCP entry and their first
-// names — linking to the MCP servers page filtered to this agent. Below it the
+// names — linking to the MCP servers page filtered to this agent, and a second
+// for the custom-tool groups, linking to Custom tools. Below them the
 // agent's own servers: the direct entries in its config files ("List the MCP
 // entries in the agent's own config files"). Adopt moves one into Coffer
 // (AgentAdoptMcpDialog); Remove duplicate takes out an entry Coffer's gateway
@@ -11,7 +12,7 @@
 // tab, and its entries stay read-only.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Server } from "lucide-react";
+import { Server, Wrench } from "lucide-react";
 
 import { Section } from "@/components/Section";
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
@@ -19,7 +20,12 @@ import { AgentMcpEntryDialog } from "@/components/agents/mcp/AgentMcpEntryDialog
 import { AgentOwnMcpRows } from "@/components/agents/mcp/AgentOwnMcpRows";
 import { McpParseErrorAlert } from "@/components/agents/mcp/McpParseErrorAlert";
 import { useOwnMcpBulk } from "@/components/agents/mcp/useOwnMcpBulk";
-import { buildOwnMcpRows, cofferMcpNames, type OwnMcpRow } from "@/components/agents/mcp/mcpRows";
+import {
+  buildOwnMcpRows,
+  cofferMcpNames,
+  cofferToolGroupNames,
+  type OwnMcpRow,
+} from "@/components/agents/mcp/mcpRows";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { FromCofferRow } from "@/components/agents/tabs/FromCofferRow";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -46,6 +52,11 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
   );
   const cofferNames = useMemo(
     () => cofferMcpNames(agent.uid, servers.data ?? []),
+    [agent.uid, servers.data],
+  );
+
+  const toolGroupNames = useMemo(
+    () => cofferToolGroupNames(agent.uid, servers.data ?? []),
     [agent.uid, servers.data],
   );
 
@@ -76,6 +87,17 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
           names={cofferNames}
           linkLabel={t("agents.mcpTab.fromCoffer.open")}
           to={`/mcp-servers?agent=${encodeURIComponent(agent.uid)}`}
+        />
+      ) : null}
+      {servers.data ? (
+        <FromCofferRow
+          icon={Wrench}
+          testId="from-coffer-custom-tools"
+          description={t("agents.mcpTab.fromCofferTools.description", { agent: agentLabel })}
+          title={t("agents.mcpTab.fromCofferTools.title", { count: toolGroupNames.length })}
+          names={toolGroupNames}
+          linkLabel={t("agents.mcpTab.fromCofferTools.open")}
+          to={`/custom-tools?agent=${encodeURIComponent(agent.uid)}`}
         />
       ) : null}
 

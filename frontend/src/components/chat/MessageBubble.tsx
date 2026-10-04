@@ -130,9 +130,6 @@ function MessageBubbleImpl({
         ? "stopped"
         : "lost";
   const working = state === "running" || state === "waiting";
-  const promptTokens = message?.prompt_tokens;
-  const completionTokens = message?.completion_tokens;
-  const showTokens = !isLive && (promptTokens != null || completionTokens != null);
   const text = replyText(blocks);
 
   return (
@@ -188,27 +185,10 @@ function MessageBubbleImpl({
           />
         )}
         {banner}
-        {!working && state !== "lost" && (
-          <ReplyFooter
-            text={text}
-            tokens={
-              showTokens
-                ? t("conversations.message.tokens", {
-                    prompt: formatTokens(promptTokens ?? 0),
-                    completion: formatTokens(completionTokens ?? 0),
-                  })
-                : null
-            }
-          />
-        )}
+        {!working && state !== "lost" && <ReplyFooter text={text} />}
       </div>
     </div>
   );
-}
-
-/** 18234 → "18.2k": the header counts, not the invoice. */
-function formatTokens(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
 export const MessageBubble = memo(MessageBubbleImpl);

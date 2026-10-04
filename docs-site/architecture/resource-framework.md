@@ -61,7 +61,7 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | Config schema | — | The typed model (Pydantic) the config must validate against. |
 | Generic creation | allowed | Whether `POST /api/v1/resources` (and a generic config update) may touch this kind. |
 | `supports_scope` | no | Whether the kind carries a per-agent scope. A kind without it rejects any non-null scope (`SCOPE_INVALID`, 422). |
-| `toggleable` | yes | Whether the kind has an enabled switch at all. `knowledge` and `memory` are not toggleable: every one of their resources is enabled and served, and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
+| `toggleable` | yes | Whether the kind has an enabled switch at all. `knowledge`, `memory` and `agent` are not toggleable: every one of their resources reads as enabled and served (including one whose stored reach says off, left from before its kind became non-toggleable), and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
 | Storage class | `vault` | The storage class the kind's resource files live in: `vault` (synced), `local` (`agent`) or `derived` (`memory`). The directory is the sync policy. |
 | Per-row storage | none | A refinement of the storage class per row, decided by the config alone. The `skill` kind files the builtin `coffer-guide` as `derived`. |
 | Fixed name | no | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
@@ -103,7 +103,7 @@ Sync has no hook into a kind. A resource file that arrives by sync, like one you
 | Kind | Hooks and flags it supplies |
 | --- | --- |
 | `mcp_server` | A fixed name (the name prefixes every tool name an agent sees), no title, scope support, a name rule (reserves `__`, the tool namespace separator, and caps the name at 24 characters), an audit redactor (strips `transport.env` and `transport.headers`), secret references, a config-change check (evicts live connections so the next call spawns with the new config), delete cleanup, an enabled reaction (evicts live connections on disable) |
-| `agent` | No generic creation, a name from config and a fixed name (one agent per type, named by it), no title, `local` storage, delete cleanup, an enabled reaction |
+| `agent` | No generic creation, a name from config and a fixed name (one agent per type, named by it), no title, not toggleable, `local` storage, delete cleanup |
 | `skill` | No generic creation, scope support, a name rule (the `SKILL.md` frontmatter rule), a delete guard (refuses deleting the builtin `coffer-guide`), per-row storage (files `coffer-guide` as derived), a fixed name (the name is the folder an agent loads it from), no title, delete cleanup, a scope reaction, an enabled reaction |
 | `knowledge` | No generic creation, no title, not toggleable, a rename mover (moves the collection directory), delete cleanup |
 | `memory` | No generic creation, not toggleable, `derived` storage, a rename mover, delete cleanup |
@@ -120,7 +120,7 @@ The resource service is built with the app's set of kinds, a repository, the aud
 | Edit config | Same generic-create gate → schema → secret probe → config-change check → write → audit `resource_updated` with redacted before and after. |
 | Rename | No-op if unchanged → refuse a fixed-name kind (`NAME_IMMUTABLE`, 409, nothing audited) → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → rename mover → write → audit `resource_renamed` with `from` and `to`. |
 | Set title | No-op if unchanged → title rule (blank clears; over 80 characters, or any title on a kind that does not carry one, is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation. |
-| Enable or disable | Refuse a kind that is not `toggleable` (`RESOURCE_NOT_TOGGLEABLE`, 409) → no-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → enabled reaction. |
+| Enable or disable | Refuse a kind that is not `toggleable` (`RESOURCE_NOT_TOGGLEABLE`, 409) → no-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → enabled reaction, for a kind that has one. |
 | Set scope | Check the scope's shape and that the kind supports scope → scope check → write → audit `resource_scope_updated` → scope reaction. |
 | Delete | Resolve → delete guard → delete cleanup → remove the resource file in one vault commit → release secrets no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
 
@@ -196,7 +196,7 @@ Each kind's config schema is a Pydantic v2 model. The resource service validates
 
 ## Reach
 
-A resource's **reach** is its `enabled` flag together with its `scope`. A kind that is neither `toggleable` nor scoped — `knowledge`, `memory` — has no reach to set: it reaches every agent, and the web UI shows no reach or status control for it. Both are machine-local: they are set on the machine they apply to and never converge through sync.
+A resource's **reach** is its `enabled` flag together with its `scope`. A kind that is neither `toggleable` nor scoped — `knowledge`, `memory`, `agent` — has no reach to set: it is always on and unscoped, and the web UI shows no reach or status control for it. Both are machine-local: they are set on the machine they apply to and never converge through sync.
 
 The framework defines the shape of a scope and the one rule every enforcement point applies:
 

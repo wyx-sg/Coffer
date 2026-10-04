@@ -11,16 +11,11 @@ import { hookNotApproved } from "@/lib/agents/hookRows";
 /** The states the Connection card renders (problem states replace the whole tab). */
 export type ConnectionCardState = Extract<
   AgentRowState,
-  "connected" | "not_connected" | "needs_repair" | "disabled"
+  "connected" | "not_connected" | "needs_repair"
 >;
 
 export function isConnectionCardState(state: AgentRowState): state is ConnectionCardState {
-  return (
-    state === "connected" ||
-    state === "not_connected" ||
-    state === "needs_repair" ||
-    state === "disabled"
-  );
+  return state === "connected" || state === "not_connected" || state === "needs_repair";
 }
 
 const K = "agents.overviewTab.connection";
@@ -32,7 +27,6 @@ export function connectionBodyKey(
   hook: CofferHook | null | undefined,
 ): string {
   const hasHook = parts.some((p) => p.key === "memory_hook");
-  if (state === "disabled") return `${K}.body.disabled`;
   if (hookAwaitsApproval(state, hook)) return `${K}.body.hookUntrusted`;
   if (state === "connected") return `${K}.body.${hasHook ? "connected" : "connectedMcpOnly"}`;
   if (state === "not_connected")
@@ -64,14 +58,13 @@ export function hookEventCount(hook: CofferHook): number {
   ).size;
 }
 
-type PartHealth = "current" | "stale" | "missing" | "notSet" | "idle" | "untrusted";
+type PartHealth = "current" | "stale" | "missing" | "notSet" | "untrusted";
 
 const HEALTH_TONE: Record<PartHealth, StatusTone> = {
   current: "ok",
   stale: "warn",
   missing: "warn",
   notSet: "off",
-  idle: "off",
   untrusted: "warn",
 };
 
@@ -79,14 +72,13 @@ export function partHealthTone(health: PartHealth): StatusTone {
   return HEALTH_TONE[health];
 }
 
-/** A part's health word: Idle while off, Not set before it was ever connected,
+/** A part's health word: Not set before it was ever connected,
  *  else installed-and-current / out of date / missing. */
 export function partHealth(
   part: CofferConnection["parts"][number],
   hook: CofferHook | null | undefined,
   state: ConnectionCardState,
 ): PartHealth {
-  if (state === "disabled") return "idle";
   if (!part.installed) return state === "not_connected" ? "notSet" : "missing";
   if (part.key === "memory_hook" && hook) {
     return hookNotApproved(hook) ? "untrusted" : hook.health;

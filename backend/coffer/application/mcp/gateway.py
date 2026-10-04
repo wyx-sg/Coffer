@@ -31,7 +31,6 @@ from typing import Any
 from coffer.application.builtin_tools import (
     BuiltinToolRegistry,
 )
-from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
@@ -103,13 +102,11 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         tiering: TieringConfig | None = None,
-        tool_reach: ToolReachRepoPort | None = None,
         auth_monitor: UpstreamAuthMonitor | None = None,
         turn_ask: TurnAskPort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._auth_monitor = auth_monitor
-        self._tool_reach = tool_reach  # custom tools' reach overrides (gateway_tool_gate)
         self._resources = resource_service
         self._supervisor = supervisor
         self._discovery = discovery
@@ -178,7 +175,6 @@ class MCPGatewaySession:
         self.last_hidden_count = await saved_hidden_count(
             self._resources,
             self._session_agent_uid,
-            self._tool_reach,
             prefs=self._prefs,
             invocations=self._invocations,
             config=self._tiering,
@@ -242,7 +238,7 @@ class MCPGatewaySession:
     async def _servers_and_hidden(self) -> tuple[list[str], frozenset[str], dict[str, str]]:
         """Visible server names, tools hidden from this agent, per-tool exposure overrides."""
         rows = await visible_mcp_servers(self._resources, self._session_agent_uid)
-        hidden = await hidden_tool_names(rows, self._session_agent_uid, self._tool_reach)
+        hidden = hidden_tool_names(rows)
         return [r.name for r in rows], hidden, await exposure_overrides(self._prefs, rows)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
@@ -360,7 +356,6 @@ class MCPGatewaySession:
             prefs=self._prefs,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            tool_reach=self._tool_reach,
             auth_monitor=self._auth_monitor,
             **self._log_ctx,
         )

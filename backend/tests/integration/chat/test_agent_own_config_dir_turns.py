@@ -1,5 +1,5 @@
 """A turn on an agent with its own config directory runs against that directory
-(spec chat "Ship Claude Code and Codex subprocess providers on the type's one agent").
+(spec chat "Run Claude Code and Codex as subprocess providers on the type's one agent").
 
 Coffer delivers skills, installs its MCP entry and edits config files in the
 agent's ``config_dir``. The process it spawns to run a turn must read that same
@@ -14,7 +14,6 @@ adapter would hand the real subprocess — no binary is spawned.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import pathlib
 from datetime import UTC, datetime
 from typing import Any
@@ -187,13 +186,10 @@ async def test_codex_turn_on_the_default_dir_leaves_the_env_untouched(
 
 @pytest.mark.asyncio
 async def test_the_resolver_reads_the_agent_answering_for_the_type(home: pathlib.Path) -> None:
-    """Disabled agents and agents of the other type do not answer — the same
-    agent the model catalogue reads is the one a turn runs against."""
-    off = _agent(AgentType.CLAUDE_CODE, home / "off", uid="e" * 32)
-    off = dataclasses.replace(off, enabled=False)
+    """Agents of the other type do not answer — the same agent the model
+    catalogue reads is the one a turn runs against."""
     agents = _Agents(
         [
-            off,
             _agent(AgentType.CODEX, home / "cx", uid="f" * 32),
             _agent(AgentType.CLAUDE_CODE, home / "on", uid="0" * 32),
         ]

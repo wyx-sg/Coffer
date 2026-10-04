@@ -24,14 +24,12 @@
     "state": {
       "connected": "已连接",
       "not-connected": "未连接到 Coffer",
-      "not-installed": "未安装",
-      "disabled": "已关闭"
+      "not-installed": "未安装"
     },
     "stateInline": {
       "connected": "已连接",
       "not-connected": "未连接到 Coffer",
-      "not-installed": "未安装",
-      "disabled": "已关闭"
+      "not-installed": "未安装"
     }
   },
   "changePreview": {
@@ -1085,20 +1083,10 @@
       "years_other": "{{count}} 年"
     },
     "daemonLog": {
-      "following": "实时跟随",
-      "newestFirst": "最新在前",
-      "reveal": "在访达中打开",
       "showCall": "查看 MCP 调用"
     },
     "reconnecting": "正在重新连接…",
-    "tabFailed": "无法加载",
-    "export": {
-      "label": "导出",
-      "json": "JSON",
-      "csv": "CSV",
-      "done_one": "已导出 {{count}} 条记录",
-      "done_other": "已导出 {{count}} 条记录"
-    }
+    "tabFailed": "无法加载"
   },
   "settings": {
     "title": "设置",
@@ -1708,7 +1696,7 @@
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "已有另一个连接是 Coffer 内部引擎的默认连接——请把默认切换到这个连接，而不是直接改这个字段",
     "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为智能体开启",
-    "PROVIDER_DOES_NOT_REACH_AGENT": "无法为该智能体开启此连接——连接或智能体已关闭，或连接的适用范围不包含该智能体",
+    "PROVIDER_DOES_NOT_REACH_AGENT": "无法为该智能体开启此连接——连接已关闭，或连接的适用范围不包含该智能体",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "有智能体正在使用该连接，无法更改协议格式——请先让该智能体切回自带登录，再修改协议，然后重新让它切到该连接",
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "已有另一个连接是 Coffer 语音转文字的默认连接——请把默认切换到这个连接，而不是直接设置标记",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
@@ -2137,6 +2125,12 @@
         "title_other": "经 Coffer 的 {{count}} 个服务器",
         "open": "打开 MCP 服务器"
       },
+      "fromCofferTools": {
+        "description": "{{agent}} 通过 Coffer 唯一的那条 MCP 条目使用这些分组。到「自定义工具」页管理它们。",
+        "title_one": "经 Coffer 的 {{count}} 个自定义工具分组",
+        "title_other": "经 Coffer 的 {{count}} 个自定义工具分组",
+        "open": "打开自定义工具"
+      },
       "own": {
         "title": "{{agent}} 自己的 MCP 服务器",
         "description": "{{agent}} 自己配置里绕过 Coffer 的条目。纳入托管后即可经由 Coffer 提供。",
@@ -2249,7 +2243,6 @@
       "not_installed": "未安装",
       "config_left_behind": "配置残留",
       "not_found": "找不到",
-      "disabled": "已关闭",
       "connected": "已连接",
       "needs_repair": "需要修复",
       "not_connected": "未连接",
@@ -2282,13 +2275,11 @@
           "mcpMissing": "<code>{{mcpFile}}</code> 里缺少 <code>coffer</code> 条目，所以 {{name}} 用不了 Coffer 的工具。",
           "hookStale": "记忆 hook 运行的命令已不被当前 Coffer 接受，所以会话开始时没有记忆。",
           "hookMissing": "<code>{{hookFile}}</code> 里缺少记忆 hook，所以会话开始时没有记忆。",
-          "hookUntrusted": "{{name}} 只运行你批准过的 hook。请在 {{name}} 的 /hooks 里批准 Coffer 的 hook，然后重新检查。",
-          "disabled": "关闭期间 Coffer 不向 {{name}} 提供任何东西。它的条目和 hook 保持原样。"
+          "hookUntrusted": "{{name}} 只运行你批准过的 hook。请在 {{name}} 的 /hooks 里批准 Coffer 的 hook，然后重新检查。"
         },
         "action": {
           "connect": "连接",
           "repair": "修复",
-          "enable": "开启",
           "checkAgain": "重新检查"
         },
         "part": {
@@ -2304,7 +2295,6 @@
           "stale": "已过期",
           "missing": "缺失",
           "notSet": "未设置",
-          "idle": "闲置",
           "untrusted": "未批准"
         }
       },
@@ -2327,7 +2317,6 @@
           "memory": "记忆",
           "config": "配置文件"
         },
-        "disabledLine": "关闭期间没有 · 开启后会有 {{count}} 个",
         "toReview": "{{count}} 个待查看",
         "mcp": {
           "line": "{{coffer}} 个经由 Coffer · {{own}} 个在 {{file}} 里",
@@ -2585,7 +2574,6 @@
         "hookStale": "记忆钩子已过期",
         "hookMissing": "记忆钩子未写入",
         "gone": "{{dir}} 和它的程序都不在了",
-        "disabled": "已在 Coffer 中关闭",
         "notOnThisMac": "这台 Mac 上没有",
         "keptNotOnPath": "{{dir}} 已保留 · PATH 上没有 {{program}}"
       }
@@ -2593,9 +2581,7 @@
     "pending": {
       "adding": "正在添加…",
       "connecting": "正在连接…",
-      "disconnecting": "正在断开连接…",
-      "enabling": "正在开启…",
-      "disabling": "正在关闭…"
+      "disconnecting": "正在断开连接…"
     },
     "rowMenu": {
       "label": "{{name}} 的更多操作",
@@ -2605,9 +2591,7 @@
       "copyUid": "复制 uid",
       "connect": "连接",
       "repair": "修复",
-      "disconnect": "断开连接…",
-      "enable": "开启",
-      "disable": "关闭"
+      "disconnect": "断开连接…"
     },
     "change": {
       "title": "查看改动",
@@ -2776,7 +2760,6 @@
       "reason": {
         "skillOff": "该技能已关闭。",
         "outsideReach": "未勾选。",
-        "agentOff": "该智能体已关闭。",
         "agentMissing": "这台机器上没有安装该智能体。",
         "pending": "还没有副本记录。点「重新检查」查看智能体的文件夹。"
       },
@@ -3640,9 +3623,6 @@
     },
     "title": "对话",
     "thinking": "正在思考…",
-    "message": {
-      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
-    },
     "history": {
       "rename": "重命名",
       "delete": "删除…",
@@ -3720,8 +3700,8 @@
       "workspaceFull": "Coffer 的工作区（~/.coffer/content/workspace）",
       "workspacePicker": {
         "label": "工作区",
-        "choose": "选择文件夹…",
-        "typePath": "或输入文件夹路径",
+        "choose": "选择…",
+        "typePath": "输入或粘贴文件夹路径",
         "use": "使用"
       }
     },
@@ -4047,17 +4027,12 @@
         "description": "机器人如何在群里收听，并把连发的消息合成一个回合。"
       },
       "directories": {
-        "description": "新对话从哪里开始，以及 /dir 可以切换到哪里。一个都没有时 /dir 关闭。"
+        "description": "/dir 可以切换到这些目录及其子目录，新对话从默认目录开始。没有默认时从 Coffer 工作区开始；一个目录都没有时 /dir 关闭。"
       },
       "replying": {
         "title": "回复与会话"
       },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
-      "saveState": {
-        "saving": "正在保存…",
-        "saved": "已保存",
-        "error": "保存失败"
-      },
       "machine": {
         "runsOn": "运行在",
         "hint": "只有一台 Mac 持有机器人的连接。"
@@ -4246,16 +4221,14 @@
       },
       "directories": {
         "title": "工作目录",
-        "default": "默认",
-        "defaultHint": "新对话从哪里开始。",
-        "defaultPlaceholder": "Coffer 工作区（~/.coffer/content/workspace）",
-        "allowed": "/dir 可用的目录",
-        "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
+        "list": "目录",
         "defaultTag": "默认",
-        "remove": "移除",
+        "setDefault": "设为默认",
+        "setDefaultAria": "把 {{path}} 设为默认",
+        "unsetDefault": "取消默认",
+        "unsetDefaultAria": "新对话不再从 {{path}} 开始",
         "removeAria": "移除 {{path}}",
         "add": "添加目录…",
-        "notAbsolute": "“{{path}}”不是绝对路径——请以 / 开头。",
         "tooMany": "最多 {{max}} 个目录。"
       }
     },
@@ -4288,8 +4261,6 @@
     "off": "关闭",
     "everywhere": "所有智能体",
     "restricted": "指定智能体",
-    "inherited": "与分组一致",
-    "inheritedSub": "跟随分组的智能体",
     "filterAgents": "筛选智能体",
     "noMatch": "没有匹配的智能体。",
     "applying": "正在应用…",
@@ -5241,6 +5212,11 @@
     "list": {
       "toolCount_other": "{{count}} 个工具",
       "filter": "筛选分组",
+      "bulkLabel": "已选的自定义工具分组",
+      "clearSelection": "清除选择",
+      "deleteManyTitle_one": "删除 {{count}} 个分组？",
+      "deleteManyTitle_other": "删除 {{count}} 个分组？",
+      "deleteManyBody": "智能体在下次调用时将失去这些工具。密钥和调用记录仍保留。",
       "section": {
         "attention": "需要处理",
         "healthy": "正常",
@@ -5296,7 +5272,7 @@
       "baseUrl": "基础 URL",
       "baseUrlHelp": "每个请求的路径都拼接在它后面。",
       "availableTo": "可用于",
-      "availableToHelp": "分组内每个工具的默认范围；单个工具可以只给更少的智能体。",
+      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "headers": "请求头",
       "headersHelp": "Coffer 会把这些加到每次调用中；密钥的值保存在 Coffer 的钥匙串里，智能体永远看不到。"
     },
@@ -5326,7 +5302,7 @@
       "section": "{{section}} · {{count}} / {{total}}",
       "pickNote": "你选中的每个操作都会成为一个工具。读取类默认选中；会修改数据的操作默认不选。",
       "baseUrlMissing": "规范没有声明服务器；每个请求的路径会接在这个 URL 后面。",
-      "availableToHelp": "分组中每个工具的默认范围。",
+      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "try": "试运行一个操作",
       "tryNone": "请先选择一个操作。",
       "tryPick": "要试运行的操作",
@@ -5427,9 +5403,8 @@
       "addRequest": "添加请求",
       "heading": "工具",
       "description": "每个工具就是一个请求；智能体看到的是 {{prefix}}。",
-      "groupGives": "{{group}} 把它提供给 {{agents}}",
-      "reachFootnote": "要对所有智能体停用它，请在表格里关闭它的开关。",
-      "reachOf": "可用于：{{name}}",
+      "filter": "筛选工具",
+      "noMatch": "没有工具匹配“{{query}}”",
       "edit": "编辑 {{name}}"
     },
     "editor": {
@@ -5978,7 +5953,6 @@
     }
   },
   "usage": {
-    "exportCsv": "导出 CSV",
     "noPrice": "—",
     "error": "无法加载 API 密钥用量。",
     "presets": {
@@ -6555,13 +6529,13 @@
   },
   "drawer": {
     "previous": "上一条",
-    "next": "下一条"
+    "next": "下一条",
+    "resize": "调整抽屉宽度"
   },
   "filters": {
     "clear": "清除",
     "clearLabel": "清除 {{label}}",
     "clearAll": "清除筛选",
-    "only": "仅此项",
     "noMatches": "没有匹配项",
     "timeRange": {
       "label": "时间范围",

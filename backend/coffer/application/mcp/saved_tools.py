@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
 from coffer.application.mcp.gateway_scope import visible_mcp_servers
 from coffer.application.mcp.gateway_tiering import apply_tiering
 from coffer.application.mcp.gateway_tool_gate import hidden_tool_names
@@ -45,7 +44,6 @@ async def current_tools(
 async def saved_hidden_count(
     resources: ResourceService,
     agent_uid: str | None,
-    tool_reach: ToolReachRepoPort | None,
     *,
     prefs: MCPCapabilityPreferenceRepoPort,
     invocations: MCPInvocationRepoPort,
@@ -54,14 +52,14 @@ async def saved_hidden_count(
 ) -> int:
     """How many upstream tools tiering leaves unlisted for the session of
     ``agent_uid``, from the saved lists of the servers it can see (minus the
-    tools its reach hides).
+    switched-off custom tools).
 
     Never raises: a handshake must not fail over a statistics problem, and
     zero is what an agent is told when nothing is known to be unlisted.
     """
     try:
         rows = await visible_mcp_servers(resources, agent_uid)
-        hidden = await hidden_tool_names(rows, agent_uid, tool_reach)
+        hidden = hidden_tool_names(rows)
         tools = [
             {"name": f"{server.name}__{name}"}
             for server in rows

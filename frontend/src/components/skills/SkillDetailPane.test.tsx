@@ -300,14 +300,11 @@ describe("SkillDetailPane", () => {
     await waitFor(() => expect(where.url).toBe("/skills"));
   });
 
-  test("delivery says why a copy is missing: the skill is off, or the agent is", async () => {
-    h.agentResources = [
-      { uid: CC.uid, enabled: true },
-      { uid: CODEX.uid, enabled: false },
-    ];
+  test("delivery says why a copy is missing: the skill is off", async () => {
+    h.skills = [makeSkill({ enabled: false })];
     renderSkillsPage("/skills/hello/delivery");
     await waitFor(() =>
-      expect(screen.getByTestId("skill-delivery-codex")).toHaveTextContent("The agent is off."),
+      expect(screen.getByTestId("skill-delivery-codex")).toHaveTextContent("The skill is off."),
     );
   });
 

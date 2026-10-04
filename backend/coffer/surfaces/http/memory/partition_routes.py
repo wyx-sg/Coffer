@@ -68,7 +68,7 @@ async def sync(
     svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> AggregationResultOut:
-    """Update memory: aggregate every registered, enabled agent's native
+    """Update memory: aggregate every registered agent's native
     memory, then distil every partition it left with undistilled raw entries
     ("Update memory in one action"; see ``application/memory/update.py``).
 

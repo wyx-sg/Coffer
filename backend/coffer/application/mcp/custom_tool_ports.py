@@ -1,42 +1,20 @@
 """Ports of the custom-tool slice of the MCP kind (design add-http-custom-tools).
 
-A tool's reach override is machine-local state kept beside, not inside, the
-group's config (spec mcp-gateway "Switch off or narrow one custom tool"): the
-config travels with sync and reach does not.
+A custom tool keeps only its on/off switch, in the group's config; who can see
+it is the group's reach (spec mcp-gateway "Switch off one custom tool").
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.openapi_import import OperationSource
 from coffer.domain.secrets import SecretApproval, SecretDestination
-
-#: A tool's own reach: the agent uids it is narrowed to, or ``"all"`` — every
-#: agent the group reaches, including ones added later. No override at all
-#: (``None`` where one is read or set) is "same as the group".
-ToolReach = list[str] | Literal["all"]
-
-
-class ToolReachRepoPort(Protocol):
-    """Per-tool reach overrides: ``(group uid, tool) -> ToolReach``."""
-
-    async def overrides_for(self, resource_uids: Sequence[str]) -> dict[str, dict[str, ToolReach]]:
-        """``{group uid: {tool: [agent uid, …] | "all"}}`` for the groups asked about."""
-        ...
-
-    async def set_override(self, resource_uid: str, tool: str, reach: ToolReach | None) -> None:
-        """Set a tool's override, or clear it with ``None``."""
-        ...
-
-    async def delete_tools(self, resource_uid: str, tools: Sequence[str]) -> None: ...
-
-    async def delete_group(self, resource_uid: str) -> None: ...
 
 
 class ToolOutcomesPort(Protocol):

@@ -5,7 +5,7 @@
 // 6.2.07): a failed call leads with its conclusion card, a change with the
 // facts (Who / What), then what it changed (the config before and after, as a
 // diff); a daemon record with its message and traceback. Below come the
-// records written around the same time and the raw JSON, folded. The footer
+// records written around the same time and the raw JSON, open. The footer
 // holds the next step — "Open X" secondary, "Copy details" ghost — and the
 // drawer steps to the previous or next record without closing. An MCP call
 // shows its metadata only: Coffer never stores a call's arguments or results.
@@ -23,7 +23,14 @@ import { useToast } from "@/components/ui/toast";
 import { describeActivity } from "@/lib/activity/activityText";
 import { callServerLabel, recordLogger, type ActivityRecord } from "@/lib/activity/records";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
-import { changeLink, nearby, offsetLabel, whenLabel } from "@/lib/activity/recordText";
+import {
+  UID_ADDRESSED_KINDS,
+  changeLink,
+  nearby,
+  offsetLabel,
+  whenLabel,
+} from "@/lib/activity/recordText";
+import { useResources } from "@/lib/hooks/useResources";
 import { useServerFailures } from "@/lib/hooks/useServerFailures";
 import { EventCell, SourceIcon, type AgentLook } from "./activityCells";
 import { CallBody, ChangeBody, DaemonBody } from "./recordBodies";
@@ -36,10 +43,10 @@ function titleOf(t: TFunction, record: ActivityRecord): string {
   return recordLogger(record) || t("activity.drawer.kinds.daemon");
 }
 
-/** The raw JSON, folded until asked for. */
+/** The raw JSON, open by default and foldable. */
 function RawLogFold({ record }: { record: unknown }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
     <div className="flex flex-col gap-2">
@@ -102,10 +109,18 @@ export function RecordDrawer({ record, rows, agents, transports, onSelect, onClo
   };
 
   const pageOpen = useKindPageOpen();
+  // A change to a uid-addressed kind looks its resource up by name to open its detail page.
+  const changeKind = record.source === "change" ? (record.entry.resource_kind ?? "") : "";
+  const needsUid = UID_ADDRESSED_KINDS.includes(changeKind);
+  const { data: sameKind } = useResources(needsUid ? changeKind : "-", needsUid);
+  const changedUid =
+    record.source === "change"
+      ? sameKind?.find((r) => r.name === record.entry.resource_name)?.uid
+      : undefined;
   const link =
     record.source === "change"
-      ? pageOpen(record.entry.resource_kind ?? "")
-        ? changeLink(record.entry)
+      ? pageOpen(changeKind)
+        ? changeLink(record.entry, changedUid)
         : null
       : call?.resource_name
         ? { to: `/mcp-servers/${encodeURIComponent(call.resource_name)}`, name: call.resource_name }

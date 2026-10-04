@@ -1,7 +1,7 @@
 """``MemoryService`` — the two passes, and the reads every other surface makes.
 
 The layer has two passes and they own two directories. **Aggregation** reads
-every registered, enabled agent's native memory and writes what it read,
+every registered agent's native memory and writes what it read,
 verbatim, under each partition's hidden ``.raw/`` (``aggregate.py``).
 **Distil** turns those entries into Coffer's own notes and rewrites the index
 (``distil.py``). This service is where each pass meets the database: which
@@ -106,15 +106,15 @@ class MemoryService:
     # ----------------------------------------------------------------- #
 
     async def aggregate(self, *, actor: str = "system") -> AggregationResult:
-        """One pass over every registered, enabled agent (see "Read only registered and
-        enabled agents' memory").
+        """One pass over every registered agent (see "Read only registered agents'
+        memory").
 
         The pass itself is in ``aggregate.py`` and touches no database. What is
         left here is the part that needs one: seeding the pass with the
         partitions that already have a row, then giving a row to each partition
         it filed into that did not have one.
         """
-        agent_rows = await self._resources.list(kind="agent", enabled=True)
+        agent_rows = await self._resources.list(kind="agent")
         memory_rows = await self._resources.list(kind=KIND_MEMORY)
         # Keyed by name because that is what a placement carries — a
         # partition's name IS its directory — but holding the whole row, so the

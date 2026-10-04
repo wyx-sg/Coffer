@@ -73,7 +73,7 @@ help:
 	@echo "  make contracts             regenerate every spec's contracts/api.openapi.yaml from the Pydantic models, then the frontend types"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
 	@echo "  make docs-reference        regenerate the docs site's CLI reference pages (en and zh)"
-	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; not in verify)"
+	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; part of verify)"
 	@echo "  make refresh-prices        refresh the bundled model price list from pydantic/genai-prices (release time; network)"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
@@ -126,7 +126,7 @@ hooks:
 # Each stage runs in order and its wall time lands in .coffer-verify.timings
 # (`<stage> <seconds>s <ok|FAILED>`, one line per stage run), printed at the
 # end whether the run passed or stopped at a failing stage.
-VERIFY_STAGES := lint verify-unit verify-integration verify-contract verify-acceptance
+VERIFY_STAGES := lint docs-build verify-unit verify-integration verify-contract verify-acceptance
 VERIFY_TIMINGS := .coffer-verify.timings
 
 verify:
@@ -402,8 +402,9 @@ refresh-prices:
 	$(PY) scripts/refresh_model_prices.py
 
 # The published site, built the way .github/workflows/pages.yml builds it.
-# VitePress fails the build on a dead internal link, so this is the local way
-# to find one before CI's Pages job does. Not part of `verify`.
+# VitePress fails the build on a dead internal link or on Markdown Vue cannot
+# compile, so `verify` runs it right after `lint`: the same build CI's Docs
+# site job runs, found before a push rather than after.
 docs-build:
 	@if [ ! -d docs-site/node_modules ]; then \
 		echo "docs-build: installing docs-site dependencies"; \

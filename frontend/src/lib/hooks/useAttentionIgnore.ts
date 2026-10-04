@@ -26,7 +26,6 @@ export function useIgnoreAttention() {
   });
 }
 
-
 /** Stop ignoring one item by its `key`: it is back on Overview. */
 export function useUnignoreAttention() {
   const qc = useQueryClient();

@@ -316,7 +316,7 @@ the keys left in its file rather than silently routing it elsewhere.
 connection. The operation:
 
 1. requires the connection to exist, else 404, and the agent of that type to be registered, else 404;
-2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection or the agent is switched off or
+2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection is switched off or
    the connection's scope does not name the agent, and with 409 `PROVIDER_INTERNAL_ONLY` for an
    `ollama` connection;
 3. projects the connection into that agent's native config file, recording the file's prior content;
@@ -367,7 +367,7 @@ agent the switch moved.
 - **THEN** a `provider_switched` entry appears with details `{from, to, protocol, agent_type, agents}`, a timestamp, and an actor.
 
 ### Requirement: Clear an agent's connection its config contradicts
-On every reconcile pass ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), the provider-projection target MUST compare, for each enabled agent that runs on a connection, the keys Coffer's projection would write — base URL, model keys, the key helper command, Codex's provider block and its model catalogue — with the keys the agent's native config carries, by value and not by presence. Where Coffer's keys are present but differ, the connection MUST be projected again. Where they are absent, the system MUST clear that agent's `connection_uid` — only that field of only that agent, writing no file, recorded in the audit log with actor `system` — so every surface then says the agent is on its built-in login, and MUST NOT write the projection back, because a choice left from an earlier session is no warrant to re-route a user's agent through a gateway they are not currently using; the exceptions are a pass run for a sync import and an item a person applies, both of which project. The opposite drift — Coffer's keys present while no connection serves the agent — MUST be reported rather than removed, unless the pass runs for a sync import or a person applies
+On every reconcile pass ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), the provider-projection target MUST compare, for each agent that runs on a connection, the keys Coffer's projection would write — base URL, model keys, the key helper command, Codex's provider block and its model catalogue — with the keys the agent's native config carries, by value and not by presence. Where Coffer's keys are present but differ, the connection MUST be projected again. Where they are absent, the system MUST clear that agent's `connection_uid` — only that field of only that agent, writing no file, recorded in the audit log with actor `system` — so every surface then says the agent is on its built-in login, and MUST NOT write the projection back, because a choice left from an earlier session is no warrant to re-route a user's agent through a gateway they are not currently using; the exceptions are a pass run for a sync import and an item a person applies, both of which project. The opposite drift — Coffer's keys present while no connection serves the agent — MUST be reported rather than removed, unless the pass runs for a sync import or a person applies
 that item. A switch MUST keep reconcile passes out until its file and its record agree. `connection_uid` is not redundant with `enabled`: `enabled` is the user's switch on the connection, while `connection_uid` records that this is the connection currently written into the agent's file — a claim about a file on disk that the agent's own CLI, other tooling, the user and a restore from backup all rewrite.
 
 #### Scenario: boot clears a connection the agent's config does not carry
@@ -885,7 +885,7 @@ set it while another connection holds it MUST be refused before anything is writ
 
 ### Requirement: Revert an agent type to its built-in login
 `POST /api/v1/providers/use-builtin/{agent_type}` MUST
-remove every key Coffer wrote from the enabled agent of that type — for Claude Code `apiKeyHelper`,
+remove every key Coffer wrote from the agent of that type — for Claude Code `apiKeyHelper`,
 `env.ANTHROPIC_BASE_URL`, the top-level `model` and `effortLevel`, the four
 `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins, Coffer's `modelPicker`, the local-runtime compatibility
 keys and Coffer's `env.NO_PROXY` pair; for Codex the provider table, `model_provider`, `model`,
@@ -1290,8 +1290,7 @@ estimated cost, how many requests were unpriced or had unknown usage, and the ag
 the row's requests, most requests first. The summary MUST be narrowable to one agent type
 (`agent_type`) and to one connection (`connection_uid`); a filtered summary's rows and totals count
 only the requests that match every filter. `GET /api/v1/usage/requests`
-pages through the per-request detail, newest first. `GET /api/v1/usage/export.csv`
-returns the same summary, with the same filters, as CSV, and the Usage tab exports it. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
+pages through the per-request detail, newest first. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
 
 #### Scenario: usage by model names the connection
 - **GIVEN** usage of two models over two connections
@@ -1307,7 +1306,7 @@ returns the same summary, with the same filters, as CSV, and the Usage tab expor
 - **GIVEN** usage by Claude Code over one connection and by Codex over another
 - **WHEN** the summary is narrowed to Codex, then to the first connection, then to both at once
 - **THEN** it counts only Codex's requests, then only the first connection's, then nothing
-- **AND** each unfiltered row names the agent types that sent its requests, most requests first, and the CSV honours the same filters
+- **AND** each unfiltered row names the agent types that sent its requests, most requests first
 
 #### Scenario: a range resolves in local days
 - **GIVEN** a clock on a known local day
@@ -1318,11 +1317,6 @@ returns the same summary, with the same filters, as CSV, and the Usage tab expor
 - **GIVEN** requests 2 hours ago, 23 hours ago and 25 hours ago
 - **WHEN** the summary is read for the range `24h`
 - **THEN** it counts the first two requests and not the third
-
-#### Scenario: export usage as CSV
-- **GIVEN** usage in the range
-- **WHEN** the user exports it
-- **THEN** the CSV has a header row and one line per group with the same totals the summary reports
 
 ### Requirement: Push the proxy an approved key without a restart
 The model proxy MUST hold a connection's key only once the key may go to the connection's base
@@ -1480,8 +1474,7 @@ The tab is in the address: `/model-providers` and `/model-providers/<uid>` are P
 `/model-providers?tab=usage` is Usage. There MUST be no `/usage` page and no Usage sidebar entry.
 The Usage tab shows only what Coffer's proxy metered for API-key requests: a filter row with a
 date-only time range (Today, Last 7 days, Last 30 days, This month, or a custom range of days, up to
-90 days back), an **Agent** pill, a **Provider** pill, **Clear filters** while one is set and a ghost
-**Export CSV** button at the right; five tiles in one row — Cost (estimated), whose "?" holds the
+90 days back), an **Agent** pill, a **Provider** pill and **Clear filters** while one is set; five tiles in one row — Cost (estimated), whose "?" holds the
 note on which prices costed the range, with the request count under it and, when a model in the
 range has no known price, "N model(s) unpriced" as a link to that model on its provider
 (`/model-providers?provider=<uid>&model=<id>`) — the one place the count appears — then Input,
@@ -1503,12 +1496,12 @@ anywhere, nor offer a status-line wrapper for it; the data is Coffer's own, so t
 #### Scenario: the Usage tab keeps its range and filters in the address
 - **GIVEN** the Usage tab with metered requests
 - **WHEN** the user picks Last 30 days, the By agent view and an Agent and a Provider filter
-- **THEN** the address carries `range`, `by`, `agent` and `provider` beside `tab=usage`, the summary and the export are asked with the same range, grouping and filters, and a custom range is two days
+- **THEN** the address carries `range`, `by`, `agent` and `provider` beside `tab=usage`, the summary is asked with that range, grouping and filters, and a custom range is two days
 
 #### Scenario: the Usage tab has nothing to show before any usage
 - **GIVEN** no API-key request has ever been metered
 - **WHEN** the Usage tab is opened
-- **THEN** it shows "No API-key usage yet" and Open Providers, which switches to the Providers tab, and no time range, filter pills or Export CSV
+- **THEN** it shows "No API-key usage yet" and Open Providers, which switches to the Providers tab, and no time range or filter pills
 
 #### Scenario: Coffer shows no subscription quota
 - **GIVEN** agents on their own subscription logins

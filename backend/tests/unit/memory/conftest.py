@@ -122,14 +122,11 @@ class FakeResources:
         if row.kind == KIND_MEMORY:
             store.delete_partition(row.name)
 
-    def add_agent(
-        self, name: str, agent_type: str, config_dir: str, *, enabled: bool = True
-    ) -> Resource:
+    def add_agent(self, name: str, agent_type: str, config_dir: str) -> Resource:
         return self._row(
             kind="agent",
             name=name,
             config={"type": agent_type, "config_dir": config_dir},
-            enabled=enabled,
         )
 
     def _row(

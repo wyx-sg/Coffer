@@ -298,7 +298,6 @@ describe("AgentsPage", () => {
       "Use a different config directory…",
       "Reveal config directory",
       "Copy uid",
-      "Turn off",
     ]);
     expect(screen.queryByRole("textbox", { name: /name|title/i })).not.toBeInTheDocument();
   };
@@ -408,16 +407,10 @@ describe("AgentsPage", () => {
     await waitFor(() => expect(within(review).getByText("Changes applied")).toBeInTheDocument());
     fireEvent.click(within(review).getByRole("button", { name: "Done" }));
 
-    fireEvent.click(await within(row).findByRole("button", { name: "More actions for Codex" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Turn off" }));
-    const turnOn = await within(row).findByRole("button", { name: "Turn on" });
-    fireEvent.click(turnOn);
     await waitFor(() =>
       expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
         "POST /agents",
         "POST /agents/agt_1/coffer-connection",
-        "POST /resources/agt_1/disable",
-        "POST /resources/agt_1/enable",
       ]),
     );
   });

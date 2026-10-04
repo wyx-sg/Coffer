@@ -642,7 +642,7 @@ paths:
       description: |-
         Switch one agent onto this connection: project it into that agent's
         native config and record it on the agent. Nothing else changes (409
-        ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+        ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection is off or the
         scope does not name the agent).
       operationId: activate_provider_api_v1_providers__uid__activate_post
       parameters:
@@ -1110,97 +1110,6 @@ paths:
       summary: Rotate Proxy Token
       tags:
       - proxy
-  /api/v1/usage/export.csv:
-    get:
-      operationId: usage_export_csv_api_v1_usage_export_csv_get
-      parameters:
-      - description: today | 24h | 7d | 30d | month | custom
-        in: query
-        name: range
-        required: false
-        schema:
-          default: today
-          description: today | 24h | 7d | 30d | month | custom
-          title: Range
-          type: string
-      - description: First local day (custom range)
-        in: query
-        name: from
-        required: false
-        schema:
-          anyOf:
-          - format: date
-            type: string
-          - type: 'null'
-          description: First local day (custom range)
-          title: From
-      - description: Last local day, inclusive (custom range)
-        in: query
-        name: to
-        required: false
-        schema:
-          anyOf:
-          - format: date
-            type: string
-          - type: 'null'
-          description: Last local day, inclusive (custom range)
-          title: To
-      - description: model | agent | day
-        in: query
-        name: group_by
-        required: false
-        schema:
-          $ref: '#/components/schemas/GroupBy'
-          default: model
-          description: model | agent | day
-      - description: Only requests this agent type sent
-        in: query
-        name: agent_type
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Only requests this agent type sent
-          title: Agent Type
-      - description: Only requests this connection served
-        in: query
-        name: connection_uid
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Only requests this connection served
-          title: Connection Uid
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            text/csv: {}
-          description: The summary as CSV.
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Usage Export Csv
-      tags:
-      - usage
   /api/v1/usage/requests:
     get:
       operationId: usage_requests_api_v1_usage_requests_get

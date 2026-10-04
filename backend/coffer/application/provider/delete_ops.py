@@ -78,8 +78,7 @@ async def preview(service: ProviderService, uid: str) -> DeletePreview:
     agents: list[DeletePreviewAgent] = []
     for agent, cfg in await _agents_on(service, uid):
         files: list[DeletePreviewFile] = []
-        # A disabled agent's file is never touched by a de-projection.
-        planned = service._projector.plan_deproject(agent) if agent.enabled else []
+        planned = service._projector.plan_deproject(agent)
         for p in planned:
             files.append(
                 DeletePreviewFile(

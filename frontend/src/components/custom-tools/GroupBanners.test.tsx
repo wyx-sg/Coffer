@@ -53,7 +53,9 @@ describe("group banners", () => {
         handoff: { prompt: "Find out why the calls of status-page fail" },
       }),
     );
-    expect(screen.getByText("Calls to status-page.internal.example are failing")).toBeInTheDocument();
+    expect(
+      screen.getByText("Calls to status-page.internal.example are failing"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View in Activity" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();
   });
@@ -74,7 +76,12 @@ describe("group banners", () => {
           health: "attention",
           secret_state: "missing",
           headers: [
-            { name: "Authorization", value: null, secret: "grafana-token", secret_state: "missing" },
+            {
+              name: "Authorization",
+              value: null,
+              secret: "grafana-token",
+              secret_state: "missing",
+            },
           ],
         })}
         onChooseAnother={onChoose}
@@ -138,6 +145,8 @@ describe("group header and row", () => {
           group={makeGroup({ health: "attention", secret_state: "pending_approval" })}
           selected={false}
           onOpen={() => {}}
+          checked={false}
+          onCheckedChange={() => {}}
         />
       </ul>,
     );
@@ -151,6 +160,8 @@ describe("group header and row", () => {
           group={makeGroup({ enabled: false, health: "off" })}
           selected={false}
           onOpen={() => {}}
+          checked={false}
+          onCheckedChange={() => {}}
         />
       </ul>,
     );

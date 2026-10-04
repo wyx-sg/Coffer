@@ -1,4 +1,4 @@
-"""Read usage back: summaries from the daily rollup, the per-request list, CSV
+"""Read usage back: summaries from the daily rollup and the per-request list
 (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
 A summary reads only ``usage_daily``, so it is cheap for any range the rollup
@@ -12,10 +12,8 @@ not in the cost).
 
 from __future__ import annotations
 
-import csv
-import io
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field, fields, replace
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta, tzinfo
 from enum import StrEnum
 
@@ -290,53 +288,11 @@ class UsageQueryService:
             key=lambda r: position_of(r.record.started_at, r.id),
         )
 
-    async def csv(
-        self,
-        range_name: str = "today",
-        *,
-        start: date | None = None,
-        end: date | None = None,
-        group_by: GroupBy | str = GroupBy.MODEL,
-        filters: SummaryFilters | None = None,
-    ) -> str:
-        """The summary as CSV: identity columns, every total, estimated cost."""
-        summary = await self.summary(
-            range_name, start=start, end=end, group_by=group_by, filters=filters
-        )
-        identity: dict[GroupBy, list[tuple[str, Callable[[SummaryRow], object]]]] = {
-            GroupBy.MODEL: [
-                ("model", lambda r: r.model),
-                ("connection_uid", lambda r: r.connection_uid),
-                ("connection", lambda r: r.connection_name),
-            ],
-            GroupBy.AGENT: [
-                ("agent_uid", lambda r: r.agent_uid),
-                ("agent_type", lambda r: r.agent_type),
-            ],
-            GroupBy.DAY: [("day", lambda r: r.day)],
-        }
-        columns = identity[summary.group_by]
-        total_names = [f.name for f in fields(UsageTotals) if f.name != "cost_usd"]
-        buf = io.StringIO()
-        writer = csv.writer(buf, lineterminator="\n")
-        writer.writerow([name for name, _ in columns] + total_names + ["estimated_cost_usd"])
-        for row in summary.rows:
-            writer.writerow(
-                [_cell(get(row)) for _, get in columns]
-                + [getattr(row.totals, n) for n in total_names]
-                + [f"{row.totals.cost_usd:.6f}"]
-            )
-        return buf.getvalue()
-
 
 def _most_first(counts: dict[str, int] | None) -> tuple[str, ...]:
     if not counts:
         return ()
     return tuple(sorted(counts, key=lambda t: (-counts[t], t)))
-
-
-def _cell(value: object) -> object:
-    return "" if value is None else value
 
 
 __all__ = [

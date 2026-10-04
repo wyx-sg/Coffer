@@ -20,7 +20,6 @@ from coffer.domain.vault.layout import StorageClass
 # with: the caller performing the mutation already has it, and a hook that
 # needs the identity reads ``resource.uid``.
 OnDeleteHook = Callable[[Resource], Awaitable[None] | None]
-OnEnabledChangedHook = Callable[[Resource], Awaitable[None] | None]
 
 
 def agent_name_for(config: dict[str, Any]) -> str:
@@ -29,10 +28,7 @@ def agent_name_for(config: dict[str, Any]) -> str:
     return AgentType(config["type"]).default_name()
 
 
-def make_agent_kind(
-    on_delete: OnDeleteHook | None = None,
-    on_enabled_changed: OnEnabledChangedHook | None = None,
-) -> Kind:
+def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
     """Construct the `agent` Kind.
 
     `on_delete` (if provided) is invoked by ResourceService BEFORE the
@@ -41,10 +37,8 @@ def make_agent_kind(
     row vanishes); sync hooks run inline. The skill module supplies the
     callback at the composition root.
 
-    `on_enabled_changed` re-runs skill delivery for this agent. Coffer does not
-    write into an agent the user has switched off, so disabling one reclaims its
-    delivered skills and enabling it puts back whatever the skills' own state
-    grants — without it the reclaim would be a one-way door.
+    An agent is not toggleable: it is connected or disconnected, never switched
+    off, so there is no ``on_enabled_changed`` hook.
 
     The kind declares no activation scope (ADR per-agent-resource-scope): scope names the agents a
     resource is active for, so an agent scoping itself is meaningless. A
@@ -55,7 +49,7 @@ def make_agent_kind(
         display_name="Agent",
         config_schema=AgentConfig,
         on_delete=on_delete,
-        on_enabled_changed=on_enabled_changed,
+        toggleable=False,
         # An agent row is created from detection/validation of an on-disk config
         # dir by AgentService; the generic POST /resources path must not create
         # an undetected, folder-less agent (spec resource-framework "Keep

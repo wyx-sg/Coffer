@@ -233,9 +233,9 @@ Reach and the enabled flag apply to the machine you set them on. [Vault sync](/g
 
 ### When delivery happens
 
-Coffer reconciles an agent's skills whenever something that affects delivery changes: a skill is imported, removed, enabled, disabled or has its reach edited; an agent is registered, enabled, disabled or has its config directory changed; or a sync round imports new skills. Each reconcile creates the links the agent should have and removes the ones it should no longer have. Removing a link never touches the master folder.
+Coffer reconciles an agent's skills whenever something that affects delivery changes: a skill is imported, removed, enabled, disabled or has its reach edited; an agent is registered or has its config directory changed; or a sync round imports new skills. Each reconcile creates the links the agent should have and removes the ones it should no longer have. Removing a link never touches the master folder.
 
-A disabled agent receives nothing. Its links are removed, and they come back when you enable the agent again.
+An agent whose config does not parse is left alone until it reads again: its links are neither added nor removed.
 
 ### Link, junction or copy
 
@@ -421,7 +421,7 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 ## Troubleshooting
 
-**An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent (the skill's **Reach** button). Check that the agent itself is enabled. Then use **Check copies** to see whether its link is missing or blocked by a foreign folder.
+**An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent (the skill's **Reach** button). Then use **Check copies** to see whether its link is missing or blocked by a foreign folder.
 
 **Adding a skill from Git fails.** The dialog shows git's own message. `could not read Username` or `Permission denied (publickey)` means this machine's git has no credential for that repository: check that `git clone <url>` works in a terminal first. A ref or folder that does not exist is named in the message too.
 

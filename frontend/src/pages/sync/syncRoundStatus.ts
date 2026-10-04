@@ -43,4 +43,3 @@ export function statusTone(status: string): Tone {
 export function statusLabel(t: TFunction, status: string): string {
   return t(`sync.round.status.${status}`, { defaultValue: status });
 }
-

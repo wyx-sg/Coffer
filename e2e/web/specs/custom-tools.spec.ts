@@ -1,7 +1,7 @@
 // e2e/web/specs/custom-tools.spec.ts
 //
 // The Custom tools page in a real browser against the isolated daemon (change
-// revise-web-ui-ia, spec web-ui "Manage custom tools on their own page"): an
+// revise-web-ui-ia, spec web-ui "Manage custom tool groups on their own page"): an
 // OpenAPI file imported into a new group, the group page with its tools, the
 // tool drawer's Test calling a real upstream (a tiny HTTP server this spec
 // starts on 127.0.0.1), and a group created over REST staying off the MCP

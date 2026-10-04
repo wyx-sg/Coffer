@@ -83,13 +83,11 @@ async def _member(
 
 
 async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService) -> ProxyState:
-    """The state to push now: every enabled agent's token digest, and a route
+    """The state to push now: every agent's token digest, and a route
     for each one that runs on a connection."""
     agents = await service._agents.list()
     enabled: list[tuple[Resource, AgentConfig]] = []
     for row in agents:
-        if not row.enabled:
-            continue
         try:
             enabled.append((row, AgentConfig.model_validate(row.config)))
         except Exception:

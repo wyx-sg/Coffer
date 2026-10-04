@@ -11,9 +11,7 @@ A group's headers are rows of a name and a value. A value is plain text
 slot — the header's name — to the ref, the way the other transports cite
 theirs), so every mechanism that walks secret refs (the missing-secret probe,
 the attention source, the secret boundary's destinations) covers a group
-unchanged. A tool's per-agent reach override is
-not here: reach is machine-local and this config travels with sync, so the
-overrides live in their own table (design add-http-custom-tools §2).
+unchanged. A tool has no reach of its own; it follows the group's.
 
 Pure: Pydantic and the standard library only.
 """

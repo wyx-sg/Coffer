@@ -8,7 +8,6 @@ import { ConversationsPage } from "./ConversationsPage";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { makeConversation } from "@/test/conversationFixtures";
-import { makeBinding } from "@/test/conversationFixtures";
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/chat", () => ({ chatApi: { listConversations: vi.fn() } }));
@@ -147,18 +146,12 @@ describe("ConversationsPage paging", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("a filter that empties what is loaded keeps reading while more exist", async () => {
-    const tg = makeBinding({ platform: "telegram", channel_uid: "ch-t" });
-    list
-      .mockResolvedValueOnce({ conversations: rows("a", 30), next_cursor: "c1" })
-      .mockResolvedValueOnce({
-        conversations: rows("t", 2, { channel_binding: tg }),
-        next_cursor: null,
-      });
-    renderPage("/conversations?source=ch-t");
+  test("a filter is the server's: it asks for source and agent, and reads no further page", async () => {
+    list.mockResolvedValueOnce({ conversations: rows("t", 2), next_cursor: "c1" });
+    renderPage("/conversations?source=ch-t,coffer&agent=codex");
     expect(await screen.findByText("t 1")).toBeInTheDocument();
-    expect(screen.queryByText("No conversations match")).not.toBeInTheDocument();
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.mock.calls[0][0]).toMatchObject({ source: ["ch-t", "coffer"], agent: ["codex"] });
   });
 
   test("the archived view reads the archived listing", async () => {

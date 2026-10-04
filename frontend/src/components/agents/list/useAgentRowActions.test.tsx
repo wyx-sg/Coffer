@@ -36,7 +36,7 @@ const writes = (d: FakeDaemon) =>
 afterEach(() => vi.clearAllMocks());
 
 describe("useAgentRowActions", () => {
-  test("a connected agent has no visible button; ⋯ lists Disconnect… and Turn off, never Remove", async () => {
+  test("a connected agent has no visible button; ⋯ lists Disconnect…, never Remove", async () => {
     const row = typeRow({ type: "claude_code", uid: "agt_a" });
     const d = use(
       fakeDaemon({
@@ -63,7 +63,6 @@ describe("useAgentRowActions", () => {
       "Reveal config directory",
       "Copy uid",
       "Disconnect…",
-      "Turn off",
     ]);
     // Disconnect… goes through Review changes; nothing is written before Apply.
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Disconnect…" }));
@@ -107,26 +106,6 @@ describe("useAgentRowActions", () => {
     use(fakeDaemon({ types: [found] }));
     renderWithDaemon(<Harness row={found} />);
     expect(await screen.findByRole("button", { name: "Connect" })).toBeInTheDocument();
-  });
-
-  test("the menu does not repeat the visible button: no Turn on on a disabled agent", async () => {
-    const row = typeRow({ type: "claude_code", uid: "agt_a" });
-    use(fakeDaemon({ types: [row], disabled: ["agt_a"] }));
-    renderWithDaemon(<Harness row={row} />);
-    await screen.findByRole("button", { name: "Turn on" });
-    fireEvent.click(screen.getByRole("button", { name: "menu" }));
-    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).not.toContain("Turn on");
-  });
-
-  test("a disabled agent offers Turn on, which switches it back on", async () => {
-    const row = typeRow({ type: "claude_code", uid: "agt_a" });
-    const d = use(fakeDaemon({ types: [row], disabled: ["agt_a"] }));
-    renderWithDaemon(<Harness row={row} />);
-    const enable = await screen.findByRole("button", { name: "Turn on" });
-    fireEvent.click(enable);
-    await waitFor(() => expect(writes(d)).toEqual(["POST /resources/agt_a/enable"]));
-    await waitFor(() => expect(screen.getByTestId("state")).not.toHaveTextContent("disabled"));
   });
 
   acceptance(

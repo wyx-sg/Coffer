@@ -381,38 +381,42 @@ describe("editing a memory", () => {
     expect(screen.getByTestId("memory-meta")).toHaveTextContent(/updated 2026-10-04/);
   });
 
-  acceptance("memory", "a save over a note that changed is refused with the current text", async () => {
-    vi.mocked(api.saveNote).mockRejectedValue(
-      new ApiError("MEMORY_NOTE_CONFLICT", "changed", {
-        saved: false,
-        current_body: "Distil rewrote this.",
-        current_fingerprint: "fp-node-9",
-      }),
-    );
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    fireEvent.change(body(), { target: { value: "My version." } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  acceptance(
+    "memory",
+    "a save over a note that changed is refused with the current text",
+    async () => {
+      vi.mocked(api.saveNote).mockRejectedValue(
+        new ApiError("MEMORY_NOTE_CONFLICT", "changed", {
+          saved: false,
+          current_body: "Distil rewrote this.",
+          current_fingerprint: "fp-node-9",
+        }),
+      );
+      renderAt(`/memory/${COFFER.uid}`);
+      fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+      fireEvent.change(body(), { target: { value: "My version." } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("This memory changed on disk while you were editing");
-    // The draft is intact and Save stays off until the person chooses.
-    expect(body()).toHaveValue("My version.");
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("This memory changed on disk while you were editing");
+      // The draft is intact and Save stays off until the person chooses.
+      expect(body()).toHaveValue("My version.");
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
 
-    // Compare shows the disk's text against mine; saving over names the new fingerprint.
-    fireEvent.click(within(alert).getByRole("button", { name: "Compare" }));
-    expect(await screen.findByText("Distil rewrote this.")).toBeInTheDocument();
-    vi.mocked(api.saveNote).mockResolvedValueOnce({ ...NODE_NOTE, body: "My version." });
-    fireEvent.click(screen.getByRole("button", { name: "Save my edit" }));
-    await waitFor(() =>
-      expect(api.saveNote).toHaveBeenLastCalledWith(COFFER.uid, NODE_NOTE.slug, {
-        body: "My version.",
-        expected_fingerprint: "fp-node-9",
-      }),
-    );
-    await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
-  });
+      // Compare shows the disk's text against mine; saving over names the new fingerprint.
+      fireEvent.click(within(alert).getByRole("button", { name: "Compare" }));
+      expect(await screen.findByText("Distil rewrote this.")).toBeInTheDocument();
+      vi.mocked(api.saveNote).mockResolvedValueOnce({ ...NODE_NOTE, body: "My version." });
+      fireEvent.click(screen.getByRole("button", { name: "Save my edit" }));
+      await waitFor(() =>
+        expect(api.saveNote).toHaveBeenLastCalledWith(COFFER.uid, NODE_NOTE.slug, {
+          body: "My version.",
+          expected_fingerprint: "fp-node-9",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
+    },
+  );
 
   test("Reload takes the disk's version after asking", async () => {
     vi.mocked(api.saveNote).mockRejectedValue(

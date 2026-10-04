@@ -668,19 +668,6 @@ async def test_a_reader_that_raises_something_unexpected_costs_that_file_not_the
 
 
 @pytest.mark.asyncio
-async def test_a_disabled_agent_is_not_read(tmp_path: pathlib.Path) -> None:
-    resources = FakeResources()
-    resources.add_agent("codex", "codex", "/cx", enabled=False)
-    reader = FakeReader(agent_type="codex")
-    reader.set_source("/cx", "/cx/memories/MEMORY.md", "d1", (raw_entry("A", "b"),))
-
-    result = await _aggregate(resources, {"codex": reader})
-
-    assert result.entries_written == 0
-    assert reader.read_paths == []
-
-
-@pytest.mark.asyncio
 async def test_an_agent_type_with_no_reader_is_skipped_rather_than_failing_the_pass() -> None:
     """A third agent earns an adapter, not a failure here (see "Reintroduce no
     retired mechanism")."""

@@ -1,6 +1,6 @@
 // src/components/agents/AgentOverviewTab.test.tsx — the Overview tab in each state it renders.
 //
-// Connected / not connected / needs repair / disabled render the Connection
+// Connected / not connected / needs repair render the Connection
 // card with the one action the state calls for; config left behind and not
 // found replace the whole tab with their fix card. Only the network boundary
 // is faked (`fakeApi`), answering each request by path.
@@ -80,7 +80,6 @@ const CONNECTED: CofferConnection = {
 interface World {
   connection: CofferConnection;
   hook: CofferHook | null;
-  enabled: boolean;
   transcripts: { title: string; source_path: string }[];
 }
 let world: World;
@@ -148,7 +147,6 @@ function route(path: string): unknown {
       ],
     };
   if (p === "/daemon/status") return { features: {} };
-  if (p === "/resources/u-cc") return { uid: "u-cc", enabled: world.enabled };
   if (p.startsWith("/resources")) return { resources: [{ uid: "m1", enabled: true, scope: null }] };
   if (p === "/providers") return { providers: [] };
   if (p === "/agents/types") return { types: [TYPE_ROW] };
@@ -159,7 +157,6 @@ beforeEach(() => {
   world = {
     connection: CONNECTED,
     hook: HOOK,
-    enabled: true,
     transcripts: [{ title: "Fix SeaTalk reconnect", source_path: "/s/1.jsonl" }],
   };
   callMock.mockImplementation(async (path: string) => route(path));
@@ -169,7 +166,6 @@ afterEach(() => vi.clearAllMocks());
 function actions(): OverviewActions {
   return {
     onConnection: vi.fn(),
-    onEnable: vi.fn(),
     onChangeConfigDir: vi.fn(),
   };
 }
@@ -202,7 +198,7 @@ describe("AgentOverviewTab — connection card", () => {
     expect(screen.getByText("Memory hook")).toBeInTheDocument();
     expect(screen.queryByText(/fired/)).toBeNull();
     expect(screen.getAllByText("Current")).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /Connect|Repair|Turn on|Disconnect/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Connect|Repair|Disconnect/ })).toBeNull();
   });
 
   test("not connected: names the files it would write and offers Connect", async () => {
@@ -229,15 +225,6 @@ describe("AgentOverviewTab — connection card", () => {
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
 
-  test("disabled: parts read Idle, MCP and Skills serve nothing, offers Turn on", async () => {
-    world.enabled = false;
-    const acts = renderTab();
-    expect(await screen.findAllByText("Idle")).toHaveLength(2);
-    expect(await screen.findAllByText(/None while off/)).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
-    expect(acts.onEnable).toHaveBeenCalled();
-  });
-
   acceptance("agent-registry", "the Overview offers the action the state calls for", async () => {
     const button = (n: string) => screen.queryByRole("button", { name: n });
     // Not connected: Connect.
@@ -254,20 +241,12 @@ describe("AgentOverviewTab — connection card", () => {
     expect(await screen.findByText(/reaches Coffer through one MCP entry/)).toBeInTheDocument();
     expect(button("Connect")).toBeNull();
     expect(button("Repair")).toBeNull();
-    expect(button("Turn on")).toBeNull();
     cleanup();
     // Partial: Repair.
     world.connection = { ...CONNECTED, state: "partial" };
     world.hook = { ...HOOK, health: "stale" };
     renderTab();
     expect(await screen.findByRole("button", { name: "Repair" })).toBeInTheDocument();
-    cleanup();
-    // Off: Turn on.
-    world.connection = CONNECTED;
-    world.hook = HOOK;
-    world.enabled = false;
-    renderTab();
-    expect(await screen.findByRole("button", { name: "Turn on" })).toBeInTheDocument();
   });
 
   test("the memory hook row appears only when the connection lists that part", async () => {

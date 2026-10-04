@@ -28,6 +28,7 @@ concurrency:
 #   test-benchmark -> make verify-benchmark
 #   test-e2e -> make verify-e2e       test-visual -> make verify-visual
 #   secrets-scan -> make verify-secrets (gitleaks, through gitleaks-action here)
+# The docs site's build is pages.yml's `build` job; locally `make docs-build`.
 # `changes` is CI plumbing and has no target.
 jobs:
   # Which kind of change this is. A pull request that only touches prose no test

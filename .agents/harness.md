@@ -40,8 +40,8 @@ A hook or gate must stay fast: a slow one trains people to bypass it. That is wh
 
 ## Gates
 
-`make verify` is the single entry point. It runs `lint`, `verify-unit`,
-`verify-integration`, `verify-contract` and `verify-acceptance` in that order,
+`make verify` is the single entry point. It runs `lint`, `docs-build` (the
+docs site's VitePress build), `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance` in that order,
 prints how long each stage took, and keeps the times in
 `.coffer-verify.timings`. Each target is one job in
 `.github/workflows/verify.yml` (the header comment there holds the mapping);

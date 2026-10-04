@@ -25,7 +25,6 @@ import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
-import { filterConversations } from "@/lib/conversations/filters";
 import { readDraftSeed } from "@/lib/conversations/handoff";
 import {
   defaultDraftAgent,
@@ -105,8 +104,10 @@ export function useChatController() {
     [filters, setFilters],
   );
   const q = useDebouncedValue(titleSearch.trim());
-  const active = useConversationList({ archived: false, q });
-  const archivedList = useConversationList({ archived: true, q, enabled: filters.archived });
+  // Every filter is the server's: a page holds only matching rows.
+  const by = { q, source: filters.source, agent: filters.agent };
+  const active = useConversationList({ ...by, archived: false });
+  const archivedList = useConversationList({ ...by, archived: true, enabled: filters.archived });
   const conversations = active.items;
   const archivedConversations = archivedList.items;
   const convLoading = active.isLoading;
@@ -224,7 +225,6 @@ export function useChatController() {
   };
 
   const view = filters.archived ? archivedList : active;
-  const listed = view.items;
 
   return {
     agents,
@@ -232,15 +232,15 @@ export function useChatController() {
     setFilters,
     listPath,
     pathFor,
-    /** Every conversation of the current view, before the filters. */
-    allConversations: listed,
-    /** The current view (active or archived) narrowed by the URL filters. */
-    listConversations: filterConversations(listed, filters),
+    /** The current view (active or archived) as the server narrowed it by the URL filters. */
+    listConversations: view.items,
     listLoading: view.isLoading,
-    /** More conversations exist past the loaded pages (the filters are applied to what is loaded). */
+    /** More matching conversations exist past the loaded pages. */
     hasMore: view.hasMore,
     loadMore: view.loadMore,
-    /** The server's count of the current view (archived and search applied). */
+    /** Reads every page left (Select all asks for them). */
+    loadAll: view.loadAll,
+    /** The server's count of the current view, every filter applied. */
     total: view.total,
     /** The list's first page failed to load. */
     listError: view.error,

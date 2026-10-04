@@ -207,7 +207,7 @@ export interface paths {
         put?: never;
         /**
          * Sync
-         * @description Update memory: aggregate every registered, enabled agent's native
+         * @description Update memory: aggregate every registered agent's native
          *     memory, then distil every partition it left with undistilled raw entries
          *     ("Update memory in one action"; see ``application/memory/update.py``).
          *

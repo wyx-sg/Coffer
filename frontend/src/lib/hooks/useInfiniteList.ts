@@ -49,6 +49,9 @@ export interface InfiniteList<T> {
   totalIsFloor: boolean;
   hasMore: boolean;
   loadMore: () => void;
+  /** Reads every page left, one after another — only for an explicit ask that
+   *  needs them all (Select all), never to fill the screen. */
+  loadAll: () => Promise<void>;
   /** The first page is loading (nothing to show yet). */
   isLoading: boolean;
   /** A later page is loading. */
@@ -92,6 +95,13 @@ export function useInfiniteList<T>({
     hasMore: query.hasNextPage,
     loadMore: () => {
       if (query.hasNextPage && !query.isFetchingNextPage) void fetchNextPage();
+    },
+    loadAll: async () => {
+      let more = query.hasNextPage;
+      while (more) {
+        const result = await fetchNextPage();
+        more = result.hasNextPage && !result.isError;
+      }
     },
     isLoading: enabled && query.isLoading,
     isLoadingMore: query.isFetchingNextPage,

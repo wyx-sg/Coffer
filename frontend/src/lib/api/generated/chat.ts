@@ -56,7 +56,9 @@ export interface paths {
         /**
          * List Conversations
          * @description Conversations newest activity first (id breaks ties), paged by cursor;
-         *     ``archived=true`` lists the archived ones, ``q`` filters by title or message text.
+         *     ``archived=true`` lists the archived ones, ``q`` filters by title or message text,
+         *     ``source`` and ``agent`` by where and by which agent it runs (all three also
+         *     narrow ``total``).
          */
         get: operations["list_conversations_api_v1_chat_conversations_get"];
         put?: never;
@@ -1251,6 +1253,10 @@ export interface operations {
                 cursor?: string | null;
                 /** @description Title or any message's text contains this text (case-insensitive); a cursor is bound to it. */
                 q?: string | null;
+                /** @description Comma-separated sources: `coffer` is conversations opened in Coffer's own UI, any other token a channel uid. Absent or empty is every source; a cursor is bound to it. */
+                source?: string | null;
+                /** @description Comma-separated agent keys (e.g. `claude_code,codex`). Absent or empty is every agent; a cursor is bound to it. */
+                agent?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

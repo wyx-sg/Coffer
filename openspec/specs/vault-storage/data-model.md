@@ -39,7 +39,7 @@ with no per-tree override, and `coffer path logs` prints the log directory).
     .git/                                  info/exclude, tags coffer/pre-apply/<time>
   local/
     resources/agent/<name>.json
-    reach.json  tool-reach.json  engine.json  retention.json  curation.json
+    reach.json  engine.json  retention.json  curation.json
     skill-source-status.json
     secret/<ref>.enc                       machine-local ciphertext (proxy tokens)
     secret-boundary/{bindings,approvals,settings,times,last-used}.json
@@ -252,7 +252,6 @@ empty, because local state can be set again.
 | File | Shape | Spec |
 | --- | --- | --- |
 | `reach.json` | `{uid: {enabled, agents: [uid] \| null, projects: null}}` | resource-framework |
-| `tool-reach.json` | `{group uid: {tool: [agent uid]}}` | mcp-gateway |
 | `engine.json` | `{updated_at}` | internal-engine |
 | `retention.json` | `{table: {retention_days, last_pruned_at, last_pruned_rows, updated_at}}` | resource-framework |
 | `curation.json` | `{documents: {relpath: {blob, at}}}` | knowledge |

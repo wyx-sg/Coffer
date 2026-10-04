@@ -4,8 +4,7 @@
 // cards, each a name with its icon and a chevron, the count in big type, one
 // fact line and, when something of the agent's own waits for a look, a warning
 // "N to review". Every number comes from useAgentCounts, the same queries the
-// tabs read, so the tile and the tab agree. While the agent is off, MCP servers
-// and Skills read "None while off" with how many would reach it.
+// tabs read, so the tile and the tab agree.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -45,12 +44,11 @@ const K = "agents.overviewTab.summary";
 interface Props {
   agent: AgentOut;
   typeRow: AgentTypeOut;
-  disabled: boolean;
   /** No `coffer` entry yet: the MCP tile says nothing reaches it until connected. */
   notConnected?: boolean;
 }
 
-export function OverviewSummary({ agent, typeRow, disabled, notConnected = false }: Props) {
+export function OverviewSummary({ agent, typeRow, notConnected = false }: Props) {
   const { t } = useTranslation();
   const counts = useAgentCounts(agent.uid);
   const hooks = useAgentHooks(agent.uid);
@@ -58,7 +56,6 @@ export function OverviewSummary({ agent, typeRow, disabled, notConnected = false
 
   const hookPaths = new Set((hooks.data?.items ?? []).map((h) => h.path));
   const ctx = {
-    disabled,
     notConnected,
     mcpFile: baseName(mcpConfigPath(agent, typeRow)),
     skillDir: abbreviateHomePath(typeRow.default_skill_dir),

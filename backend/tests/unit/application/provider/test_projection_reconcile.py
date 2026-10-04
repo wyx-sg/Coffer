@@ -241,14 +241,6 @@ async def test_a_connection_no_registered_agent_runs_on_judges_nothing() -> None
     assert calls == []
 
 
-async def test_a_disabled_agent_is_not_judged(tmp_path: pathlib.Path) -> None:
-    store = _Store({_settings(tmp_path): "{}"})
-    results, calls = await _run(store, [_agent(tmp_path, enabled=False)], [_connection()])
-
-    assert results == []
-    assert calls == []
-
-
 async def test_an_unreadable_config_is_never_guessed_absent(tmp_path: pathlib.Path) -> None:
     """Guessing "absent" from a file we could not read would clear a choice on no
     evidence — the worse of the two mistakes."""

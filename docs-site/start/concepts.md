@@ -67,7 +67,7 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 A resource's **reach** decides where it takes effect. Reach has two parts:
 
-- **`enabled`**: the on/off switch. Knowledge collections and memory partitions have none: they are always on.
+- **`enabled`**: the on/off switch. Knowledge collections, memory partitions and agents have none: they are always on.
 - **scope**: an optional allow-list of agents. No scope means every agent, `--agents a,b` means only those agents, and an empty list means none.
 
 Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.

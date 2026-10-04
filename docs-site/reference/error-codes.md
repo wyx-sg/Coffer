@@ -198,7 +198,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | No conversation with that id. | Refresh the conversation list. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
-| `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no enabled agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add or enable the agent on the Agents page. |
+| `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add the agent on the Agents page. |
 | `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation, or a request for the files a reply changed named no assistant reply of it. | Refresh the conversation; retry the message shown there. |
 | `REPLY_FILE_NOT_FOUND` | 404 | The diff of a changed file was asked for under a path the reply did not record. | Reopen the reply's changed files and pick one from the list. |
 | `QUESTION_CLOSED` | 409 | An answer to a question the agent asked that is no longer waiting: it was already answered (the first answer wins), cancelled, or its turn ended. Nothing changed. | Refresh the conversation; the card shows the answer that was taken. |
@@ -219,7 +219,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while an agent runs on it. | Switch each agent running on it back to its own login with **Change model**, edit, then switch again. |
-| `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | A connection cannot be switched on for an agent it does not reach: the connection or the agent is switched off, or the connection's scope does not name the agent. | Switch the connection on, or add the agent to its scope, then switch again. |
+| `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | A connection cannot be switched on for an agent it does not reach: the connection is switched off, or the connection's scope does not name the agent. | Switch the connection on, or add the agent to its scope, then switch again. |
 | `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's internal engine only and cannot be switched on for an agent. | Use it as the internal-engine default instead. |
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag in **Settings › General → Coffer's model**. |
 | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | Another connection is already the speech-to-text default. | Move the flag in **Settings › General → Coffer's model** (**Speech to text**). |

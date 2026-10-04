@@ -1,12 +1,15 @@
 // src/components/chat/ConversationsList.tsx — the Conversations page's list
 // (spec chat "Show every conversation on the Conversations page"): one
 // bordered container of rows, newest activity first, under Today / Yesterday /
-// Earlier bands that carry no counts. It has no header row; a row's checkbox
-// shows on hover, and a shift-click ticks the range between two rows.
+// Earlier bands that carry no counts. It has no header row: the first band
+// holds Select all, in the column of the rows' checkboxes. A checkbox shows on
+// hover, and a shift-click ticks the range between two rows.
 import { Fragment, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { Conversation } from "@/lib/api/chat";
 import { groupByTime } from "@/lib/conversations/time";
 import { ConversationRow } from "./ConversationRow";
@@ -26,9 +29,19 @@ interface Props {
     selected: ReadonlySet<string>;
     setMany: (ids: string[], on: boolean) => void;
   };
+  /** Select all: every conversation the view holds, loaded or not; ticked again, none. */
+  selectAll: {
+    checked: boolean;
+    indeterminate: boolean;
+    onToggle: () => void;
+  };
   onArchive: (c: Conversation) => void;
   onDelete: (c: Conversation) => void;
 }
+
+// Hidden (its space kept) until the pointer or focus is on the list.
+const REVEAL =
+  "opacity-0 transition-opacity duration-fast group-hover/list:opacity-100 focus-within:opacity-100";
 
 export function ConversationsList({
   conversations,
@@ -38,6 +51,7 @@ export function ConversationsList({
   hrefFor,
   archivedView,
   selection,
+  selectAll,
   onArchive,
   onDelete,
 }: Props) {
@@ -72,18 +86,35 @@ export function ConversationsList({
   return (
     <ul
       aria-label={t("conversations.list.ariaLabel")}
-      className="m-0 min-w-[42rem] list-none overflow-hidden rounded-xl border border-border bg-surface-raised p-0"
+      className="group/list m-0 min-w-[42rem] list-none overflow-hidden rounded-xl border border-border bg-surface-raised p-0"
     >
       {isLoading ? skeletons(4, "skeleton") : null}
       {isLoading
         ? null
-        : groups.map((g) => (
+        : groups.map((g, i) => (
             <Fragment key={g.bucket}>
               <li
-                aria-hidden
-                className="flex h-7 items-center bg-surface-sunken pl-10 text-2xs font-semibold text-text-muted border-t border-border-subtle first:border-t-0"
+                data-band={g.bucket}
+                className="flex h-7 items-center gap-x-3 border-t border-border-subtle bg-surface-sunken pl-3.5 text-2xs font-semibold text-text-muted first:border-t-0"
               >
-                {t(`conversations.group.${g.bucket}`)}
+                {i === 0 ? (
+                  <span
+                    className={cn(
+                      "inline-flex",
+                      !(selecting || selectAll.checked || selectAll.indeterminate) && REVEAL,
+                    )}
+                  >
+                    <Checkbox
+                      checked={selectAll.checked}
+                      indeterminate={selectAll.indeterminate}
+                      aria-label={t("common.bulk.selectAll")}
+                      onChange={selectAll.onToggle}
+                    />
+                  </span>
+                ) : (
+                  <span aria-hidden className="w-[15px] shrink-0" />
+                )}
+                <span aria-hidden>{t(`conversations.group.${g.bucket}`)}</span>
               </li>
               {g.items.map((c) => (
                 <ConversationRow

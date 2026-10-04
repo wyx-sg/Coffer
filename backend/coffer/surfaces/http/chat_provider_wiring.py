@@ -6,7 +6,7 @@ agent-mechanisms-are-optional-facets-on-the-descriptor) — Claude Code over the
 Agent SDK, Codex over ``codex app-server`` — and a further agent is one more
 driver bound at the composition root, with no change here, to the chat
 surface, persistence, or the wire contract. Providers surface in the picker
-only when their binary is on PATH and an enabled managed agent of that type is
+only when their binary is on PATH and a managed agent of that type is
 registered (``availability()``).
 """
 
@@ -49,7 +49,7 @@ def agent_home_env_resolver(
     The agent answering for the type (``answering_agent_config`` — the same one
     the model catalogue reads) decides it: a custom ``config_dir`` becomes
     ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME``, the default one (or no registered
-    agent) sets nothing (spec chat "Ship Claude Code and Codex subprocess
+    agent) sets nothing (spec chat "Run Claude Code and Codex as subprocess
     providers on the type's one agent"). ``agents`` is a getter so the registry is read at request
     time, after the composition root has published it, and so a changed
     ``config_dir`` takes effect on the next turn without a restart.

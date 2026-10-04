@@ -3,8 +3,8 @@
 // Shared by the Agents list row and the agent detail page (header menu and
 // the Overview's own buttons, through `open`), so a state offers the same
 // action wherever the agent is shown. The visible button is only ever a fix
-// Coffer can make: Connect (not connected, or a newly found agent), Repair, or
-// Turn on. A healthy row has none, and an agent whose program is not on this
+// Coffer can make: Connect (not connected, or a newly found agent), or Repair.
+// A healthy row has none, and an agent whose program is not on this
 // Mac has none either: its install prompt (Copy prompt, Ask an agent) heads the
 // ⋯ menu. The menu never repeats the visible button. Connect, Repair and
 // Disconnect all open the Review changes dialog; a connected agent's config
@@ -12,7 +12,7 @@
 // holds both supported agents.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Plug, Power, Wrench, type LucideIcon } from "lucide-react";
+import { Plug, Wrench, type LucideIcon } from "lucide-react";
 
 import {
   AgentConnectionChangeDialog,
@@ -25,7 +25,6 @@ import type { AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useFsActions } from "@/lib/fsActions";
 import { useAgentPending, type AgentPending } from "@/lib/hooks/useAgentPending";
-import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { AgentConfigDirDialog } from "./AgentConfigDirDialog";
 import { useAgentRowState } from "./useAgentRowState";
 
@@ -40,12 +39,11 @@ export interface AgentRowActions {
   actions: MenuAction[];
   primary: AgentPrimaryAction | null;
   dialogs: ReactNode;
-  /** Long work running on this agent now (connect, disconnect, enable, …), from wherever it started. */
+  /** Long work running on this agent now (connect, disconnect, …), from wherever it started. */
   pending: AgentPending | null;
   open: {
     change: (kind: "add" | "connect" | "disconnect") => void;
     configDir: () => void;
-    enable: () => void;
   };
 }
 
@@ -56,9 +54,7 @@ export function useAgentRowActions(
   const { t } = useTranslation();
   const { toast } = useToast();
   const fs = useFsActions();
-  const enableMutation = useEnableResource();
-  const disableMutation = useDisableResource();
-  const { state = "checking", enabled, connection } = useAgentRowState(row);
+  const { state = "checking", connection } = useAgentRowState(row);
   const pending = useAgentPending(row);
   const busy = pending !== null;
   const [change, setChange] = useState<ConnectionChangeRequest | null>(null);
@@ -76,7 +72,6 @@ export function useAgentRowActions(
   const open: AgentRowActions["open"] = {
     change: (kind) => setChange(kind === "add" ? { kind, rows: [row] } : { kind, row }),
     configDir: () => setConfigDirOpen(true),
-    enable: () => uid && !busy && enableMutation.mutate({ uid, kind: "agent" }),
   };
 
   let primary: AgentPrimaryAction | null = null;
@@ -101,9 +96,6 @@ export function useAgentRowActions(
       primary = row.addable
         ? { label: t("agents.rowMenu.connect"), icon: Plug, run: () => open.change("add") }
         : null;
-      break;
-    case "disabled":
-      primary = { label: t("agents.rowMenu.enable"), icon: Power, run: open.enable };
       break;
   }
 
@@ -158,25 +150,6 @@ export function useAgentRowActions(
       onSelect: () => open.change("disconnect"),
       disabled: busy,
     });
-  }
-  if (uid) {
-    // A disabled agent's Turn on is the row's button (or the Overview's); Turn
-    // off only while it is on.
-    if (enabled) {
-      actions.push({
-        key: "disable",
-        label: t("agents.rowMenu.disable"),
-        onSelect: () => disableMutation.mutate({ uid, kind: "agent" }),
-        disabled: busy,
-      });
-    } else if (state !== "disabled") {
-      actions.push({
-        key: "enable",
-        label: t("agents.rowMenu.enable"),
-        onSelect: open.enable,
-        disabled: busy,
-      });
-    }
   }
 
   const dialogs = (
