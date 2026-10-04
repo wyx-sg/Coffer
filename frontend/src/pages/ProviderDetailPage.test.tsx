@@ -204,7 +204,8 @@ describe("ProviderDetailPage", () => {
 
     expect(screen.getByText("Reachable")).toBeInTheDocument();
     expect(screen.getByText("locked while Codex runs on it")).toBeInTheDocument();
-    expect(screen.getByText("coffer://secret/provider/acme")).toBeInTheDocument();
+    // An opaque ref shows as itself; only a standalone secret has a coffer:// URI.
+    expect(screen.getByText("provider/acme")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
     expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
     // One column, no tabs: the Models section sits under Used by and Endpoint.

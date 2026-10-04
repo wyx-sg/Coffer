@@ -6201,7 +6201,6 @@
       "never": "从不"
     },
     "key": {
-      "secretPrefix": "密钥：",
       "secretLabel": "API Key 对应的密钥",
       "stored": "只写不读，保存在这台 Mac 的钥匙串加密存储中。",
       "storedChip": "已保存",

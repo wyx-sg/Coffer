@@ -26,6 +26,7 @@ import type { ProviderUse } from "@/lib/providers/usedBy";
 import { ProbeResult } from "./ProbeResult";
 import { useEndpointTest } from "./useEndpointTest";
 import { useUserNames } from "./useUserNames";
+import { secretReferenceOf } from "@/lib/secretValue";
 
 interface Props {
   open: boolean;
@@ -85,8 +86,9 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
             <span className="text-xs font-label text-text">{t("providers.replace.secret")}</span>
             <span className="inline-flex items-center gap-1.5">
               <KeyRound className="size-3.5 text-text-muted" aria-hidden />
-              <span className="text-xs text-text-muted">{t("providers.key.secretPrefix")}</span>
-              <span className="font-mono text-xs">{provider.secret_ref}</span>
+              <span className="font-mono text-xs">
+                {provider.secret_ref ? secretReferenceOf(provider.secret_ref) : null}
+              </span>
             </span>
           </div>
           <div className="flex flex-col gap-1.5">
