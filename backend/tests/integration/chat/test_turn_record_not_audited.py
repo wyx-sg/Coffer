@@ -1,5 +1,5 @@
-"""A turn leaves no audit-log row, and Coffer keeps no copy of it (spec chat "Keep a
-turn's record in its conversation, not the audit log" — the record is now the
+"""A turn leaves no audit-log row, and Coffer keeps no copy of it (spec chat
+"Leave a turn's record to the agent's own session, not the audit log" — the record is now the
 agent's own session).
 
 Runs a real turn through the orchestrator against the real SQLite conversation
@@ -34,9 +34,8 @@ from tests.unit.chat.conftest import FakeAgentAdapter, FakeAgentProvider
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.acceptance(
-    spec="chat", scenario="a turn is recorded in its conversation and not in the audit log"
-)
+@pytest.mark.acceptance(spec="chat", scenario="a turn leaves no audit row and no stored text")
+@pytest.mark.acceptance(spec="chat", scenario="a conversation row holds no message text")
 async def test_a_turn_is_not_recorded_in_the_audit_log_or_kept_as_text(tmp_path) -> None:  # type: ignore[no-untyped-def]
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -84,5 +83,15 @@ async def test_a_turn_is_not_recorded_in_the_audit_log_or_kept_as_text(tmp_path)
             ).scalar_one()
         assert "chat_messages" not in tables
         assert audit_rows == 0
+
+        # The index row carries title, agent, channel, chat and agent config ...
+        assert (row.agent_key, row.channel_uid, row.peer_chat_id) == ("agent", "chan", "peer")
+        # ... and no table of the database holds any of the turn's text.
+        async with sm() as session:
+            for table in sorted(tables):
+                dump = (await session.execute(text(f'SELECT * FROM "{table}"'))).fetchall()
+                cells = " ".join(str(v) for r in dump for v in r)
+                assert "Checking." not in cells and "Done." not in cells, table
+                assert "read_file" not in cells, table
     finally:
         await engine.dispose()

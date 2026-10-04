@@ -1,6 +1,6 @@
 """A question for the owner, in a chat: sending its cards, taking the answer,
-rewriting the cards when it closes (spec channels "Ask the owner in the chat and
-take the answer back to the agent").
+rewriting the cards when it closes (spec channels
+"Ask the owner in the chat and take the chat's answer back to the agent").
 
 The chat platform raises the question and answers it (``coffer.application.chat
 .questions``); this module is the channel's half. It reaches the platform only

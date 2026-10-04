@@ -746,7 +746,6 @@ async def test_cancel_interrupts_disconnects_and_persists_session():
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 async def test_adapter_reports_the_model_the_turn_ran_on():
     # The CLI names the model on its assistant messages; the adapter exposes it so
     # the turn runner can record it on the reply it finalises.
@@ -971,6 +970,7 @@ class _ResumeThenFreshFactory:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a cleaned-up session resumes as a fresh one")
 @pytest.mark.acceptance(
     spec="chat",
     scenario="a resume id the agent has forgotten retries once as a fresh session",

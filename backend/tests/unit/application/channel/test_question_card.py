@@ -1,6 +1,6 @@
 """A question as a card: its text, its buttons, its callback payload and the line
-it is rewritten to (spec channels "Ask the owner in the chat and take the answer
-back to the agent")."""
+it is rewritten to (spec channels
+"Ask the owner in the chat and take the chat's answer back to the agent")."""
 
 from __future__ import annotations
 

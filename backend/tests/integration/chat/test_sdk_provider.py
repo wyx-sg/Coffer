@@ -238,6 +238,7 @@ async def test_build_adapter_returns_sdk_adapter_with_correct_cwd(tmp_path) -> N
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a turn carries no history")
 async def test_build_adapter_resumes_stored_session(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Session id written by the first turn is passed as resume_session on next."""
     repo, engine = await _repo(tmp_path)

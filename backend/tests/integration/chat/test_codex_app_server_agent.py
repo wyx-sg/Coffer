@@ -364,7 +364,6 @@ async def test_adapter_streams_events_and_persists_thread_id():
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 async def test_adapter_reports_the_model_the_thread_runs_on():
     server = FakeCodexAppServer(frames=_basic_frames(), model="gpt-test-5")
     adapter = _adapter(_Factory(server))
@@ -478,6 +477,7 @@ async def test_resume_uses_thread_resume_with_thread_id():
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a cleaned-up session resumes as a fresh one")
 @pytest.mark.acceptance(
     spec="chat",
     scenario="a resume id the agent has forgotten retries once as a fresh session",

@@ -1,6 +1,6 @@
 """A question the agent asks the owner goes out as a card in the chat and its
-answer goes back to the agent (spec channels "Ask the owner in the chat and take
-the answer back to the agent").
+answer goes back to the agent (spec channels
+"Ask the owner in the chat and take the chat's answer back to the agent").
 
 A real turn orchestrator runs a scripted agent that asks through the function the
 Claude Code hook and ``coffer__ask`` share; the channel renders the turn's events,
@@ -140,9 +140,6 @@ async def test_a_text_message_is_the_answer_and_starts_no_turn(env: ChannelEnv) 
     assert await _user_texts(env, conversation_id) == ["go"]
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="an answer given in Coffer rewrites the chat card"
-)
 async def test_an_answer_given_in_coffer_rewrites_the_card(env: ChannelEnv) -> None:
     resource, adapter, _built = await _chat(env, YES_NO)
     conversation_id = await env.active_conversation(resource)

@@ -13,6 +13,7 @@ from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
 )
+from coffer.application.chat.turn_state import peek
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.domain.chat.events import (
@@ -88,6 +89,9 @@ _DONE = TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat", scenario="a turn streams its typed events in order and stores none of them"
+)
 async def test_happy_path_collects_events() -> None:
     scripted: list[AgentEvent] = [
         TurnStarted(),
@@ -103,6 +107,12 @@ async def test_happy_path_collects_events() -> None:
 
     assert any(isinstance(e, TextDelta) for e in events)
     assert any(isinstance(e, TurnDone) for e in events)
+    # The renderer got the turn's events in the order the adapter produced them.
+    assert events == scripted
+    # Nothing of the turn's text was written: the index row is the only record.
+    stored = await _conv.get(conv.id)
+    assert stored is not None
+    assert "Hello" not in repr(stored)
 
 
 @pytest.mark.asyncio
@@ -117,6 +127,69 @@ async def test_the_adapter_is_given_the_prompt_and_the_attachments() -> None:
 
     assert adapter.recorded_prompts == ["remember this"]
     assert adapter.recorded_attachments == [[image]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a turn carries no history")
+async def test_a_later_turn_is_given_only_its_own_message() -> None:
+    adapter = FakeAgentAdapter([_DONE])
+    orchestrator, _, provider = make_orchestrator(adapter=adapter)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+
+    await drain_queue(await start_turn(orchestrator, conv.id, "first question"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "second question"))
+
+    # Each turn is its message and nothing earlier; the adapter is built from the
+    # conversation id alone, so it resumes the stored native session itself.
+    assert adapter.recorded_prompts == ["first question", "second question"]
+    assert all("first question" not in p for p in adapter.recorded_prompts[1:])
+    assert adapter.recorded_attachments == [[], []]
+    assert provider.init_calls and provider.deleted == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a completed turn is not replayed")
+async def test_a_completed_turn_leaves_nothing_to_replay() -> None:
+    scripted: list[AgentEvent] = [TurnStarted(), TextDelta(text="secret reply"), _DONE]
+    orchestrator, _, _ = make_orchestrator(scripted)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+
+    await drain_queue(await start_turn(orchestrator, conv.id, "go"))
+    await asyncio.sleep(0)
+
+    # What a late subscriber could read: the pending-queue snapshot (empty), and no
+    # turn in flight or held with the turn's content.
+    assert orchestrator.pending(conv.id) == []
+    assert conv.id not in active_turns()
+    state = peek(conv.id)
+    assert state is None or (state.active is None and state.queue == [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a reported model reaches the turn's log line")
+async def test_a_reported_model_reaches_the_turn_log_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    scripted: list[AgentEvent] = [TurnStarted(), TextDelta(text="hi"), _DONE]
+    orchestrator, _, _ = make_orchestrator(adapter=FakeAgentAdapter(scripted, model_id="model-x"))
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+    with caplog.at_level("INFO", logger="coffer.application.chat.turn_runner"):
+        await drain_queue(await start_turn(orchestrator, conv.id, "go"))
+    assert any("model-x" in r.getMessage() for r in caplog.records)
+
+    # An adapter that names no model (no attribute at all) is still a valid adapter.
+    class _NoModel:
+        async def run_turn(self, prompt: str, attachments: Any = ()) -> AsyncIterator[AgentEvent]:
+            async def gen() -> AsyncIterator[AgentEvent]:
+                for ev in scripted:
+                    yield ev
+
+            return gen()
+
+    orchestrator2, _, _ = make_orchestrator(adapter=_NoModel())
+    conv2 = await orchestrator2._chat.create_conversation(agent_key="builtin")
+    events = await drain_queue(await start_turn(orchestrator2, conv2.id, "go"))
+    assert isinstance(events[-1], TurnDone)
 
 
 @pytest.mark.asyncio

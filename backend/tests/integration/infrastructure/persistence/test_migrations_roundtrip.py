@@ -163,6 +163,9 @@ def test_0147_drops_the_effort_column_and_the_stored_effort_key(tmp_path, monkey
         )
 
 
+@pytest.mark.acceptance(
+    spec="chat", scenario="the upgrade drops the text and keeps channel conversations"
+)
 def test_0149_drops_the_message_store_and_the_conversations_no_channel_owns(tmp_path, monkeypatch):
     db_path = tmp_path / "messages.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")

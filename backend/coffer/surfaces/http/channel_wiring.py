@@ -153,7 +153,7 @@ def wire_channel_kind(
         # channels "Withdraw a bot reply on the owner's command").
         replies=replies,
         # Questions an agent asks the owner (spec channels "Ask the owner in the
-        # chat and take the answer back to the agent").
+        # chat and take the chat's answer back to the agent").
         questions=ChatQuestions(),
     )
 

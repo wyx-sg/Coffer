@@ -201,6 +201,9 @@ async def test_prune_unknown_table_rejected(tmp_path):
     await engine.dispose()
 
 
+@pytest.mark.acceptance(
+    spec="chat", scenario="the upgrade drops the text and keeps channel conversations"
+)
 @pytest.mark.asyncio
 async def test_initialize_defaults_forgets_the_rows_of_retired_policies(tmp_path):
     """A policy the registry no longer holds (the conversation archive/delete pair)

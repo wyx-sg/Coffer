@@ -66,6 +66,15 @@ def _is_ask_tool(name: str) -> bool:
     return name == "AskUserQuestion" or name.endswith("coffer__ask")
 
 
+def _reported_model(adapter: AgentAdapter) -> str | None:
+    """The model the adapter says the turn ran on; optional, read best-effort."""
+    try:
+        model = getattr(adapter, "model_id", None)
+    except Exception:
+        return None
+    return model if isinstance(model, str) and model else None
+
+
 class _IdleWatch:
     """The idle watchdog's deadline, which a pending question for the owner
     suspends: silence while the turn waits on a person is not a wedge (the
@@ -203,6 +212,13 @@ async def run_turn_task(
             )
             emit(error_event)
 
+        if final_done is not None:
+            # Coffer stores no reply to carry the model, so the log line does.
+            log.info(
+                "Turn for conversation %s completed (model=%s)",
+                conversation_id,
+                _reported_model(adapter),
+            )
         await finish()
     except asyncio.CancelledError:
         if active.discarded:
