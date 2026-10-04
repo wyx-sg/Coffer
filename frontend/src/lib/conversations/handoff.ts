@@ -43,8 +43,19 @@ export function draftAgentState(agentKey: string): { draftAgent: string } {
 }
 
 /** The agent a location's state opens the draft on, or null when it names none. */
-export function readDraftAgentState(state: unknown): string | null {
+function readDraftAgentState(state: unknown): string | null {
   if (typeof state !== "object" || state === null || !("draftAgent" in state)) return null;
   const agentKey: unknown = state.draftAgent;
   return typeof agentKey === "string" && agentKey ? agentKey : null;
+}
+
+/** What a location's state seeds the draft with: a hand-off (agent, folder, prompt) or an agent
+ *  page's New conversation (agent only — `cwd` undefined keeps the last folder, no prompt). */
+export function readDraftSeed(
+  state: unknown,
+): { agentKey: string; cwd?: string | null; prompt: string | null } | null {
+  const handoff = readHandoffState(state);
+  if (handoff) return handoff;
+  const agentKey = readDraftAgentState(state);
+  return agentKey ? { agentKey, prompt: null } : null;
 }

@@ -26,7 +26,7 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
 import { filterConversations } from "@/lib/conversations/filters";
-import { readDraftAgentState, readHandoffState } from "@/lib/conversations/handoff";
+import { readDraftSeed } from "@/lib/conversations/handoff";
 import {
   defaultDraftAgent,
   readLastWorkingDir,
@@ -83,30 +83,16 @@ export function useChatController() {
   // The draft was opened by a hand-off: the box says nothing is sent until Send.
   const [draftFromHandoff, setDraftFromHandoff] = useState(false);
 
-  // Apply a hand-off once, then drop it from the history entry so a reload or
-  // Back does not type the prompt again.
+  // Apply a hand-off (or New conversation's agent) once, then drop the state so Back does not.
   const handoffState: unknown = isDraft ? location.state : null;
   const { pathname, search: locationSearch } = location;
   useEffect(() => {
-    const handoff = readHandoffState(handoffState);
-    const draftAgent = handoff ? null : readDraftAgentState(handoffState);
-    if (handoff) {
-      setDraftConfig({ agentKey: handoff.agentKey, cwd: handoff.cwd, model: null, effort: null });
-      setDraftPrefill({ text: handoff.prompt, attachments: [] });
-      setDraftFromHandoff(true);
-    } else if (draftAgent) {
-      // An agent page's New conversation: a fresh draft on that agent, nothing typed.
-      setDraftConfig({
-        agentKey: draftAgent,
-        cwd: readLastWorkingDir(),
-        model: null,
-        effort: null,
-      });
-      setDraftPrefill(null);
-      setDraftFromHandoff(false);
-    } else {
-      return;
-    }
+    const seed = readDraftSeed(handoffState);
+    if (!seed) return;
+    const cwd = seed.cwd === undefined ? readLastWorkingDir() : seed.cwd;
+    setDraftConfig({ agentKey: seed.agentKey, cwd, model: null, effort: null });
+    setDraftPrefill(seed.prompt ? { text: seed.prompt, attachments: [] } : null);
+    setDraftFromHandoff(!!seed.prompt);
     navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
   }, [handoffState, pathname, locationSearch, navigate]);
 
