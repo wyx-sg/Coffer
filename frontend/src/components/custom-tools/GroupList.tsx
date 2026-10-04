@@ -1,12 +1,12 @@
-// src/components/custom-tools/GroupList.tsx — the list pane: a filter (and the `?agent=` pill), then the groups
+// src/components/custom-tools/GroupList.tsx — the list pane: a filter and the Reach filter (`?agent=`), then the groups
 // sectioned by health (needs attention first, then healthy, then off). While groups are ticked the selection bar
 // takes the filter's place; which are ticked belongs to the page.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
+import { AgentReachFilter } from "@/components/reach/AgentReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { useAgentFilter } from "@/lib/agents/agentFilter";
@@ -81,11 +81,9 @@ export function GroupList({
             placeholder={t("customTools.list.filter")}
             ariaLabel={t("customTools.list.filter")}
           />
-          {agentFilter ? (
-            <div className="flex items-center gap-2">
-              <AgentFilterPill filter={agentFilter} />
-            </div>
-          ) : null}
+          <div className="flex items-center gap-2">
+            <AgentReachFilter filter={agentFilter} />
+          </div>
         </>
       )}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">

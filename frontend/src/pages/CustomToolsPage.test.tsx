@@ -139,9 +139,7 @@ describe("CustomToolsPage", () => {
     renderAt("/custom-tools?agent=ag-cx");
     expect(await screen.findByText("everyone")).toBeInTheDocument();
     expect(screen.queryByText("only-claude")).not.toBeInTheDocument();
-    expect(screen.getByText("Codex")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove the Codex filter" }));
-    expect(await screen.findByText("only-claude")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Reach" })).toHaveTextContent("Codex");
   });
 
   acceptance("web-ui", "the tools table has no reach column and is searched by name", async () => {

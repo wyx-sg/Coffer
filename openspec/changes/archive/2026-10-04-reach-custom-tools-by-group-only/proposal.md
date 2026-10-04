@@ -13,8 +13,8 @@ switch and a second group already cover.
   reaches exactly the agents its group reaches. The route that set or cleared one
   tool's reach and `~/.coffer/local/tool-reach.json` are removed, and the tools
   table loses its reach column.
-- The Custom tools list accepts `?agent=<uid>` and names the agent in a removable
-  filter, as the MCP servers and Skills lists do.
+- The Custom tools list gets the Reach filter the MCP servers and Skills lists
+  have (every group, or those reaching one agent), kept in `?agent=<uid>`.
 - Groups can be ticked and acted on together: a selection bar with Reach, Delete
   and a clear, a select-all row, and Esc to clear.
 - An agent's MCP servers tab carries a From Coffer row for custom-tool groups,

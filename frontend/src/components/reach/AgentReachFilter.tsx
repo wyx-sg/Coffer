@@ -1,4 +1,4 @@
-// src/components/reach/AgentReachFilter.tsx — a library list's reach filter (Skills, MCP servers):
+// src/components/reach/AgentReachFilter.tsx — a library list's reach filter (Skills, MCP servers, Custom tools):
 // everything, or only what reaches one agent.
 //
 // It reads and writes the page's `?agent=` (lib/agents/agentFilter.ts), so the

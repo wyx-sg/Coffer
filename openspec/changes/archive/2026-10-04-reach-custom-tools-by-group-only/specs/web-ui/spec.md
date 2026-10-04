@@ -8,8 +8,9 @@ list in place of the search: "N of M selected", **Reach** (the bulk control of
 (×); a select-all row ticks every listed group, and Esc clears the selection.
 Delete removes each group with everything in it, and a group whose page is open
 closes. The list MUST accept the `agent` query parameter (`/custom-tools?agent=<uid>`)
-and then list only the groups that reach that agent, naming the agent in a
-removable filter under the search, as the MCP servers and Skills lists do.
+and then list only the groups that reach that agent: a Reach filter under the
+search — every group, or those reaching one agent — reads and writes it, as on the
+MCP servers and Skills lists.
 
 #### Scenario: ticking a group puts the selection bar at the top
 - **GIVEN** the Custom tools list with three groups
@@ -19,7 +20,7 @@ removable filter under the search, as the MCP servers and Skills lists do.
 #### Scenario: the list narrows to one agent
 - **GIVEN** a group that reaches only Claude Code and another that reaches every agent
 - **WHEN** the user opens `/custom-tools?agent=<Codex uid>`
-- **THEN** only the group that reaches every agent is listed, under a removable Codex filter
+- **THEN** only the group that reaches every agent is listed, with Codex chosen in the Reach filter
 
 ### Requirement: Manage custom tool groups on their own page
 The Custom tools page (`/custom-tools`, under Capabilities) MUST manage custom

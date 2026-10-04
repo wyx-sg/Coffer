@@ -8,7 +8,7 @@
 ## 2. Frontend
 
 - [x] 2.1 Drop the tools table's reach column, ToolReachCell, useToolReach and the inherited reach control
-- [x] 2.2 `?agent=` filter and pill on the Custom tools list
+- [x] 2.2 Reach filter (`?agent=`) on the Custom tools list
 - [x] 2.3 Multi-select and the selection bar (Reach, Delete, clear) on the group list
 - [x] 2.4 Custom-tool From Coffer row on the agent MCP servers tab; MCP row excludes groups
 - [x] 2.5 Tools table search and Add request above the table
