@@ -142,7 +142,7 @@ mod tests {
         let b = ("b2".to_owned(), "fp2".to_owned());
         assert_eq!(batch_target(&[b.clone(), a.clone()]), want);
         assert_eq!(batch_target(&[a.clone(), b.clone()]), want);
-        assert_ne!(batch_target(&[a.clone()]), want);
+        assert_ne!(batch_target(std::slice::from_ref(&a)), want);
         assert_ne!(
             batch_target(&[a, ("b2".to_owned(), "fpX".to_owned())]),
             want
