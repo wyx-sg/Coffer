@@ -144,8 +144,7 @@ class Kind:
     # ResourceService.update_scope rejects any non-null payload for it (422).
     # `mcp_server`, `skill`, `channel` and `provider` set this True; `agent`
     # deliberately does not — it IS the agent, so there is nothing for a
-    # per-agent scope to narrow — and `knowledge`/`memory` withdrew from reach
-    # in migration 0088.
+    # per-agent scope to narrow — and `knowledge`/`memory` have no reach.
     supports_scope: bool = False
     # Whether this kind's rows carry an enabled switch at all. False means
     # every row is served and ``ResourceService.set_enabled`` refuses it with

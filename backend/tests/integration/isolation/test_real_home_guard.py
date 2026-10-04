@@ -47,7 +47,7 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
     home = os.environ["HOME"]
     assert pathlib.Path.home() == pathlib.Path(home)
     assert os.path.abspath(home) not in _guard().homes
-    assert _guard().protected_root(os.path.join(home, ".coffer", "coffer.db")) is None
+    assert _guard().protected_root(os.path.join(home, ".coffer", "runs.db")) is None
     # Only the suite's own pins survive: a COFFER_* the developer's shell
     # exported (a DB URL, a log directory) was stripped at import.
     pins = {

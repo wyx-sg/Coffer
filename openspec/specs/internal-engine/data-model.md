@@ -211,9 +211,7 @@ would conflict on every edit — so it is `local/engine.json`.
 A change made on another machine arrives as a `sync` commit of the document and
 takes effect on the next read; the vault's history is its record. Deleting the
 document — here, by hand, or on another machine — resets this machine to the
-defaults (see "Reset to the defaults when the document is deleted"). In the
-one-time upgrade to the vault layout the `internal_engine_config` row became
-this document and revision 0136 dropped the table.
+defaults (see "Reset to the defaults when the document is deleted").
 
 ## Constraints summary
 

@@ -36,8 +36,8 @@ def _lock_for(path: Path) -> threading.RLock:
 class JsonStore:
     """A JSON object in one file, changed atomically.
 
-    ``path`` may be a callable so the file follows ``HOME`` (tests, the
-    migration's rehearsal) instead of being fixed at construction.
+    ``path`` may be a callable so the file follows ``HOME`` (tests) instead
+    of being fixed at construction.
     """
 
     def __init__(self, path: Path | Callable[[], Path], *, mode: int = 0o600) -> None:

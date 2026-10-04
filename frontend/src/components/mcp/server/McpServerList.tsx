@@ -16,6 +16,7 @@ import { SearchInput } from "@/components/SearchInput";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
 import type { ResourceOut } from "@/lib/api/resources";
+import { searchableName } from "@/lib/resourceTitle";
 import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
@@ -23,7 +24,7 @@ import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
 import { McpBuiltinRow } from "./McpBuiltinRow";
 import { McpServerListRow } from "./McpServerListRow";
 import { McpServersBulkBar } from "./McpServersBulkBar";
-import { GROUP_ORDER, serverState, transportOf, type ServerGroup } from "@/lib/mcp/serverState";
+import { GROUP_ORDER, serverState, type ServerGroup } from "@/lib/mcp/serverState";
 
 /** The fixed name of Coffer's own server, and its address on this page. */
 export const BUILTIN_NAME = "coffer";
@@ -67,7 +68,7 @@ export function McpServerList({
     const q = query.trim().toLowerCase();
     const out = new Map<ServerGroup, number[]>(GROUP_ORDER.map((g) => [g, []]));
     servers.forEach((s, i) => {
-      const haystack = `${s.name} ${transportOf(s.config).target}`.toLowerCase();
+      const haystack = searchableName(s).toLowerCase();
       if (q && !haystack.includes(q)) return;
       if (agentFilter && !agentFilter.matches(s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);
@@ -80,8 +81,7 @@ export function McpServerList({
   // Coffer's own server: always on, for every agent; only the search can hide it.
   const showBuiltin =
     !!builtin &&
-    (query.trim() === "" ||
-      `${builtin.name} ${builtin.url}`.toLowerCase().includes(query.trim().toLowerCase()));
+    (query.trim() === "" || builtin.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   // The listed servers the search shows (never the built-in one): the bar's "of M".
   const visibleUids = [...groups.values()].flat().map((i) => servers[i].uid);

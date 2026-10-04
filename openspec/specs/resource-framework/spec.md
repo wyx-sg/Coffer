@@ -391,7 +391,7 @@ else is managed:
 - **program** — a program Coffer installs or writes runs it (the memory hook entry point, an agent's
   key helper);
 - **offline** — it must work when the daemon is down or cannot start (the daemon's start, stop,
-  restart and status, the one-time migration, locating the log files, the daemon's own pre-bind
+  restart and status, locating the log files, the daemon's own pre-bind
   settings);
 - **hand-off** — a prompt Coffer gives an agent tells it to run the command, because what it reads or
   writes is not a file (running a command with secrets in its environment, naming and storing a
@@ -410,7 +410,7 @@ across every spec and so has no narrower home.
 #### Scenario: the command tree holds only commands the web UI does not replace
 - **GIVEN** the CLI's live command tree
 - **WHEN** it is read
-- **THEN** every command it holds is one a web UI page does not replace: the recorded list names the memory hook, the proxy key helper, the daemon lifecycle verbs, the migration, `path logs`, `config`, `run`, `secret list` and `secret set`, the three `log` commands, `mcp test` and `vault problems`, and no group exists for a kind the web UI manages
+- **THEN** every command it holds is one a web UI page does not replace: the recorded list names the memory hook, the proxy key helper, the daemon lifecycle verbs, `path logs`, `config`, `run`, `secret list` and `secret set`, the three `log` commands, `mcp test` and `vault problems`, and no group exists for a kind the web UI manages
 - **AND** a web UI operation with no command line counterpart ships without a reviewer being asked for one
 
 #### Scenario: every command has a recorded reason

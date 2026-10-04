@@ -29,14 +29,14 @@ class AuditLogModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
-    #: The resource's uid (migration 0136); kind+name are the label it
+    #: The resource's uid; kind+name are the label it
     #: carried then.
     resource_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     resource_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     resource_name: Mapped[str | None] = mapped_column(String, nullable=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)
     details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Correlation ids (migration 0137); see ``domain.audit.AuditEntry``.
+    #: Correlation ids; see ``domain.audit.AuditEntry``.
     trace_id: Mapped[str | None] = mapped_column(String, nullable=True)
     conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     turn_id: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -81,11 +81,11 @@ class SyncRunModel(Base):
     )
 
 
-# The usage-metering tables (migration 0110) live in their own module to keep
+# The usage-metering tables live in their own module to keep
 # this one within the file-size budget; importing it here registers them on
 # ``Base.metadata`` wherever the core models are loaded (``create_all``,
 # Alembic's env.py).
-# The ignored attention items (migration 0134), registered the same way.
+# The ignored attention items, registered the same way.
 from coffer.infrastructure.persistence import (  # noqa: E402, F401
     attention_ignore_repo as _attention_ignore_repo,
 )

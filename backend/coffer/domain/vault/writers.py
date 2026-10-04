@@ -23,7 +23,7 @@ WRITER_DISK = "disk"
 #: An agent through a Coffer tool; ``agent`` names which (``Coffer-Agent``).
 WRITER_AGENT = "agent"
 #: The daemon on its own account: a uid minted for a hand-made file, a
-#: machine descriptor, a layout upgrade, the migration.
+#: machine descriptor, a layout upgrade.
 WRITER_DAEMON = "daemon"
 #: Coffer's curation pass over a knowledge collection.
 WRITER_CURATION = "curation"

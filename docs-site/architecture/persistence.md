@@ -9,7 +9,7 @@ Coffer stores its state under `~/.coffer/` in five **storage classes**, one dire
 
 ## The problem it solves
 
-Coffer's state used to be stored by where the code that wrote it happened to put it. Configuration lived in one SQLite file, `coffer.db`, beside file trees for knowledge and skills. Reach, the sync pointer and chat history sat in the same database as the resources you wanted on every machine. Sync then had to serialize the database into files, translate them back, and remember a rule for every field that must not travel. Every such rule was a place to be wrong.
+State kept in one place, wherever the code that wrote it happened to put it, goes wrong in a specific way. Configuration in one SQLite file beside file trees for knowledge and skills, with reach, the sync pointer and chat history in the same database as the resources you want on every machine, would force sync to serialize the database into files, translate them back, and remember a rule for every field that must not travel. Every such rule is a place to be wrong.
 
 The state has five different natures, and each wants different treatment:
 
@@ -115,8 +115,7 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ├── secret/                       machine-local ciphertext (proxy tokens)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote
-├── sync/round.json               a stopped round, a hold, a join's pending choices
-└── migration.json                the record of the one-time upgrade
+└── sync/round.json               a stopped round, a hold, a join's pending choices
 ```
 
 Each file is one JSON object, read whole, changed under a per-file lock and written back atomically (a sibling temp file, then a rename). A missing file reads as empty. A file that does not parse is moved aside as `<name>.unreadable-<n>`, logged, and read as empty: local state can be set again, and a daemon that refuses to start over a settings file is worse than one that forgets them.
@@ -141,7 +140,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | `attention_ignores` | The "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
 
 ::: details Tables no code reads
-The migration chain also creates `workflow_runs`, `workflow_events`, `workflow_node_attempts` and `workflow_approvals`. No module in this build reads them; they exist because migrations are one linear history and later revisions build on the ones that created them.
+The baseline also creates `workflow_runs`, `workflow_events`, `workflow_node_attempts` and `workflow_approvals`. No module in this build reads them; they exist because the baseline schema includes them.
 :::
 
 Every connection runs this pragma suite:
@@ -196,15 +195,13 @@ The vault needs `git`. A machine without it fails at startup with a message sayi
 
 ## Migrations of runs.db
 
-Schema changes to `runs.db` are Alembic revisions kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>`. The head is `0138`, which dropped the unused `owner` column from `conversations`. `0137` added the correlation ids to the audit log, and `0136`, before it, turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never tables created implicitly from the models.
+`runs.db`'s Alembic history starts at one baseline revision, `0146`, which creates the whole schema in a single step. Every later schema change is a new revision stacked on it, kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>` (the next one is `0147`) and carrying a working `downgrade()`. A schema change is always a revision, never tables created implicitly from the models.
 
 Migrations run in the daemon's lifespan, before any service is built:
 
 ```mermaid
 flowchart TB
-  A["Daemon starts"] --> H{"Home holds only coffer.db,<br/>or a rolled-back upgrade?"}
-  H -- yes --> Z["Refuse: run coffer migrate<br/>(or --resume)"]
-  H -- no --> B["Read runs.db's revision"]
+  A["Daemon starts"] --> B["Read runs.db's revision"]
   B --> C{"Known to this build?"}
   C -- no --> X["Fail with DB_SCHEMA_TOO_NEW"]
   C -- yes --> D{"At head?"}
@@ -216,7 +213,6 @@ flowchart TB
 
 - **Backups.** Before an upgrade the runner copies the database, with its `-wal` and `-shm` companions, to `runs.db.pre-<revision>`. An existing copy is never overwritten, and only the three newest are kept. To undo a bad migration, stop the daemon, move `runs.db` aside, rename the matching copy back, and start the previous build.
 - **A schema from a newer build.** A revision this build does not know stops the daemon with `DB_SCHEMA_TOO_NEW` before anything is touched, following the principle of [detecting rather than guessing](/architecture/design-principles#detect-never-refuse).
-- **An old home.** A home that still holds only `coffer.db` is not migrated by the daemon. It refuses to start with `VAULT_MIGRATION_REQUIRED` and names `coffer migrate`, the one-time upgrade you run yourself. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Secrets at rest
 
@@ -240,8 +236,8 @@ Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime st
 | --- | --- |
 | The `vault` package in the domain layer | Layout, documents, format versions, writers and trailers. |
 | The `vault` package in the application layer | Validation rules, history and restore, problems. |
-| The `vault` package in the infrastructure layer | The class roots under `~/.coffer`, the repository, the writer, the scanner, the resource and state stores, reach, local JSON, the one-time upgrade. |
-| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`; the migration runner (startup migration, backup, too-new guard, the refusal of an old home), which both the daemon's startup and `coffer migrate` call. |
+| The `vault` package in the infrastructure layer | The class roots under `~/.coffer`, the repository, the writer, the scanner, the resource and state stores, reach, local JSON. |
+| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`; the migration runner (startup migration, backup, too-new guard), called from the daemon's startup. |
 | The `secret` package in the infrastructure layer | Secret ciphertext as files. |
 | The `daemon` package in the infrastructure layer | `daemon-config.json`. |
 

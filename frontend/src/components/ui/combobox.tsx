@@ -56,11 +56,7 @@ export function Combobox({
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase();
     if (needle.length === 0) return options;
-    return options.filter(
-      (option) =>
-        option.label.toLowerCase().includes(needle) ||
-        (option.hint ?? "").toLowerCase().includes(needle),
-    );
+    return options.filter((option) => option.label.toLowerCase().includes(needle));
   }, [filter, options]);
 
   const selected = options.find((option) => option.value === value);

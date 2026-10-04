@@ -38,7 +38,7 @@ def _point_db_at(monkeypatch: pytest.MonkeyPatch, db_path: pathlib.Path) -> None
 
 
 def test_future_revision_raises(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    db = tmp_path / "coffer.db"
+    db = tmp_path / "runs.db"
     _stamp(db, "9999")  # a revision this build's migration tree does not contain
     _point_db_at(monkeypatch, db)
 
@@ -51,7 +51,7 @@ def test_future_revision_raises(tmp_path: pathlib.Path, monkeypatch: pytest.Monk
 def test_known_head_revision_passes(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    db = tmp_path / "coffer.db"
+    db = tmp_path / "runs.db"
     _stamp(db, HEAD_REVISION)  # the revision an up-to-date DB carries
     _point_db_at(monkeypatch, db)
 
@@ -60,7 +60,7 @@ def test_known_head_revision_passes(
 
 
 def test_fresh_db_passes(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    db = tmp_path / "coffer.db"
+    db = tmp_path / "runs.db"
     db.touch()  # empty DB: no alembic_version table → current revision is None
     _point_db_at(monkeypatch, db)
 

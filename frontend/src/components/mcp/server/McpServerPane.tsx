@@ -167,6 +167,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         basePath={basePath}
         overview={
           <McpOverviewTab
+            invocationsHref={`${basePath}/invocations`}
             name={resource.name}
             enabled={resource.enabled}
             state={state}

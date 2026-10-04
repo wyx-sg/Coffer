@@ -76,7 +76,7 @@ _SKIP_FILES = {"package-lock.json"}
 #:
 #: The command line keeps only what needs it (OpenSpec change
 #: trim-the-cli-to-what-needs-it, design §1): `memory hook`, `proxy token`,
-#: `daemon start|stop|restart|status`, `migrate`, `path logs`, `config
+#: `daemon start|stop|restart|status`, `path logs`, `config
 #: list|get|set|unset`, `run`, `secret list|set`, `log audit|mcp|daemon`, `mcp
 #: test` and `vault problems`. Everything else is removed, with no aliases;
 #: each spelling names the web UI page that does the job now.
@@ -106,6 +106,7 @@ REMOVED: tuple[tuple[str, str], ...] = (
         "nothing: the reconciler repairs drift; what needs a person is on the attention list",
     ),
     ("coffer attention", "the attention list on the Overview page"),
+    ("coffer migrate", "nothing: a fresh install starts at the current layout"),
     ("coffer open", "open the Coffer app"),
     (
         "coffer scan",

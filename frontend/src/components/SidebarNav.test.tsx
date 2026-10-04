@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
-import { fireEvent, render, within } from "@testing-library/react";
+import { act, render, within } from "@testing-library/react";
 import { isValidElement } from "react";
 import { MemoryRouter, Navigate, matchRoutes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -317,13 +317,13 @@ describe("an experimental feature's entry", () => {
       expanded.unmount();
 
       const rail = renderNav("/", true);
-      fireEvent.focus(rail.getByRole("link", { name: "Knowledge" }));
+      act(() => rail.getByRole("link", { name: "Knowledge" }).focus());
       expect(await rail.findByRole("tooltip")).toHaveTextContent("Knowledge · Experimental");
       rail.unmount();
 
       // An entry no feature owns names no marker in its tooltip.
       const plain = renderNav("/", true);
-      fireEvent.focus(plain.getByRole("link", { name: "Agents" }));
+      act(() => plain.getByRole("link", { name: "Agents" }).focus());
       expect(await plain.findByRole("tooltip")).not.toHaveTextContent("Experimental");
     },
   );

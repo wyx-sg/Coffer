@@ -5,6 +5,7 @@
 // Settings as a modal from the sidebar footer", "Organise Settings into six
 // tabs"). Plain tests until the change is archived (its task 7.14b).
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { pressEscape } from "@/test/escape";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useNavigate, useRoutes } from "react-router-dom";
@@ -40,7 +41,7 @@ beforeEach(() => {
             policies: [],
             vault: { path: "/v", bytes: 0, versions: null },
             local_content: { folder: "/c", locations: [], bytes: 0 },
-            history: { path: "/c/coffer.db", bytes: 0 },
+            history: { path: "/c/runs.db", bytes: 0 },
             cache: { bytes: 0 },
             status: "ready",
             version: "0.0.0",
@@ -148,7 +149,7 @@ describe("the Settings modal", () => {
     const nav = screen.getByRole("navigation", { name: /primary/i, hidden: true });
     expect(within(nav).queryByText("Settings")).toBeNull();
 
-    fireEvent.keyDown(screen.getByTestId("settings-modal"), { key: "Escape" });
+    pressEscape(screen.getByTestId("settings-modal"));
     await waitFor(() => expect(where.pathname).toBe("/mcp-servers"));
     expect(screen.getByTestId("sidebar-settings")).toHaveAttribute("aria-pressed", "false");
   });
@@ -161,7 +162,7 @@ describe("the Settings modal", () => {
     );
     await waitFor(() => expect(where.pathname).toBe("/settings/data"));
 
-    fireEvent.keyDown(screen.getByTestId("settings-modal"), { key: "Escape" });
+    pressEscape(screen.getByTestId("settings-modal"));
     await waitFor(() => expect(where.pathname).toBe("/activity"));
     expect(screen.queryByTestId("settings-modal")).not.toBeInTheDocument();
 

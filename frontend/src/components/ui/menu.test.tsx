@@ -1,6 +1,6 @@
 // src/components/ui/menu.test.tsx — the ⋯ action menu: opens, runs an item once, moves by keyboard.
 import { describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ActionMenu } from "./menu";
 
@@ -77,7 +77,8 @@ describe("ActionMenu", () => {
   test('the icon-only trigger shows the tooltip "More actions" on focus, and stays quiet while open', async () => {
     renderMenu();
     const trigger = screen.getByRole("button", { name: "More actions for Codex" });
-    fireEvent.focus(trigger);
+    // Keyboard focus (a real one: a synthetic focus event moves nothing).
+    act(() => trigger.focus());
     expect(await screen.findByRole("tooltip")).toHaveTextContent("More actions");
     fireEvent.click(trigger);
     expect(screen.getByRole("menu")).toBeInTheDocument();

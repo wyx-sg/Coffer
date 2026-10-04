@@ -135,7 +135,7 @@ The id is not only for `daemon.log`. `application/runtime/correlation.py` holds 
 
 A turn binds its ids around the spawn of its task: a fresh `turn_id`, the conversation's id, and the trace id of the request that started it — or, for a channel message that arrived over a websocket or a long poll with no request behind it, the turn's own id as its trace id. Because `asyncio` copies the context into every task it creates, the turn's renderer and anything else it starts carry the same ids with no parameter threaded through.
 
-So "what else did this request do?" is one filter on each record: `GET /api/v1/audit?trace_id=…`, `GET /api/v1/mcp/invocations?trace_id=…` and `GET /api/v1/daemon/logs?trace_id=…`, or `--trace <id>` on `coffer log audit`, `coffer log mcp` and `coffer log daemon`. The Activity page's record drawer shows a change's and a call's trace id. Rows older than migration 0137 carry none, and no id is invented for them.
+So "what else did this request do?" is one filter on each record: `GET /api/v1/audit?trace_id=…`, `GET /api/v1/mcp/invocations?trace_id=…` and `GET /api/v1/daemon/logs?trace_id=…`, or `--trace <id>` on `coffer log audit`, `coffer log mcp` and `coffer log daemon`. The Activity page's record drawer shows a change's and a call's trace id.
 
 ## The audit log
 
@@ -148,7 +148,7 @@ The audit log answers "what changed, and who changed it". It lives in the `audit
 | `timestamp` | when the event happened (UTC) |
 | `event_type` | one value from the vocabulary below |
 | `actor` | who caused it: `cli`, `api`, `ui`, `system`, or another short lowercase identifier |
-| `resource_uid` | the resource's uid, or empty for an event that names no resource or whose resource was deleted before the vault layout |
+| `resource_uid` | the resource's uid, or empty for an event that names no resource or whose resource was deleted |
 | `resource_kind`, `resource_name` | the label the resource carried **at the time** |
 | `details` | event-specific fields, already redacted |
 | `trace_id` | the request's or turn's correlation id; empty for a row written with none bound, such as a boot pass |

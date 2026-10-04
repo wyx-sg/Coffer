@@ -34,7 +34,6 @@ _EXPECTED = {
     "daemon stop",
     "daemon restart",
     "daemon status",
-    "migrate",
     "path logs",
     "config list",
     "config get",

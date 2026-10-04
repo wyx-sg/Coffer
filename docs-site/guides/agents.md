@@ -31,10 +31,6 @@ A machine has at most one registered agent of each type, and the agent's name **
 
 Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
 
-::: details Upgrading from a build that allowed several agents of one type
-Earlier builds let you register several agents of one type under names you chose. On upgrade, a database migration keeps one agent per type and drops the rest. It keeps, in this order of preference, the agent that is connected to Coffer (its Coffer MCP entry carries its uid), then an enabled one, then the most recently used, then the one on the standard directory. Every reach list and every channel's default agent that named a dropped agent is re-pointed at the kept one, the kept agent is renamed to its type, and each dropped agent is logged in the daemon log as `migration.0109.agent_dropped`. A dropped agent's config directory keeps whatever Coffer had written there, such as skill links or its `coffer` MCP entry; remove those by hand if you no longer use that directory. Titles and descriptions on agents are cleared.
-:::
-
 ::: info The agent's files are the source of truth
 Coffer never copies an agent's configuration into its own store. Config files, MCP entries, plugins, native memory and transcripts are read from disk every time you look at them. The agent record itself holds only the type, the config directory and the model binding.
 :::
@@ -269,7 +265,7 @@ For Codex it also says whether Codex will run the hook. Codex skips an entry you
 
 It also shows when the hook last fired, from the [audit log](/guides/activity). **Never fired** on an agent you use every day is the sign that the agent is not running the hook; the block says the likely cause and links to **Activity**, and Overview lists it under **Needs you**.
 
-**The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over command and file and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in Config files**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in **Config files**.
+**The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over the command and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in Config files**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in **Config files**.
 
 ## Models
 

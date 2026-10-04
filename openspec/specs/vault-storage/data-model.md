@@ -44,7 +44,6 @@ with no per-tree override, and `coffer path logs` prints the log directory).
     secret/<ref>.enc                       machine-local ciphertext (proxy tokens)
     secret-boundary/{bindings,approvals,settings,times,last-used}.json
     sync/{remote,round}.json
-    migration.json
   content/
     chat-media/  channel-media/  workspace/
     backup/skills/                         folders set aside from an agent's link path
@@ -227,7 +226,7 @@ as a `disk` write.
 | `Coffer-Agent` | the agent, when the writer is `agent`; for a curation pass, the author of the item it curated |
 | `Coffer-Machine` | the machine id that made the commit |
 | `Coffer-Restored-From` | for a restore, the commit restored from |
-| `Coffer-Layout` | for a layout commit, the move it made — `db -> 3` for the one-time upgrade |
+| `Coffer-Layout` | for a layout commit, the layout move it made (`<from> -> <to>`) |
 
 The knowledge history adds `Coffer-Collection`, `Coffer-Item`, `Coffer-Status`
 and `Coffer-Undoes` (spec knowledge). A history row shows the writer as
@@ -260,7 +259,6 @@ empty, because local state can be set again.
 | `skill-source-status.json` | `{skill uid: {checked_at, last_success_at, error, latest_commit, commits_ahead, files_changed, dismissed_commit}}` | skill-manager |
 | `secret-boundary/*.json` | bindings, approvals, settings, first-stored times, last-used times | secret |
 | `sync/remote.json`, `sync/round.json` | the remote; the round waiting for a person | vault-sync |
-| `migration.json` | the one-time upgrade's record | below |
 
 ## `derived/derived.db`
 
@@ -274,68 +272,8 @@ again rather than migrated.
 ## `runs.db`
 
 The history database, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another:
-one Alembic lineage, head `0136`, single writer. Every row that names a
-resource names it by uid — `resource_uid`, `skill_uid`, `agent_uid`; there is
-no integer resource id. Revision 0136 re-keyed `audit_log`,
-`channel_thread_conversations`, `channel_thread_history` and `channel_outbox`
-from the integer id to `resource_uid`, dropped every table whose state moved
-out, and emptied `sync_runs`.
-
-## The one-time upgrade
-
-`coffer migrate` turns a home that holds `coffer.db` into this layout. It is
-Python, not an Alembic step (`infrastructure/vault/migration/`): it backs up the
-database, runs Alembic to 0135 on it, reads the old tables, creates the vault,
-moves the trees (a rename, never a copy), replays the knowledge root's own git
-history into the vault under `knowledge/`, strips the `coffer_curated_at`
-stamps (settled documents seed `local/curation.json`), writes every file, makes
-**one** `daemon` commit (operation `layout`, `Coffer-Layout: db -> 3`), then
-renames `coffer.db` to `runs.db` and upgrades it to 0136.
-
-| Old | New |
-| --- | --- |
-| `skills/coffer-guide` | `derived/skills/coffer-guide` |
-| `knowledge` | `vault/knowledge` |
-| `skills` | `vault/skills` |
-| `memory` | `derived/memory` |
-| `chat-media`, `channel-media`, `workspace` | `content/…` |
-| `cache/agent` | `derived/cache/agent` |
-
-### `local/migration.json`
-
-Written before the first move and after every step, so a rollback of a failed
-upgrade is the same rollback:
-
-| Key | Notes |
-| --- | --- |
-| `format_version` | 1 |
-| `build` | the build that ran the upgrade |
-| `started_at`, `finished_at` | ISO times; `finished_at` is null until it completes |
-| `database_backup` | the backup's name (`coffer.db.pre-vault`) |
-| `daemon_config_backup` | whether `daemon-config.json` was backed up |
-| `created` | the class directories the home did not have before |
-| `moves` | `[{source, target}]`, in order |
-| `knowledge_git` | where the knowledge root's `.git` was set aside (`pre-vault/knowledge.git`) |
-| `stamped` | `[{path, blob}]` — each document whose stamp was stripped, and the blob the stripped file held |
-| `database_renamed` | whether `coffer.db` became `runs.db` |
-
-### Backups and the hold marker
-
-The backup set is `coffer.db.pre-vault` (+`-wal`/`-shm`) and
-`~/.coffer/pre-vault/` (`knowledge.git`, `knowledge-stamped/`,
-`daemon-config.json`). `coffer migrate --rollback` restores byte for byte —
-stamped originals, the knowledge `.git`, every recorded move reversed, `vault/`
-and `local/` set aside as `*.rolled-back-<time>`, `runs.db` set aside,
-`coffer.db` copied back from its backup, `daemon-config.json` restored — and
-writes the hold marker `~/.coffer/MIGRATION_ROLLED_BACK`:
-
-```json
-{ "rolled_back_at": "<iso time>", "set_aside": ["vault.rolled-back-…", "…"], "problems": [] }
-```
-
-While the marker exists this build neither starts on the home
-(`VAULT_MIGRATION_ON_HOLD`) nor migrates it; `coffer migrate --resume` removes
-it. A home holding only `coffer.db` is refused with `VAULT_MIGRATION_REQUIRED`,
-and a half-done upgrade is refused naming `--rollback`. `coffer migrate
---rehearse [--home PATH]` runs the upgrade and the rollback on a copy in a
-throwaway `HOME` and compares hashes; the source is untouched.
+one Alembic lineage, single writer. The lineage starts at one baseline revision,
+`0146`, that creates the whole schema; every later revision stacks on it and
+carries a working `downgrade()`. Every row that names a resource names it by
+uid — `resource_uid`, `skill_uid`, `agent_uid`; there is no integer resource
+id.

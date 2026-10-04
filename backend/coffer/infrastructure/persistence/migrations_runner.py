@@ -1,11 +1,8 @@
 """Synchronous Alembic migration runner + forward-compatibility guard.
 
-Run at daemon lifespan startup (off the request path); ``coffer migrate`` uses
-:func:`upgrade_to` from the CLI, so it lives here in infrastructure rather than
-in the HTTP surface.
-It migrates ``runs.db`` only: the move of a pre-vault home out of
-``coffer.db`` is ``coffer migrate`` (``infrastructure.vault.migration``),
-which a person runs once and this runner refuses to do in their place.
+Run at daemon lifespan startup (off the request path), so it lives here in
+infrastructure rather than in the HTTP surface. It migrates ``runs.db``, whose
+history starts at one baseline revision; every later revision stacks on it.
 
 Before a migration actually changes the schema, the on-disk database is copied
 aside as ``runs.db.pre-<revision>`` (with its ``-wal``/``-shm`` companions when
@@ -30,9 +27,6 @@ from alembic.config import Config as AlembicConfig
 from sqlalchemy.engine import make_url
 
 from coffer.domain.errors import DatabaseSchemaTooNew
-from coffer.infrastructure.vault.migration.errors import PreVaultDatabase
-from coffer.infrastructure.vault.migration.guard import refuse_unmigrated_home
-from coffer.infrastructure.vault.migration.places import LAYOUT_REVISION
 
 #: How many ``runs.db.pre-*`` copies survive; older ones are removed once a
 #: newer copy lands, so an install that upgrades often does not hoard copies.
@@ -154,43 +148,14 @@ def backup_before_migrate(
     return dest
 
 
-def _below(cfg: AlembicConfig, current: str, revision: str) -> bool:
-    """Whether ``current`` is an ancestor of ``revision``."""
-    from alembic.script import ScriptDirectory
-
-    script = ScriptDirectory.from_config(cfg)
-    ancestors = {r.revision for r in script.iterate_revisions(revision, "base")}
-    return current in ancestors and current != revision
-
-
-def upgrade_to(db_url: str, revision: str) -> None:
-    """``alembic upgrade <revision>`` on exactly ``db_url``, guarded against a
-    newer build's database. For ``coffer migrate``, which takes its own backup
-    of the database before it starts and so makes none here."""
-    cfg = _alembic_config(db_url)
-    _guard_schema_not_newer(cfg, db_url)
-    command.upgrade(cfg, revision)
-
-
 def run_migrations(db_url: str) -> pathlib.Path | None:
-    """Refuse a home that has not taken the vault upgrade, guard against a
-    too-new schema, back the file up if an upgrade is due, then ``alembic
-    upgrade head``. Returns the backup path, or ``None`` when the schema was
-    already current or the database is not a file.
-
-    The daemon never moves a home into the vault layout itself: that is the
-    one-time step ``coffer migrate`` a person runs. So a home that still holds
-    only ``coffer.db``, or one a rollback left on hold, stops the daemon here,
-    and so does a database below the layout revision that is not new —
-    upgrading it would drop tables whose state was never moved out.
-    """
+    """Guard against a too-new schema, back the file up if an upgrade is due,
+    then ``alembic upgrade head``. Returns the backup path, or ``None`` when
+    the schema was already current or the database is not a file."""
     from alembic.script import ScriptDirectory
 
-    refuse_unmigrated_home()
     cfg = _alembic_config(db_url)
     current = _guard_schema_not_newer(cfg, db_url)
-    if current is not None and _below(cfg, current, LAYOUT_REVISION):
-        raise PreVaultDatabase(db_url, current)
     head = ScriptDirectory.from_config(cfg).get_current_head()
     backup: pathlib.Path | None = None
     db_path = sqlite_file(db_url)

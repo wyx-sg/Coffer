@@ -218,7 +218,7 @@ coffer daemon restart
 
 对于桌面应用：退出 Coffer，用 `coffer daemon stop` 停掉守护进程，用新版本替换 `Coffer.app`，再清除一次它的隔离标记。下次启动时会运行新的守护进程，由它部署新的二进制。
 
-重启很重要，因为已经在运行的守护进程会继续跑旧版本。当 CLI 或 shim 发现守护进程的版本和自己不同时，会在 stderr 上打印一行警告，写明守护进程的可执行文件。新构建在执行 schema 迁移之前，会先保存 `runs.db.pre-<revision>`。如果你的 Coffer 还把状态存在 `coffer.db` 里，升级需要你自己运行一次性的步骤：见[升级已有的 Coffer](/zh/guides/upgrading)。
+重启很重要，因为已经在运行的守护进程会继续跑旧版本。当 CLI 或 shim 发现守护进程的版本和自己不同时，会在 stderr 上打印一行警告，写明守护进程的可执行文件。新构建在执行 schema 迁移之前，会先保存 `runs.db.pre-<revision>`。
 
 ## 卸载 {#uninstall}
 

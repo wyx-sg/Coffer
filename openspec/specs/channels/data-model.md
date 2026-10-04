@@ -72,28 +72,20 @@ Validation rules:
   a scope named agent RESOURCES while `default_agent` named an agent KEY and
   three call sites compared the two directly — reading every correctly-narrowed
   scope as excluding the channel's own agent.
-- A channel carries NO model curation. It briefly had its own `default_model`
-  and `models` allowed range; both are gone, because a channel binds an agent
-  and nothing more: a new conversation runs on the bound agent's own CLI
-  default, and the `/model` card offers that agent's whole catalogue and refuses
-  no id. Migration `20260912_0068_drop_channel_model_curation.py` takes both keys
-  off every stored channel config in one direction only, with no load-time shim
-  (house rule). The migration removed them, and `_CommonChannelFields` forbids
-  unknown keys (`extra="forbid"`), so a file still carrying one is refused.
+- A channel carries NO model curation (no `default_model`, no `models` allowed
+  range), because a channel binds an agent and nothing more: a new conversation
+  runs on the bound agent's own CLI default, and the `/model` card offers that
+  agent's whole catalogue and refuses no id. `_CommonChannelFields` forbids
+  unknown keys (`extra="forbid"`), so a file carrying either is refused.
 - `runs_on` is the `machine_id` of the one machine whose daemon starts this
   channel's adapter (see "Bind each channel to the one machine that runs it"). It lives in `config` because it must TRAVEL:
   config is what the resource file carries between machines, while the
   channel's `enabled` / scope are reach, in `local/reach.json`, which
   deliberately stays home. `None` is unbound and runs nowhere — never "runs
   here", which a document naming nobody would mean on every machine at once.
-  Migration `20260914_0079_bind_channels_to_this_machine.py` writes this
-  machine's cached id into every pre-existing channel config, so a channel that
-  was running before the field existed keeps running after it: until that
-  revision a channel never left the machine it was registered on, so "this
-  machine" is the true answer rather than a safe guess. Data-only and one
-  direction, with no load-time shim (house rule); a vault whose machine id
-  cannot be read is left unbound, which the surfaces show plainly rather than
-  papering over with an invented id.
+  A channel registered on a machine whose machine id cannot be read is left
+  unbound, which the surfaces show plainly rather than papering over with an
+  invented id.
 - A channel bound to a machine OTHER than this one is exempt from the
   `default_agent` registry check on both write paths. That check asks whether
   the channel will be able to drive anything when it starts, and a channel this
@@ -104,13 +96,9 @@ Validation rules:
   connection (spec channels/seatalk "Receive every event over one outbound
   websocket connection"), so its configuration carries no transport field and no
   ingress field. The webhook-era keys — `delivery`, `signing_secret_ref`,
-  `public_base_url`, `tunnel_token_ref` — were removed from every stored config by
-  migration `0103` (below), in one direction for the data and with no load-time
-  shim (house rule). The secret values the two removed refs cited are left
-  in the secret store: a migration that deletes secrets could not be undone
-  by its downgrade, and deleting them on the Secrets page removes them on
-  purpose. A channel config refuses every key no channel type declares, so a
-  file still carrying one is refused by the vault (spec vault-storage "Keep
+  `public_base_url`, `tunnel_token_ref` — are not part of it. A channel config
+  refuses every key no channel type declares, so a file carrying one is refused
+  by the vault (spec vault-storage "Keep
   every vault document a JSON object that preserves what it does not know").
 - Channel turns run in the Coffer-managed default workspace
   `~/.coffer/content/workspace` (created on first use).
@@ -158,15 +146,13 @@ Everything in it is a fact about the platform, which is why it travels: a
 channel that moved to another machine without its pairings would make the
 owner re-pair from their phone. What a chat's live conversation is — and the
 agent a thread has stuck to — is not in it: those are `runs.db`'s thread tables
-below, because conversations are machine-local. In the one-time upgrade to the
-vault layout each channel's `channel_peers` rows became its document and
-revision 0136 dropped the table.
+below, because conversations are machine-local.
 
 ## `runs.db` — the thread tables
 
 The three tables below are history and machine-local: they name
 conversations, and conversations do not travel. Each names its channel by
-`resource_uid` (revision 0136 re-keyed them from the integer channel id). No
+`resource_uid`. No
 foreign key points at the channel — it is a file — so the channel's `on_delete`
 deletes its thread, history and outbox rows (`delete_for_channel`).
 
@@ -212,14 +198,10 @@ reply-in-thread in a SeaTalk direct chat keys to the chat's `""` row. The
 ordinal is `max + 1` over the chat's rows, so a number is never reused after
 its conversation is replaced ("Open parallel conversations beside a direct chat").
 
-Migrations: `20260708_0041_channel_thread_conversations.py` creates it;
-`20260928_0104_channel_parallel_threads.py` adds `parallel_ordinal` and
-`parallel_title`, nullable, with no backfill: the direct-chat thread rows that
-exist were casual replies, and leaving them without an ordinal is what folds
-them into the direct chat's conversation. Reversible by dropping both columns.
-`20260930_0108_channel_sticky_settings_history_outbox.py` adds `chat_kind` and
-the three `preferred_*` settings, nullable, no backfill; 0136 re-keys it to
-`resource_uid`.
+`parallel_ordinal` and `parallel_title` are nullable: a direct-chat thread row
+without an ordinal is a casual reply, which is what folds it into the direct
+chat's conversation. `chat_kind` and the three `preferred_*` settings are
+nullable too.
 
 A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
 group's defaults from its main chat"): a group thread with no setting of its own
@@ -242,8 +224,7 @@ back through (spec chat "Mirror a web reply into the channel it came from").
 | `chat_kind`       | TEXT NULL                                    | `direct` / `group`, when known            |
 | `opened_at`       | DATETIME (UTC)                               |                                           |
 
-Index on `(resource_uid, chat_id, thread_id)`. Migration 0108 creates it; 0136
-re-keys it to `resource_uid`.
+Index on `(resource_uid, chat_id, thread_id)`.
 
 ### `channel_outbox`
 
@@ -264,8 +245,7 @@ it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
 | `created_at`      | DATETIME (UTC)                               |                                         |
 | `delivered_at`    | DATETIME NULL                                | NULL while pending                      |
 
-Indexes on `(resource_uid, delivered_at)` and `conversation_id`. Migration 0108
-creates it; 0136 re-keys it to `resource_uid`.
+Indexes on `(resource_uid, delivered_at)` and `conversation_id`.
 
 ### `channel_replies`
 
@@ -285,30 +265,7 @@ day), and with its channel.
 | `message_ids`  | TEXT NOT NULL    | a JSON list of platform message ids, in send order        |
 | `sent_at`      | DATETIME (UTC)   | what the platform's withdraw window is measured from      |
 
-Index on `(resource_uid, chat_id, sent_at)`. Migration 0145 creates it.
-
-## Migrations that touch a channel's config
-
-These Alembic data migrations ran against channel configs while resources were
-rows of the pre-vault database; they are its history, and the one-time upgrade
-carried their result into the resource files.
-
-| revision | what it does |
-| --- | --- |
-| `20260710_0047_channel_runs_on_to_scope.py` | backfills `scope_json` from the then-current `config_json.runs_on`, for the machine axis on reach that has since been withdrawn |
-| `20260912_0068_drop_channel_model_curation.py` | strips `default_model` and `models` off every stored channel config |
-| `20260914_0079_bind_channels_to_this_machine.py` | writes this machine's id into every channel that carries no `runs_on` |
-| `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given |
-| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names** — an intermediate step, superseded by 0096 |
-| `20260918_0096_cross_references_point_at_uids.py` | rewrites each channel's stored scope from agent resource names into agent **uids**, and its `default_agent` from an agent key into an agent uid (it also renames `conversations.channel_name` to `channel_uid`) |
-| `20260918_0099_credential_refs_stop_naming_their_resource.py` | rewrites every `*_ref` field of a channel config (`bot_token_ref`, `app_secret_ref`, `signing_secret_ref`, `tunnel_token_ref`) from `channel/<name>/<secret>` to an address that does not spell the channel's name, moving the secret row with it |
-| `20260924_0103_seatalk_channels_drop_webhook_fields.py` | removes `delivery`, `signing_secret_ref`, `public_base_url` and `tunnel_token_ref` from every SeaTalk channel config, leaving the secret values the refs cited in the store; the downgrade writes `delivery: "websocket"` back, the value every rewritten channel now behaves as and the only one the older model accepts without a signing secret |
-
-All eight rewrite channel config data with no load-time shim (house rule), and
-all but 0103 in one direction only; 0096 also renames a `conversations` column,
-and that schema half reverses on downgrade while the data half does not. 0103's
-downgrade does not restore the removed keys either — it writes only the
-`delivery` value an older build needs to accept the row.
+Index on `(resource_uid, chat_id, sent_at)`.
 
 ## In-memory state (never persisted)
 

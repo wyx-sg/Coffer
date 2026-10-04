@@ -84,23 +84,20 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | `connection_uid`    | `str \| None`  | the uid of the provider connection this agent runs on; `None` = the agent's own built-in login. Machine-local like the record (agents are filed under `local/`), so it never syncs. Written only by the provider switch operations, never by `PATCH /api/v1/agents/{uid}`; `AgentOut` reports it (see "Carry the connection an agent runs on on the agent record") |
 
 Those are the whole schema — the model is `extra="forbid"` and declares nothing
-else (no `wire_api`: the one-time vault upgrade strips it from old records, and
-Codex's `responses` is a fixed value the projection writes). The three model fields are the agent's own binding (see "Carry the model
+else (no `wire_api`: Codex's `responses` is a fixed value the projection writes). The three model fields are the agent's own binding (see "Carry the model
 binding on the agent record"): they live here because the model is chosen at the
 point of use. Projecting them into an agent's native config is [spec
-provider-switching](../provider-switching/spec.md)'s. A `models` curated-set
-field existed briefly and is gone: migration `0060` backfilled it and migration
-`0063` dropped it again.
+provider-switching](../provider-switching/spec.md)'s.
 
 Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`.
 
-Beside this schema the agent carries the kind-agnostic Resource `enabled` flag (resource-framework, kept in `local/reach.json`), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields it once carried are gone, stripped from stored configs by migration `0058`.
+Beside this schema the agent carries the kind-agnostic Resource `enabled` flag (resource-framework, kept in `local/reach.json`), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)).
 
 Validators:
 
 - `config_dir` (when set) must be an absolute path; at registration the `<config_dir>/skills` subdirectory is auto-created, then the resolved `config_dir` must be an existing, writable directory.
 - `config_dir` must not point inside a privileged location (checked by `assert_skill_dir_usable` in `application/agent/service.py`): `/etc`, `/bin`, `/sbin`, `/usr`, `/var`, `/sys`, `/proc`, `/root`, `/boot`, `/dev`, `/System`, `/Library/Application Support/Apple` (POSIX; matched at a path-component boundary on both the expanded and the resolved path, with macOS's `/private` prefix stripped, and `/var/folders/` carved out as usable) or `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)` (Windows).
-- `model_config = ConfigDict(extra="forbid")` so unknown fields are rejected. There is no tolerance shim for removed keys: a migration strips each one at rest instead (migration `0056` for `disable_native_memory` and `auto_detected`, `0058` for the skill-follow policy, `0063` for `models`), so the model stays honest about the fields it has.
+- `model_config = ConfigDict(extra="forbid")` so unknown fields are rejected. There is no tolerance shim for removed keys, so the model stays honest about the fields it has.
 
 ### `ConfigFileFormat` + config-file allowlist (`domain/agent/config_files.py`)
 
@@ -218,12 +215,6 @@ share the same atomic-write + `.bak` machinery.
 its reach in `local/reach.json`. Both are machine-local: another machine's
 agents are its own, discovered there. Discovery is read-only, with no
 suppression list to persist.
-
-The Alembic data migrations that shaped stored agents ran while agents were
-rows of the pre-vault database — `0031` and `0048` dropped agents of removed
-types, `0056` stripped config keys this spec removed, `0058` the skill-follow
-policy, `0060` backfilled the curated-`models` key, and `0063` stripped the curated-`models` key again;
-the one-time upgrade to the vault layout carried their result into the files.
 
 **Config files and Coffer connection state are NOT persisted by Coffer** — the
 agent's on-disk config files are the source of truth. Connection status is
@@ -561,7 +552,7 @@ import infrastructure directly).
 - `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — the callback is passed to `make_agent_kind` at the composition root).
 - `on_enabled_changed=...` — hook invoked when the agent's `enabled` flag changes; the composition root passes one that runs the reconciler's skill-link pass (`Trigger.CHANGE`, actor `system`).
 - `generic_create_allowed=False` — the kind-agnostic `POST /api/v1/resources` refuses to create an agent; agents are registered only through `AgentService`, which validates the config directory.
-- `name_from_config=agent_name_for`, `name_fixed=True`, `titled=False` — the name is the type's (`claude-code`, `codex`), fixed, and there is no title (spec agent-registry "Keep one agent per type, named by it"). Migration 0109 collapsed a database's agents to one per type.
+- `name_from_config=agent_name_for`, `name_fixed=True`, `titled=False` — the name is the type's (`claude-code`, `codex`), fixed, and there is no title (spec agent-registry "Keep one agent per type, named by it").
 
 ## Composition root wiring
 

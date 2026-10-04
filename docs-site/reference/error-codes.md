@@ -280,9 +280,6 @@ These are raised while the daemon starts, before it serves requests. They appear
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `DB_SCHEMA_TOO_NEW` | 409 | `~/.coffer/runs.db` was migrated by a newer or different Coffer build. The status applies if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
-| `VAULT_MIGRATION_REQUIRED` | 409 | The home still keeps its state in `coffer.db`, from a Coffer before the vault layout. | Stop the daemon and run `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading). |
-| `VAULT_MIGRATION_ON_HOLD` | 409 | `coffer migrate --rollback` put the home back and left its hold marker. | Run the previous build, or `coffer migrate --resume` and then `coffer migrate`. |
-| `VAULT_MIGRATION_REFUSED` | 409 | `coffer migrate` will not touch the home as it stands, for example an upgrade stopped half-way. | Follow the message; after a half-done upgrade, `coffer migrate --rollback` first. |
 | `GIT_MISSING` | 500 | The vault needs `git` and none was found. A route that needs git answers with it too. | Install git the way that fits the machine; the error's `details.handoff` is a prompt for your agent. |
 
 `MASTER_KEY_MISSING` can stop a start as well; see [Secrets](#secrets). A `git` older than

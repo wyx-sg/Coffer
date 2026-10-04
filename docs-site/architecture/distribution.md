@@ -39,7 +39,7 @@ Each binary is frozen from its own PyInstaller spec in `backend/`, one per entry
 | --- | --- |
 | `coffer-daemon` | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when the frontend has been built (`frontend/dist`) at build time. |
 | `coffer-mcp-shim` | The stdio-to-HTTP bridge an MCP client launches. Excludes FastAPI, uvicorn, SQLAlchemy, alembic and structlog, so it starts quickly for clients that spawn it every session. |
-| `coffer` | The Typer CLI, httpx, and the `keyring` backends, plus SQLAlchemy, aiosqlite and alembic with the migration scripts as data files, because `coffer migrate` runs the one-time vault upgrade in the CLI process. Excludes the web server and the MCP SDK. |
+| `coffer` | The Typer CLI, httpx, and the `keyring` backends: a thin HTTP client of the daemon. Excludes the web server, SQLAlchemy, Alembic and the MCP SDK. |
 
 Each spec builds a single-file console executable without UPX compression, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
 
@@ -157,7 +157,7 @@ For each of `coffer`, `coffer-daemon` and `coffer-mcp-shim`:
 
 Deployment is best-effort: a binary that cannot be copied is logged and skipped, and the daemon starts anyway. To roll back by hand, point the three symlinks at the previous version directory.
 
-Before running database migrations, the daemon also copies `runs.db` (and its `-wal`/`-shm` files) to `runs.db.pre-<revision>`, keeping the three most recent copies. The one-time move from `coffer.db` into the vault layout is not done by the daemon: it is `coffer migrate`, see [Upgrading an existing Coffer](/guides/upgrading). See [Persistence](/architecture/persistence).
+Before running database migrations, the daemon also copies `runs.db` (and its `-wal`/`-shm` files) to `runs.db.pre-<revision>`, keeping the three most recent copies. See [Persistence](/architecture/persistence).
 
 ::: warning
 `install.sh` installs plain files into `~/.coffer/bin`, each renamed over its public name, so a symlink left by an earlier deploy is replaced rather than written through and the version directories stay intact. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.

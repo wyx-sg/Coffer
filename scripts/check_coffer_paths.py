@@ -59,7 +59,6 @@ LAYOUT_ENTRIES = frozenset(
         "content",
         "derived",
         "runs.db",
-        "coffer.db",
         "logs",
         "bin",
         "daemon.json",

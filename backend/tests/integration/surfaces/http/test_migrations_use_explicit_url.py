@@ -1,7 +1,7 @@
 """``run_migrations(url)`` migrates ``url`` and nothing else.
 
 Alembic's ``env.py`` used to resolve the database URL from ``COFFER_DB_URL``
-alone, falling back to ``~/.coffer/coffer.db``, and ignored the URL the runner
+alone, falling back to ``~/.coffer/runs.db``, and ignored the URL the runner
 was given — so any caller that passed an explicit URL without also exporting
 the variable would upgrade the developer's real vault. The runner now pins the
 URL on the Alembic config and ``env.py`` prefers that over the environment.
@@ -22,7 +22,7 @@ def _url(db: pathlib.Path) -> str:
 
 @pytest.fixture
 def isolated_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
-    """A throwaway HOME so a fallback to ``~/.coffer/coffer.db`` would be
+    """A throwaway HOME so a fallback to ``~/.coffer/runs.db`` would be
     visible as a new directory rather than a write into the real vault."""
     home = tmp_path / "home"
     home.mkdir()

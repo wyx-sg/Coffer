@@ -6,7 +6,7 @@ set -euo pipefail
 # Create a per-run isolated dir (or reuse one passed in via env)
 COFFER_E2E_HOME="${COFFER_E2E_HOME:-$(mktemp -d -t coffer-e2e-XXXXXX)}"
 export HOME="${COFFER_E2E_HOME}"
-export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/coffer.db"
+export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/runs.db"
 # COFFER_E2E_PORT lets a second suite (the visual baseline,
 # playwright.visual.config.ts) run its own daemon beside this one.
 COFFER_E2E_PORT="${COFFER_E2E_PORT:-18000}"

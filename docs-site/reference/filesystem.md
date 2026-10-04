@@ -34,7 +34,6 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
 ├── vendor/                       # operator-supplied SeaTalk SDK
 ├── secrets/                      # legacy plaintext key files (only if left from an old setup)
-├── coffer.db.pre-vault, pre-vault/   # only after the one-time upgrade: its backup set
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
 
@@ -86,7 +85,6 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here. | daemon | Never | Every secret waits for approval again. |
 | `local/sync/remote.json` | The one sync remote: URL, branch, push secret ref, username, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
 | `local/sync/round.json` | A stopped round, a hold, or a join's pending choices, with your answers so far. | daemon | Never | The question is asked again on the next round. |
-| `local/migration.json` | The record of the one-time upgrade: every move it made, read by `coffer migrate --rollback`. | `coffer migrate` | Never | Not until you are sure you will not roll back. |
 
 A local file that does not parse is moved aside as `<name>.unreadable-<n>` and read as empty.
 
@@ -120,16 +118,6 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 | `derived/resources/` | Derived resource files: memory partitions, and `skill/coffer-guide.json`. | The daemon at start |
 | `derived/skills/coffer-guide/` | Coffer's own guide skill, rendered from this build. | The daemon at start |
 | `derived/sync-conflicts/` | Marked-up copies of a stopped round's conflicting files, for a hand merge. | Opening the file in an editor again |
-
-### After the one-time upgrade
-
-| Path | Purpose | Safe to delete |
-| --- | --- | --- |
-| `coffer.db.pre-vault` (+ `-wal`, `-shm`) | The database as it was before `coffer migrate`. Never opened for writing again; `coffer migrate --rollback` copies it back. | Once you will not roll back. |
-| `pre-vault/knowledge.git`, `pre-vault/knowledge-stamped/`, `pre-vault/daemon-config.json` | The old knowledge history, the knowledge documents before their curation stamps were removed, and the old `daemon-config.json`. | Once you will not roll back. |
-| `vault.rolled-back-<ts>/`, `local.rolled-back-<ts>/` | What a rollback set aside. | Once you have taken what you need from them. |
-
-See [Upgrading an existing Coffer](/guides/upgrading).
 
 ### Daemon files {#daemon-files}
 
@@ -217,5 +205,4 @@ Before removing Coffer, disconnect each agent from Coffer and remove the provide
 - [Security model](/architecture/security)
 - [Vault sync](/guides/vault-sync)
 - [Editing the vault by hand](/guides/vault-files)
-- [Upgrading an existing Coffer](/guides/upgrading)
 - [Troubleshooting](/guides/troubleshooting)

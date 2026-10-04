@@ -23,7 +23,7 @@ class MCPInvocationModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    #: WHICH server, by identity (migration 0097). The log is history, so it has
+    #: WHICH server, by identity. The log is history, so it has
     #: to survive the rename that a name-keyed column would have split it across.
     #: Not a foreign key: a deleted server's invocations stay readable, and two
     #: reserved non-uid values live here — see ``domain.mcp.capability``.
@@ -34,7 +34,7 @@ class MCPInvocationModel(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     session_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: The calling agent's uid, as its session reported it (migration 0110).
+    #: The calling agent's uid, as its session reported it.
     #: Not a foreign key, for the same reason ``resource_uid`` is not one: a
     #: deleted agent's calls stay in the history.
     agent_uid: Mapped[str | None] = mapped_column(String, nullable=True)

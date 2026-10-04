@@ -181,5 +181,5 @@ Rules a future change must respect:
   more file to keep level with the code — the gate fails a stale entry so it
   cannot drift silently.
 - Enforced by `scripts/check_bare_tasks.py`, the `runtime` block of
-  `GET /api/v1/daemon/status`, `runs.db` migration 0137, and the specs named
+  `GET /api/v1/daemon/status`, the correlation ids on the audit and invocation rows, and the specs named
   above.

@@ -51,10 +51,7 @@ through `Kind.storage_row`, to file its resource and master folder under
 ### `SkillConfig` (`domain/skill/config.py`)
 
 Pydantic v2 `BaseModel`. It carries no copy of the skill's name: the name comes
-from the SKILL.md frontmatter at import and is stored once, as `Resource.name`.
-A `skill_md_name` key mirrored it until migration 0098 stripped it — one fact
-written twice, with nothing reading the second copy and two places to disagree
-once renaming arrived ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
+from the SKILL.md frontmatter at import and is stored once, as `Resource.name`, so renaming has no second copy to disagree with ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
 
 | Field                        | Type               | Notes                                               |
 | ---------------------------- | ------------------ | --------------------------------------------------- |
@@ -233,10 +230,8 @@ delivered on the laptop is two machines' records with two answers, not one
 scope with two axes.
 
 The agent resource carries **no** skill-delivery policy: `follow_all_skills`
-and `skill_exclusions` are gone from `AgentConfig` (spec agent-registry's schema), and
-migration `0058` stripped both keys from every stored agent. There is no
-load-time shim and no back-compat default — a stored agent simply no longer has
-them.
+and `skill_exclusions` do not exist on `AgentConfig` (spec agent-registry's schema). There is no
+load-time shim and no back-compat default.
 
 `application/skill/link_reconcile.py` holds the skill-link target of the
 unified reconciler (spec resource-framework "Converge what Coffer writes outside
@@ -281,11 +276,6 @@ and a row present at all means "this agent currently holds a delivered copy". Th
 | which copies are delivered into which agent | `derived/derived.db` `skill_agent_bindings` | derived |
 | what this machine last learned about a Git-imported skill's source | `local/skill-source-status.json` | local |
 | the skill's reach (`enabled`, scope) | `local/reach.json` (spec resource-framework) | local |
-
-In the one-time upgrade to the vault layout `skill_agent_bindings` rows were
-copied into `derived.db` (so delivered copies can still be reclaimed),
-`skill_source_status` became `local/skill-source-status.json`, and revision
-0136 dropped both tables.
 
 ### `skill_agent_bindings` (`derived/derived.db`)
 

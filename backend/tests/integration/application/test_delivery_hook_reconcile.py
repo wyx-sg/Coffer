@@ -3,7 +3,7 @@ real ``Reconciler`` (ADR one-level-triggered-reconciler-compares-parameters).
 
 Every test runs under an isolated HOME: the agents' config trees are laid out
 by ``fake_agent_dir`` from their own descriptors, the database sits at the
-home's ``~/.coffer/coffer.db``, and "connected" is the real answer — the agent
+home's ``~/.coffer/runs.db``, and "connected" is the real answer — the agent
 carries Coffer's gateway MCP entry, installed by ``AgentMcpService``.
 
 - A stale hook — a bare ``coffer`` command on ``SessionStart`` alone — is

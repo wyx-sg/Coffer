@@ -152,7 +152,6 @@ Approve only a target you recognise. A command line you did not write, pointing 
 ### What needs no approval
 
 - **A secret you just supplied for it.** A value stored on this machine in the last five minutes under a ref that has never been sent anywhere is approved when you register the server, channel or connection that cites it. This is what every "add" dialog with a pasted token does. A second place citing the same ref is a second place, and waits. It does not apply to standalone secrets.
-- **Everything that already worked when you upgraded.** The first time a daemon with approvals starts, every secret already in use is approved once for its current target. The move to the vault layout (`coffer migrate`) is the exception: it carries no approvals, so each secret's first use at each destination waits once ([Upgrading](/guides/upgrading)).
 - **Anything, while the protection is off.**
 
 A binding is also checked when you register or change the place that uses it, so an approval it needs appears right when you save, with the approvals dialog opening on the page you are on. A binding is checked at the moment of use — when a server starts, a channel connects, a sync round pushes — so a change that arrives behind Coffer's back, such as a vault file edited by hand or a server another machine synced in, is caught too.

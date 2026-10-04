@@ -82,7 +82,7 @@ def test_the_daemon_boots_to_ready_inside_its_ceiling(tmp_path: Path) -> None:
     env = {
         **os.environ,
         "HOME": str(home),
-        "COFFER_DB_URL": f"sqlite+aiosqlite:///{home / 'coffer.db'}",
+        "COFFER_DB_URL": f"sqlite+aiosqlite:///{home / 'runs.db'}",
         "COFFER_KNOWLEDGE_ROOT": str(tmp_path / "knowledge"),
         "COFFER_LOG_DIR": str(home / "logs"),
         "COFFER_PORT_RANGE_START": str(port),

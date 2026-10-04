@@ -194,7 +194,7 @@ The `check_architecture_doc.py` gate keeps the tree on this page level with the 
 | Wiring the above together | the kind's wiring module in `surfaces/http/` |
 | Something a second kind now needs too | a kind-agnostic module at the layer root |
 | Behaviour that differs by operating system | the platform part of the infrastructure layer, which the application reaches through its platform port ([Platform port](/architecture/platform)) |
-| A schema change | a new Alembic migration in the persistence package's `migrations/versions/` directory |
+| A schema change | a new Alembic revision, stacked on the baseline, in the persistence package's `migrations/versions/` directory |
 
 ## The frontend
 
