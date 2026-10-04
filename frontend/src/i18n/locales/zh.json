@@ -2515,8 +2515,7 @@
         "staleBody": "它在这份预览生成之后被保存过，所以没有写入任何内容。重新加载后会按当前文件重新预览。",
         "reload": "重新加载预览",
         "note": "只有所示的行会改变。文件里的其他内容原样保留，并保留一份 .bak 副本。",
-        "noteCatalog": "只有所示的行会改变。模型列表文件是 Coffer 自己的；config.toml 会保留一份 .bak 副本。",
-        "testFailed": "连接测试失败：{{message}} 你仍可以应用。"
+        "noteCatalog": "只有所示的行会改变。模型列表文件是 Coffer 自己的；config.toml 会保留一份 .bak 副本。"
       },
       "provider": {
         "label": "提供商",
@@ -2529,6 +2528,14 @@
       "builtinNote": {
         "claude_code": "使用自己的登录时，{{agent}} 自行选择模型（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它。",
         "codex": "使用自己的登录时，{{agent}} 自行选择模型（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它。"
+      },
+      "test": {
+        "testing": "正在测试连接…",
+        "ok": "连接正常 · {{ms}} 毫秒",
+        "failed": "连接失败：{{message}}",
+        "retry": "重试",
+        "blockedTesting": "连接测试通过后才能查看变更。",
+        "blockedFailed": "请修复连接或换一个模型后再查看变更。"
       },
       "model": {
         "label": "默认模型",

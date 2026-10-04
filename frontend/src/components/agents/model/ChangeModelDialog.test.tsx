@@ -71,14 +71,16 @@ const PREVIEW = {
 };
 
 let applyError: ApiError | null;
+let testResult: { ok: boolean; message: string };
 
 beforeEach(() => {
   call.mockReset();
   applyError = null;
+  testResult = { ok: true, message: "ok" };
   call.mockImplementation(async (path: string, opts) => {
     if (path === "/providers") return { providers: [PROVIDER] };
     if (path.startsWith("/agent-providers/")) return { models: [], default_model: null };
-    if (path === "/models/test-connection") return { ok: true, message: "ok" };
+    if (path === "/models/test-connection") return testResult;
     if (path === "/providers/model-switch/preview") return PREVIEW;
     if (path === "/providers/model-switch/apply") {
       if (applyError) throw applyError;
@@ -102,6 +104,7 @@ async function reviewChange() {
   const model = await screen.findByRole("combobox", { name: "Default model" });
   fireEvent.keyDown(model, { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("option", { name: "m2" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Review changes" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
   expect((await screen.findAllByText("~/.claude/settings.json")).length).toBeGreaterThan(0);
 }
@@ -185,5 +188,61 @@ describe("ChangeModelDialog", () => {
     await waitFor(() => expect(within(dialog).queryByText("Default model")).toBeNull());
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
     expect(within(dialog).getByText(/picks its model itself/)).toBeInTheDocument();
+  });
+
+  acceptance(
+    "provider-switching",
+    "a model change is tested before it can be reviewed",
+    async () => {
+      renderDialog();
+      const model = await screen.findByRole("combobox", { name: "Default model" });
+      fireEvent.keyDown(model, { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name: "m2" }));
+      const review = screen.getByRole("button", { name: "Review changes" });
+      expect(review).toBeDisabled();
+      expect(await screen.findByText("Testing connection…")).toBeInTheDocument();
+      expect(await screen.findByText(/Connection OK · \d+ ms/)).toBeInTheDocument();
+      expect(review).toBeEnabled();
+      const probe = call.mock.calls.find(([p]) => p === "/models/test-connection");
+      expect((probe?.[1] as { body: unknown }).body).toMatchObject({
+        provider: "anthropic",
+        model: "m2",
+        base_url: "https://gw.example",
+        secret_ref: "ref",
+      });
+    },
+  );
+
+  acceptance(
+    "provider-switching",
+    "a failed connection test keeps Review changes off and offers Retry",
+    async () => {
+      testResult = { ok: false, message: "401 unauthorized" };
+      renderDialog();
+      const model = await screen.findByRole("combobox", { name: "Default model" });
+      fireEvent.keyDown(model, { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name: "m2" }));
+      expect(await screen.findByText("Connection failed: 401 unauthorized")).toBeInTheDocument();
+      const review = screen.getByRole("button", { name: "Review changes" });
+      expect(review).toBeDisabled();
+      expect(screen.getByText(/Fix the connection or pick another model/)).toBeInTheDocument();
+      testResult = { ok: true, message: "ok" };
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      expect(await screen.findByText(/Connection OK/)).toBeInTheDocument();
+      expect(review).toBeEnabled();
+    },
+  );
+
+  acceptance("provider-switching", "the built-in login needs no connection test", async () => {
+    renderDialog();
+    const dialog = await screen.findByRole("dialog");
+    const trigger = await within(dialog).findByRole("combobox", { name: /provider/i });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: /built-in login/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Review changes" })).toBeEnabled(),
+    );
+    expect(call.mock.calls.filter(([p]) => p === "/models/test-connection")).toHaveLength(0);
+    expect(within(dialog).queryByText(/Connection OK|Testing connection/)).toBeNull();
   });
 });

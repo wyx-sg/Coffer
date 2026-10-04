@@ -1,8 +1,8 @@
 // frontend/src/lib/hooks/useModelSwitch.ts — review, then apply, one agent's model change.
 //
 // Opening the review asks the daemon for the files the change writes (nothing
-// is written) and, for a provider, runs a connection test alongside — one step
-// for the person, no separate test gate. Apply sends back the fingerprints the
+// is written); the connection test already passed in the form (useModelSwitchTest).
+// Apply sends back the fingerprints the
 // preview read: when a file changed on disk since, the daemon refuses
 // (CONFIG_FILE_STALE) and the review offers Reload preview instead of writing.
 import { useEffect } from "react";
@@ -11,14 +11,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/lib/api/errors";
 import { modelSwitchApi, type ModelSwitchIn } from "@/lib/api/modelSwitch";
 import { agentProvidersKey, agentsKey, providersKey } from "@/lib/api/queryKeys";
-import type { Provider } from "@/lib/api/providers";
-import { useTestConnection } from "@/lib/hooks/useModelIntrospection";
 
-export function useModelSwitchReview(
-  request: ModelSwitchIn,
-  connection: Provider | null,
-  open: boolean,
-) {
+export function useModelSwitchReview(request: ModelSwitchIn, open: boolean) {
   const qc = useQueryClient();
   const preview = useMutation({ mutationFn: (b: ModelSwitchIn) => modelSwitchApi.preview(b) });
   const apply = useMutation({
@@ -32,26 +26,14 @@ export function useModelSwitchReview(
       void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "proxy" });
     },
   });
-  const test = useTestConnection();
 
   const { mutate: runPreview, reset: resetPreview } = preview;
   const { reset: resetApply } = apply;
-  const { mutate: runTest, reset: resetTest } = test;
 
   const load = () => {
     resetApply();
     resetPreview();
     runPreview(request);
-    if (connection && request.model) {
-      runTest({
-        provider: connection.protocol,
-        model: request.model,
-        base_url: connection.base_url,
-        secret_ref: connection.secret_ref,
-      });
-    } else {
-      resetTest();
-    }
   };
 
   useEffect(() => {
@@ -65,7 +47,6 @@ export function useModelSwitchReview(
   return {
     preview,
     apply,
-    test,
     stale,
     /** The preview could not be made (the connection is off, the agent is off…). */
     previewError: preview.error,
@@ -74,7 +55,6 @@ export function useModelSwitchReview(
     reset: () => {
       resetApply();
       resetPreview();
-      resetTest();
     },
   };
 }

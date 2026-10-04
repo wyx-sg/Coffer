@@ -2515,8 +2515,7 @@
         "staleBody": "It was saved after this preview was made, so nothing was written. Reload to preview against the current file.",
         "reload": "Reload preview",
         "note": "Only the lines shown change. Everything else in the file is left as it is, and a .bak copy is kept.",
-        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a .bak copy of config.toml is kept.",
-        "testFailed": "The connection test failed: {{message}} You can still apply."
+        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a .bak copy of config.toml is kept."
       },
       "provider": {
         "label": "Provider",
@@ -2529,6 +2528,14 @@
       "builtinNote": {
         "claude_code": "With its own login, {{agent}} picks its model itself (<code>/model</code>). Coffer sets it only for a provider you add.",
         "codex": "With its own login, {{agent}} picks its model itself (<code>/model</code>). Coffer sets it only for a provider you add."
+      },
+      "test": {
+        "testing": "Testing connection…",
+        "ok": "Connection OK · {{ms}} ms",
+        "failed": "Connection failed: {{message}}",
+        "retry": "Retry",
+        "blockedTesting": "Review changes unlocks once the connection test passes.",
+        "blockedFailed": "Fix the connection or pick another model to review the change."
       },
       "model": {
         "label": "Default model",

@@ -18,6 +18,8 @@ import type { AgentType } from "@/lib/api/agents";
 import { BUILTIN, type ConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { displayName } from "@/lib/resourceTitle";
+import { ModelTestStatus } from "./ModelTestStatus";
+import type { useModelSwitchTest } from "@/lib/hooks/useModelSwitchTest";
 
 const K = "agents.changeModel";
 const HINT = "text-xs text-text-subtle";
@@ -45,9 +47,12 @@ export function ModelFormFields({
   agentType,
   draft: c,
   onNavigate,
+  test,
 }: {
   agentType: AgentType;
   draft: ConnectionDraft;
+  /** The connection test of the chosen provider and model, shown under Model. */
+  test?: ReturnType<typeof useModelSwitchTest>;
   /** Called when a link in the form leaves for another page (the dialog closes). */
   onNavigate?: () => void;
 }) {
@@ -118,6 +123,7 @@ export function ModelFormFields({
                 ))}
               </SelectContent>
             </Select>
+            {test ? <ModelTestStatus status={test.status} onRetry={test.retry} /> : null}
           </Field>
 
           {c.showTiers ? <TierFields draft={c} /> : null}

@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import { useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
+import { useModelSwitchTest } from "@/lib/hooks/useModelSwitchTest";
 import { ChangeModelReview } from "./ChangeModelReview";
 import { ModelFormFields } from "./ModelFormFields";
 
@@ -54,18 +55,36 @@ export function ChangeModelDialog({ agent, open, onOpenChange }: Props) {
 function Form({ agent, onClose }: { agent: AgentOut; onClose: () => void }) {
   const { t } = useTranslation();
   const draft = useAgentConnectionDraft(agent);
+  const test = useModelSwitchTest(draft.draftConnObj, draft.draftModel);
   const [reviewing, setReviewing] = useState(false);
   if (draft.loading) return <Skeleton className="h-40 w-full" />;
+  // A provider must have answered with this model before its change can be
+  // reviewed; the built-in login has nothing to test.
+  const tested = draft.draftIsBuiltin || test.status.state === "passed";
+  const blocked = draft.canReview && !tested;
   return (
     <>
       <div className="flex flex-col gap-4">
-        <ModelFormFields agentType={agent.type} draft={draft} onNavigate={onClose} />
+        <ModelFormFields agentType={agent.type} draft={draft} onNavigate={onClose} test={test} />
       </div>
-      <DialogFooter>
+      <DialogFooter className="items-center">
+        {blocked ? (
+          <span id="change-model-blocked" className="mr-auto text-xs text-text-subtle">
+            {t(
+              test.status.state === "failed"
+                ? "agents.changeModel.test.blockedFailed"
+                : "agents.changeModel.test.blockedTesting",
+            )}
+          </span>
+        ) : null}
         <Button variant="ghost" onClick={onClose}>
           {t("common.cancel")}
         </Button>
-        <Button disabled={!draft.canReview} onClick={() => setReviewing(true)}>
+        <Button
+          disabled={!draft.canReview || !tested}
+          aria-describedby={blocked ? "change-model-blocked" : undefined}
+          onClick={() => setReviewing(true)}
+        >
           {t("agents.changeModel.reviewButton")}
         </Button>
       </DialogFooter>
