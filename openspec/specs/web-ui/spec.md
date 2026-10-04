@@ -2655,8 +2655,8 @@ returns to its button, and a failed call returns it at once with the error as
 a toast. Every other action — connecting an agent or repairing its config
 (writes into the agent's own files, previewed on their page), adding a secret,
 turning approval on, and every read-only review — keeps opening its page. Every row MUST also
-carry a ⋯ menu — Copy prompt, Ask an agent while a managed agent is available,
-then Ignore — with the daemon's prompt as given (every item carries one, the
+carry the hand-off split button, Ask an agent ▾ with Copy prompt behind it, and a ⋯ menu
+holding Ignore — the daemon's prompt as given (every item carries one, the
 kind's own where it has one); the list scrolls inside a frame of about six
 rows, under its title, which shows how many items it holds. An attention source that failed MUST be named
 above the rows in one muted status line, saying that what it would report is missing. Rows MUST clear
@@ -2714,9 +2714,9 @@ for what agents share follows.
 
 #### Scenario: a needs-you row offers the item's hand-off in its menu
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
-- **WHEN** the user opens the row's ⋯ menu and chooses Copy prompt, then Ask an agent
+- **WHEN** the user opens the split button's menu and chooses Copy prompt, then presses Ask an agent
 - **THEN** the daemon's prompt is copied as given, and Ask an agent opens New conversation and then the draft with the prompt in its composer, unsent
-- **AND** with no managed agent available the menu offers Copy prompt only, and every row's menu ends with Ignore
+- **AND** with no managed agent available the row offers a Copy prompt button only, and every row's ⋯ menu ends with Ignore
 
 #### Scenario: overview shows a calm card when nothing needs the user
 - **GIVEN** an attention list with no items and no failed source, two connected agents, two enabled MCP servers and sync on with nothing held
@@ -2760,7 +2760,7 @@ the one-sentence help beside it. The split button sits after the state's own but
 Retry, View log), appears once per problem, never on a healthy, success or empty state, and never for
 a missing secret or an approval, which only the person can give. Wherever another requirement names
 Copy prompt and Ask an agent together, they are this button's menu item and button. On a Needs you
-row they are items of the ⋯ menu beside Ignore.
+row the same split button sits beside the row's action, and the ⋯ menu holds Ignore.
 
 #### Scenario: the split button hands a prompt over or copies it
 - **GIVEN** a problem with a prompt and a managed agent installed
