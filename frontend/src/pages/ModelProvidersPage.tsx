@@ -16,6 +16,8 @@ import { ProvidersSplit } from "@/components/providers/ProvidersSplit";
 import { UsageTab } from "@/components/usage/UsageTab";
 import type { PresetId } from "@/lib/providers/presets";
 import { providersTabPath } from "@/lib/providers/tabs";
+import { PAGE_BLEED } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function ModelProvidersPage() {
   const { uid } = useParams<{ uid: string }>();
@@ -27,7 +29,7 @@ export function ModelProvidersPage() {
   return (
     // Full-bleed like Skills and Knowledge: Layout pads every page, and this
     // one is a workspace whose panes scroll on their own.
-    <div className="-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden">
+    <div className={cn(PAGE_BLEED, "flex-col")}>
       <ModelProvidersHeader
         tab={usage ? "usage" : "providers"}
         onAdd={() => setAdding("anthropic")}

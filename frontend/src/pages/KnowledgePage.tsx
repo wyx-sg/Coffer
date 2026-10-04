@@ -50,6 +50,8 @@ import {
   KNOWLEDGE_ROOT,
   KNOWLEDGE_TABS,
 } from "@/lib/knowledge/routes";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function KnowledgePage() {
   const { t } = useTranslation();
@@ -90,7 +92,7 @@ export function KnowledgePage() {
   };
 
   const header = (
-    <div className="shrink-0 px-8 pb-3 pt-4">
+    <div className={cn(PAGE_BLEED_HEAD, "shrink-0 pb-3")}>
       <PageHeader
         title={t("knowledge.title")}
         badges={<ExperimentalTag />}
@@ -131,7 +133,7 @@ export function KnowledgePage() {
 
   // Full-bleed like Skills: Layout pads every page, and this one is a
   // workspace whose panes each scroll on their own.
-  const shell = "-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden";
+  const shell = cn(PAGE_BLEED, "flex-col");
 
   if (empty) {
     return (

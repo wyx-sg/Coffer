@@ -12,6 +12,8 @@ import { ConversationsIndex } from "@/components/chat/ConversationsIndex";
 import { ConversationWorkspace } from "@/components/chat/ConversationWorkspace";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useChatController } from "@/lib/hooks/useChatController";
+import { PAGE_BLEED } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 export function ConversationsPage() {
   const { t } = useTranslation();
@@ -28,7 +30,7 @@ export function ConversationsPage() {
       {workspace ? (
         // Full-bleed: Layout pads every page (32px sides, 16 above, 40 below), and a
         // conversation is a workspace whose thread scrolls on its own.
-        <div className="relative -mx-8 -mb-10 -mt-4 flex h-screen overflow-hidden">
+        <div className={cn(PAGE_BLEED, "relative")}>
           <ConversationWorkspace c={c} onNew={c.openDraft} agentNames={agentNames} />
         </div>
       ) : (

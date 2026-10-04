@@ -14,6 +14,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { providersTabPath, type ProvidersTab } from "@/lib/providers/tabs";
+import { PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
+import { cn } from "@/lib/utils";
 
 interface Props {
   tab: ProvidersTab;
@@ -25,7 +27,7 @@ export function ModelProvidersHeader({ tab, onAdd }: Props) {
   const navigate = useNavigate();
   return (
     <div className="shrink-0">
-      <div className="px-8 pb-3 pt-4">
+      <div className={cn(PAGE_BLEED_HEAD, "pb-3")}>
         <PageHeader
           title={t("providers.title")}
           experimental
