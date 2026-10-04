@@ -214,8 +214,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | 有智能体运行在该连接上时，不能更改其协议格式。 | 对运行在它上面的每个智能体用**更改模型**切回它自己的登录，编辑后再重新切换。 |
 | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | 不能把智能体切到它不生效的连接上：连接或智能体被停用，或连接的作用范围没有指明该智能体。 | 开启该连接，或把该智能体加入它的作用范围，然后再切换。 |
 | `PROVIDER_INTERNAL_ONLY` | 409 | `ollama` 连接只供 Coffer 内部引擎使用，不能为智能体开启。 | 改为把它作为内部引擎的默认连接。 |
-| `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | 已有另一个连接是内部引擎的默认连接。 | 在**设置 › 通用 → Coffer 的模型**里转移这个标记。 |
-| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 在**设置 › 通用 → Coffer 的模型**（**语音转文字**）里转移这个标记。 |
+| `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | 已有另一个连接是内部引擎的默认连接。 | 在**设置 › 通用 → Coffer 自用模型**里转移这个标记。 |
+| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 在**设置 › 通用 → Coffer 自用模型**（**语音转文字**）里转移这个标记。 |
 
 ## 保险库 {#the-vault}
 
@@ -231,7 +231,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
-| `SYNC_NO_REMOTE` | 409 | 没有配置同步远端。 | 在**同步**页面（**配置**）设置一个。见[保险库同步](/zh/guides/vault-sync)。 |
+| `SYNC_NO_REMOTE` | 409 | 没有配置同步远端。 | 在**同步**页面（**远端**标签页）设置一个。见[保险库同步](/zh/guides/vault-sync)。 |
 | `SYNC_NO_PLAINTEXT_FOUND` | 409 | 请求了仍然推送，但上一轮并没有因明文密钥停下。 | 没有需要跳过的内容；运行**立即同步**。见[保险库同步](/zh/guides/vault-sync#when-a-round-finds-a-plaintext-secret)。 |
 | `SYNC_REMOTE_INVALID` | 422 | URL 或分支会被 git 当作选项解析，或者不是 git 接受的名字。 | 修正 URL 或分支。 |
 | `SYNC_REMOTE_FAILED` | 502 | 针对远端的某个 git 操作失败。消息已脱敏。 | 检查网络访问、远端 URL 和令牌的权限。 |

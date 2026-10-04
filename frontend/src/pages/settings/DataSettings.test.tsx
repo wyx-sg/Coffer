@@ -255,9 +255,7 @@ describe("DataSettings", () => {
     // The refused save names what is still in place.
     expect(failed).toHaveTextContent("MCP calls are still kept forever.");
     expect(screen.getByText("Not saved")).toBeInTheDocument();
-    expect(screen.getByTestId("settings-data-other-retention")).toHaveTextContent(
-      "Other retention settings: coffer config",
-    );
+    expect(screen.queryByTestId("settings-data-other-retention")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
   });

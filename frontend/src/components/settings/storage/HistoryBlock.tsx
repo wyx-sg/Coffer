@@ -174,12 +174,6 @@ export function HistoryBlock({ size, onReveal }: Props) {
             {prune.isPending ? t("settings.retention.pruning") : t("settings.retention.pruneAll")}
           </Button>
         </SettingRow>
-        <p
-          className="border-t border-border-subtle py-3 text-xs text-text-muted"
-          data-testid="settings-data-other-retention"
-        >
-          {t("settings.data.otherRetention")} <code className="font-mono">coffer config</code>
-        </p>
       </DataBlock>
       <ConfirmDialog
         open={confirmPrune}

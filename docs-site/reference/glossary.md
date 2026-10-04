@@ -117,7 +117,7 @@ is a [resource](#resource) of kind `provider`. See [Model providers](/guides/pro
 
 The one machine allowed to run the [curation pass](#curation-pass) automatically, so two
 synced machines never rewrite the same collection at once. Set with
-**Runs on** in **Settings › General**. See [Knowledge](/architecture/knowledge#the-owner-machine).
+**Curation runs on** in the **Automatic** popover of the Knowledge page header. See [Knowledge](/architecture/knowledge#the-owner-machine).
 
 ### Curation pass
 

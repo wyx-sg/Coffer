@@ -176,10 +176,11 @@ These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) an
 
 | Setting | Default | Effect | Stored in |
 | --- | --- | --- | --- |
-| **Default rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | browser `localStorage` (`coffer.pageSize`) |
-| **Preferred editor** | System default | The app or command Coffer opens managed files with. | browser `localStorage` (`coffer.preferredEditor`) |
-| **Start at login** | off | Installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. | the plist file |
+| **Rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | browser `localStorage` (`coffer.pageSize`) |
+| **Open files with** | System default | The app or command Coffer opens managed files with. | browser `localStorage` (`coffer.preferredEditor`) |
 | **Experimental features** (Settings → Features) | off | See [Experimental features](#experimental-features). | `daemon-config.json` |
+
+**Start at login** is under **Settings → Daemon**, not General. It is off by default and, when on, installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. It is stored in the plist file.
 
 ### Settings › General → Coffer's model
 
@@ -190,37 +191,43 @@ The internal engine settings are one vault document, `state/settings/internal-en
 | **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. |
 | **Time limit per call** | `60` s | How long one call to Coffer's own model may take. |
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. |
-| **Upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. |
-| **Upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. |
-| **Upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. |
 | **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. |
-| Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. |
 
-Upkeep intervals have a floor of 60 seconds. `coffer daemon status` shows the passes in flight.
+The upkeep passes are not in Settings. Each is switched, retimed and (for curation) given its owner in the **Automatic** popover on the page it upkeeps; the popover's interval list (**Every**) runs from 15 minutes to 1 day, and a shorter interval can be set through the settings API down to a floor of 60 seconds. `coffer daemon status` shows the passes in flight.
+
+| Pass | Where | Default | Effect |
+| --- | --- | --- | --- |
+| aggregate | **Memory** header → **Automatic**, switched with distil as **Read memory automatically** | on, every 1 h | Reads the agents' own memory files into the derived memory tree. |
+| distil | the same switch; its interval has no control in the popover | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. |
+| curate | **Knowledge** header → **Automatic** (**Automatic curation**) | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. |
+
+The curation owner, the one machine allowed to run curation in a synced vault, is **Curation runs on** in the Knowledge **Automatic** popover (default: every machine).
 
 ### Sync remote
 
-The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, set on the **Sync** page (**Setup**). See [Vault sync](/guides/vault-sync).
+The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, set on the **Sync** page (the **Remote** tab, and the set-up form before the first join). See [Vault sync](/guides/vault-sync).
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused. |
-| **Push secret** | none | The secret holding the push token. |
-| Username | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. |
+| **Run a round** | every hour | How often a round runs automatically (a list from every minute to every few days). Stored as seconds; at least `60`: a smaller value is refused over the API. |
+| **Secret** | none | The secret holding the push token. |
+| **User name** | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. |
 | **Include encrypted secrets** | off | Commit and push `vault/secret/` (ciphertext only, never the key). |
-| **Sync automatically** | on | Off pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. |
+| **Only when I press Sync now** (a choice under **Run a round**) | off | Pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. |
 
 ### Settings → Data
 
 Retention policies decide how long rows are kept. The retention worker prunes once at start-up and then every 6 hours. Policies are local to this machine, kept in `~/.coffer/local/retention.json`.
 
+The window is set in **Settings → Data → History**, which shows three policies. The other two keep their defaults and are reachable only over REST (`/api/v1/retention/policies`).
+
 | Policy | Key | Default | Effect |
 | --- | --- | --- | --- |
-| **Audit log** | `audit_log` | 365 days | Deletes audit entries older than the window. |
-| **MCP invocations** | `mcp_invocations` | 30 days | Deletes gateway invocation log rows. |
-| **Sync rounds** | `sync_runs` | 90 days | Deletes the history of sync rounds. |
-| **Auto-archive idle chats** | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
-| **Delete archived chats** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
+| **Changes** | `audit_log` | 365 days | Deletes audit entries older than the window. |
+| **MCP calls** | `mcp_invocations` | 30 days | Deletes gateway invocation log rows. |
+| **Conversations** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
+| REST only | `sync_runs` | 90 days | Deletes the history of sync rounds. |
+| REST only | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
 
 Both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
 

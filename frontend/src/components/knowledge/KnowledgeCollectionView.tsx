@@ -2,7 +2,8 @@
 //
 // A collection with no document open (boards 5.1.10, 5.1.11, 5.1.14). The pane
 // bar is the collection's name with a ⋯ menu — Reveal in Finder · Copy path ·
-// Delete collection…, which runs at once with an Undo toast. The body is one
+// Rename… (a dialog; the folder moves with the name, board 5.1.31) · Delete
+// collection…, which runs at once with an Undo toast. The body is one
 // 720-wide page: the folder name as the heading, its description — the opening
 // paragraph of its README — edited in place (click, then blur or ⌘Enter saves,
 // Esc cancels, and the success toast offers Undo), and its properties
@@ -16,6 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
+import { KnowledgeRenameDialog } from "@/components/knowledge/KnowledgeRenameDialog";
 import { KnowledgeStatsLine } from "@/components/knowledge/KnowledgeStatsLine";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionMenu } from "@/components/ui/menu";
@@ -36,6 +38,7 @@ export function KnowledgeCollectionView({ collection, modelSet }: Props) {
   const { reveal } = useFsActions();
   const deleteCollection = useDeleteCollection(collection);
   const [editing, setEditing] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const empty = collection.document_count === 0 && collection.pending_count === 0;
 
   const revealFolder = () =>
@@ -61,6 +64,7 @@ export function KnowledgeCollectionView({ collection, modelSet }: Props) {
                 disabled: !collection.folder_path,
               },
               { key: "copy", label: t("knowledge.collection.copyPath"), onSelect: copyPath },
+              { key: "rename", label: t("knowledge.rename.menu"), onSelect: () => setRenaming(true) },
               {
                 key: "delete",
                 label: t("knowledge.deleteCollection.menu"),
@@ -72,6 +76,7 @@ export function KnowledgeCollectionView({ collection, modelSet }: Props) {
           />
         }
       />
+      <KnowledgeRenameDialog collection={collection} open={renaming} onOpenChange={setRenaming} />
 
       <div className="min-h-0 flex-1 overflow-auto px-8 py-7">
         <div className="mx-auto flex max-w-[720px] flex-col gap-5">

@@ -1515,7 +1515,6 @@
         "cleared": "Cleared {{size}}. Memory is rebuilt on the next update."
       },
       "stillKept": "{{name}} are still kept {{window}}.",
-      "otherRetention": "Other retention settings:",
       "tryAgain": "Retry"
     },
     "prices": {
@@ -3106,6 +3105,13 @@
       "submit": "Create collection",
       "created": "Created {{name}}"
     },
+    "rename": {
+      "menu": "Rename…",
+      "title": "Rename {{name}}",
+      "body": "Its folder moves with it, and agents find it under the new name.",
+      "submit": "Rename",
+      "renamed": "Renamed to {{name}}"
+    },
     "deleteCollection": {
       "menu": "Delete collection…",
       "deleted": "Deleted {{name}}",
@@ -3194,7 +3200,7 @@
       "reload": "Reload",
       "copyMine": "Copy my text",
       "copyFailed": "Couldn't copy your text",
-      "editStands": "Your edit stands: items curated later go around it, never over it.",
+      "editStands": "Curation carries your edit into the documents that disagree with it.",
       "unsaved": "Unsaved changes",
       "notSaved": "Not saved",
       "copied": "Your text is on the clipboard",

@@ -211,7 +211,7 @@ An archived conversation opens read-only: its history reads normally, the compos
 
 ### Retention
 
-Coffer archives a conversation with no new message for 7 days and deletes archived conversations 30 days after they were archived. Change the deletion window, or set it to **Keep forever**, under **Settings → Data → History → Conversations**; the archive window is the **Auto-archive idle chats** setting in the same section. Archiving is reversible; deletion is not.
+Coffer archives a conversation with no new message for 7 days and deletes archived conversations 30 days after they were archived. Change the deletion window, or set it to **Keep forever**, under **Settings → Data → History → Conversations**; the 7-day archive window has no control in the web UI (it is the `conversations_archive` policy, set through `/api/v1/retention/policies`). Archiving is reversible; deletion is not.
 
 ## Chat and the agent's own sessions
 
@@ -220,7 +220,7 @@ A Coffer conversation is backed by one real session of the agent. Coffer stores 
 There are two records of that conversation:
 
 - **Coffer's conversation** — messages, tool calls, results, model and token usage, in Coffer's history database, `runs.db`. This is what the Conversations page shows, and it is the record of what the agent did. Turns are not written to the audit log.
-- **The agent's own session files** — kept by the agent itself, as for any session. The agent's detail page lists these under **Agents → *agent* → Conversations** (**Transcript sessions**), together with the sessions you ran directly in a terminal.
+- **The agent's own session files** — kept by the agent itself, as for any session. The agent's detail page lists these under **Agents → *agent* → Sessions**, together with the sessions you ran directly in a terminal.
 
 Each conversation has one owner — you — whichever screen you are on. Chat does not model several people sharing a conversation; the channel pairing that lets your phone drive a conversation is the same trust decision as your browser session.
 

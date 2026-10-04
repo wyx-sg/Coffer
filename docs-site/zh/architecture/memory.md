@@ -320,7 +320,7 @@ Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/
 
 路径由组合根解析，优先使用稳定的 `~/.coffer/bin/coffer`，而不是它背后的版本目录。只写 `coffer` 不够，因为 Hook 在智能体启动的任意 shell 下运行。Codex 在不加载用户 rc 文件的 `/bin/zsh` 下运行 Hook，所以那个 shell 的 `PATH` 里没有 `~/.coffer/bin`。从 Dock 启动的 Claude Code 也不继承登录 shell 的 `PATH`。
 
-开头的 `: coffer-memory;` 是一个携带标记的 shell 空操作。Coffer 靠这个标记查找、替换和删除自己的条目，从不碰同一事件上其他工具的 Hook。安装或移除都会先把 Coffer 带标记的条目从**所有**事件上清掉，所以任何其他事件上都不会遗留带标记的条目。安装始终是显式操作：Hook 是智能体 Coffer 连接的一部分（智能体页面上的「连接到 Coffer」；见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)）。它是幂等的，移除条目后还会顺手删掉空的事件数组和空的 `hooks` 键。智能体以不可变的 uid 命名，因为 Hook 字符串可能在 settings 文件里躺好几个月，而你期间可能给智能体改名。
+开头的 `: coffer-memory;` 是一个携带标记的 shell 空操作。Coffer 靠这个标记查找、替换和删除自己的条目，从不碰同一事件上其他工具的 Hook。安装或移除都会先把 Coffer 带标记的条目从**所有**事件上清掉，所以任何其他事件上都不会遗留带标记的条目。安装始终是显式操作：Hook 是智能体 Coffer 连接的一部分（智能体页面上的**连接**；见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)）。它是幂等的，移除条目后还会顺手删掉空的事件数组和空的 `hooks` 键。智能体以不可变的 uid 命名，因为 Hook 字符串可能在 settings 文件里躺好几个月，而你期间可能给智能体改名。
 
 ```mermaid
 sequenceDiagram

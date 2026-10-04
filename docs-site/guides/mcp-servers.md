@@ -73,7 +73,7 @@ The list ends with **Built-in**: Coffer's own `coffer` server, the one endpoint 
 The Brave Search server reads its API key from the `BRAVE_API_KEY` environment variable. Cite it from the server's environment:
 
 1. Open **MCP servers**, click **Add server** and paste `npx -y @modelcontextprotocol/server-brave-search` into the box.
-2. In the environment variables, add `BRAVE_API_KEY`, set the row to **Secret** and paste the key. Coffer stores it in the secret store under a generated ref and cites it from `secret_refs`. (When an agent stores a key for you, the hand-off tells it to read the value from stdin with `coffer secret set`, so it never lands in a chat or in shell history.)
+2. In the environment variables, add `BRAVE_API_KEY` and paste the key as its value (the field reads *Choose a secret, or paste a new value*, and a pasted key that looks like a secret is saved as a new secret when you add the server). Coffer stores it in the secret store under a generated ref and cites it from `secret_refs`. (When an agent stores a key for you, the hand-off tells it to read the value from stdin with `coffer secret set`, so it never lands in a chat or in shell history.)
 3. Press **Test**: the server starts and lists its tools. Then click **Add server**.
 
 A secret you store for the server and then register it with is approved by the registration, and the server uses it at once. Citing a secret that already goes somewhere else, or later changing the server's command line or URL, holds the secret until you approve it in the desktop app: the server's page says it waits, and Coffer does not start the server until then. Coffer also marks a stdio server whose environment carries a secret as readable by other processes on this Mac, because any program running as you can read a process's environment. See [Secrets → Approvals](/guides/secrets#approvals).
@@ -106,10 +106,10 @@ An HTTP server is a remote MCP endpoint that speaks the streamable HTTP transpor
 ### Worked example: an HTTP server with a bearer token
 
 1. Open **MCP servers**, click **Add server** and paste `https://api.githubcopilot.com/mcp/` into the box.
-2. In the headers, add `Authorization`, set the row to **Secret** and paste the whole header value, including the scheme (`Bearer …`).
+2. In the headers, add `Authorization` and paste the whole header value as its value (a stored secret from the field's menu, or a pasted value that is saved as a new secret), including the scheme (`Bearer …`).
 3. Press **Test**, then click **Add server**.
 
-For an HTTP server each **Secret** header row becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
+For an HTTP server each header whose value is a secret becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
 
 The config Coffer stores:
 
