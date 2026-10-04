@@ -1,10 +1,9 @@
 """Review, then apply, a change of one agent's model (spec provider-switching).
 
 The agent page's "Change model" dialog asks for a connection (or the built-in
-login), a model, an effort level, Claude Code's tier pins and, for a local model
-that reports none, a context window. Nothing is written until the user has seen
-the files that change: :func:`preview` computes them without touching disk and
-hands back, per file, what it holds now and what it would hold, with a
+login), a model, an effort level and Claude Code's tier pins. Nothing is written
+until the user has seen the files that change: :func:`preview` computes them without
+touching disk and hands back, per file, what it holds now and what it would hold, with a
 fingerprint of what was read. :func:`apply` refuses (``ConfigFileStale``, a 409)
 when any of those files changed on disk after the preview was made, then does
 what :func:`switch_ops.activate` / :func:`switch_ops.deactivate` do — project,
@@ -30,7 +29,7 @@ from coffer.application.provider.switch_ops import activate_checks, agent_of_typ
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.provider.config import CuratedModel, ProviderConfig
+from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import ConfigFileStale
 
@@ -64,8 +63,6 @@ class ModelSwitch:
     model: str | None = None
     effort: str | None = None
     tier_models: Mapping[str, str] | None = None
-    #: A local model's window, entered by the user when its runtime reports none.
-    context_window: int | None = None
 
 
 @dataclass(frozen=True)
@@ -89,20 +86,6 @@ def _with_binding(agent: Resource, switch: ModelSwitch) -> Resource:
     return dataclasses.replace(agent, config=new.model_dump(mode="json"))
 
 
-def _with_window(cfg: ProviderConfig, switch: ModelSwitch) -> ProviderConfig:
-    """The connection with the entered window on the chosen model's entry."""
-    if switch.context_window is None or not switch.model:
-        return cfg
-    models = [m.model_copy() for m in cfg.models]
-    for m in models:
-        if m.id == switch.model:
-            m.context_window = switch.context_window
-            break
-    else:
-        models.append(CuratedModel(id=switch.model, context_window=switch.context_window))
-    return cfg.model_copy(update={"models": models})
-
-
 async def _plan(
     service: ProviderService, switch: ModelSwitch
 ) -> tuple[Resource, Resource | None, ProviderConfig | None, list[PlannedFile]]:
@@ -114,9 +97,7 @@ async def _plan(
     resource = await service.get(switch.connection_uid)
     cfg = service._cfg(resource)
     await activate_checks(service, resource, cfg, agent, switch.agent_type)
-    planned = service._projector.plan_project(
-        resource, _with_window(cfg, switch), _with_binding(agent, switch)
-    )
+    planned = service._projector.plan_project(resource, cfg, _with_binding(agent, switch))
     return agent, resource, cfg, planned
 
 
@@ -171,9 +152,6 @@ async def _activate(
     """Record the binding, then project it (``activate`` reads the binding from
     the agent's record); the binding goes back as it was if the projection fails."""
     before = AgentConfig.model_validate(agent.config)
-    if switch.context_window is not None and switch.model:
-        cfg = _with_window(service._cfg(resource), switch)
-        await service.update(resource.uid, models=list(cfg.models), actor=actor)
     await agents.set_model_binding(
         uid=agent.uid,
         model=switch.model,

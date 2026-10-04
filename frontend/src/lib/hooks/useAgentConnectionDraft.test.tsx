@@ -3,7 +3,7 @@
 // The Change model dialog's draft, driven through the hook with a real query
 // cache and only `call` (the network) faked: what makes a draft dirty and
 // reviewable, the request it builds, where Effort's levels come from, the
-// context-window ask for a local model and Coffer's tier prefill.
+// Coffer's tier prefill.
 import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, test } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -128,7 +128,6 @@ describe("useAgentConnectionDraft", () => {
         sonnet: "claude-sonnet-5-5",
         haiku: "claude-haiku-5",
       },
-      context_window: null,
     });
     act(() => result.current.pickConnection(BUILTIN));
     expect(result.current.request).toMatchObject({
@@ -166,21 +165,6 @@ describe("useAgentConnectionDraft", () => {
     );
     act(() => result.current.pickConnection("u-gw"));
     expect(result.current.effortLevels).toEqual(["low", "medium"]);
-  });
-
-  test("a local model without a reported window asks for one and sends it", async () => {
-    const codex: AgentOut = { ...AGENT, uid: "a-codex", type: "codex" };
-    const { result } = await setup(codex, [
-      conn("ollama", {
-        protocol: "openai",
-        base_url: "http://127.0.0.1:11434",
-        models: text("qwen3-coder:30b"),
-      }),
-    ]);
-    act(() => result.current.pickConnection("u-ollama"));
-    expect(result.current.showWindow).toBe(true);
-    act(() => result.current.setWindow("32768"));
-    expect(result.current.request.context_window).toBe(32768);
   });
 
   test("a local runtime pins every tier to the Model; an edited tier can be changed", async () => {

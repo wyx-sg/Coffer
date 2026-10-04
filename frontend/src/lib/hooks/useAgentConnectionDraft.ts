@@ -35,9 +35,6 @@ import {
 
 export { BUILTIN, type Tier } from "@/lib/agents/connectionDraft";
 
-/** Below this many tokens an agent compacts often (the runtimes' own guidance). */
-export const SMALL_WINDOW = 64_000;
-
 export function useAgentConnectionDraft(agent: AgentOut) {
   const wire = WIRE_BY_AGENT[agent.type];
   const providers = useProviders();
@@ -69,7 +66,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const [draftModel, setDraftModel] = useState(appliedModel);
   const [draftEffort, setDraftEffort] = useState<string | null>(appliedEffort);
   const [draftTiers, setDraftTiers] = useState<TierModels>(appliedTiers);
-  const [draftWindow, setDraftWindow] = useState("");
   const [fetched, setFetched] = useState<string[]>([]);
 
   // The draft starts from what is applied, which is known once providers load.
@@ -109,10 +105,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     () => suggestTiers(models, draftModel, local),
     [models, draftModel, local],
   );
-  // A local model whose runtime reports no window: the person says what it is.
-  const showWindow = local && !draftIsBuiltin && !!draftModel && !curatedEntry?.context_window;
-  const windowTokens = Number.parseInt(draftWindow, 10);
-  const window = showWindow && windowTokens > 0 ? windowTokens : null;
 
   const introspect = () => {
     if (!draftConnObj || restricted) return;
@@ -130,7 +122,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const stageModel = (m: string, pool: string[], onLocal: boolean) => {
     setDraftModel(m);
     setDraftEffort(null);
-    setDraftWindow("");
     setDraftTiers(hasTiers ? suggestTiers(pool, m, onLocal) : {});
   };
 
@@ -162,8 +153,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     draftConn !== appliedConn ||
     draftModel !== appliedModel ||
     (!draftIsBuiltin && draftEffort !== appliedEffort) ||
-    (showTiers && tiersKey(draftTiers) !== appliedTiersJson) ||
-    window !== null;
+    (showTiers && tiersKey(draftTiers) !== appliedTiersJson);
   // A model is needed on a provider; Review is for something to change.
   const canReview = dirty && (draftIsBuiltin || !!draftModel);
 
@@ -174,7 +164,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     model: draftIsBuiltin ? null : draftModel,
     effort: draftIsBuiltin || effortLevels.length === 0 ? null : draftEffort,
     tier_models: showTiers ? (draftTiers as Record<string, string>) : null,
-    context_window: window,
   };
 
   return {
@@ -192,9 +181,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     tiers,
     draftTiers,
     tiersAreSuggested: tiersKey(draftTiers) === tiersKey(suggestion),
-    showWindow,
-    draftWindow,
-    windowTokens: window,
     loading: providers.isPending,
     dirty,
     canReview,
@@ -204,7 +190,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     pickModel: (m: string) => stageModel(m, models, local),
     pickEffort: setDraftEffort,
     pickTier: (tier: Tier, m: string) => setDraftTiers((cur) => ({ ...cur, [tier]: m })),
-    setWindow: setDraftWindow,
   };
 }
 
