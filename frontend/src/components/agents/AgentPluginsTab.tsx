@@ -15,6 +15,7 @@ import { AlertTriangle } from "lucide-react";
 
 import { HelpTip } from "@/components/HelpTip";
 import { PluginInfoDialog } from "@/components/agents/PluginInfoDialog";
+import { useAgentPluginsBulk } from "@/components/agents/useAgentPluginsBulk";
 import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { Dot, KindRow } from "@/components/agents/tabs/KindRow";
@@ -44,6 +45,13 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const codex = agent.type === "codex";
   const programMissing = Boolean(plugins.data) && !codex && !canUninstall;
 
+  const bulk = useAgentPluginsBulk({
+    agentUid: agent.uid,
+    agentType: agent.type,
+    agentLabel: agentName,
+    canUninstall,
+  });
+
   const notices = (
     <>
       {parseErrors.map((pe) => (
@@ -67,6 +75,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
           ) : null}
         </div>
       ) : null}
+      {bulk.notice}
     </>
   );
 
@@ -91,12 +100,18 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
             </p>
           </HelpTip>
         }
-        notice={parseErrors.length > 0 || programMissing ? notices : undefined}
+        notice={parseErrors.length > 0 || programMissing || bulk.notice ? notices : undefined}
+        bulk={{
+          rowKey: (p) => p.id,
+          barLabel: t("agents.pluginsTab.bulk.label"),
+          actions: bulk.actions,
+        }}
       >
-        {(visible) =>
+        {(visible, select) =>
           visible.map((p) => (
             <KindRow
               key={p.id}
+              leading={select.leading(p, p.name)}
               name={
                 <button
                   type="button"
@@ -147,6 +162,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
           ))
         }
       </AgentKindTab>
+      {bulk.dialogs}
       <PluginInfoDialog agentUid={agent.uid} pluginId={infoId} onClose={() => setInfoId(null)} />
       <PluginUninstallDialog
         agentType={agent.type}

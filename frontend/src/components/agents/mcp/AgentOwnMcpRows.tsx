@@ -9,6 +9,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import type { RowSelect } from "@/components/agents/tabs/AgentKindTab";
 import { Dot, KindRow } from "@/components/agents/tabs/KindRow";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ const STATE_LABEL: Record<OwnMcpState, string> = {
 
 interface Props {
   rows: OwnMcpRow[];
+  select: RowSelect<OwnMcpRow>;
   /** The file a direct entry sits in, home-relative. */
   whereLabel: (source: string) => string;
   onAdopt: (row: OwnMcpRow) => void;
@@ -34,6 +36,7 @@ interface Props {
 
 export function AgentOwnMcpRows({
   rows,
+  select,
   whereLabel,
   onAdopt,
   onRemoveDuplicate,
@@ -50,6 +53,7 @@ export function AgentOwnMcpRows({
         return (
           <KindRow
             key={row.key}
+            leading={select.leading(row, row.name)}
             name={
               <button
                 type="button"
