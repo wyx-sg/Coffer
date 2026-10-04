@@ -82,10 +82,11 @@ them: it lives under `derived/` (see "Withhold derived output in both halves").
 ### Requirement: Skip symlinks and nested repositories
 The vault repository MUST NOT record a symlink (its target is not vault content,
 and a link to a file outside the vault would otherwise be published) or anything
-inside a nested git repository, so neither is ever pushed; Python bytecode
-(`__pycache__/`, `*.pyc`, `*.pyo`), which the interpreter writes beside a skill's
-scripts whenever they run, and editor and system litter are kept out by the
-repository's own exclude file.
+inside a nested git repository, so neither is ever pushed; what a skill's
+scripts generate whenever they run — Python bytecode (`__pycache__/`, `*.pyc`,
+`*.pyo`), log files (`*.log`), installed dependencies (`node_modules/`, `.venv/`)
+and tool caches (`.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`) — and editor
+and system litter are kept out by the repository's own exclude file.
 
 #### Scenario: a symlink in the vault is skipped rather than published
 - **GIVEN** a skill folder holding a symlink to a file outside the vault, and a nested git repository beside it
@@ -96,6 +97,11 @@ repository's own exclude file.
 - **GIVEN** a skill whose `scripts/` holds a `__pycache__/` of `.pyc` files beside its scripts
 - **WHEN** the vault settles what is on disk
 - **THEN** the scripts are committed and the bytecode is not, and nothing is left pending
+
+#### Scenario: logs and caches a skill's scripts write are not published
+- **GIVEN** a skill whose folder holds a `run.log`, a `node_modules/` and a `.pytest_cache/` its scripts wrote
+- **WHEN** the vault settles what is on disk
+- **THEN** the skill's own files are committed and none of the generated ones are, and nothing is left pending
 
 ### Requirement: Converge shared state areas
 Module-owned shared state that belongs to the vault rather than to one machine

@@ -99,7 +99,7 @@ A resource file carries its identity, format version, name, description and conf
 - **Reach is not in the file.** Whether a resource is enabled here, and for which agents, is in `local/reach.json`.
 - **`updated_at` is not in the file.** It is the file's modification time on this machine; no revision counter or index is kept.
 
-What Coffer ignores in the repository is written into `.git/info/exclude`, never into a tracked `.gitignore` another machine could change: editor and system litter, hidden entries inside collections (except `.inbox/`), and `secret/` unless your sync remote carries secrets.
+What Coffer ignores in the repository is written into `.git/info/exclude`, never into a tracked `.gitignore` another machine could change: editor and system litter, what a skill's scripts generate when they run (bytecode, `*.log`, `node_modules/`, `.venv/` and tool caches), hidden entries inside collections (except `.inbox/`), and `secret/` unless your sync remote carries secrets.
 
 ### Local
 

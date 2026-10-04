@@ -9,8 +9,9 @@ Nothing here decides *whether* a change may be committed; that is the writer's
 job. ``stage`` and ``commit_staged`` are the two primitives it calls.
 
 ``.git/info/exclude`` — never a tracked ``.gitignore`` another machine could
-change — keeps out editor and OS litter, hidden entries in knowledge (except
-the inbox), and ``secret/`` unless this vault carries secrets.
+change — keeps out editor and OS litter, what a skill's scripts generate when
+they run (bytecode, logs, dependency and tool caches), hidden entries in
+knowledge (except the inbox), and ``secret/`` unless this vault carries secrets.
 """
 
 from __future__ import annotations
@@ -38,6 +39,12 @@ _EXCLUDE_BASE = """# Written by Coffer. Never synced: this file is inside .git.
 .#*
 __pycache__/
 *.py[co]
+*.log
+node_modules/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 /knowledge/**/.*
 !/knowledge/**/.inbox
 """
