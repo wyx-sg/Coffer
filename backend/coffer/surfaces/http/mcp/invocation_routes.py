@@ -59,13 +59,9 @@ _TRACE_ID_HELP = (
 
 
 async def _uids_named(resources: ResourceService, text: str) -> list[str]:
-    """The uids of the MCP servers whose name or title contains ``text``."""
+    """The uids of the MCP servers whose name contains ``text``."""
     needle = text.lower()
-    return [
-        r.uid
-        for r in await resources.list(kind="mcp_server")
-        if needle in r.name.lower() or needle in (r.title or "").lower()
-    ]
+    return [r.uid for r in await resources.list(kind="mcp_server") if needle in r.name.lower()]
 
 
 async def _page(

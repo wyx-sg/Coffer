@@ -67,7 +67,7 @@ export function McpServerList({
     const q = query.trim().toLowerCase();
     const out = new Map<ServerGroup, number[]>(GROUP_ORDER.map((g) => [g, []]));
     servers.forEach((s, i) => {
-      const haystack = `${s.name} ${s.title ?? ""} ${transportOf(s.config).target}`.toLowerCase();
+      const haystack = `${s.name} ${transportOf(s.config).target}`.toLowerCase();
       if (q && !haystack.includes(q)) return;
       if (agentFilter && !agentFilter.matches(s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);

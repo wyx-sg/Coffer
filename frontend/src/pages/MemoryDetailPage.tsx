@@ -28,14 +28,12 @@ import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { distilState } from "@/components/memory/partitionFacts";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { PageHeader } from "@/components/PageHeader";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
-import { displayName } from "@/lib/resourceTitle";
 
 const MEMORY_TABS = ["memories", "delivered"] as const;
 
@@ -80,7 +78,7 @@ export function MemoryDetailPage() {
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <PageHeader
-        title={<ResourceLabel resource={row} heading />}
+        title={row.name}
         badges={row.unresolvable ? <UnresolvableBadge /> : null}
         subtitle={subtitle}
         actions={
@@ -98,7 +96,7 @@ export function MemoryDetailPage() {
         </TabsList>
         <TabsContent value={tab} className="mt-[18px] min-h-0">
           {tab === "memories" ? (
-            <PartitionMemoriesTab uid={uid} name={displayName(row)} partition={row} />
+            <PartitionMemoriesTab uid={uid} name={row.name} partition={row} />
           ) : (
             <PartitionDeliveredTab uid={uid} repositoryPath={row.repository_path} />
           )}

@@ -24,7 +24,7 @@ The framework takes the first half and refuses the second:
 | Pre-write validators may refuse; post-write reactions may not. | A validator decides whether a change happens. A reaction catches up with a change that is already persisted and audited, so letting it raise would pretend to undo something it cannot. |
 | Creation is the one operation not generalised. | A skill needs a master folder, an agent needs a detected config directory. Such kinds opt out of generic creation and register through their own service. Everything after creation is generic. |
 | Identity is an immutable `uid`, the name a label. | A synced vault needs an identity every machine agrees on and a rename cannot break. |
-| A name agents quote is fixed; only the kinds whose name is free carry a `title`. | An MCP server's name prefixes every tool name an agent sees, and a skill's name is the folder an agent loads it from. Renaming either would break permission rules, skills and notes Coffer cannot see, so those kinds declare their name fixed. An agent's name is its type, one per machine. None of the three carries a display title: a second label beside a fixed name only hides the name people and agents actually use. A knowledge collection carries none either: it is shown by its folder name. Providers, channels and memory partitions keep an optional `title`. |
+| A name agents quote is fixed; only the kinds whose name is free carry a `title`. | An MCP server's name prefixes every tool name an agent sees, and a skill's name is the folder an agent loads it from. Renaming either would break permission rules, skills and notes Coffer cannot see, so those kinds declare their name fixed. An agent's name is its type, one per machine. None of the three carries a display title: a second label beside a fixed name only hides the name people and agents actually use. A knowledge collection and a memory partition carry none either: each is shown by its name. Only providers and channels keep an optional `title`. |
 | The framework stores reach; kinds enforce it. | Enforcement belongs where the asking agent is known. A central gate would have to sit on every kind's read path. |
 | The core is tested against a fake kind. | A core that needed a real kind to be testable would already have leaked. An import contract keeps it that way. |
 
@@ -67,7 +67,7 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | Fixed name | no | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
 | What re-registering resets | empty | What deleting and registering again resets, named in the `NAME_IMMUTABLE` message. |
 | Name from config | none | The one name a row may carry, derived from its config. `agent` declares it: an agent is named by its type (`claude_code` → `claude-code`), and registration refuses any other name. |
-| Title | carried | Whether rows of the kind carry the optional `title`. Not carried by `agent`, `mcp_server`, `skill` and `knowledge`; a non-empty title on those is refused with `CONFIG_INVALID` on register and on edit. |
+| Title | carried | Whether rows of the kind carry the optional `title`. Not carried by `agent`, `knowledge`, `mcp_server`, `memory` and `skill`; a non-empty title on those is refused with `CONFIG_INVALID` on register and on edit. |
 
 **Pre-write validators — run before persistence; raising rejects the write**
 

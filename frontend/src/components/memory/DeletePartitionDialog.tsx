@@ -10,7 +10,6 @@ import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { useDeletePartition } from "@/lib/hooks/useMemory";
-import { displayName } from "@/lib/resourceTitle";
 
 interface Props {
   /** The partition to delete; `null` keeps the dialog closed. */
@@ -23,7 +22,7 @@ interface Props {
 export function DeletePartitionDialog({ partition, onClose, onDeleted }: Props) {
   const { t } = useTranslation();
   const del = useDeletePartition();
-  const name = partition ? displayName(partition) : "";
+  const name = partition ? partition.name : "";
 
   return (
     <ConfirmDialog

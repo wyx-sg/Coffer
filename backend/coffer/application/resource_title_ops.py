@@ -6,8 +6,8 @@ instance and reaches into its (private) attributes.
 
 A title is display text a person chose (spec resource-framework "Carry an
 optional editable title on the kinds that have one"); a kind that carries none
-(``Kind.titled`` — `agent`, `mcp_server`, `skill`) refuses a non-empty one. It
-is deliberately NOT routed through ``update_config``, for two reasons:
+(``Kind.titled`` false — `agent`, `knowledge`, `mcp_server`, `memory`, `skill`)
+refuses a non-empty one. It is deliberately NOT routed through ``update_config``, for two reasons:
 
 - A title has no on-disk artifact behind it for the generic path to desync, so
   the lifecycle seam that refuses a kind's config rewrite has nothing to guard.

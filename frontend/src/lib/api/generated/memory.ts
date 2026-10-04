@@ -549,8 +549,6 @@ export interface components {
             sample: string | null;
             /** Sources */
             sources: string[];
-            /** Title */
-            title: string | null;
             /** Uid */
             uid: string;
             /** Unresolvable */

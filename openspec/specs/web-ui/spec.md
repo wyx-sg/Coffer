@@ -2155,10 +2155,10 @@ searches, rather than show an empty panel.
 - **THEN** the app navigates to `/activity` and the palette closes
 
 #### Scenario: the palette jumps to an object
-- **GIVEN** a registered MCP server whose title differs from its name
-- **WHEN** the user opens the palette and types part of the server's name, then part of its title
-- **THEN** each query lists the server as the best match, named by its title and marked as an MCP server
-- **AND** choosing it opens `/mcp-servers/<name>` and closes the palette
+- **GIVEN** a registered provider whose title differs from its name
+- **WHEN** the user opens the palette and types part of the provider's name, then part of its title
+- **THEN** each query lists the provider as the best match, named by its title and marked as a provider
+- **AND** choosing it opens that provider's page and closes the palette
 
 #### Scenario: the palette offers no actions
 - **GIVEN** the palette open with an empty query, and then with queries naming objects

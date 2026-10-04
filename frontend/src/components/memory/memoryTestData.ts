@@ -16,7 +16,6 @@ import type {
 export const GLOBAL: PartitionOut = {
   uid: "mp-4410",
   name: "global",
-  title: null,
   repository_path: "",
   repository_key: "",
   note_count: 12,
@@ -32,7 +31,6 @@ export const GLOBAL: PartitionOut = {
 export const COFFER: PartitionOut = {
   uid: "mp-be27",
   name: "coffer",
-  title: null,
   repository_path: "/Users/dev/work/coffer",
   repository_key: "remote:github.com/wyx-sg/coffer",
   note_count: 2,
@@ -49,7 +47,6 @@ export const COFFER: PartitionOut = {
 export const GONE: PartitionOut = {
   uid: "mp-0d5c",
   name: "old-prototype",
-  title: null,
   repository_path: "/Users/dev/work/old-prototype",
   repository_key: "path:/Users/dev/work/old-prototype",
   note_count: 6,
