@@ -142,7 +142,7 @@ verify:
 		fi; \
 	done; \
 	echo ""; echo "verify: stage timings ($(VERIFY_TIMINGS))"; cat $(VERIFY_TIMINGS)
-	@$(PY) scripts/verify_stamp.py write && echo "verify: OK — recorded .coffer-verify.stamp"
+	@echo "verify: OK"
 verify-all: verify verify-e2e
 
 # Two halves of one rule: `openspec validate --strict` fails a requirement

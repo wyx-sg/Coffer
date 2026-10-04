@@ -204,7 +204,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 
 Only one integration run happens on a machine at a time. `make verify-integration` takes a machine-wide lock (`~/.cache/coffer/verify-integration.lock`), so a second run from another worktree or session waits for the first instead of slowing it down until time-based tests fail; `COFFER_VERIFY_LOCK=off` skips the lock. Each integration test also has a 300-second cap (`PYTEST_TIMEOUT`), so a hung test fails by name instead of stalling the run.
 
-`make verify` runs `lint`, then `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, one after another. At the end, pass or fail, it prints how long each stage took and keeps the list in `.coffer-verify.timings`. When everything passes, it writes `.coffer-verify.stamp`, a content fingerprint of the source files. The Claude Code harness hook reads that stamp and warns when a commit happens while it is stale. `make verify-all` adds `verify-e2e`.
+`make verify` runs `lint`, then `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, one after another. At the end, pass or fail, it prints how long each stage took and keeps the list in `.coffer-verify.timings`. `make verify-all` adds `verify-e2e`.
 
 `make lint` is the whole static gate, not only a formatter pass. It runs these steps in order:
 

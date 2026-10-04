@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -103,59 +100,6 @@ def test_block_dangerous_bash_allows_safe(command: str) -> None:
     )
     assert proc.returncode == 0, proc.stderr
     assert hook_json(proc) == {}  # no decision -> normal permission flow
-
-
-def test_session_context_reports_branch() -> None:
-    proc = run_hook("session_context.py", {"hook_event_name": "SessionStart"})
-    assert proc.returncode == 0, proc.stderr
-    out = hook_json(proc)
-    ctx = out["hookSpecificOutput"]["additionalContext"]
-    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
-    assert "branch" in ctx.lower()  # human-readable branch line is present
-
-
-def test_session_context_never_blocks_outside_git(tmp_path: Path) -> None:
-    proc = run_hook("session_context.py", {"hook_event_name": "SessionStart"}, cwd=tmp_path)
-    assert proc.returncode == 0, proc.stderr  # non-git cwd must not error
-
-
-def _init_repo(path: Path) -> None:
-    subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "config", "user.email", "t@t.t"], cwd=path, check=True, capture_output=True
-    )
-    subprocess.run(["git", "config", "user.name", "t"], cwd=path, check=True, capture_output=True)
-
-
-def test_session_context_flags_stale_verify(tmp_path: Path) -> None:
-    # Self-contained repo carrying a copy of the verify-stamp script: write the
-    # stamp, then change source so the baseline goes stale.
-    _init_repo(tmp_path)
-    (tmp_path / "scripts").mkdir()
-    shutil.copy(REPO_ROOT / "scripts" / "verify_stamp.py", tmp_path / "scripts" / "verify_stamp.py")
-    (tmp_path / "mod.py").write_text("x = 1\n")
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, check=True, capture_output=True)
-    subprocess.run(
-        [sys.executable, str(tmp_path / "scripts" / "verify_stamp.py"), "write"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-    )
-    (tmp_path / "mod.py").write_text("x = 2  # changed after verify\n")
-
-    proc = run_hook("session_context.py", {"hook_event_name": "SessionStart"}, cwd=tmp_path)
-    ctx = hook_json(proc)["hookSpecificOutput"]["additionalContext"]
-    assert "stale" in ctx.lower()
-
-
-def test_session_context_silent_when_no_stamp(tmp_path: Path) -> None:
-    # A fresh repo with no stamp must not claim verify is stale.
-    _init_repo(tmp_path)
-    (tmp_path / "mod.py").write_text("x = 1\n")
-    proc = run_hook("session_context.py", {"hook_event_name": "SessionStart"}, cwd=tmp_path)
-    ctx = hook_json(proc)["hookSpecificOutput"]["additionalContext"]
-    assert "stale" not in ctx.lower()
 
 
 def test_auto_format_prettier_scoped_to_frontend(tmp_path: Path, monkeypatch) -> None:

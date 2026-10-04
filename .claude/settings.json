@@ -31,7 +31,10 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/auto_format.py" }
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/auto_format.py"
+          }
         ]
       }
     ],
@@ -39,15 +42,10 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/block_dangerous_bash.py" },
-          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/verify_before_commit.py" }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session_context.py" }
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/block_dangerous_bash.py"
+          }
         ]
       }
     ]

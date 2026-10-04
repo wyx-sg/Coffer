@@ -204,7 +204,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 
 同一台机器上同一时间只跑一份集成测试。`make verify-integration` 会拿一把全机锁（`~/.cache/coffer/verify-integration.lock`）：另一个 worktree 或会话的第二份会排队等第一份跑完，而不是互相拖慢到依赖时间的测试纷纷失败；`COFFER_VERIFY_LOCK=off` 可以跳过这把锁。每个集成测试还有 300 秒的上限（`PYTEST_TIMEOUT`），卡住的测试会按名字报失败，而不是把整轮拖住。
 
-`make verify` 先运行 `lint`，然后依次运行 `verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`。最后，无论成功还是失败，它都会打印每个阶段的耗时，并把列表保存在 `.coffer-verify.timings`。全部通过时，它会写入 `.coffer-verify.stamp`，即源文件的内容指纹。Claude Code 控制层的 Hook 会读取这个戳，在它过期时发生提交就发出警告。`make verify-all` 额外加上 `verify-e2e`。
+`make verify` 先运行 `lint`，然后依次运行 `verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`。最后，无论成功还是失败，它都会打印每个阶段的耗时，并把列表保存在 `.coffer-verify.timings`。`make verify-all` 额外加上 `verify-e2e`。
 
 `make lint` 是完整的静态门禁，不只是一次格式化检查。它按顺序运行以下步骤：
 

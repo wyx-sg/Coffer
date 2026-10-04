@@ -189,7 +189,5 @@ docs/superpowers/
 *eval-capture*.jsonl
 evals/captured/
 
-# verify-before-commit freshness stamp (scripts/verify_stamp.py) and the
-# per-stage timings `make verify` writes — local only.
-.coffer-verify.stamp
+# The per-stage timings `make verify` writes — local only.
 .coffer-verify.timings
