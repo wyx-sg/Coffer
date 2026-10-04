@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { acceptance } from "@/test/acceptance";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -11,7 +11,14 @@ import { ToastProvider } from "@/components/ui/toast";
 import type { ResourceOut } from "@/lib/api/resources";
 import { McpServerList } from "./McpServerList";
 
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: () => ({
+    data: [
+      { uid: "u-cc", type: "claude_code", name: "claude_code" },
+      { uid: "u-cx", type: "codex", name: "codex" },
+    ],
+  }),
+}));
 vi.mock("@/lib/hooks/useMcpServerPage", () => ({
   useMcpServerListReads: () => ({ details: new Map(), splits: new Map() }),
 }));
@@ -49,13 +56,13 @@ function Harness({ servers }: { servers: ResourceOut[] }) {
   );
 }
 
-function renderList(servers: ResourceOut[] = SERVERS) {
+function renderList(servers: ResourceOut[] = SERVERS, path = "/mcp-servers") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
         <ToastProvider>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[path]}>
             <Harness servers={servers} />
           </MemoryRouter>
         </ToastProvider>
@@ -72,10 +79,21 @@ describe("McpServerList", () => {
     builtin.data = { name: "coffer", url: "http://127.0.0.1:38470/mcp", tool_count: 2 };
   });
 
-  test("the search is the only filter: no Reach filter", () => {
-    renderList();
+  acceptance("web-ui", "the Reach filter narrows the servers to one agent", async () => {
+    renderList([
+      server("u-gh", "github"),
+      server("u-cx", "codex-only", { scope: { agents: ["u-cx"] } as ResourceOut["scope"] }),
+    ]);
     expect(screen.getByRole("textbox", { name: "Filter servers" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
+    const reach = screen.getByRole("combobox", { name: "Reach" });
+    expect(reach).toHaveTextContent("All");
+    // Radix Select opens from the keyboard in jsdom (no PointerEvent).
+    fireEvent.keyDown(reach, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Claude Code" }));
+    await waitFor(() => expect(screen.queryByRole("link", { name: /codex-only/ })).toBeNull());
+    expect(screen.getByRole("link", { name: /github/ })).toBeInTheDocument();
+    // Coffer's own server reaches every agent, so it stays.
+    expect(screen.getByRole("link", { name: /coffer/ })).toBeInTheDocument();
   });
 
   test("the groups read Off after Healthy, and an off server leaves its Reach column empty", () => {

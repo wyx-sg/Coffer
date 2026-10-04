@@ -42,7 +42,7 @@ The open conversation is part of the URL, `/conversations/<id>`, so a refresh, a
 
 ### Working directory
 
-A conversation's working directory is chosen on the draft, in the folder control beside the paperclip: a recent folder, **Choose a folder…**, or a typed absolute path. It opens on the folder you used last. Leave it on **Coffer’s workspace** and the turn runs in the Coffer-managed workspace, `~/.coffer/content/workspace`, which is created on first use. Once the conversation exists the folder stays in the same place as a read-only path.
+A conversation's working directory is chosen on the draft, in the folder control beside the paperclip: a recent folder, or one row for any other — type or paste an absolute path and press **Use**, or leave the field empty and press **Choose…** for the folder dialog. It opens on the folder you used last. Leave it on **Coffer’s workspace** and the turn runs in the Coffer-managed workspace, `~/.coffer/content/workspace`, which is created on first use. Once the conversation exists the folder stays in the same place as a read-only path.
 
 A conversation's agent and working directory are fixed when it is created, because the agent's session belongs to that one directory. To work somewhere else, start a new conversation.
 
@@ -71,7 +71,7 @@ A reply streams into the thread as the agent writes it, under the agent's mark, 
 - Assistant text renders as GitHub-flavoured Markdown. Single newlines are kept as line breaks, tables render as tables, and every fenced code block has its own **Copy** control.
 - Each tool call is a card between the text around it, in the order the agent made it. The card names the tool and what it was called on — the file, the pattern, the command — and reads **Running** until its result arrives, then **Done · 0.3s** (with how long the call took) or **Error**. Open it to see **Input** and **Result**.
 - When the reply is complete, **Files changed** lists every file the reply wrote, with the lines each added and removed, at the end of the reply after its text. Coffer records a diff of each file as the reply runs, so a row with a diff opens it: a drawer slides in from the right, under the title bar, showing that reply's changes to the file with old and new line numbers, hunk headers and added and removed lines marked. The header shows the path and its counts, **1 of 2** with **Previous file** and **Next file** to walk the reply's changed files, and a close button; Esc closes it too. A file that is binary or over 1 MB is listed with its counts but has no diff to open. Replies from before diffs were recorded keep an estimated list that does not open.
-- A finished assistant message ends with a **Copy reply** button (it copies what the agent wrote, without the tool calls) and its token usage (for example `18.2k in · 1.4k out`), and records the model that produced it.
+- A finished assistant message ends with a **Copy reply** button (it copies what the agent wrote, without the tool calls), and records the model and token usage that produced it; the counts are not shown in the thread.
 - If you scroll up, **Jump to latest** takes you back to the live end.
 
 The turn runs as a detached task in the daemon. Closing the tab, losing Wi-Fi or refreshing does not stop it: the reply finishes and is saved, and when you come back the page subscribes again and replays the turn in progress from its start. If the live stream drops mid-turn, the page reconnects on its own; after five failed attempts a warning inside the reply says **Lost the live stream from the daemon** with **Reload conversation**, which shows everything the turn has written so far. A tool call that had not returned reads **Unknown**, because the page cannot tell whether it finished.
@@ -136,7 +136,7 @@ If Claude Code is not logged in, the banner says so and tells you to run `claude
 A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Conversations page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
 
 - The title bar shows where the conversation came from, for example **SeaTalk · coffer-dev › thread**; a reply typed here also goes there. When a reply cannot go back to the chat it says **Replies stay in Coffer** with a **?** that says why.
-- The reply is posted in that chat or thread as `(from Coffer) …`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
+- The reply is posted in that chat or thread under a first line `<your name> · from Coffer`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
 - A reply goes only to the chat and thread the conversation belongs to, never anywhere else.
 
 A conversation that lives in a **group's main chat** is never mirrored: the composer says the reply stays in Coffer. A main chat is where the whole room reads, and a reply you typed at your desk, with an answer the room did not ask for, is not something to drop in front of everyone. A direct chat, its parallel threads and a group thread are yours to continue, so they are mirrored.
@@ -184,14 +184,14 @@ Retrying a failed turn resends the message with its attachments. If a file it ca
 - the title, then a status word — **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer — and the latest message's first line under it;
 - on the right, its **source** — the Coffer mark and **Coffer** for a conversation started on this page, or the platform's logo and the place in its chat for one a [channel](/guides/channels) opened: `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread`, `Telegram · Group › topic` — then the agent and the time of the last activity (the clock for today and yesterday, a date such as `Sep 22` for earlier).
 
-Above the list, from left to right: an **Active / Archived** switch, a search box over titles and message text (press `/` to jump to it), a **Source** pill, an **Agent** pill, and **Clear filters** once anything narrows the list. Source lists **Coffer** and each of your channels (`SeaTalk · Team bot`) and takes several at once; Agent does the same. The list shows no count. The filters are part of the URL, so a filtered list is a link:
+Above the list, from left to right: an **Active / Archived** switch, a search box over titles and message text (press `/` to jump to it), a **Source** pill, an **Agent** pill, and **Clear filters** once anything narrows the list. Source lists **Coffer** and each of your channels (`SeaTalk · Team bot`) and takes several at once; Agent does the same. The server applies both, so scrolling pages through matches only. The list shows no count. The filters are part of the URL, so a filtered list is a link:
 
 - Search — `?q=sentry`.
 - Sources — `?source=coffer,<channel uid>`. A channel's **Conversations from *name*** link on the Channels page opens `?source=<uid>`, with that channel ticked in the Source pill.
 - Agents — `?agent=codex`.
 - **Archived** — `?archived=1`.
 
-Hover a row for a checkbox on its left and a **⋯** menu on its right. **Rename** opens the conversation with its title ready to edit; **Archive** (**Unarchive** in the archived view) acts at once and a toast offers **Undo**; **Delete…** asks first. Tick rows (shift-click ticks a range) and the filter row gives way to a bar — `3 of 8 selected`, **Archive**, **Delete…**, **Clear**. A bulk delete lists the titles it will remove, five at a time with **Show all**.
+Hover a row for a checkbox on its left and a **⋯** menu on its right. **Rename** opens the conversation with its title ready to edit; **Archive** (**Unarchive** in the archived view) acts at once and a toast offers **Undo**; **Delete…** asks first. The first day group has a **Select all** box in the same column: it ticks every conversation in the view — reading the ones not loaded yet — and is half-ticked while only some are. Tick rows (shift-click ticks a range) and the filter row gives way to a bar — `3 of 8 selected`, **Archive**, **Delete…**, **Clear**. A bulk delete lists the titles it will remove, five at a time with **Show all**.
 
 When there is no conversation yet, the page is its header and one message. When filters match nothing, **No conversations match** offers **Clear filters**; if the list cannot be read it says so, with **Retry**.
 

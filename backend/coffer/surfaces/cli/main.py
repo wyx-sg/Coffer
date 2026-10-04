@@ -10,6 +10,7 @@ import typer
 from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
+    cli_cmd,
     config_cmd,
     daemon_cmd,
     log_cmd,
@@ -61,6 +62,7 @@ app.add_typer(log_cmd.app, name="log")
 app.add_typer(path_cmd.app, name="path")
 app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(secret_cmd.app, name="secret")
+app.add_typer(cli_cmd.app, name="cli")
 # `coffer run [--secret …] -- cmd`: everything after `--` is the child's argv.
 app.command(
     "run",

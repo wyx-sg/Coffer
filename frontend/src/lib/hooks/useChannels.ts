@@ -6,7 +6,7 @@
 // channel-specific lives here: live status and the state it puts a channel in,
 // pairing, notify, reconnect, the settings auto-save, and the machine binding
 // (`runs_on`, written through the same config PATCH an edit uses).
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -121,20 +121,17 @@ export function useReconnectChannel(uid: string) {
   });
 }
 
-export type AutoSaveState = "idle" | "saving" | "saved" | "error";
-
 /**
  * Save a channel's settings as they change (the Settings tab has no Save
  * button). Each call PATCHes the whole config, so calls are queued and each
  * plans from the config the previous one wrote — two fields saved a moment
  * apart must not each PATCH back the config from before the other. A failure
- * is toasted and leaves the state at "error"; the field keeps what was typed.
+ * is toasted; the field keeps what was typed.
  */
 export function useChannelAutoSave(channel: ResourceOut) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [state, setState] = useState<AutoSaveState>("idle");
   const latest = useRef(channel.config);
   const pending = useRef(0);
   const queue = useRef<Promise<void>>(Promise.resolve());
@@ -147,7 +144,6 @@ export function useChannelAutoSave(channel: ResourceOut) {
   const save = useCallback(
     (values: Partial<ChannelEditValues>) => {
       pending.current += 1;
-      setState("saving");
       queue.current = queue.current.then(async () => {
         const config = latest.current;
         const agent = typeof config.default_agent === "string" ? config.default_agent : "";
@@ -160,12 +156,10 @@ export function useChannelAutoSave(channel: ResourceOut) {
         try {
           await applyChannelEdit(plan);
           latest.current = plan.config;
-          setState("saved");
           void qc.invalidateQueries({ queryKey: resourcesKey });
           void qc.invalidateQueries({ queryKey: channelStatusKey(channel.uid) });
           void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
         } catch (error) {
-          setState("error");
           toast.error(translateApiError(t, error));
         } finally {
           pending.current -= 1;
@@ -176,7 +170,7 @@ export function useChannelAutoSave(channel: ResourceOut) {
     [channel.uid, channel.name, qc, t, toast],
   );
 
-  return { save, state };
+  return { save };
 }
 
 /**

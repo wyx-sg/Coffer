@@ -35,11 +35,12 @@ A feature MUST join the registry by adding one entry that names its route
 prefixes and the kinds it owns, and by tagging its other surfaces — built-in
 tools, agent directories, attention sources, sidebar entries and background
 passes — with its key. A feature MUST leave the registry by deleting its entry
-and every gate and tag that names it, together with a migration that strips its
-stored setting from the `features` object of `~/.coffer/daemon-config.json`,
-keeping every other key. A stored setting for a key the registry does not name
-MUST be ignored by every read — logged, never listed — and MUST NOT fail
-anything. A `features` object a person already holds is kept as it is.
+and every gate and tag that names it, and by adding one entry to the table of
+graduated features or the table of retired features (see "Move a graduated
+feature's configuration and clean up a retired one's"). A stored setting for a
+key the registry does not name and no table lists MUST be ignored by every read
+— logged, never listed — and MUST NOT fail anything. A `features` object a
+person already holds is kept as it is.
 
 #### Scenario: the registry names the four experimental features
 - **GIVEN** a running daemon
@@ -51,6 +52,43 @@ anything. A `features` object a person already holds is kept as it is.
 - **GIVEN** a daemon config whose `features` object holds a key the registry does not name
 - **WHEN** the daemon starts and the features and the daemon status are read
 - **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
+
+#### Scenario: a gate that still names a feature that left the registry fails loudly
+- **GIVEN** a feature whose entry was deleted from the registry, a stored setting for it beside another stored key, and a tool tagged with it
+- **WHEN** the features are read, the deleted feature's state is asked for and the tagged tool is registered
+- **THEN** its routes and kind are no longer gated, its stored setting is logged and not listed, and the other key is kept
+- **AND** asking for the deleted feature's state raises `FeatureUnknown` and registering the tagged tool raises `FeatureUnknown`, so a gate left behind is caught rather than silently open
+
+### Requirement: Move a graduated feature's configuration and clean up a retired one's
+A feature that graduates (becomes stable: always on, with no switch) leaves the
+registry into a table of graduated features; its entry MAY name a mapping from
+old top-level keys of `~/.coffer/daemon-config.json` to new ones. A feature that
+is retired (removed) leaves the registry into a table of retired features; its
+entry MAY name further top-level keys of that file. The daemon MUST apply both
+tables to the daemon config once, at startup, before it reads the feature
+settings: a graduated feature's switch is removed from the `features` object and
+each mapped setting is moved to its new key, keeping a value already there; a
+retired feature's switch and named settings are removed; every other key is
+kept. The file MUST be rewritten atomically and only when something changed, and
+one log line MUST be written per key moved or removed. A key may be in the
+registry or in a table, never both.
+
+#### Scenario: a graduated feature's switch is removed and its settings carry over at startup
+- **GIVEN** a feature in the graduated table that maps old key `a` to `b`, and a daemon config holding its switch, `a` and another feature's switch
+- **WHEN** the daemon starts
+- **THEN** the config no longer holds the graduated feature's switch or `a`, holds `b` with `a`'s value, and still holds the other feature's switch
+- **AND** one log line names the switch and one names the moved setting, and a second start rewrites nothing
+
+#### Scenario: a retired feature's switch and settings are removed at startup
+- **GIVEN** a feature in the retired table that names setting `s`, and a daemon config holding its switch, `s` and other keys
+- **WHEN** the daemon starts
+- **THEN** the config no longer holds the retired feature's switch or `s`, and every other key is kept
+- **AND** one log line names each key removed
+
+#### Scenario: the lifecycle tables never name a live feature
+- **GIVEN** the registry and both tables
+- **WHEN** their keys are compared
+- **THEN** no key is in the registry and a table, and no key is in both tables
 
 ### Requirement: Decide a feature's state per machine
 A feature's state MUST be decided in this order: a pin in `COFFER_FEATURES`,
@@ -344,7 +382,7 @@ embed data of a switched-off feature MUST leave that section out.
 
 ### Requirement: Show the Features tab in every build
 Settings MUST carry a **Features** tab (`/settings/features`) in every build,
-after General, Security, Data, Daemon and About. The tab MUST list every
+after General, Security, Data and Daemon, and before About. The tab MUST list every
 registered feature, in registry order, with its name, an **Experimental** mark,
 a one-line description, a switch showing its current state, and what decided
 that state — a pin in `COFFER_FEATURES`, this machine's own setting, or the
@@ -357,7 +395,7 @@ card.
 - **GIVEN** a running daemon
 - **WHEN** the user opens Settings → Features
 - **THEN** the tab lists `knowledge`, `memory`, `sync` and `models` with name, Experimental mark, description, state and what decided it
-- **AND** the Settings tab list is General, Security, Data, Daemon, About and Features
+- **AND** the Settings tab list is General, Security, Data, Daemon, Features and About
 
 #### Scenario: the features tab switches a feature
 - **GIVEN** the daemon reports a registered feature `f` off and unpinned

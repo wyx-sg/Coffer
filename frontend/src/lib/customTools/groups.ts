@@ -19,6 +19,11 @@ export function isCustomToolGroup(resource: { config?: unknown }): boolean {
   return (transport as { type?: unknown }).type === HTTP_API_TRANSPORT;
 }
 
+/** A group's reach as the shared reach fields read it (`null` scope = every agent). */
+export function reachOf(group: Pick<CustomToolGroup, "scope">): { agents: string[] } | null {
+  return group.scope === null ? null : { agents: group.scope };
+}
+
 /** The three sections of the list, in the order they are shown. */
 export type GroupSection = "attention" | "healthy" | "off";
 const GROUP_SECTIONS: readonly GroupSection[] = ["attention", "healthy", "off"];
@@ -51,13 +56,7 @@ export function sectionGroups(
   filter: string,
 ): { section: GroupSection; groups: CustomToolGroup[] }[] {
   const q = filter.trim().toLowerCase();
-  const matching = groups.filter(
-    (g) =>
-      !q ||
-      g.name.toLowerCase().includes(q) ||
-      hostOf(g.base_url).toLowerCase().includes(q) ||
-      g.tools.some((tool) => tool.name.toLowerCase().includes(q)),
-  );
+  const matching = groups.filter((g) => !q || g.name.toLowerCase().includes(q));
   const sorted = [...matching].sort(
     (a, b) => HEALTH_RANK[a.health] - HEALTH_RANK[b.health] || a.name.localeCompare(b.name),
   );

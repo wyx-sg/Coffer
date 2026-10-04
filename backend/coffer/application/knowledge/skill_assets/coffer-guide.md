@@ -129,14 +129,27 @@ A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
 cited in files as `coffer://secret/<name>`. Write that reference into skills,
 scripts and env files — never the value. `coffer secret list` shows what
 exists; `coffer secret set <name>` stores a value read from stdin. If you find a
-plaintext secret left in `~/.coffer/secrets/` or in a skill, tell the developer:
-the Secrets page scans for them and offers to move each into a secret.
+plaintext secret left in a file or in a skill, tell the developer to store it as
+a secret and cite it by `coffer://secret/<name>`.
 
 A secret that would go somewhere it has not gone before — a new MCP server
 citing an existing token, a changed command line or URL —
 waits for the developer's approval in the Coffer app (a command that hits this
 prints `waiting for approval in the Coffer app` and exits `9`). That is not an
 error to retry or to route around: tell the developer what is waiting.
+
+## Command-line tools Coffer manages
+
+Coffer keeps track of the command-line tools this developer relies on: the ones
+skills require, the launchers MCP servers start with, and the ones the
+developer added by hand, each with what it is for. `coffer cli list` prints
+them with whether each is ready, missing, outdated or logged out on this
+machine as of Coffer's last check; `coffer cli list --json` adds, for one that
+needs attention, the prompt for installing, updating or logging in to it. Read
+it before concluding a tool is unavailable, or to learn which tool this
+developer uses for a job. Coffer installs nothing itself: a missing or
+logged-out tool is one to set up as that prompt says, or to raise with the
+developer.
 
 ## When Coffer itself misbehaves
 

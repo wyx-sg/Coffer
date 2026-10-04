@@ -84,6 +84,11 @@ def _read_raw() -> dict[str, Any] | None:
     return payload
 
 
+def read_payload() -> dict[str, Any] | None:
+    """The parsed config file, or ``None`` — for the modules that own one part of it."""
+    return _read_raw()
+
+
 def config_is_readable() -> bool:
     """False only when the file exists but could not be parsed.
 

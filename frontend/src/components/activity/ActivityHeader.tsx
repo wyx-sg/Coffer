@@ -1,8 +1,7 @@
-// src/components/activity/ActivityHeader.tsx — Activity's title with its live mark and Export, and the four tabs.
+// src/components/activity/ActivityHeader.tsx — Activity's title with its live mark, and the four tabs.
 //
 // Design 6.2.01: the title, "● Live" (a dot and the word; "Reconnecting…" when
-// the daemon's change feed is closed), the one-line description, a ghost
-// "Export ⌄" on the right. Tabs carry no counts; a tab whose log failed to
+// the daemon's change feed is closed), the one-line description. Tabs carry no counts; a tab whose log failed to
 // load shows a warning icon.
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -10,9 +9,7 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusDot } from "@/components/status/StatusDot";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { SourceParams } from "@/lib/api/activity";
-import { ACTIVITY_TABS, type ActivityRecord, type ActivityTab } from "@/lib/activity/records";
-import { ExportMenu } from "./ExportMenu";
+import { ACTIVITY_TABS, type ActivityTab } from "@/lib/activity/records";
 
 interface Props {
   tab: ActivityTab;
@@ -21,14 +18,9 @@ interface Props {
   failedTabs: ReadonlySet<ActivityTab>;
   /** The daemon's change feed is open. */
   live: boolean;
-  /** No records at all yet: there is nothing to export. */
-  empty: boolean;
-  /** For the export. */
-  specs: SourceParams[];
-  keep: (r: ActivityRecord) => boolean;
 }
 
-export function ActivityHeader({ tab, onTab, failedTabs, live, empty, specs, keep }: Props) {
+export function ActivityHeader({ tab, onTab, failedTabs, live }: Props) {
   const { t } = useTranslation();
   return (
     <>
@@ -41,7 +33,6 @@ export function ActivityHeader({ tab, onTab, failedTabs, live, empty, specs, kee
             {live ? t("activity.live") : t("activity.reconnecting")}
           </span>
         }
-        actions={empty ? null : <ExportMenu tab={tab} specs={specs} keep={keep} />}
       />
       <Tabs value={tab} onValueChange={onTab}>
         <TabsList>

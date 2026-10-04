@@ -1,6 +1,6 @@
 // src/components/shell/SidebarFooter.test.tsx — the footer's one Settings row (no daemon state on it) and the update card.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
@@ -87,12 +87,12 @@ describe("SidebarFooter", () => {
   test("the collapsed gear's tooltip reads Settings and its shortcut; the labelled row has none", async () => {
     answer({});
     const expanded = renderFooter();
-    fireEvent.focus(screen.getByTestId("sidebar-settings"));
+    act(() => screen.getByTestId("sidebar-settings").focus());
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expanded.unmount();
     renderFooter(true);
-    fireEvent.focus(screen.getByTestId("sidebar-settings"));
+    act(() => screen.getByTestId("sidebar-settings").focus());
     expect(await screen.findByRole("tooltip")).toHaveTextContent(/^Settings\s+\S/);
   });
 

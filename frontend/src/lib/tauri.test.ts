@@ -143,7 +143,10 @@ describe("connectToShellDaemon", () => {
 
   acceptance("desktop-app", "the handshake credentials a locally-hosted page", async () => {
     enterTauri();
-    invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:38470/api/v1", token: "fresh-token" });
+    invokeMock.mockResolvedValue({
+      baseUrl: "http://127.0.0.1:38470/api/v1",
+      token: "fresh-token",
+    });
 
     await connectToShellDaemon();
 

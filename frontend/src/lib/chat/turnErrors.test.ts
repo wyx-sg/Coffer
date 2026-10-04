@@ -6,7 +6,11 @@ import { describeTurnError, isAgentNotLoggedIn } from "./turnErrors";
 
 // Mimics i18next: returns the key when no translation exists.
 const t = (key: string) =>
-  key === "conversations.errors.agentNotLoggedIn" ? "LOGIN COPY" : key === "errors.BOOM" ? "boom copy" : key;
+  key === "conversations.errors.agentNotLoggedIn"
+    ? "LOGIN COPY"
+    : key === "errors.BOOM"
+      ? "boom copy"
+      : key;
 
 describe("isAgentNotLoggedIn", () => {
   test("matches the agent CLI's not-logged-in wording and a /login hint", () => {

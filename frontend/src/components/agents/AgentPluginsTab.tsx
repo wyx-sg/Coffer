@@ -27,7 +27,7 @@ import type { AgentOut } from "@/lib/api/agents";
 import type { PluginOut } from "@/lib/api/agents-workspace";
 import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
 
-const searchText = (p: PluginOut) => `${p.name} ${p.id} ${p.marketplace} ${p.description ?? ""}`;
+const searchText = (p: PluginOut) => p.name;
 
 export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();

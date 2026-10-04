@@ -69,8 +69,6 @@ export function FilterPill(props: FilterPillProps) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  // "Only" remembers the previous set so a second click restores it.
-  const beforeOnly = useRef<string[] | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const commit = (next: string[]) => {
@@ -100,7 +98,6 @@ export function FilterPill(props: FilterPillProps) {
   const sections = useMemo(() => buildSections(groups, rows), [groups, rows]);
 
   const toggle = (value: string) => {
-    beforeOnly.current = null;
     if (single) {
       commit(selected[0] === value ? [] : [value]);
       setOpen(false);
@@ -109,20 +106,7 @@ export function FilterPill(props: FilterPillProps) {
     commit(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
   };
 
-  const only = (value: string) => {
-    if (beforeOnly.current && selected.length === 1 && selected[0] === value) {
-      commit(beforeOnly.current);
-      beforeOnly.current = null;
-    } else {
-      beforeOnly.current = selected;
-      commit([value]);
-    }
-  };
-
-  const clear = () => {
-    beforeOnly.current = null;
-    commit([]);
-  };
+  const clear = () => commit([]);
 
   const move = (e: KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -191,7 +175,6 @@ export function FilterPill(props: FilterPillProps) {
           listRef={listRef}
           onKeyDown={move}
           onToggle={toggle}
-          onOnly={only}
         />
         <div className="mt-1 border-t border-border-subtle pt-1">
           <button

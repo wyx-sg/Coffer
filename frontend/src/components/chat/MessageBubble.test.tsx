@@ -119,7 +119,7 @@ describe("MessageBubble", () => {
   });
 
   describe("the end of a reply", () => {
-    test("a finished reply offers Copy reply with its text blocks, and the token line", async () => {
+    test("a finished reply offers Copy reply with its text blocks, and no token counts", async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, { clipboard: { writeText } });
       render(
@@ -136,19 +136,19 @@ describe("MessageBubble", () => {
           })}
         />,
       );
-      expect(screen.getByText("18.2k in · 1.4k out")).toBeInTheDocument();
+      expect(screen.queryByText(/18\.2k|1\.4k/)).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Copy reply" }));
       expect(writeText).toHaveBeenCalledWith("first\n\nsecond");
       await screen.findByRole("button", { name: "Copy reply" });
       await waitFor(() => expect(document.querySelector("svg.lucide-check")).not.toBeNull());
     });
 
-    test("a reply still running has neither Copy reply nor tokens", () => {
+    test("a reply still running has no Copy reply", () => {
       render(<MessageBubble message={makeAssistant({ status: "streaming" })} />);
       expect(screen.queryByRole("button", { name: "Copy reply" })).not.toBeInTheDocument();
     });
 
-    test("files changed sit after the text and before the token line; an estimated row opens nothing", () => {
+    test("files changed sit after the text and before Copy reply; an estimated row opens nothing", () => {
       const onOpenFile = vi.fn();
       render(
         <MessageBubble
@@ -175,11 +175,11 @@ describe("MessageBubble", () => {
       expect(within(card).getByText("src/a.py")).toBeInTheDocument();
       expect(within(card).queryByRole("button")).not.toBeInTheDocument();
       expect(onOpenFile).not.toHaveBeenCalled();
-      const tokens = screen.getByText("100 in · 10 out");
+      const copy = screen.getByRole("button", { name: "Copy reply" });
       expect(screen.getByText("Done.").compareDocumentPosition(title)).toBe(
         Node.DOCUMENT_POSITION_FOLLOWING,
       );
-      expect(title.compareDocumentPosition(tokens)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(title.compareDocumentPosition(copy)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
   });
 
@@ -275,17 +275,6 @@ describe("MessageBubble", () => {
       "text-warning",
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  });
-
-  test("renders per-message token usage when present", () => {
-    render(<MessageBubble message={makeAssistant({ prompt_tokens: 12, completion_tokens: 34 })} />);
-    expect(screen.getByText(/12 in/)).toBeInTheDocument();
-    expect(screen.getByText(/34 out/)).toBeInTheDocument();
-  });
-
-  test("omits token usage when the message has none", () => {
-    render(<MessageBubble message={makeAssistant({})} />);
-    expect(screen.queryByText(/ in ·/)).not.toBeInTheDocument();
   });
 
   test("renders a thinking indicator for a persisted streaming placeholder", () => {

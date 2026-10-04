@@ -14,7 +14,8 @@ question (``coffer.application.features``).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Literal
 
 from coffer.domain.error_base import CofferError
@@ -58,7 +59,8 @@ class ExperimentalFeature:
 #: and the Usage tab. Every one is off until the person switches it on, on this
 #: machine. A feature joins by adding one entry here and tagging its other
 #: surfaces with its key; it leaves by deleting that entry and every gate that
-#: names it (and, once released, a migration that strips its stored setting).
+#: names it, and by adding one entry to ``GRADUATED_FEATURES`` or
+#: ``RETIRED_FEATURES`` below.
 KNOWLEDGE = "knowledge"
 MEMORY = "memory"
 SYNC = "sync"
@@ -90,6 +92,41 @@ EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
         kinds=("provider",),
     ),
 )
+
+
+@dataclass(frozen=True)
+class GraduatedFeature:
+    """A feature that left the registry because it is now stable: always on,
+    with no switch (spec experimental-features "Move a graduated feature's
+    configuration and clean up a retired one's")."""
+
+    key: str
+    #: Settings the feature held in ``daemon-config.json`` that the stable
+    #: feature reads elsewhere in that file: old top-level key -> new top-level
+    #: key. Each is moved once; a value already at the new key is kept.
+    moved: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class RetiredFeature:
+    """A feature that left the registry because it was removed."""
+
+    key: str
+    #: Further top-level keys of ``daemon-config.json`` that belonged to the
+    #: feature and are removed with its switch.
+    strip: tuple[str, ...] = ()
+
+
+#: Every feature that has graduated, and what of its configuration moves. Empty
+#: today: no feature has graduated. A feature leaves ``EXPERIMENTAL_FEATURES``
+#: into exactly one of these two tables, in the same change; the daemon applies
+#: them to ``daemon-config.json`` once, at startup, and an entry stays only
+#: while a config written before it could still be in the wild.
+GRADUATED_FEATURES: tuple[GraduatedFeature, ...] = ()
+
+#: Every feature that was removed, and the settings beyond its switch that go
+#: with it. Empty today: no feature has been retired.
+RETIRED_FEATURES: tuple[RetiredFeature, ...] = ()
 
 
 # The lookups read the registry on every call rather than from an index built

@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import or_, text
 
+from coffer.application.chat.conversation_repo import EVERY, Narrowing
 from coffer.domain.chat.message import ContentBlock, block_from_dict, block_to_dict
 from coffer.infrastructure.chat.persistence_models import ConversationModel
 
@@ -40,16 +41,34 @@ def _like_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _listing_filter(stmt: Any, *, archived: bool, contains: str | None) -> Any:
+def _listing_filter(
+    stmt: Any,
+    *,
+    archived: bool,
+    contains: str | None,
+    narrow: Narrowing = EVERY,
+) -> Any:
     """Narrow a ``ConversationModel`` statement to one listing: active or archived,
     and, with ``contains``, the conversations whose title or any text block of any
     message holds it (case-insensitive). The message text is read out of the JSON
-    column, so characters the JSON escapes (CJK, quotes) still match."""
+    column, so characters the JSON escapes (CJK, quotes) still match. ``narrow``
+    keeps its sources (``coffer`` is ``channel_uid IS NULL``, any other token a
+    channel uid) and its agent keys."""
     stmt = stmt.where(
         ConversationModel.archived_at.isnot(None)
         if archived
         else ConversationModel.archived_at.is_(None)
     )
+    if narrow.sources:
+        uids = [s for s in narrow.sources if s != "coffer"]
+        clauses = []
+        if len(uids) != len(narrow.sources):
+            clauses.append(ConversationModel.channel_uid.is_(None))
+        if uids:
+            clauses.append(ConversationModel.channel_uid.in_(uids))
+        stmt = stmt.where(or_(*clauses))
+    if narrow.agents:
+        stmt = stmt.where(ConversationModel.agent_key.in_(narrow.agents))
     if contains:
         pattern = f"%{_like_escape(contains)}%"
         in_messages = text(_MESSAGE_TEXT_MATCH).bindparams(pattern=pattern)

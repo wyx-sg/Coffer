@@ -114,6 +114,15 @@ describe("McpToolsTab", () => {
     expect(screen.getByTestId("mcp-tools-shown")).toHaveTextContent("Showing 1 of 1");
   });
 
+  acceptance("web-ui", "a search does not match descriptions", () => {
+    renderTab();
+    // Every description reads "does tool_NN"; "does" is in none of the names.
+    fireEvent.change(screen.getByRole("textbox", { name: "Search tools" }), {
+      target: { value: "does" },
+    });
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
   acceptance("mcp-gateway", "a tool's exposure is chosen by the person", () => {
     renderTab();
     expect(screen.getByRole("combobox", { name: "Exposure of tool_00" })).toHaveTextContent(

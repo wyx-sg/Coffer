@@ -165,6 +165,12 @@ def test_no_message_text_crosses_the_wire(client: TestClient, tmp_path: pathlib.
     }
 
 
+def _entries(sidecar: pathlib.Path) -> dict[str, dict[str, object]]:
+    """The sidecar's per-file entries, without its format stamp."""
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    return {k: v for k, v in data.items() if k != "__format__"}
+
+
 @pytest.mark.acceptance(
     spec="agent-registry",
     scenario="browse an agent's transcript history with title, search, and sort",
@@ -317,7 +323,7 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     worker = client.app.state.background_workers.warm_worker  # type: ignore[attr-defined]
     client.portal.call(worker.run_once)  # type: ignore[union-attr]
 
-    stored = json.loads(sidecar.read_text(encoding="utf-8"))
+    stored = _entries(sidecar)
     assert len(stored) == 3
     assert all("message_count" in entry for entry in stored.values())
     assert len(client.get("/api/v1/audit").json()["entries"]) == before
@@ -344,13 +350,13 @@ def test_warm_pass_rebuilds_a_sidecar_deleted_under_a_hot_cache(
 
     # Warm first: after this the in-memory cache holds all three files' stamps.
     client.portal.call(worker.run_once)  # type: ignore[union-attr]
-    assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
+    assert len(_entries(sidecar)) == 3
 
     sidecar.unlink()
     client.portal.call(worker.run_once)  # type: ignore[union-attr]
 
     assert sidecar.is_file(), "a warm pass left the deleted sidecar deleted"
-    assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
+    assert len(_entries(sidecar)) == 3
 
 
 # ---------------------------------------------------------------------------

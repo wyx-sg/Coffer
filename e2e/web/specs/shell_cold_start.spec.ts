@@ -50,12 +50,12 @@ acceptance(
     // Adding a sidebar entry means adding it here. See
     // `frontend/src/lib/navigation.ts`. The e2e daemon pins all four
     // experimental features on (`scripts/start_daemon.sh`), so the five
-    // entries they own are listed and each carries the Experimental marker
-    // beside its label.
-    const EXP = String.raw`\s*Experimental`;
+    // entries they own are listed. The expanded row carries no Experimental
+    // tag (spec experimental-features "Mark an experimental feature's
+    // sidebar entry"): the tag is on the page title and in the rail tooltip.
     const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [
       [null, [/^Overview$/i]],
-      ["Agents", [/^Agents$/i, new RegExp(`^Model providers${EXP}$`, "i")]],
+      ["Agents", [/^Agents$/i, /^Model providers$/i]],
       ["Run", [/^Conversations$/i, /^Channels$/i]],
       [
         "Capabilities",
@@ -64,8 +64,8 @@ acceptance(
       [
         "Context",
         [
-          new RegExp(`^Knowledge${EXP}$`, "i"),
-          new RegExp(`^Memory${EXP}$`, "i"),
+          /^Knowledge$/i,
+          /^Memory$/i,
         ],
       ],
       [
@@ -73,7 +73,7 @@ acceptance(
         [
           /^Secrets$/i,
           /^Activity$/i,
-          new RegExp(`^Sync${EXP}$`, "i"),
+          /^Sync$/i,
         ],
       ],
     ];
@@ -88,11 +88,12 @@ acceptance(
     await expect(nav.getByRole("link")).toHaveCount(14);
 
     // Settings is not an entry: a labelled row sits at the bottom of the
-    // sidebar, carrying the daemon status.
+    // sidebar; it shows no daemon state (spec web-ui "Open Settings as a
+    // modal from the sidebar footer").
     await expect(nav.getByRole("link", { name: /^Settings$/i })).toHaveCount(0);
     await expect(page.getByTestId("sidebar-settings")).toHaveText("Settings");
     await expect(page.getByTestId("sidebar-settings")).toHaveAccessibleName(
-      /Daemon running on port \d+/,
+      "Settings",
     );
 
     // No generic "unexpected error" card.
@@ -128,9 +129,9 @@ acceptance(
     // The recovery affordance is the restart command — the browser cannot
     // restart the daemon, and the retries clear the state on their own.
     await expect(banner.getByText("coffer daemon start")).toBeVisible();
-    // The footer agrees with the banner: it reads offline, never running.
+    // The Settings row shows no daemon state; the banner alone says offline.
     await expect(page.getByTestId("sidebar-settings")).toHaveAccessibleName(
-      /Daemon offline/,
+      "Settings",
     );
   },
 );
@@ -206,8 +207,9 @@ acceptance(
     await expect(
       welcome.getByRole("heading", { name: /no mcp servers yet/i }),
     ).toBeVisible();
+    // The Add server action sits in the page header, beside the title.
     await expect(
-      welcome.getByRole("button", { name: /^add server$/i }),
+      page.getByRole("button", { name: /^add server$/i }),
     ).toBeVisible();
 
     // No ghost-table / "No resources yet" cell (we render the welcome

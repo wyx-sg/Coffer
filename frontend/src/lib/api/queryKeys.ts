@@ -219,12 +219,19 @@ export const upkeepRunsKey = ["upkeep", "runs"] as const;
 export const conversationsKey = ["conversations"] as const;
 /** Every conversation list's head (what a sent message refreshes without re-reading the pages). */
 export const conversationHeadsKey = ["conversations", "lists", "head"] as const;
+/** The list's source and agent pills: part of its key, in a stable order. */
+type ListNarrowing = { source?: readonly string[]; agent?: readonly string[] };
+const narrowKey = ({ source = [], agent = [] }: ListNarrowing) => ({
+  source: [...source].sort(),
+  agent: [...agent].sort(),
+});
+
 /** The pages a conversation list has read so far, for one view (archived, title search). */
-export const conversationPagesKey = (archived: boolean, q: string) =>
-  ["conversations", "lists", "pages", { archived, q }] as const;
+export const conversationPagesKey = (archived: boolean, q: string, narrow: ListNarrowing = {}) =>
+  ["conversations", "lists", "pages", { archived, q, ...narrowKey(narrow) }] as const;
 /** The newest few rows of that view, re-read to keep the pages current. */
-export const conversationHeadKey = (archived: boolean, q: string) =>
-  ["conversations", "lists", "head", { archived, q }] as const;
+export const conversationHeadKey = (archived: boolean, q: string, narrow: ListNarrowing = {}) =>
+  ["conversations", "lists", "head", { archived, q, ...narrowKey(narrow) }] as const;
 /** What the command palette lists: a small read, by the text typed. */
 export const paletteConversationsKey = (q: string) =>
   ["conversations", "lists", "palette", { q }] as const;
@@ -252,7 +259,6 @@ export const secretsKey = ["secrets"] as const;
 export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
 export const secretsListKey = ["secrets", "list"] as const;
-export const secretScanKey = ["secrets", "scan"] as const;
 
 // --- settings — daemon-side settings the Settings pages edit ---------------
 

@@ -41,4 +41,5 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer path`](/zh/reference/cli/path) | Where Coffer's log files live |
 | [`coffer mcp`](/zh/reference/cli/mcp) | Check an MCP server |
 | [`coffer secret`](/zh/reference/cli/secret) | Manage encrypted secrets. |
+| [`coffer cli`](/zh/reference/cli/cli) | Read the command-line tools Coffer manages. |
 | [`coffer vault`](/zh/reference/cli/vault) | Hand edits the vault refused |

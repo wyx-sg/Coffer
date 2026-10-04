@@ -82,6 +82,15 @@ const POSTGRES = entry("postgres-local", {
 const LINEAR = entry("linear");
 const GITHUB_COPY = entry("github", { matches_resource: "github" });
 
+const TOOL_GROUP = {
+  uid: "r-billing",
+  kind: "mcp_server",
+  name: "billing",
+  enabled: true,
+  scope: null,
+  config: { transport: { type: "http_api" } },
+};
+
 const SERVERS = [
   { uid: "r-gh", kind: "mcp_server", name: "github", enabled: true, scope: null },
   {
@@ -162,6 +171,24 @@ describe("AgentMcpServersTab", () => {
     expect(screen.queryByText(/disabled-one|codex-only/)).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Manage: filesystem" })).not.toBeInTheDocument();
+  });
+
+  acceptance("agent-registry", "custom-tool groups have their own From Coffer row", async () => {
+    stub({ servers: [...SERVERS.slice(0, 1), TOOL_GROUP] as typeof SERVERS });
+    renderTab();
+    expect(await screen.findByText("1 server through Coffer")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open MCP servers/ })).toHaveAttribute(
+      "href",
+      "/mcp-servers?agent=u-cc",
+    );
+    expect(screen.getByText("1 custom tool group through Coffer")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Custom tools/ })).toHaveAttribute(
+      "href",
+      "/custom-tools?agent=u-cc",
+    );
+    // The group is not counted among the servers.
+    expect(screen.getByTestId("from-coffer-mcp")).not.toHaveTextContent("billing");
+    expect(screen.getByTestId("from-coffer-custom-tools")).toHaveTextContent("billing");
   });
 
   test("the agent's own entries show command, file, secrets and state", async () => {

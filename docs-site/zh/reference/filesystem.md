@@ -33,7 +33,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── logs/                         # daemon, proxy, shim and upstream logs
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
 ├── vendor/                       # operator-supplied SeaTalk SDK
-├── secrets/                      # legacy plaintext key files (only if left from an old setup)
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
 
@@ -76,7 +75,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | 本机的智能体，每个一个资源文件。 | 守护进程 | 从不 | 该智能体在本机被取消注册。 |
 | `local/reach.json` | 每个资源在本机的生效范围：是否启用，对哪些智能体生效。 | 守护进程 | 从不 | 每个资源恢复为所属类型的默认生效范围。 |
-| `local/tool-reach.json` | 自定义工具的逐工具生效范围覆盖。 | 守护进程 | 从不 | 覆盖项丢失。 |
 | `local/engine.json` | 本机上次修改 Coffer 引擎设置的时间。 | 守护进程 | 从不 | 可以。 |
 | `local/retention.json` | 每张可清理表的保留期限，以及上次清理的时间。 | 守护进程 | 从不 | 可以：使用默认值。 |
 | `local/curation.json` | 每篇知识文档在上次整理完成时的内容，用来察觉之后有人手动改过。 | 守护进程 | 从不 | 整理会把每篇文档重新读一遍。 |
@@ -157,7 +155,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `vendor/` | 你放 SeaTalk WebSocket SDK（`seatalk_oapi_sdk`）的地方。Coffer 只读取它。 | 你 | 否 | 不用 SeaTalk 就可以。 |
-| `secrets/` | 遗留目录：`coffer run --secret` 出现之前技能读取的明文密钥文件。Coffer 从不往这里写。 | 你 | 否 | 其中的密钥进了保险库之后可以。 |
 | `eval-capture.jsonl` | 捕获的 `coffer__search_tools` 调用，仅在设置了 `COFFER_EVAL_CAPTURE` 时存在。 | 守护进程 | 否 | 可以。 |
 
 ## ~/.coffer 之外 {#outside-coffer}

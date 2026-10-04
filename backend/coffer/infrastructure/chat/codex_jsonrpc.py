@@ -131,8 +131,20 @@ class CodexRpcClient:
         req_id = self._next_id
         future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
         self._pending[req_id] = future
-        await self._write({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params})
-        return await future
+        try:
+            await self._write({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params})
+            return await future
+        finally:
+            # A write that fails (the peer already exited) leaves a future no one
+            # awaits; failing it later would log "Future exception was never
+            # retrieved". Dropping it here keeps the table to live requests only.
+            self._pending.pop(req_id, None)
+            if not future.done():
+                future.cancel()
+            elif not future.cancelled():
+                # The read loop can fail the future while this call is still
+                # writing; a write error then leaves that exception unread.
+                future.exception()
 
     def on_request(self, method: str, handler: RequestHandler) -> None:
         """Register an async handler for an inbound server→client request method."""

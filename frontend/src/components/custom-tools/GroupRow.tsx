@@ -1,7 +1,9 @@
 // src/components/custom-tools/GroupRow.tsx — one group in the list pane: name, what is wrong or where it
-// points, and its reach. The group's tools are on its own page, not in the row.
+// points, and its reach. The group's tools are on its own page, not in the row. The checkbox feeds the
+// selection bar: it shows on hover or focus, and on every row while any is ticked.
 import { useTranslation } from "react-i18next";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
 import { pickableAgents } from "@/lib/reach/reachState";
 import { StatusDot } from "@/components/status/StatusDot";
@@ -15,6 +17,10 @@ interface Props {
   group: CustomToolGroup;
   selected: boolean;
   onOpen: () => void;
+  /** Any row is ticked: every checkbox shows. */
+  selecting?: boolean;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
 }
 
 /** The row's second line: the problem for a group that needs attention. */
@@ -52,17 +58,39 @@ function Reach({ group }: { group: CustomToolGroup }) {
   return <AgentBadgeGroup agents={agents} />;
 }
 
-export function GroupRow({ group, selected, onOpen }: Props) {
+export function GroupRow({
+  group,
+  selected,
+  onOpen,
+  selecting = false,
+  checked,
+  onCheckedChange,
+}: Props) {
+  const { t } = useTranslation();
   const sub = useSubline(group);
 
   return (
     <li>
       <div
         className={cn(
-          "flex min-h-[52px] items-center gap-2 rounded-lg px-2.5 transition-colors duration-fast",
+          "group flex min-h-[52px] items-center gap-2 rounded-lg pl-2.5 pr-2.5 transition-colors duration-fast",
           selected ? "bg-surface-selected" : "hover:bg-surface-hover",
         )}
       >
+        <span
+          className={cn(
+            "shrink-0 items-center",
+            selecting || checked
+              ? "inline-flex"
+              : "hidden group-focus-within:inline-flex group-hover:inline-flex",
+          )}
+        >
+          <Checkbox
+            checked={checked}
+            onChange={(e) => onCheckedChange(e.target.checked)}
+            aria-label={`${t("common.bulk.selectRow")}: ${group.name}`}
+          />
+        </span>
         <button
           type="button"
           aria-current={selected ? "page" : undefined}

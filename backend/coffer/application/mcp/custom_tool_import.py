@@ -167,12 +167,10 @@ class CustomToolImporter:
     ) -> GroupView:
         resource, transport = await self._service.group(name)
         reading = await self._reread(transport, name, document)
-        plan = plan_reimport(transport, reading)
         updated = apply_reimport(
             transport, reading, add_keys=add_keys, fetched_at=self._service.now()
         )
         await self._service.write_transport(resource, updated, actor)
-        await self._service.reach.delete_tools(resource.uid, plan.removed)
         return await self._service.view(name)
 
 

@@ -649,7 +649,7 @@
       "noCalls": "最近 24 小时没有调用。",
       "offBody": "开启后，它会重新提供给你上次选择的智能体。",
       "offTitle": "已关闭 — 没有智能体能使用它",
-      "openInActivity": "在活动中查看",
+      "viewInvocations": "查看调用记录",
       "reason": {
         "failing": "失败",
         "failingSince": "{{error}} · 自 {{since}} 起",
@@ -820,7 +820,6 @@
       "secret_approval_requested": "请求批准一项密钥改动",
       "secret_approval_approved": "批准了一项密钥改动",
       "secret_approval_rejected": "拒绝了一项密钥改动",
-      "secret_imported": "导入了密钥",
       "secret_protection_enabled": "重新开启了密钥审批",
       "storage_cache_cleared": "清除了可重建的缓存",
       "vault_file_edited": "在磁盘上编辑了一个保险库文件",
@@ -1084,20 +1083,10 @@
       "years_other": "{{count}} 年"
     },
     "daemonLog": {
-      "following": "实时跟随",
-      "newestFirst": "最新在前",
-      "reveal": "在访达中打开",
       "showCall": "查看 MCP 调用"
     },
     "reconnecting": "正在重新连接…",
-    "tabFailed": "无法加载",
-    "export": {
-      "label": "导出",
-      "json": "JSON",
-      "csv": "CSV",
-      "done_one": "已导出 {{count}} 条记录",
-      "done_other": "已导出 {{count}} 条记录"
-    }
+    "tabFailed": "无法加载"
   },
   "settings": {
     "title": "设置",
@@ -2083,6 +2072,12 @@
         "title_other": "经 Coffer 的 {{count}} 个服务器",
         "open": "打开 MCP 服务器"
       },
+      "fromCofferTools": {
+        "description": "{{agent}} 通过 Coffer 唯一的那条 MCP 条目使用这些分组。到「自定义工具」页管理它们。",
+        "title_one": "经 Coffer 的 {{count}} 个自定义工具分组",
+        "title_other": "经 Coffer 的 {{count}} 个自定义工具分组",
+        "open": "打开自定义工具"
+      },
       "own": {
         "title": "{{agent}} 自己的 MCP 服务器",
         "description": "{{agent}} 自己配置里绕过 Coffer 的条目。纳入托管后即可经由 Coffer 提供。",
@@ -2156,10 +2151,6 @@
     "fromCoffer": {
       "title": "来自 Coffer",
       "more": "另有 {{count}} 个"
-    },
-    "filterPill": {
-      "agent": "智能体",
-      "remove": "移除 {{name}} 筛选"
     },
     "kindTab": {
       "loadFailed": "无法读取此列表",
@@ -2402,7 +2393,9 @@
       "search": "搜索会话",
       "project": "项目",
       "projectChosen": "项目：{{project}}",
-      "allProjects": "所有项目"
+      "allProjects": "所有项目",
+      "searchProjects": "搜索项目",
+      "noProjects": "没有匹配的项目"
     },
     "changeModel": {
       "title": "更改 {{name}} 的模型",
@@ -2553,6 +2546,10 @@
         "hooks": "钩子"
       }
     }
+  },
+  "reachFilter": {
+    "label": "生效范围",
+    "all": "全部"
   },
   "skills": {
     "subtitle": "Coffer 把技能放在一个主文件夹里，以链接或副本的方式交付给你选的智能体。",
@@ -3187,9 +3184,6 @@
       "needsGitBody": "请在这台 Mac 上安装 git 才能查看各版本。文档本身没有问题。",
       "checkAgain": "重新检查"
     },
-    "diff": {
-      "none": "文字没有变化。"
-    },
     "writer": {
       "user": "你",
       "agent": "一个智能体",
@@ -3526,9 +3520,6 @@
     },
     "title": "对话",
     "thinking": "正在思考…",
-    "message": {
-      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
-    },
     "history": {
       "rename": "重命名",
       "delete": "删除…",
@@ -3600,8 +3591,8 @@
       "workspaceFull": "Coffer 的工作区（~/.coffer/content/workspace）",
       "workspacePicker": {
         "label": "工作区",
-        "choose": "选择文件夹…",
-        "typePath": "或输入文件夹路径",
+        "choose": "选择…",
+        "typePath": "输入或粘贴文件夹路径",
         "use": "使用"
       }
     },
@@ -3927,17 +3918,12 @@
         "description": "机器人如何在群里收听，并把连发的消息合成一个回合。"
       },
       "directories": {
-        "description": "新对话从哪里开始，以及 /dir 可以切换到哪里。一个都没有时 /dir 关闭。"
+        "description": "/dir 可以切换到这些目录及其子目录，新对话从默认目录开始。没有默认时从 Coffer 工作区开始；一个目录都没有时 /dir 关闭。"
       },
       "replying": {
         "title": "回复与会话"
       },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
-      "saveState": {
-        "saving": "正在保存…",
-        "saved": "已保存",
-        "error": "保存失败"
-      },
       "machine": {
         "runsOn": "运行在",
         "hint": "只有一台 Mac 持有机器人的连接。"
@@ -4126,16 +4112,14 @@
       },
       "directories": {
         "title": "工作目录",
-        "default": "默认",
-        "defaultHint": "新对话从哪里开始。",
-        "defaultPlaceholder": "Coffer 工作区（~/.coffer/content/workspace）",
-        "allowed": "/dir 可用的目录",
-        "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
+        "list": "目录",
         "defaultTag": "默认",
-        "remove": "移除",
+        "setDefault": "设为默认",
+        "setDefaultAria": "把 {{path}} 设为默认",
+        "unsetDefault": "取消默认",
+        "unsetDefaultAria": "新对话不再从 {{path}} 开始",
         "removeAria": "移除 {{path}}",
         "add": "添加目录…",
-        "notAbsolute": "“{{path}}”不是绝对路径——请以 / 开头。",
         "tooMany": "最多 {{max}} 个目录。"
       }
     },
@@ -4168,8 +4152,6 @@
     "off": "关闭",
     "everywhere": "所有智能体",
     "restricted": "指定智能体",
-    "inherited": "与分组一致",
-    "inheritedSub": "跟随分组的智能体",
     "filterAgents": "筛选智能体",
     "noMatch": "没有匹配的智能体。",
     "applying": "正在应用…",
@@ -4232,8 +4214,7 @@
         "confirmBody": "Coffer 会按文件现在的样子推送，并在审计日志中记下是你操作的。只有在确认每一处都不是真实密钥时才这样做：一旦推送，这个值就在远端的历史里了。",
         "confirmLabel": "我已确认，仍然推送",
         "title_one": "没有推送任何内容：{{count}} 个文件含明文密钥",
-        "title_other": "没有推送任何内容：{{count}} 个文件含明文密钥",
-        "move": "移入密钥…"
+        "title_other": "没有推送任何内容：{{count}} 个文件含明文密钥"
       },
       "push_failed": {
         "title": "推送被拒绝",
@@ -5122,6 +5103,11 @@
     "list": {
       "toolCount_other": "{{count}} 个工具",
       "filter": "筛选分组",
+      "bulkLabel": "已选的自定义工具分组",
+      "clearSelection": "清除选择",
+      "deleteManyTitle_one": "删除 {{count}} 个分组？",
+      "deleteManyTitle_other": "删除 {{count}} 个分组？",
+      "deleteManyBody": "智能体在下次调用时将失去这些工具。密钥和调用记录仍保留。",
       "section": {
         "attention": "需要处理",
         "healthy": "正常",
@@ -5177,7 +5163,7 @@
       "baseUrl": "基础 URL",
       "baseUrlHelp": "每个请求的路径都拼接在它后面。",
       "availableTo": "可用于",
-      "availableToHelp": "分组内每个工具的默认范围；单个工具可以只给更少的智能体。",
+      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "headers": "请求头",
       "headersHelp": "Coffer 会把这些加到每次调用中；密钥的值保存在 Coffer 的钥匙串里，智能体永远看不到。"
     },
@@ -5207,7 +5193,7 @@
       "section": "{{section}} · {{count}} / {{total}}",
       "pickNote": "你选中的每个操作都会成为一个工具。读取类默认选中；会修改数据的操作默认不选。",
       "baseUrlMissing": "规范没有声明服务器；每个请求的路径会接在这个 URL 后面。",
-      "availableToHelp": "分组中每个工具的默认范围。",
+      "availableToHelp": "分组内的每个工具都可用于这些智能体。",
       "try": "试运行一个操作",
       "tryNone": "请先选择一个操作。",
       "tryPick": "要试运行的操作",
@@ -5308,9 +5294,8 @@
       "addRequest": "添加请求",
       "heading": "工具",
       "description": "每个工具就是一个请求；智能体看到的是 {{prefix}}。",
-      "groupGives": "{{group}} 把它提供给 {{agents}}",
-      "reachFootnote": "要对所有智能体停用它，请在表格里关闭它的开关。",
-      "reachOf": "可用于：{{name}}",
+      "filter": "筛选工具",
+      "noMatch": "没有工具匹配“{{query}}”",
       "edit": "编辑 {{name}}"
     },
     "editor": {
@@ -5751,64 +5736,6 @@
       "body_other": "仍有 {{count}} 处读取 {{reference}}。请先让它们改用其他密钥或移除引用，再删除。",
       "open": "打开"
     },
-    "scan": {
-      "open": "查找明文密钥",
-      "scanning": "正在查找明文密钥…",
-      "failed": "无法查找明文密钥",
-      "noneTitle": "没有发现明文密钥",
-      "noneBody": "~/.coffer/secrets/ 和你的 skill 中都没有以明文保存的密钥。",
-      "foundTitle": "发现明文密钥",
-      "foundSummary_one": "在 {{files}} 个文件中发现 {{count}} 处",
-      "foundSummary_other": "在 {{files}} 个文件中发现 {{count}} 处",
-      "foundIn": "位置",
-      "key": "键",
-      "secretName": "密钥名称",
-      "line": "第 {{line}} 行",
-      "source": {
-        "secrets_file": "密钥文件",
-        "skill": "skill"
-      },
-      "tickAll": "全选",
-      "tickOne": "迁移 {{path}} 第 {{line}} 行",
-      "tickWhole": "迁移 {{path}}",
-      "ticked": "已选 {{count}} / {{total}}",
-      "mentions_one": "{{count}} 个 skill 仍从 ~/.coffer/secrets/ 读取密钥。可以手动更新，也可以交给智能体：",
-      "mentions_other": "{{count}} 个 skill 仍从 ~/.coffer/secrets/ 读取密钥。可以手动更新，也可以交给智能体：",
-      "hint": "每个选中的值会移入加密存储，文件改为按名称引用它。与已有密钥相同的值会复用该密钥。",
-      "review_one": "查看 {{count}} 项改动",
-      "review_other": "查看 {{count}} 项改动",
-      "reviewing": "正在检查…",
-      "previewTitle": "查看改动",
-      "previewSummary": "新增 {{secrets}} 个密钥，修改 {{files}} 个文件",
-      "previewSecrets": "密钥",
-      "previewFiles": "文件",
-      "add": "+ 添加",
-      "modify": "~ 修改",
-      "previewNote": "这里的值已遮盖。每个文件保持原位置和权限，只有含密钥的那几行会改动。",
-      "back": "返回",
-      "apply_one": "应用 {{count}} 项改动",
-      "apply_other": "应用 {{count}} 项改动",
-      "applying": "正在应用…",
-      "applied_one": "已将 {{count}} 个密钥移入密钥库",
-      "applied_other": "已将 {{count}} 个密钥移入密钥库",
-      "resultTitle_one": "已移入 {{moved}}/{{count}} 个 key",
-      "resultTitle_other": "已移入 {{moved}}/{{count}} 个 key",
-      "skipped": "已跳过",
-      "noneBody_one": "Coffer 检查了 {{count}} 个文件，没有发现以明文写入的 API key 或 token。",
-      "noneBody_other": "Coffer 检查了 {{count}} 个文件，没有发现以明文写入的 API key 或 token。",
-      "checked": "已检查",
-      "checkedWhere": "智能体配置、MCP 服务器定义、自定义工具、skill、~/.coffer",
-      "notChanged": "未修改",
-      "inActivity": "每项改动都记录在 Activity 中",
-      "unwrittenTitle": "无法改写 {{path}}",
-      "unwrittenTitleMany_one": "{{count}} 个文件无法改写",
-      "unwrittenTitleMany_other": "{{count}} 个文件无法改写",
-      "unwrittenBody": "{{reason}}。该 key 已保存为密钥 {{name}}，但文件里仍以明文保留着它。",
-      "unwrittenBodyMany": "这些 key 已保存为密钥，但这些文件里仍以明文保留着它们。",
-      "moved": "已移入",
-      "savedNotChanged": "已保存 · 文件未修改",
-      "retry": "重试"
-    },
     "time": {
       "never": "从未"
     },
@@ -5917,7 +5844,6 @@
     }
   },
   "usage": {
-    "exportCsv": "导出 CSV",
     "noPrice": "—",
     "error": "无法加载 API 密钥用量。",
     "presets": {
@@ -6000,6 +5926,9 @@
       "provider": "提供商",
       "findProvider": "查找提供商"
     }
+  },
+  "diff": {
+    "none": "文字没有变化。"
   },
   "splitView": {
     "resizeList": "调整列表宽度"
@@ -6491,13 +6420,13 @@
   },
   "drawer": {
     "previous": "上一条",
-    "next": "下一条"
+    "next": "下一条",
+    "resize": "调整抽屉宽度"
   },
   "filters": {
     "clear": "清除",
     "clearLabel": "清除 {{label}}",
     "clearAll": "清除筛选",
-    "only": "仅此项",
     "noMatches": "没有匹配项",
     "timeRange": {
       "label": "时间范围",

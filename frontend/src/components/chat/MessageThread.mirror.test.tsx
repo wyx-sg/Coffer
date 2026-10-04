@@ -102,7 +102,11 @@ describe("MessageThread channel mirror", () => {
         target: "SeaTalk · 🧵#1 deploy check",
         reason: null,
         undelivered: [
-          { kind: "reply", text: "(from Coffer) and the docs", created_at: "2026-01-01T00:01:00Z" },
+          {
+            kind: "reply",
+            text: "You · from Coffer\nand the docs",
+            created_at: "2026-01-01T00:01:00Z",
+          },
           { kind: "answer", text: "ship it", created_at: "2026-01-01T00:02:00Z" },
         ],
       }),

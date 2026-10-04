@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Secrets), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Address a secret by an opaque reference", spec secret "Resolve standalone secrets into one child with coffer run", spec secret "List every stored and cited secret with what uses it", spec secret "Move plaintext secret files into the store", spec secret "Route every secret command through the daemon", spec secret "Release unshared references when a resource is deleted", spec secret "Hold plaintext only in memory at the moment of use"
+**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Secrets), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Address a secret by an opaque reference", spec secret "Resolve standalone secrets into one child with coffer run", spec secret "List every stored and cited secret with what uses it", spec secret "Route every secret command through the daemon", spec secret "Release unshared references when a resource is deleted", spec secret "Hold plaintext only in memory at the moment of use"
 
 ## Context
 
@@ -131,22 +131,12 @@ and the initial environment of any same-user process is readable with `ps eww`
   of Coffer's own skill store). A row nothing references is the cleanup
   candidate. The list carries no values: a value is seen only in the desktop
   app, under a presence check.
-- **Migration of plaintext secret files.** `coffer secret scan` reads
-  `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of
-  strings) and every text file of the skill master store (assignments whose
-  name says password, secret, token or key, and well-known token shapes),
-  proposes one name per entry (`<file stem>.<key>`) and reports findings, never
-  values. `coffer secret import [--id]… [--dry-run]` stores each chosen value,
-  confirms the store reads back the same value, and only then rewrites the file
-  with `coffer://secret/<name>` in place of the value, atomically and keeping
-  its mode; it lists the skills whose files mention the old path so their
-  commands can move to `coffer run --env-file`, and hands that rewrite to the
-  person's agent as a prompt that carries no value. No plaintext backup is kept:
-  the values are in the store, which is backed up with the vault. A new
-  standalone secret, and the replacement of a value already in use, are stored at once: writing
-  stays open
-  ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)),
-  so an import of a name is applied at once.
+- **No migration of plaintext secret files.** Coffer does not scan
+  `~/.coffer/secrets/` or the skill store for plaintext values and does not
+  rewrite files. A person or their agent stores a value as a standalone secret
+  and cites `coffer://secret/<name>`. A new standalone secret, and the
+  replacement of a value already in use, are stored at once: writing stays open
+  ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 
 Pros: the secret never enters an environment the agent or its other children
 can see, which is the one exposure the measurements show is automatic; one

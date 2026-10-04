@@ -4,11 +4,12 @@
 import { useState } from "react";
 import { acceptance } from "@/test/acceptance";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import type { SecretRef } from "@/lib/api/secret";
 import { persistNewSecrets, type KeyValueSecretRow, type SecretFieldValue } from "./secretValue";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { KeyValueSecretRows } from "./KeyValueSecretRows";
 import { SecretField } from "./SecretField";
 
@@ -124,6 +125,30 @@ describe("SecretField", () => {
     await waitFor(() =>
       expect(current("value")).toEqual({ kind: "stored", name: "grafana-token" }),
     );
+  });
+
+  test("the menu stays open inside a dialog's focus trap", async () => {
+    // The dialog and the popover must share one Radix focus-scope stack; with two
+    // copies the dialog pulled focus back and the menu closed as it opened.
+    wrap(
+      <Dialog open>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Edit</DialogTitle>
+          <RowsHarness
+            initial={[{ key: "Authorization", value: { kind: "stored", name: "deploy-token" } }]}
+          />
+        </DialogContent>
+      </Dialog>,
+    );
+    const trigger = await screen.findByRole("button", {
+      name: /Authorization: secret deploy-token/,
+    });
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+    fireEvent.click(trigger);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
   });
 
   test("a chosen secret this machine does not hold is Missing", async () => {

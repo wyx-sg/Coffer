@@ -3,11 +3,10 @@
 // Tiles, a cost-per-day chart and a breakdown by model, agent or day. The
 // range, the Agent and Provider filters and the breakdown live in the URL
 // (`?range=`, `?agent=`, `?provider=`, `?by=`, beside the page's `?tab=usage`)
-// so a refresh or Back keeps them; "Export CSV" on the filter row downloads
-// exactly that. Before any API-key usage exists the tab is only its empty
+// so a refresh or Back keeps them. Before any API-key usage exists the tab is only its empty
 // state, with no controls to narrow nothing; an empty range after that says
 // only the range is empty. The data is Coffer's own, so there is no Refresh.
-import { BarChart3, Download } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
@@ -20,7 +19,7 @@ import { agentTypeLabel } from "@/lib/agents/display";
 import type { UsageQuery } from "@/lib/api/usage";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useProviders } from "@/lib/hooks/useProviders";
-import { useExportUsageCsv, useUsageSummary } from "@/lib/hooks/useUsage";
+import { useUsageSummary } from "@/lib/hooks/useUsage";
 import { formatDay } from "@/lib/usage/format";
 import {
   GROUPINGS,
@@ -64,7 +63,6 @@ export function UsageTab({ onOpenProviders }: Props) {
   });
   const providers = useProviders();
   const agents = useAgents();
-  const exportCsv = useExportUsageCsv();
 
   const setQuery = (next: UsageQuery) =>
     setParams(writeUsageQuery(params, next), { replace: true });
@@ -167,17 +165,6 @@ export function UsageTab({ onOpenProviders }: Props) {
       <FilterRow
         active={filtered}
         onClear={() => setQuery({ ...query, agent_type: undefined, connection_uid: undefined })}
-        trailing={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={exportCsv.isPending}
-            onClick={() => exportCsv.mutate(query)}
-          >
-            <Download aria-hidden />
-            {t("usage.exportCsv")}
-          </Button>
-        }
       >
         <TimeRangePill
           dateOnly

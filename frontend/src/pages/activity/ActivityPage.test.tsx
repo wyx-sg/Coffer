@@ -1,4 +1,4 @@
-// src/pages/activity/ActivityPage.test.tsx — the Activity page: four tabs, the filter row, the drawer, live insertion and holding, export, hand-offs.
+// src/pages/activity/ActivityPage.test.tsx — the Activity page: four tabs, the filter row, the drawer, live insertion and holding, hand-offs.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,15 +27,6 @@ vi.mock("@/lib/hooks/useAgents", () => ({
     data: [{ uid: "a-cc", type: "claude_code", display_name: "Claude Code", name: "claude_code" }],
   }),
 }));
-
-const saved: { name: string; type: string; content: string }[] = [];
-vi.mock("@/lib/activity/export", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/activity/export")>();
-  return {
-    ...actual,
-    saveFile: (name: string, type: string, content: string) => saved.push({ name, type, content }),
-  };
-});
 
 const { getApiClient } = await import("@/lib/api/client");
 const { ActivityPage } = await import("./ActivityPage");
@@ -218,7 +209,6 @@ const target =
 
 beforeEach(() => {
   vi.clearAllMocks();
-  saved.length = 0;
   stream.listener = null;
 });
 
@@ -382,7 +372,7 @@ describe("ActivityPage", () => {
     ]);
   });
 
-  acceptance("web-ui", "nothing recorded hides the filter row and Export", async () => {
+  acceptance("web-ui", "nothing recorded hides the filter row", async () => {
     mockApi();
     render(wrap(<ActivityPage />));
     expect(await screen.findByText("Nothing has happened yet")).toBeInTheDocument();
@@ -397,7 +387,6 @@ describe("ActivityPage", () => {
     );
     expect(screen.getByRole("link", { name: "Add an MCP server" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Filter by name, tool or path")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
     expect(tab(/^Changes/)).toBeInTheDocument();
   });
 
@@ -406,7 +395,6 @@ describe("ActivityPage", () => {
     render(wrap(<ActivityPage />));
     expect(await screen.findByText("Nothing in this time range")).toBeInTheDocument();
     expect(pill("Last hour")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export" })).toBeInTheDocument();
   });
 
   test("a change announced on the event stream re-reads the audit log's newest page", async () => {
@@ -474,9 +462,11 @@ acceptance("web-ui", "activity row expands to its raw record", async () => {
   const line = await screen.findByText("Added filesystem");
   fireEvent.click(line.closest("tr")!);
   const panel = await drawer();
-  // The raw JSON is folded until asked for.
-  expect(panel.querySelector(".cm-content")).toBeNull();
-  fireEvent.click(within(panel).getByRole("button", { name: "Raw log" }));
+  // The raw JSON is open from the start.
+  expect(within(panel).getByRole("button", { name: "Raw log" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
   await waitFor(() =>
     expect(panel.querySelector(".cm-content")?.textContent).toContain('"some_key": "some_value"'),
   );
@@ -488,7 +478,6 @@ acceptance("web-ui", "activity row expands to its raw record", async () => {
   // A daemon record on Everything opens in the drawer too.
   fireEvent.click((await screen.findByText("auto_sync_failed")).closest("tr")!);
   const daemonPanel = await drawer();
-  fireEvent.click(within(daemonPanel).getByRole("button", { name: "Raw log" }));
   await waitFor(() =>
     expect(daemonPanel.querySelector(".cm-content")?.textContent).toContain(
       '"error": "connection refused"',
@@ -841,8 +830,8 @@ test("a new record the filters exclude is neither inserted nor counted", async (
   expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
 });
 
-acceptance("web-ui", "export from the menu honours the filters", async () => {
-  const { get } = mockApi({
+test("the status control leads the MCP calls filter row", async () => {
+  mockApi({
     invocations: [
       { ...INVOCATION, id: 1, status: "error", error_message: "boom" },
       { ...INVOCATION, id: 2, status: "ok" },
@@ -861,29 +850,6 @@ acceptance("web-ui", "export from the menu honours the filters", async () => {
   ).toEqual(["All", "OK", "Failed"]);
   fireEvent.click(within(group).getByRole("button", { name: "Failed" }));
   await waitFor(() => expect(screen.getAllByText(target("github.search_issues"))).toHaveLength(1));
-
-  // Export is a visible ghost button with a JSON / CSV menu — not a ⋯ menu.
-  fireEvent.click(screen.getByRole("button", { name: "Export" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
-  await waitFor(() => expect(saved).toHaveLength(1));
-  const lines = saved[0].content.trim().split("\r\n");
-  expect(lines).toHaveLength(2);
-  expect(lines[1]).toContain("github");
-  expect(lines[1]).toContain("error");
-  const exportRead = get.mock.calls.filter(
-    (c: unknown[]) =>
-      c[0] === "/mcp/invocations" &&
-      (c[1] as { params: { query: Record<string, unknown> } }).params.query.limit === 500,
-  );
-  expect(exportRead.at(-1)?.[1]).toMatchObject({
-    params: { query: { q: "github", status: "failed" } },
-  });
-
-  fireEvent.click(screen.getByRole("button", { name: "Export" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "JSON" }));
-  await waitFor(() => expect(saved).toHaveLength(2));
-  const json = JSON.parse(saved[1].content) as { id: number }[];
-  expect(json.map((r) => r.id)).toEqual([1]);
 });
 
 test("Failed means error, timeout and denied", async () => {
@@ -976,14 +942,11 @@ test("the time range offers its windows and a custom range, and the URL keeps th
   expect(query).toBe("?range=7d");
 });
 
-test("the daemon log opens on the last 24 h and names its file with a link to Finder", async () => {
+test("the daemon log opens on the last 24 h", async () => {
   mockApi({ daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />, ["/activity?tab=daemon"]));
   expect(await screen.findByRole("button", { name: /Last 24 h/ })).toBeInTheDocument();
-  expect(await screen.findByText("~/.coffer/logs/daemon.log")).toBeInTheDocument();
-  expect(screen.getByText("newest first")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Open in Finder" })).toBeEnabled();
-  expect(screen.queryByRole("button", { name: "Open log file" })).not.toBeInTheDocument();
+  expect(screen.queryByText("~/.coffer/logs/daemon.log")).not.toBeInTheDocument();
   // Level first, then search, time, Logger.
   const group = screen.getByRole("group", { name: "Log level" });
   expect(

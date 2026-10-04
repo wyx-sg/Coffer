@@ -4,9 +4,8 @@
 // sources (Coffer's own UI, or any number of channels) and the agents, read
 // from and written to the URL so a filtered list is a link (a channel's
 // "Conversations from this channel" opens `/conversations?source=<uid>`).
-// Pure, so the matching is unit-tested alone.
-import type { Conversation } from "@/lib/api/chat";
-
+// The server applies every one of them (the list asks for `source` and
+// `agent` with each page); this module only reads and writes the URL.
 /** The source token for a conversation opened in Coffer's own UI; any other token is a channel uid. */
 export const COFFER_SOURCE = "coffer";
 
@@ -52,25 +51,6 @@ export function filtersSearch(filters: ConversationFilters): string {
   // Commas stay readable in the address bar.
   const s = params.toString().replace(/%2C/g, ",");
   return s ? `?${s}` : "";
-}
-
-/** The source token a conversation belongs to: `coffer`, or its channel's uid. */
-export function sourceToken(conversation: Conversation): string {
-  return conversation.channel_binding?.channel_uid ?? COFFER_SOURCE;
-}
-
-function matchesFilters(conversation: Conversation, filters: ConversationFilters): boolean {
-  if (filters.agent.length > 0 && !filters.agent.includes(conversation.agent_key)) return false;
-  if (filters.source.length === 0) return true;
-  return filters.source.includes(sourceToken(conversation));
-}
-
-/** The pill filters applied to loaded rows (archived and the search are the server's). */
-export function filterConversations(
-  conversations: readonly Conversation[],
-  filters: ConversationFilters,
-): Conversation[] {
-  return conversations.filter((c) => matchesFilters(c, filters));
 }
 
 /** Whether anything narrows the list: a source, an agent or a search (the archived view is a list, not a filter). */

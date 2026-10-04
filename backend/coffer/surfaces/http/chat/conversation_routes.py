@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
+from coffer.application.chat.conversation_repo import Narrowing
 from coffer.application.chat.ports import ChannelMirrorPort
 from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
@@ -240,18 +241,40 @@ async def list_conversations(
             "a cursor is bound to it."
         ),
     ),
+    source: str | None = Query(
+        default=None,
+        max_length=2000,
+        description=(
+            "Comma-separated sources: `coffer` is conversations opened in Coffer's own "
+            "UI, any other token a channel uid. Absent or empty is every source; a "
+            "cursor is bound to it."
+        ),
+    ),
+    agent: str | None = Query(
+        default=None,
+        max_length=2000,
+        description=(
+            "Comma-separated agent keys (e.g. `claude_code,codex`). Absent or empty "
+            "is every agent; a cursor is bound to it."
+        ),
+    ),
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationListOut:
     """Conversations newest activity first (id breaks ties), paged by cursor;
-    ``archived=true`` lists the archived ones, ``q`` filters by title or message text."""
-    page = await svc.page_conversations(archived=archived, limit=limit, cursor=cursor, q=q)
+    ``archived=true`` lists the archived ones, ``q`` filters by title or message text,
+    ``source`` and ``agent`` by where and by which agent it runs (all three also
+    narrow ``total``)."""
+    narrow = Narrowing.parse(source, agent)
+    page = await svc.page_conversations(
+        archived=archived, limit=limit, cursor=cursor, q=q, narrow=narrow
+    )
     extras = await _extras(page.items, svc, resources, mirror)
     return ConversationListOut(
         conversations=[_conv_out(c, extras) for c in page.items],
         next_cursor=page.next_cursor,
-        total=await svc.count_conversations(archived=archived, q=q),
+        total=await svc.count_conversations(archived=archived, q=q, narrow=narrow),
     )
 
 

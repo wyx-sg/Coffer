@@ -478,8 +478,8 @@ settings below, the machine that runs it (see "Bind each channel to the one
 machine that runs it") and its secrets, and the channel's deletion. Choosing a tab
 changes the address and nothing else.
 
-Settings are saved as they change, with no save button, and say whether the last
-change was saved. They cover the channel's title, its type's plain settings (a
+Settings are saved as they change, with no save button and no saved line; a save
+that fails says so in a toast and the field keeps what was typed. They cover the channel's title, its type's plain settings (a
 SeaTalk app id), its two group-gating switches, `require_mention` and
 `ignore_other_mentions` (see "Configure when the bot answers in a group"), and
 the rest of what this requirement and the others in this spec name as a channel
@@ -2116,13 +2116,16 @@ the others reach the agent.
 ### Requirement: Choose the working directory from chat
 The owner MUST be able to move a chat's conversation to another working
 directory from chat — but only to a directory the channel allows. A channel's
-Settings carry its Working directories: a **Default**, the absolute path new
-conversations start in (stored as the default agent configuration's `cwd`; set
-on the Channels page and cleared there; none means the Coffer workspace `~/.coffer/content/workspace`), and the list **Allowed for
-/dir**, `directories`, absolute paths shown as rows with Remove and an Add
-directory… folder picker, the default's row marked "default", and edited on the Channels page;
-each entry also admits the directories beneath it. With no allowed directory,
-`/dir` is off.
+Settings carry its Working directories as one **Directories** list, `directories`:
+absolute paths added through an Add directory… folder picker and edited on the
+Channels page, each also admitting the directories beneath it, and the ones `/dir`
+may switch to. One of them may be the **Default**, the directory new conversations
+start in (stored as the default agent configuration's `cwd`): each row offers
+**Set as default** (the default's row reads "default" and offers **Unset default**)
+and a remove ✕, removing the default's row clears the default, and none means the
+Coffer workspace `~/.coffer/content/workspace`. A default stored before it had to be
+listed is shown in the list and joins it with the next change. A long list scrolls
+inside its box. With no directory, `/dir` is off.
 `/dir <path>` accepts an allowed path or one beneath it, `/dir <name>` the base
 name of exactly one allowed path; either must be an existing directory. Because
 an agent's session is tied to its directory, setting one opens a fresh
@@ -2156,9 +2159,8 @@ is refused with the allowed ones named.
 
 #### Scenario: the channel's default directory is edited on the Channels page
 - **GIVEN** a registered channel
-- **WHEN** the owner sets its Default working directory in the channel's settings on the Channels page
-- **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and clearing the field removes it
-- **AND** a relative path is refused with nothing saved, in the Default working directory and in the allowed list alike
+- **WHEN** the owner chooses Set as default on one of its listed directories on the Channels page
+- **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and Unset default — or removing that row — removes it
 
 ### Requirement: Resume an earlier conversation from chat
 Every conversation a chat thread opens MUST be remembered for that thread, and

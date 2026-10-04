@@ -98,12 +98,11 @@ test("a collection is one tree; a document is read, edited and shows up in its H
     return;
   }
 
-  // Written on the spot (no model): a document in the tree, and the page says
-  // how items become documents instead of offering an Inbox.
+  // Written on the spot (no model): a document in the tree, and one button
+  // leading to Settings › General stands where the Automatic control would be,
+  // instead of an Inbox.
   await expect(
-    page.getByText(
-      /Set Coffer's model to curate new items into your documents/,
-    ),
+    page.getByRole("button", { name: "Curation needs Coffer’s engine" }),
   ).toBeVisible();
   await expect(tree.getByRole("button", { name: /^Inbox/ })).toHaveCount(0);
   // The tree names a document by its file, as it is on disk.
@@ -118,15 +117,20 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   await expect(editor).toBeVisible();
   await expect(page.getByText("Kept by curation")).toBeVisible();
   await editor.fill("The edited body.");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("The edited body.")).toBeVisible();
+  // The editor closes once the save lands; leaving before that would meet the
+  // unsaved-edits prompt.
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
 
   // The save is a version naming you, in the document's History.
   await page.getByRole("link", { name: /^History/ }).click();
   await expect(page).toHaveURL(
     new RegExp(`/knowledge/${collection.uid}/history\\?file=`),
   );
-  await expect(page.getByText("newest first")).toBeVisible();
+  // One list of versions, newest first: the save on top, marked Current.
+  const versions = page.getByRole("list", { name: "Versions" });
+  await expect(versions.getByRole("listitem").first()).toContainText("Edited in Coffer");
   await expect(
     page.getByRole("button", { name: /^You.*Current/ }),
   ).toBeVisible();

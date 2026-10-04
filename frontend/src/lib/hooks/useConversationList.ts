@@ -38,6 +38,7 @@ const HEAD_REFRESH_MS = 10_000;
 const PALETTE_SEARCH_LIMIT = 8;
 /** Within this many pixels of the top counts as "at the top". */
 const TOP_SLACK = 8;
+const NONE: readonly string[] = [];
 
 type Pages = InfiniteData<ListPage<Conversation>, string | null>;
 
@@ -76,22 +77,27 @@ interface Args {
   archived: boolean;
   /** The title search, already debounced; "" lists everything. */
   q: string;
+  /** Source tokens and agent keys the server narrows to; empty is every one. */
+  source?: readonly string[];
+  agent?: readonly string[];
   enabled?: boolean;
 }
 
 export function useConversationList({
   archived,
   q,
+  source = NONE,
+  agent = NONE,
   enabled = true,
 }: Args): InfiniteList<Conversation> {
   const qc = useQueryClient();
-  const pagesKey = conversationPagesKey(archived, q);
-  const headKey = conversationHeadKey(archived, q);
+  const pagesKey = conversationPagesKey(archived, q, { source, agent });
+  const headKey = conversationHeadKey(archived, q, { source, agent });
   const list = useInfiniteList<Conversation>({
     queryKey: pagesKey,
     fetchPage: async (cursor, signal) => {
       const out = await chatApi.listConversations(
-        { archived, q, limit: cursor ? MORE_PAGE : FIRST_PAGE, cursor },
+        { archived, q, source, agent, limit: cursor ? MORE_PAGE : FIRST_PAGE, cursor },
         signal,
       );
       // The first page is also the head's first answer: it is not asked for twice.
@@ -106,7 +112,8 @@ export function useConversationList({
   const loaded = enabled && !archived && !list.isLoading && !list.error;
   const head = useQuery({
     queryKey: headKey,
-    queryFn: ({ signal }) => chatApi.listConversations({ archived, q, limit: FIRST_PAGE }, signal),
+    queryFn: ({ signal }) =>
+      chatApi.listConversations({ archived, q, source, agent, limit: FIRST_PAGE }, signal),
     enabled: loaded,
     staleTime: HEAD_REFRESH_MS - 1_000,
     refetchInterval: HEAD_REFRESH_MS,

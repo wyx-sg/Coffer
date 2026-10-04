@@ -5,10 +5,11 @@ import { resourceListApi } from "@/lib/api/resourceList";
 import { resourceKey, resourcesByKindKey } from "@/lib/api/queryKeys";
 import type { Scope } from "@/lib/hooks/useScope";
 
-export function useResources(kind?: string) {
+export function useResources(kind?: string, enabled = true) {
   return useQuery({
     queryKey: resourcesByKindKey(kind),
     queryFn: () => resourceListApi.list(kind),
+    enabled,
   });
 }
 

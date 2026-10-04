@@ -80,11 +80,11 @@ describe("secret list view", () => {
     expect(only("all")).toHaveLength(5);
   });
 
-  test("search matches the ref, the short name and the names of what uses it", () => {
+  test("search matches the ref and the short name, not what uses it", () => {
     const names = (s: SecretListState) => filterItems(items, s).map((i) => i.short);
     expect(names(state({ q: "jira" }))).toEqual(["JIRA_PERSONAL_TOKEN"]);
     expect(names(state({ q: "APP-SEC" }))).toEqual(["app-secret"]);
-    expect(names(state({ q: "groq" }))).toEqual(["key"]);
+    expect(names(state({ q: "groq" }))).toEqual([]);
   });
 
   test("the default order puts no-value and waiting rows first, then names", () => {

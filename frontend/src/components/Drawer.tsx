@@ -1,7 +1,8 @@
 // src/components/Drawer.tsx — the one right-hand drawer (Foundations 0.4.02).
 //
-// Reads a record or a log without leaving the list: 640 wide, from the title
-// bar down, the page behind dimmed to the 32% scrim. Esc, a click outside or ✕
+// Reads a record or a log without leaving the list: 640 wide by default, from
+// the title bar down; its left edge drags wider or narrower (remembered across
+// drawers, double-click resets), the page behind dimmed to the 32% scrim. Esc, a click outside or ✕
 // closes it, and focus returns to the row that opened it. The header carries
 // the title (15/650), an optional mono subtitle and, for a list of records,
 // previous / next (also the ↑ / ↓ keys while the drawer is open, unless the
@@ -11,6 +12,7 @@ import { ArrowDown, ArrowUp, X } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { SplitDivider } from "@/components/SplitDivider";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -21,7 +23,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useResizableWidth } from "@/lib/hooks/useResizableWidth";
 import { cn } from "@/lib/utils";
+
+const DRAWER_DEFAULT_WIDTH = 640;
+const DRAWER_MIN_WIDTH = 420;
+/** What the drawer leaves of the page at its widest (px). */
+const DRAWER_PAGE_GAP = 120;
 
 interface Props {
   open: boolean;
@@ -61,6 +69,12 @@ export function Drawer({
 }: Props) {
   const { t } = useTranslation();
   const stepping = onPrevious !== undefined || onNext !== undefined;
+  const { width, setWidth, reset, bounds } = useResizableWidth({
+    storageKey: "drawer",
+    defaultWidth: DRAWER_DEFAULT_WIDTH,
+    min: DRAWER_MIN_WIDTH,
+    max: typeof window === "undefined" ? undefined : window.innerWidth - DRAWER_PAGE_GAP,
+  });
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!stepping || (event.target as HTMLElement).closest(TYPING)) return;
@@ -78,9 +92,21 @@ export function Drawer({
       <SheetContent
         showClose={false}
         onKeyDown={onKeyDown}
+        className="max-w-full"
+        style={{ width }}
         // No subtitle means no description to point at.
         {...(subtitle ? {} : { "aria-describedby": undefined })}
       >
+        <SplitDivider
+          value={width}
+          min={bounds.min}
+          max={bounds.max}
+          onChange={setWidth}
+          onReset={reset}
+          label={t("drawer.resize")}
+          growsLeft
+          className="absolute inset-y-0 left-0 bg-transparent"
+        />
         <SheetHeader className="flex-row items-start gap-2 pr-3.5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <SheetTitle className="truncate font-sans text-md font-bold">{title}</SheetTitle>

@@ -48,6 +48,10 @@ COMMAND_REASONS: dict[str, tuple[Reason, str]] = {
         Reason.HANDOFF,
         "an agent stores a secret read from stdin without the value entering a chat",
     ),
+    "cli list": (
+        Reason.HANDOFF,
+        "the coffer-guide skill names it: an agent has no page to read the tools Coffer manages",
+    ),
     "log audit": (Reason.HANDOFF, "troubleshooting hand-offs read records that are not files"),
     "log mcp": (Reason.HANDOFF, "troubleshooting hand-offs read records that are not files"),
     "log daemon": (Reason.HANDOFF, "troubleshooting hand-offs read records that are not files"),

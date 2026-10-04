@@ -9,12 +9,12 @@ describe("diffLines", () => {
     const rows = diffLines("a\nb\nc", "a\nB\nc\nd");
     expect(rows.map((r) => `${r.kind}:${r.text}`)).toEqual([
       "context:a",
-      "del:b",
+      "remove:b",
       "add:B",
       "context:c",
       "add:d",
     ]);
-    expect(rows[3]).toMatchObject({ oldLine: 3, newLine: 3 });
+    expect(rows[3]).toMatchObject({ oldNo: 3, newNo: 3 });
   });
 
   test("identical texts are all context", () => {
@@ -40,10 +40,10 @@ describe("parseUnifiedDiff", () => {
     );
     expect(rows[0].kind).toBe("hunk");
     expect(rows.slice(1)).toEqual([
-      { kind: "context", text: "## Startup", oldLine: 6, newLine: 6 },
-      { kind: "del", text: "old line", oldLine: 7 },
-      { kind: "add", text: "new line", newLine: 7 },
-      { kind: "add", text: "another", newLine: 8 },
+      { kind: "context", text: "## Startup", oldNo: 6, newNo: 6 },
+      { kind: "remove", text: "old line", oldNo: 7 },
+      { kind: "add", text: "new line", newNo: 7 },
+      { kind: "add", text: "another", newNo: 8 },
     ]);
   });
 

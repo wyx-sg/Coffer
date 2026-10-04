@@ -78,7 +78,7 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     await dialog.getByRole("button", { name: /SeaTalk/ }).click();
     await dialog.getByRole("button", { name: "Next" }).click();
     await expect(
-      dialog.getByRole("heading", { name: "Add SeaTalk channel" }),
+      dialog.getByRole("heading", { name: "Add a SeaTalk channel" }),
     ).toBeVisible();
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByLabel("App ID").fill("e2e-app-1");
@@ -86,7 +86,7 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     await dialog.getByRole("button", { name: "Connect" }).click();
 
     await expect(
-      dialog.getByRole("heading", { name: `Pair ${name}` }),
+      dialog.getByRole("heading", { name: `Pair SeaTalk · ${name}` }),
     ).toBeVisible();
     await expect(dialog.getByTestId("channel-pairing-code")).toBeVisible();
     await dialog.getByRole("button", { name: "Pair later" }).click();
@@ -107,35 +107,53 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     // Overview links to the conversations this channel started.
     await expect(
       page.getByTestId("channel-conversations-link"),
-    ).toHaveAttribute("href", `/conversations?channel=${uid}`);
+    ).toHaveAttribute("href", `/conversations?source=${uid}`);
 
-    // Settings save as they change.
+    // Settings save as they change. A directory is added outside the page (the
+    // folder dialog is the host's), then made the default from its row.
+    const current = (await (
+      await fetch(`${base}/resources/${uid}`, { headers })
+    ).json()) as { config: Record<string, unknown> };
+    const seeded = await fetch(`${base}/resources/${uid}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: { ...current.config, directories: [dir] },
+      }),
+    });
+    expect(seeded.ok).toBe(true);
+    await page.reload();
     await page.getByRole("tab", { name: "Settings" }).click();
     await expect(page).toHaveURL(new RegExp(`/channels/${uid}/settings$`));
     await page.getByLabel("Long-task ping after").fill("300");
-    await page.getByLabel("Default", { exact: true }).fill(dir);
-    await page.getByLabel("Default", { exact: true }).blur();
-    await expect(page.getByTestId("channel-save-state")).toHaveText("Saved");
+    await page.getByLabel("Long-task ping after").blur();
+    await page
+      .getByRole("button", { name: `Set ${dir} as the default` })
+      .click();
     await expect
       .poll(async () => {
         const r = await fetch(`${base}/resources/${uid}`, { headers });
         const body = (await r.json()) as { config: Record<string, unknown> };
         const agentConfig = body.config.default_agent_config as
-          | Record<string, unknown>
-          | null
-          | undefined;
+          Record<string, unknown> | null | undefined;
         return [body.config.notify_after_seconds, agentConfig?.cwd];
       })
       .toEqual([300, dir]);
 
     await page.reload();
     await expect(page.getByLabel("Long-task ping after")).toHaveValue("300");
-    await expect(page.getByLabel("Default", { exact: true })).toHaveValue(dir);
+    const directories = page.getByRole("list", { name: "Directories" });
+    await expect(directories).toContainText(dir);
+    await expect(
+      page.getByRole("button", {
+        name: `Stop starting new conversations in ${dir}`,
+      }),
+    ).toBeVisible();
 
     // Delete, from the danger zone.
     await page.getByRole("button", { name: "Delete…" }).click();
     const confirm = page.getByRole("dialog");
-    await expect(confirm).toContainText("Conversations stay in Conversations");
+    await expect(confirm).toContainText("conversations stay in Conversations");
     await confirm.getByRole("button", { name: "Delete channel" }).click();
     await expect(
       page.getByTestId("channel-row").filter({ hasText: name }),

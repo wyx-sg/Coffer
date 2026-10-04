@@ -41,8 +41,8 @@ enabled, with its kind's default scope (unrestricted for every kind except
 `provider`, which pre-fills from its wire). That is what a resource that
 arrives from another machine, or a file a person wrote by hand, gets until
 someone narrows it here. "Not here" is expressed by disabling or narrowing the
-resource on the machine it should be dark on. Custom tools' per-tool reach
-follows the same rule in the sibling file `local/tool-reach.json`.
+resource on the machine it should be dark on. A custom tool has no reach of
+its own: it follows its group's.
 
 Enforcement is each kind's own seam at its own choke point, where the asking
 identity is known: the MCP gateway at the per-session listing, skill delivery

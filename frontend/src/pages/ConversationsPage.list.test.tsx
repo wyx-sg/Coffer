@@ -138,7 +138,7 @@ describe("Conversations list", () => {
     const list = screen.getByRole("list", { name: "Conversations" });
     const groups = within(list)
       .getAllByRole("listitem", { hidden: true })
-      .filter((li) => li.getAttribute("aria-hidden") === "true")
+      .filter((li) => li.hasAttribute("data-band"))
       .map((li) => li.textContent);
     expect(groups).toEqual(["Today", "Yesterday", "Earlier"]);
     expect(screen.queryByRole("columnheader")).toBeNull();

@@ -163,7 +163,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; **Find plaintext keys** on the Secrets page finds them and moves them into the store. See [Secrets](/guides/secrets). Name each secret the skill uses under `requires: {secrets: [...]}` so Coffer can say when it is not set.
+  Do not keep secrets in plaintext files such as `~/.coffer/secrets/<name>.env`; store them as secrets instead. See [Secrets](/guides/secrets). Name each secret the skill uses under `requires: {secrets: [...]}` so Coffer can say when it is not set.
 
 ## Descriptions
 

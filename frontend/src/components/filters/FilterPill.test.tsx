@@ -87,14 +87,4 @@ describe("FilterPill", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(screen.getByRole("button", { name: /Agent:\s*Codex/ })).toBeInTheDocument();
   });
-
-  it("Only selects one value and a second click restores the previous set", async () => {
-    const user = userEvent;
-    render(<Multi initial={["mcp", "skill"]} />);
-    await user.click(screen.getByRole("button", { name: /Kind:/ }));
-    await user.click(screen.getByRole("button", { name: "Only: Memory" }));
-    expect(screen.getByRole("button", { name: /Kind:\s*Memory$/ })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Only: Memory" }));
-    expect(screen.getByRole("button", { name: /Kind:\s*MCP, Skill/ })).toBeInTheDocument();
-  });
 });

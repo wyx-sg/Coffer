@@ -279,6 +279,10 @@ never one list with a flag every caller must remember. Both listings MUST page
 by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor")
 with the conversation id as the tie-break, so a conversation whose activity is
 bumped while a reader pages moves to the head rather than appearing twice.
+Both listings MUST narrow by source (`source`: `coffer` for conversations opened in
+Coffer's own UI, any other token a channel uid) and by agent (`agent`: agent keys),
+each a comma-separated set, in the server — the page and its `total` both — and a
+cursor MUST be bound to the `q`, source and agent filters it was issued for.
 
 #### Scenario: the conversation list is ordered by activity, not by creation
 - **GIVEN** two conversations created in order,
@@ -291,6 +295,11 @@ bumped while a reader pages moves to the head rather than appearing twice.
 - **WHEN** the active listing is read with `limit=2` and then with the answer's `next_cursor`
 - **THEN** the first page holds the two with the latest activity and the second the third, with a `null` `next_cursor`
 - **AND** both pages report a `total` of 3
+
+#### Scenario: the conversation list narrows by source and agent on the server
+- **GIVEN** conversations opened in Coffer and in a channel, run by different agents
+- **WHEN** the listing is read with `source=coffer` or `source=<channel uid>`, and with `agent=<key>`
+- **THEN** the page and `total` hold only the matching conversations, and a cursor issued for one set of filters is `CURSOR_INVALID` for another
 
 ### Requirement: Require every writer to name the agent
 `agent_key` MUST have no storage-level default. Every writer names the agent
@@ -610,10 +619,13 @@ naming the conversation, and says its messages are removed from Coffer while the
 stay. The filter row reads, in order, an **Active / Archived** switch, a search box over titles and
 message text (`/` focuses it), a **Source** pill (Coffer and each channel, several at once, each
 channel shown as its platform's logo and `SeaTalk · Team bot`), an **Agent** pill, and **Clear filters**
-once anything narrows the list; it shows no result count. All of it is in the URL — `?q=`,
+once anything narrows the list; it shows no result count. The source and agent filters are applied by the server, so a filtered list pages through matches only. All of it is in the URL — `?q=`,
 `?source=coffer,<channel uid>`, `?agent=`, `?archived=1` — so a filtered list is a link, and a channel's
 **Conversations from this channel** link opens `?source=<uid>`; a link carrying the earlier
-`?channel=<uid>` is read once as that source and the address rewritten. Ticking a row (a shift-click
+`?channel=<uid>` is read once as that source and the address rewritten. The first day group carries a
+**Select all** checkbox in the rows' checkbox column — shown on hover, always while anything is ticked,
+half-ticked while only some are — that ticks every conversation the view holds, reading the pages not
+loaded yet first, and clears them when ticked again. Ticking a row (a shift-click
 ticks the range) replaces the filter row with a selection bar — "3 of 8 selected", **Archive**
 (**Unarchive** in the archived view), **Delete…** and **Clear** — and a bulk delete asks first, listing
 the titles (five, then **Show all**). The list reads 30 conversations and then 50 more as it is
@@ -662,6 +674,12 @@ one owner, and an agent cannot tell which window a turn arrived through.
 - **WHEN** the user ticks two rows
 - **THEN** the filter row is replaced by "2 of N selected" with Archive, Delete… and Clear
 - **AND** Delete… lists the two titles in its confirmation, and a list of more than five shows five and Show all
+
+#### Scenario: Select all ticks every conversation the view holds
+- **GIVEN** a view of 35 conversations of which the first 30 are loaded
+- **WHEN** the user ticks Select all in the first day group
+- **THEN** the remaining page is read and the bar reads "35 of 35 selected"
+- **AND** with only some rows ticked Select all is half-ticked, and ticking it when all are ticked clears the selection
 
 #### Scenario: a list that fails to load says so
 - **GIVEN** the conversation list request fails
@@ -874,7 +892,7 @@ removed, read from the reply's recorded files (see "Record what each reply chang
 in each file"); a reply recorded before files were recorded falls back to the
 files its tool calls wrote, with repeated edits to one file summed into one row. A
 reply that changed no file shows no card. The card sits inside the reply, after
-its text and before its token line, and its title carries no count.
+its text and before Copy reply, and its title carries no count.
 
 #### Scenario: a reply's file edits are summed into one row per file
 - **GIVEN** an assistant reply whose tool calls edit one file twice, write a second file, and read a third
@@ -901,8 +919,9 @@ carries it when the turn left none) — never a floating notice, never above the
 composer and never two error surfaces at once. It reads "The turn failed:" and
 the reason, adds that Retry sends the same message again, and carries a Retry
 that re-sends the message that failed and a dismiss that clears it; the reply's
-header reads "Failed after 38s". At the end of a reply that carries its token
-counts, a Copy reply control copies the reply's text.
+header reads "Failed after 38s". At the end of a finished reply, a Copy reply
+control copies the reply's text; the reply shows no token counts (they stay recorded
+on the message).
 
 The Retry MUST re-send the failed message whole: its text AND every attachment
 it carried, whether the files came from the web composer or a channel. A
@@ -949,7 +968,10 @@ prompt and no install command (handing an install to an assistant belongs to the
 Agents page). The draft's title bar says "New conversation", and with an agent its
 centre says which agent will run in which folder; the folder picker, agent and model
 sit in the reply box's toolbar, and a draft opened from Ask an agent
-says under the box that nothing is sent until Send.
+says under the box that nothing is sent until Send. The folder picker lists Coffer's
+workspace and the folders recent conversations started in, then one row for any
+other folder: a field to type or paste a path whose one button reads **Choose…**
+(the host's folder dialog) while the field is empty and **Use** once it holds a path.
 
 When the conversation is created but the daemon refuses its first message (for
 example `ATTACHMENT_NOT_FOUND`), the message MUST NOT be lost: its text and

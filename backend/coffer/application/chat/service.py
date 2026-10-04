@@ -20,8 +20,8 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from coffer.application.chat.conversation_repo import EVERY, Narrowing, page_conversations
 from coffer.application.chat.conversation_repo import ConversationRepo as ConversationRepo
-from coffer.application.chat.conversation_repo import page_conversations
 from coffer.application.chat.message_repo import MessageRepo as MessageRepo
 from coffer.application.chat.preview import message_preview
 from coffer.application.chat.registry import AgentProviderRegistry
@@ -127,17 +127,20 @@ class ChatService:
         limit: int = 100,
         cursor: str | None = None,
         q: str | None = None,
+        narrow: Narrowing = EVERY,
     ) -> Page[Conversation]:
         """One page of :meth:`list_conversations`, continued by ``cursor``."""
         return await page_conversations(
-            self._conversations, archived=archived, limit=limit, cursor=cursor, q=q
+            self._conversations, archived=archived, limit=limit, cursor=cursor, q=q, narrow=narrow
         )
 
-    async def count_conversations(self, *, archived: bool = False, q: str | None = None) -> int:
+    async def count_conversations(
+        self, *, archived: bool = False, q: str | None = None, narrow: Narrowing = EVERY
+    ) -> int:
         """How many conversations match the listing (``archived``, ``q``), whatever
         the paging; ``q`` is trimmed like :meth:`page_conversations` does."""
         q = (q or "").strip() or None
-        return await self._conversations.count(archived=archived, contains=q)
+        return await self._conversations.count(archived=archived, contains=q, narrow=narrow)
 
     async def get_conversation(self, conversation_id: str) -> Conversation:
         """Return a conversation by id; raises ``ConversationNotFound`` if absent."""

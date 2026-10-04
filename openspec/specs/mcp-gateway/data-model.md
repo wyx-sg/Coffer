@@ -85,8 +85,8 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | `operation`     | `str \| None`           | `"<METHOD> <path>"` of the imported operation, for re-import                 |
 | `source_text`   | `str \| None`           | the operation's text in the imported spec (at most 20 000 characters), so a re-import can show what changed |
 
-A tool's **reach override** is not in the config: reach is machine-local, so it
-is `local/tool-reach.json` (below).
+A tool has only its on/off switch (`enabled`); who can see it is its group's
+reach alone.
 
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
 
@@ -186,7 +186,6 @@ resource, so the tiering counts leave it out.
 | capability switches | `vault/state/mcp-preferences/<server name>.json` | vault |
 | when each capability was first and last seen | `derived/derived.db` `mcp_capability_seen` | derived |
 | the last health check | `derived/derived.db` `mcp_server_health` | derived |
-| custom tools' reach overrides | `local/tool-reach.json` | local |
 | the invocation log | `runs.db` `mcp_invocations` | runs |
 
 ### Capability switches — `state/mcp-preferences/<server name>.json`
@@ -238,19 +237,6 @@ CREATE TABLE mcp_server_health (
 A capability switched off on another machine that this machine has never seen
 reads with its seen-times at the epoch, and is left out of "current tools".
 
-### Custom tools' reach — `local/tool-reach.json`
-
-```json
-{ "<group uid>": { "<tool name>": ["<agent uid>", "..."] } }
-```
-
-A custom tool may narrow its group's reach to some agents; like every reach it
-is true of this machine only, so it is local state beside `local/reach.json`
-and never in the group's vault file (`MCPToolReachStore`,
-`infrastructure/mcp/tool_reach_repo.py`). A tool with no entry reaches wherever
-its group does; an emptied group is removed. Entries go with their tool
-(removed, renamed away, dropped by a re-import) and with their group.
-
 ### `runs.db` — `mcp_invocations`
 
 ```sql
@@ -286,7 +272,6 @@ a builtin, a deleted server — counts for nothing.
 | ------ | ------ |
 | delete a server | its `state/mcp-preferences/` document goes in the same commit. Does **not** touch `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does |
 | switch a capability | adds or removes its key in the server's document (one commit); the seen-times are untouched, which is what makes a decision survive an upstream upgrade |
-| `local/tool-reach.json` | never synced (spec vault-sync "Keep reach machine-local") |
 | `mcp_server_health` | keyed by the server's uid, so a rename keeps the row it already has |
 
 The kind-agnostic rules these sit under — what a rename does to the audit trail

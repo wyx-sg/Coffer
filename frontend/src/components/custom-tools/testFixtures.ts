@@ -20,8 +20,6 @@ export function makeTool(overrides: Partial<CustomTool> = {}): CustomTool {
     changes_data: false,
     changes_data_set: false,
     operation: null,
-    reach_mode: "inherit",
-    reach_override: null,
     calls_24h: 0,
     failures_24h: 0,
     ...overrides,
