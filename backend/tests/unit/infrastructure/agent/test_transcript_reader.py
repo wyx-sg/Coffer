@@ -19,6 +19,12 @@ from coffer.infrastructure.agent import paths
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
 
 
+def _stored_entries() -> dict[str, object]:
+    """The sidecar's per-file entries — its format stamp is not one of them."""
+    data = json.loads(paths.transcript_summaries_path().read_text(encoding="utf-8"))
+    return {k: v for k, v in data.items() if k != "__format__"}
+
+
 def _counting_reader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[FileTranscriptReader, dict[str, int]]:
@@ -320,7 +326,7 @@ def test_cache_prunes_entries_for_deleted_files(tmp_path: Path) -> None:
     assert total == 2
     assert len(r._cache) == 2  # the deleted file's entry is gone, not leaked
     # …and the sidecar it was written back to does not leak it either.
-    assert len(json.loads(paths.transcript_summaries_path().read_text())) == 2
+    assert len(_stored_entries()) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +380,7 @@ def test_a_hot_reader_writes_the_sidecar_back_after_it_is_deleted(tmp_path: Path
     r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
 
     assert sidecar.is_file()
-    assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
+    assert len(_stored_entries()) == 3
 
 
 def test_missing_sidecar_still_lists_correctly(tmp_path: Path) -> None:
@@ -454,5 +460,27 @@ def test_sidecar_keeps_another_agent_root_untouched(tmp_path: Path) -> None:
     r = FileTranscriptReader()
     r.search_session_summaries(agent_type_value="codex", config_dir=str(other), limit=100)
     r.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
-    stored = json.loads(paths.transcript_summaries_path().read_text())
+    stored = _stored_entries()
     assert len(stored) == 4  # three here, one under the other root
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="keep attachment markers out of a session's title",
+)
+def test_sidecar_written_by_older_parsers_is_discarded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A sidecar without the current format stamp holds titles the old parsers
+    derived (image markers and all); it must be re-derived, not served."""
+    _make_codex_tree(tmp_path)
+    first, _ = _counting_reader(monkeypatch)
+    first.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
+    sidecar = paths.transcript_summaries_path()
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert data.pop("__format__") >= 2
+    sidecar.write_text(json.dumps(data), encoding="utf-8")  # the pre-stamp shape
+
+    second, calls = _counting_reader(monkeypatch)
+    second.search_session_summaries(agent_type_value="codex", config_dir=str(tmp_path), limit=100)
+    assert calls["n"] == 3

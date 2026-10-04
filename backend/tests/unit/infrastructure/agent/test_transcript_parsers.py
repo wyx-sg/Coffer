@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from datetime import UTC
 
+import pytest
+
 from coffer.infrastructure.agent.transcript_reader import parse_claude_code, parse_codex
 from coffer.infrastructure.agent.transcript_records import parse_iso as _parse_iso
 
@@ -418,3 +420,48 @@ def test_parse_claude_title_skips_tag_blocks_too() -> None:
     ]
     s = parse_claude_code(lines, source_path="/tags-claude.jsonl")
     assert s.title == "add a health check"
+
+
+# ---------------------------------------------------------------------------
+# Attachment markers are not something the person typed
+# ---------------------------------------------------------------------------
+
+_ACCEPT = pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="keep attachment markers out of a session's title",
+)
+
+
+@_ACCEPT
+def test_claude_title_strips_image_markers_and_skips_image_only_turns() -> None:
+    lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "message": {"role": "user", "content": "[Image: source: /tmp/a b.png]"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": "[Image #1] [Image: source: /tmp/shot.png]\nwhy is this red?",
+                },
+            }
+        ),
+    ]
+    s = parse_claude_code(lines, source_path="/img.jsonl")
+    assert s.title == "why is this red?"
+
+
+@_ACCEPT
+def test_image_only_session_has_no_title_in_either_parser() -> None:
+    marker = "[Image: source: /Users/me/Library/shot.png]"
+    claude = [json.dumps({"type": "user", "message": {"role": "user", "content": marker}})]
+    assert parse_claude_code(claude, source_path="/i1.jsonl").title is None
+    assert parse_codex(_codex_user_turns(marker), source_path="/i2.jsonl").title is None
+    assert (
+        parse_codex(_codex_user_turns(f"{marker}\nfix it"), source_path="/i3.jsonl").title
+        == "fix it"
+    )

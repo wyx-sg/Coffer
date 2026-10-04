@@ -32,14 +32,3 @@ export function formatAgo(t: TFunction, iso: string, now = Date.now()): string |
     age: t(`agents.overviewTab.age.${age.unit}`, { count: age.count }),
   });
 }
-
-/** " · last fired 2h ago" for the memory hook row. */
-export function formatLastFired(t: TFunction, iso: string | null, now = Date.now()): string {
-  if (iso === null) return t("agents.overviewTab.connection.part.neverFired");
-  const age = ageOf(iso, now);
-  if (age === null) return "";
-  if (age.unit === "now") return t("agents.overviewTab.connection.part.lastFiredNow");
-  return t("agents.overviewTab.connection.part.lastFired", {
-    age: t(`agents.overviewTab.age.${age.unit}`, { count: age.count }),
-  });
-}

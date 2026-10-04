@@ -71,6 +71,12 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
   return (
     <FileBrowserFrame
       sideWidth={320}
+      resizable={{
+        storageKey: "agent-sessions",
+        label: t("splitView.resizeList"),
+        listMinWidth: 240,
+        detailMinWidth: 480,
+      }}
       side={<SessionList uid={agent.uid} selected={selected} onOpen={open} />}
       main={
         selected ? (

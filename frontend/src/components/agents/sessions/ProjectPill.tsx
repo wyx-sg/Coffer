@@ -6,7 +6,7 @@
 // path, exactly, as the listing's `project` parameter takes it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Search } from "lucide-react";
 
 import { projectName } from "@/components/agents/sessions/sessionTime";
 import { pillClass } from "@/components/filters/pillStyles";
@@ -28,6 +28,7 @@ export function ProjectPill({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const recent = useAgentTranscripts(uid, {
     limit: PROJECT_SOURCE,
     sort: "last_activity_at",
@@ -40,13 +41,19 @@ export function ProjectPill({
         .filter((p): p is string => Boolean(p)),
     ),
   ];
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? projects.filter((p) => p.toLowerCase().includes(needle)) : projects;
   const choose = (next: string | null) => {
     onChange(next);
     setOpen(false);
   };
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    if (!next) setQuery("");
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
         <button type="button" className={cn(pillClass(!!value, open), "px-2.5")}>
           <span className={cn(value && "font-label text-text")}>
@@ -58,12 +65,23 @@ export function ProjectPill({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-60 p-1" align="end">
+        <label className="mx-0.5 mb-1 mt-0.5 flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface-raised px-2 text-xs text-text focus-within:ring-2 focus-within:ring-focus-ring">
+          <Search className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("agents.sessionsTab.searchProjects")}
+            aria-label={t("agents.sessionsTab.searchProjects")}
+            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-subtle"
+          />
+        </label>
         <div
           role="listbox"
           aria-label={t("agents.sessionsTab.project")}
           className="flex max-h-80 flex-col overflow-y-auto"
         >
-          {[null, ...projects].map((path) => {
+          {[null, ...shown].map((path) => {
             const selected = path === value;
             return (
               <button
@@ -86,6 +104,11 @@ export function ProjectPill({
               </button>
             );
           })}
+          {needle && shown.length === 0 ? (
+            <p className="px-2 py-1.5 text-xs text-text-muted">
+              {t("agents.sessionsTab.noProjects")}
+            </p>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

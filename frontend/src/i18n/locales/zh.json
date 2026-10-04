@@ -2297,10 +2297,7 @@
           "mcpIn": "<code>coffer</code>，位于 <path>{{file}}</path>",
           "notIn": "不在 <path>{{file}}</path> 中",
           "hookIn_one": "{{count}} 个事件，位于 <path>{{file}}</path>",
-          "hookIn_other": "{{count}} 个事件，位于 <path>{{file}}</path>",
-          "lastFired": " · {{age}}前触发过",
-          "lastFiredNow": " · 刚刚触发过",
-          "neverFired": " · 从未触发"
+          "hookIn_other": "{{count}} 个事件，位于 <path>{{file}}</path>"
         },
         "health": {
           "current": "最新",
@@ -2369,11 +2366,11 @@
         "heading": "模型",
         "change": "更改…",
         "provider": "提供商",
-        "model": "模型",
+        "model": "默认模型",
         "effort": "推理强度",
         "route": "路径",
         "test": "测试",
-        "auto": "由智能体自动选择",
+        "auto": "内置默认",
         "routeProxy": "经由 Coffer 的中转",
         "reachable": "可连通",
         "routeDirect": {
@@ -2491,7 +2488,9 @@
       "search": "搜索会话",
       "project": "项目",
       "projectChosen": "项目：{{project}}",
-      "allProjects": "所有项目"
+      "allProjects": "所有项目",
+      "searchProjects": "搜索项目",
+      "noProjects": "没有匹配的项目"
     },
     "changeModel": {
       "title": "更改 {{name}} 的模型",
@@ -2529,13 +2528,13 @@
         "codex": "使用自己的登录时，{{agent}} 自行选择模型和推理强度（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它们。"
       },
       "model": {
-        "label": "模型",
+        "label": "默认模型",
         "placeholder": "选择模型"
       },
       "effort": {
         "label": "推理强度",
         "default": "默认",
-        "none": "这个模型没有上报档位。",
+        "none": "智能体的模型目录里没有这个模型，不知道它有哪些档位，所以不设推理强度，按提供商的默认走。",
         "choose": "选择模型后可查看它的档位。",
         "levels": {
           "minimal": "最低",
@@ -2564,14 +2563,14 @@
     "list": {
       "subtitle": "这台 Mac 上的 Claude Code 和 Codex，以及通过 Coffer 送达各自的内容。",
       "connectBoth": "全部连接",
-      "countsLabel": "数量是什么意思",
       "countsHelp": "数量是通过 Coffer 实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面（MCP 服务器、技能）。",
       "empty": "没有可显示的智能体。",
       "col": {
         "plugins": "插件",
         "agent": "智能体",
         "configDir": "配置目录",
-        "model": "模型",
+        "provider": "提供商",
+        "model": "默认模型",
         "skills": "技能",
         "mcp": "MCP",
         "coffer": "Coffer",
@@ -2580,10 +2579,8 @@
       "sub": {
         "version": "v{{version}}"
       },
-      "autoModel": "由智能体自动选择",
+      "builtinDefault": "内置默认",
       "detail": {
-        "lastDelivery": "上次投递 {{when}}",
-        "noDelivery": "尚未投递",
         "mcpMissing": "缺少 MCP 条目",
         "hookStale": "记忆钩子已过期",
         "hookMissing": "记忆钩子未写入",

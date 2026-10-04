@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import i18n from "@/i18n";
 
-import { formatAgo, formatLastFired } from "./age";
+import { formatAgo } from "./age";
 import { hookConfigPath, mainConfigPath, mcpConfigPath } from "./paths";
 
 const t = i18n.getFixedT("en");
@@ -39,10 +39,5 @@ describe("age", () => {
     expect(formatAgo(t, ago(3 * 86400_000), now)).toBe("3d");
     expect(formatAgo(t, ago(15 * 86400_000), now)).toBe("2w");
     expect(formatAgo(t, "not a time", now)).toBeNull();
-  });
-
-  test("the hook row says when it last fired, or that it never has", () => {
-    expect(formatLastFired(t, ago(2 * 3600_000), now)).toBe(" · fired 2h ago");
-    expect(formatLastFired(t, null, now)).toBe(" · never fired");
   });
 });

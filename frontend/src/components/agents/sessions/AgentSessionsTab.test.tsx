@@ -216,6 +216,32 @@ describe("AgentSessionsTab", () => {
     expect(listCalls()).toContainEqual(expect.objectContaining({ project: "/Users/xing/scratch" }));
   });
 
+  test("the Project pill searches the projects by their full path", () => {
+    stubList({
+      rows: [
+        summary({}),
+        summary({ title: "Other", project_path: "/Users/xing/scratch", source_path: PATH_B }),
+      ],
+    });
+    renderTab();
+    fireEvent.click(screen.getByRole("button", { name: /^project$/i }));
+    const search = screen.getByRole("textbox", { name: "Search projects" });
+    fireEvent.change(search, { target: { value: "USERS/XING/SCR" } });
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "All projects",
+      "scratch",
+    ]);
+    fireEvent.change(search, { target: { value: "nothing-like-this" } });
+    expect(screen.getByText("No matching project")).toBeInTheDocument();
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["All projects"]);
+  });
+
+  test("the divider between the list and the reader can be dragged", () => {
+    stubList();
+    renderTab();
+    expect(screen.getByRole("separator", { name: /resize the list/i })).toBeInTheDocument();
+  });
+
   test("Load more reads the next page with the cursor the last one returned", () => {
     stubList({ next: "cursor-2", total: 3 });
     renderTab();

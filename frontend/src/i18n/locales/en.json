@@ -2297,10 +2297,7 @@
           "mcpIn": "<code>coffer</code> in <path>{{file}}</path>",
           "notIn": "Not in <path>{{file}}</path>",
           "hookIn_one": "{{count}} event in <path>{{file}}</path>",
-          "hookIn_other": "{{count}} events in <path>{{file}}</path>",
-          "lastFired": " · fired {{age}} ago",
-          "lastFiredNow": " · fired just now",
-          "neverFired": " · never fired"
+          "hookIn_other": "{{count}} events in <path>{{file}}</path>"
         },
         "health": {
           "current": "Current",
@@ -2369,11 +2366,11 @@
         "heading": "Model",
         "change": "Change…",
         "provider": "Provider",
-        "model": "Model",
+        "model": "Default model",
         "effort": "Effort",
         "route": "Route",
         "test": "Test",
-        "auto": "Chosen by the agent",
+        "auto": "Built-in default",
         "routeProxy": "Through Coffer’s proxy",
         "reachable": "reachable",
         "routeDirect": {
@@ -2491,7 +2488,9 @@
       "search": "Search sessions",
       "project": "Project",
       "projectChosen": "Project: {{project}}",
-      "allProjects": "All projects"
+      "allProjects": "All projects",
+      "searchProjects": "Search projects",
+      "noProjects": "No matching project"
     },
     "changeModel": {
       "title": "Change {{name}}’s model",
@@ -2529,13 +2528,13 @@
         "codex": "With its own login, {{agent}} picks its model and effort itself (<code>/model</code>). Coffer sets them only for a provider you add."
       },
       "model": {
-        "label": "Model",
+        "label": "Default model",
         "placeholder": "Select a model"
       },
       "effort": {
         "label": "Effort",
         "default": "Default",
-        "none": "This model reports no levels.",
+        "none": "The agent's model catalogue does not list this model, so its levels are unknown; no effort is set and the provider's default applies.",
         "choose": "Choose a model to see its levels.",
         "levels": {
           "minimal": "Minimal",
@@ -2564,14 +2563,14 @@
     "list": {
       "subtitle": "Claude Code and Codex on this Mac, and what reaches each through Coffer.",
       "connectBoth": "Connect both",
-      "countsLabel": "What the counts mean",
       "countsHelp": "Counts are what reaches each agent through Coffer. Choose who gets a resource on its own page (MCP servers, Skills).",
       "empty": "No agents to show.",
       "col": {
         "plugins": "Plugins",
         "agent": "Agent",
         "configDir": "Config directory",
-        "model": "Model",
+        "provider": "Provider",
+        "model": "Default model",
         "skills": "Skills",
         "mcp": "MCP",
         "coffer": "Coffer",
@@ -2580,10 +2579,8 @@
       "sub": {
         "version": "v{{version}}"
       },
-      "autoModel": "Chosen by the agent",
+      "builtinDefault": "Built-in default",
       "detail": {
-        "lastDelivery": "Last delivery {{when}}",
-        "noDelivery": "No delivery yet",
         "mcpMissing": "MCP entry missing",
         "hookStale": "Memory hook is out of date",
         "hookMissing": "Memory hook not written",
