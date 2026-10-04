@@ -1,9 +1,9 @@
-// frontend/src/lib/knowledge/wrapLine.ts
+// frontend/src/lib/diff/wrapLine.ts
 //
-// Cuts one long diff line into rows for KnowledgeDiff (Foundations 0.6.05):
+// Cuts one long diff line into rows for FileDiff, the one diff renderer (Foundations 0.6.05):
 // nothing is truncated, the view shows each continuation under a ↳.
 
-/** Characters per row before a line wraps: a 720-wide pane at 12px mono. */
+/** Characters per row before a line wraps: a typical detail pane at 12px mono. */
 const WRAP_AT = 84;
 
 /** A line cut into rows of at most `width` characters, at a space where there

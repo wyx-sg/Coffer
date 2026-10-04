@@ -3232,9 +3232,6 @@
       "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
       "checkAgain": "Check again"
     },
-    "diff": {
-      "none": "No changes to the text."
-    },
     "writer": {
       "user": "You",
       "agent": "An agent",
@@ -6051,6 +6048,9 @@
       "provider": "Provider",
       "findProvider": "Find a provider"
     }
+  },
+  "diff": {
+    "none": "No changes to the text."
   },
   "splitView": {
     "resizeList": "Resize the list"
