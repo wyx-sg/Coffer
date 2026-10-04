@@ -442,6 +442,38 @@ export interface components {
             total: number;
         };
         /**
+         * ChangeEventOut
+         * @description The data of a `change` event: something changed; refetch what shows it.
+         *
+         *     Sent once per resource write through the framework, and once per change in
+         *     what the attention list reports (`kind` `attention`, no `id`).
+         *     The event's SSE id is `seq`, so a reconnecting client resumes with
+         *     `Last-Event-ID`.
+         */
+        ChangeEventOut: {
+            /**
+             * Id
+             * @description The resource's uid; null for `attention`.
+             */
+            id: string | null;
+            /**
+             * Kind
+             * @description The resource kind, or `attention`.
+             */
+            kind: string;
+            /**
+             * Op
+             * @description `upsert`: the resource exists with new content. `delete`: it is gone.
+             * @enum {string}
+             */
+            op: "upsert" | "delete";
+            /**
+             * Seq
+             * @description Grows by one per event across this daemon run; the first is 1.
+             */
+            seq: number;
+        };
+        /**
          * DeliveryResultOut
          * @description What delivering a reach change did for one agent.
          */
@@ -477,6 +509,14 @@ export interface components {
             error: components["schemas"]["ErrorDetail"];
         };
         /**
+         * EventStreamMessage
+         * @description The `data:` of one event on `GET /api/v1/events`, chosen by its SSE `event:` name.
+         *
+         *     `change` carries a ChangeEventOut, `resync` a ResyncEventOut, `heartbeat` a
+         *     HeartbeatEventOut.
+         */
+        EventStreamMessage: components["schemas"]["ChangeEventOut"] | components["schemas"]["ResyncEventOut"] | components["schemas"]["HeartbeatEventOut"];
+        /**
          * HandoffOut
          * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
          *     to pre-fill a new conversation with; Coffer never sends it itself.
@@ -484,6 +524,19 @@ export interface components {
         HandoffOut: {
             /** Prompt */
             prompt: string;
+        };
+        /**
+         * HeartbeatEventOut
+         * @description The data of a `heartbeat` event: sent at a fixed interval while nothing changes.
+         *
+         *     A client whose last seen `seq` is below `seq` is behind and should reconnect.
+         */
+        HeartbeatEventOut: {
+            /**
+             * Seq
+             * @description The current head `seq`; 0 before the first change.
+             */
+            seq: number;
         };
         /**
          * PruneRequestIn
@@ -743,6 +796,22 @@ export interface components {
             name?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * ResyncEventOut
+         * @description The data of a `resync` event: events may have been missed; refetch everything.
+         *
+         *     Sent first on a reconnect whose `Last-Event-ID` the buffer cannot cover
+         *     (older than its oldest entry, or never issued by this daemon run), and in
+         *     place of the backlog when a client falls too far behind. Live `change`
+         *     events follow it.
+         */
+        ResyncEventOut: {
+            /**
+             * Seq
+             * @description The head `seq` when the resync was issued.
+             */
+            seq: number;
         };
         /** RetentionPolicyListOut */
         RetentionPolicyListOut: {

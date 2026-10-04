@@ -872,6 +872,33 @@ export interface components {
             /** Text */
             text: string | null;
         };
+        /**
+         * QuestionAskedEventOut
+         * @description The data of a `question_asked` event: the agent asked the owner a question
+         *     and the turn is waiting. Sent again with the same `question_id` as the owner
+         *     answers one question of several; the card is replaced by `question_id`.
+         */
+        QuestionAskedEventOut: {
+            question: components["schemas"]["QuestionOut"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "question_asked";
+        };
+        /**
+         * QuestionClosedEventOut
+         * @description The data of a `question_closed` event: the question was answered in full,
+         *     or cancelled (the turn stopped or ended).
+         */
+        QuestionClosedEventOut: {
+            question: components["schemas"]["QuestionOut"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "question_closed";
+        };
         /** QuestionOptionOut */
         QuestionOptionOut: {
             /** Description */
@@ -923,6 +950,22 @@ export interface components {
             options: components["schemas"]["QuestionOptionOut"][];
             /** Question */
             question: string;
+        };
+        /**
+         * QueueChangedEventOut
+         * @description The data of a `queue_changed` event: the pending-message queue changed.
+         */
+        QueueChangedEventOut: {
+            /**
+             * Pending
+             * @description The ordered texts still waiting to run as turns.
+             */
+            pending: string[];
+            /**
+             * Type
+             * @constant
+             */
+            type: "queue_changed";
         };
         /**
          * ReplyFileDiffOut
@@ -1000,6 +1043,119 @@ export interface components {
              * @default
              */
             text?: string;
+        };
+        /**
+         * TextDeltaEventOut
+         * @description The data of a `text_delta` event: a chunk of assistant text.
+         */
+        TextDeltaEventOut: {
+            /** Text */
+            text: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "text_delta";
+        };
+        /**
+         * ToolCallEventOut
+         * @description The data of a `tool_call` event: the agent requested a tool invocation.
+         */
+        ToolCallEventOut: {
+            /** Tool Input */
+            tool_input: {
+                [key: string]: unknown;
+            };
+            /** Tool Name */
+            tool_name: string;
+            /** Tool Use Id */
+            tool_use_id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "tool_call";
+        };
+        /**
+         * ToolResultEventOut
+         * @description The data of a `tool_result` event: the result or error of a prior `tool_call`.
+         */
+        ToolResultEventOut: {
+            /**
+             * Duration Ms
+             * @description How long the tool ran, in milliseconds; null when unknown.
+             */
+            duration_ms: number | null;
+            /** Error */
+            error: string | null;
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Name */
+            tool_name: string;
+            /** Tool Use Id */
+            tool_use_id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "tool_result";
+        };
+        /**
+         * TurnDoneEventOut
+         * @description The data of a `turn_done` event: the turn completed (or was interrupted).
+         */
+        TurnDoneEventOut: {
+            /** Completion Tokens */
+            completion_tokens: number | null;
+            /** Prompt Tokens */
+            prompt_tokens: number | null;
+            /**
+             * Stop Reason
+             * @description Why the turn ended: `end_turn`, or `interrupted` when the user stopped it.
+             */
+            stop_reason: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "turn_done";
+        };
+        /**
+         * TurnErrorEventOut
+         * @description The data of a `turn_error` event: the turn failed.
+         */
+        TurnErrorEventOut: {
+            /**
+             * Code
+             * @description A short machine token, e.g. `stream_ended`, `turn_timeout`.
+             */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "turn_error";
+        };
+        /**
+         * TurnEventMessage
+         * @description The `data:` of one event on `GET /api/v1/chat/conversations/{id}/events`,
+         *     chosen by its SSE `event:` name (which equals the model's `type`).
+         */
+        TurnEventMessage: components["schemas"]["TurnStartEventOut"] | components["schemas"]["TextDeltaEventOut"] | components["schemas"]["ToolCallEventOut"] | components["schemas"]["ToolResultEventOut"] | components["schemas"]["TurnDoneEventOut"] | components["schemas"]["TurnErrorEventOut"] | components["schemas"]["QueueChangedEventOut"] | components["schemas"]["QuestionAskedEventOut"] | components["schemas"]["QuestionClosedEventOut"];
+        /**
+         * TurnStartEventOut
+         * @description The data of a `turn_start` event: the agent loop began a turn.
+         */
+        TurnStartEventOut: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "turn_start";
         };
         /**
          * UndeliveredReplyOut

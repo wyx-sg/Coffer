@@ -299,6 +299,9 @@ paths:
               itemSchema:
                 properties:
                   data:
+                    contentMediaType: application/json
+                    contentSchema:
+                      $ref: '#/components/schemas/EventStreamMessage'
                     type: string
                   event:
                     type: string
@@ -307,6 +310,8 @@ paths:
                   retry:
                     minimum: 0
                     type: integer
+                required:
+                - data
                 type: object
           description: A Server-Sent Events stream of `change`, `resync` and `heartbeat` events that stays open until the client disconnects.
         '422':
@@ -1316,6 +1321,43 @@ components:
       - total
       title: AuditListOut
       type: object
+    ChangeEventOut:
+      description: |-
+        The data of a `change` event: something changed; refetch what shows it.
+
+        Sent once per resource write through the framework, and once per change in
+        what the attention list reports (`kind` `attention`, no `id`).
+        The event's SSE id is `seq`, so a reconnecting client resumes with
+        `Last-Event-ID`.
+      properties:
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The resource's uid; null for `attention`.
+          title: Id
+        kind:
+          description: The resource kind, or `attention`.
+          title: Kind
+          type: string
+        op:
+          description: '`upsert`: the resource exists with new content. `delete`: it is gone.'
+          enum:
+          - upsert
+          - delete
+          title: Op
+          type: string
+        seq:
+          description: Grows by one per event across this daemon run; the first is 1.
+          title: Seq
+          type: integer
+      required:
+      - seq
+      - kind
+      - id
+      - op
+      title: ChangeEventOut
+      type: object
     DeliveryResultOut:
       description: What delivering a reach change did for one agent.
       properties:
@@ -1370,6 +1412,17 @@ components:
       - error
       title: ErrorResponse
       type: object
+    EventStreamMessage:
+      anyOf:
+      - $ref: '#/components/schemas/ChangeEventOut'
+      - $ref: '#/components/schemas/ResyncEventOut'
+      - $ref: '#/components/schemas/HeartbeatEventOut'
+      description: |-
+        The `data:` of one event on `GET /api/v1/events`, chosen by its SSE `event:` name.
+
+        `change` carries a ChangeEventOut, `resync` a ResyncEventOut, `heartbeat` a
+        HeartbeatEventOut.
+      title: EventStreamMessage
     HandoffOut:
       description: |-
         A chore for the person's agent. ``prompt`` is the whole text to copy or
@@ -1381,6 +1434,20 @@ components:
       required:
       - prompt
       title: HandoffOut
+      type: object
+    HeartbeatEventOut:
+      description: |-
+        The data of a `heartbeat` event: sent at a fixed interval while nothing changes.
+
+        A client whose last seen `seq` is below `seq` is behind and should reconnect.
+      properties:
+        seq:
+          description: The current head `seq`; 0 before the first change.
+          title: Seq
+          type: integer
+      required:
+      - seq
+      title: HeartbeatEventOut
       type: object
     PruneRequestIn:
       description: '``POST /retention/prune`` body; the whole body is optional.'
@@ -1827,6 +1894,23 @@ components:
           - type: 'null'
           title: Title
       title: ResourceUpdate
+      type: object
+    ResyncEventOut:
+      description: |-
+        The data of a `resync` event: events may have been missed; refetch everything.
+
+        Sent first on a reconnect whose `Last-Event-ID` the buffer cannot cover
+        (older than its oldest entry, or never issued by this daemon run), and in
+        place of the backlog when a client falls too far behind. Live `change`
+        events follow it.
+      properties:
+        seq:
+          description: The head `seq` when the resync was issued.
+          title: Seq
+          type: integer
+      required:
+      - seq
+      title: ResyncEventOut
       type: object
     RetentionPolicyListOut:
       properties:
