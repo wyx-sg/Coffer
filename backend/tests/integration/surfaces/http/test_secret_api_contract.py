@@ -63,23 +63,34 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     spec="secret", scenario="storing a secret answers 204 and audits the ref only"
 )
 def test_storing_a_secret_answers_204_and_audits_the_ref_only(daemon: _Daemon) -> None:
-    r = daemon.client.post("/api/v1/secrets", json={"ref": "gh/token", "value": "ghp_store_me_42"})
+    r = daemon.client.post(
+        "/api/v1/secrets",
+        json={"ref": "secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "value": "ghp_store_me_42"},
+    )
     assert r.status_code == 204, r.text
-    assert daemon.client.get("/api/v1/secrets/gh/token/exists").json()["present"] is True
+    assert (
+        daemon.client.get("/api/v1/secrets/secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/exists").json()[
+            "present"
+        ]
+        is True
+    )
 
     entries = daemon.audit("secret_set")
     assert len(entries) == 1
-    assert "gh/token" in json.dumps(entries[0]["details"])
+    assert "secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in json.dumps(entries[0]["details"])
     assert "ghp_store_me_42" not in json.dumps(entries[0])
 
 
 @pytest.mark.acceptance(spec="secret", scenario="the presence probe records no audit entry")
 def test_the_presence_probe_records_no_audit_entry(daemon: _Daemon) -> None:
-    daemon.client.post("/api/v1/secrets", json={"ref": "gh/token", "value": "ghp_probe"})
+    daemon.client.post(
+        "/api/v1/secrets",
+        json={"ref": "secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "value": "ghp_probe"},
+    )
     before = daemon.secret_audit()
     assert [e["event_type"] for e in before] == ["secret_set"]
 
-    present = daemon.client.get("/api/v1/secrets/gh/token/exists")
+    present = daemon.client.get("/api/v1/secrets/secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/exists")
     absent = daemon.client.get("/api/v1/secrets/never/stored/exists")
     assert present.status_code == 200 and present.json()["present"] is True
     assert absent.status_code == 200 and absent.json()["present"] is False
@@ -90,15 +101,20 @@ def test_the_presence_probe_records_no_audit_entry(daemon: _Daemon) -> None:
 @pytest.mark.acceptance(spec="secret", scenario="secret audit events carry the ref only")
 def test_secret_audit_events_carry_the_ref_only(daemon: _Daemon) -> None:
     secret = "sk-audit-must-never-carry-this"
-    daemon.client.post("/api/v1/secrets", json={"ref": "svc/key", "value": secret})
-    assert _value("svc/key") == secret
-    assert daemon.client.delete("/api/v1/secrets/svc/key").status_code == 204
+    daemon.client.post(
+        "/api/v1/secrets", json={"ref": "secret/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "value": secret}
+    )
+    assert _value("secret/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") == secret
+    assert (
+        daemon.client.delete("/api/v1/secrets/secret/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").status_code
+        == 204
+    )
 
     for event in ("secret_set", "secret_deleted"):
         entries = daemon.audit(event)
         assert len(entries) == 1, event
         payload = json.dumps(entries[0])
-        assert "svc/key" in json.dumps(entries[0]["details"]), event
+        assert "secret/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in json.dumps(entries[0]["details"]), event
         assert secret not in payload, event
 
 
@@ -107,7 +123,10 @@ def test_secret_audit_events_carry_the_ref_only(daemon: _Daemon) -> None:
     scenario="read and change the master key location from the API and the Settings card",
 )
 def test_read_and_change_the_master_key_location(daemon: _Daemon) -> None:
-    daemon.client.post("/api/v1/secrets", json={"ref": "kept/key", "value": "v-survives"})
+    daemon.client.post(
+        "/api/v1/secrets",
+        json={"ref": "secret/cccccccccccccccccccccccccccccccc", "value": "v-survives"},
+    )
 
     r = daemon.client.get("/api/v1/settings/secrets")
     assert r.status_code == 200 and r.json()["master_key_storage"] == "file"
@@ -122,4 +141,4 @@ def test_read_and_change_the_master_key_location(daemon: _Daemon) -> None:
     assert not (daemon.home / "master.key").exists()
     assert any(daemon.keyring._data.values())
 
-    assert _value("kept/key") == "v-survives"
+    assert _value("secret/cccccccccccccccccccccccccccccccc") == "v-survives"

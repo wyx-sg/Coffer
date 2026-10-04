@@ -172,3 +172,54 @@ def rewrite_file(path: str, hits: list[Hit], names: dict[str, str]) -> None:
     except BaseException:
         pathlib.Path(tmp).unlink(missing_ok=True)
         raise
+
+
+def rewrite_secret_uris(
+    skills_root: pathlib.Path,
+    old: str,
+    new: str,
+    skip: frozenset[str] = frozenset(),
+) -> int:
+    """Replace ``coffer://secret/<old>`` with ``coffer://secret/<new>`` in every
+    text file of the skill master store (Coffer's own rendered skills in ``skip``
+    excepted), atomically and keeping each file's mode; how many files changed.
+    A file that cannot be rewritten raises, after the others were tried."""
+    pattern = re.compile(re.escape(secret_uri(old)) + r"(?![A-Za-z0-9_.-])")
+    replacement = secret_uri(new)
+    changed = 0
+    failure: OSError | None = None
+    if not skills_root.is_dir():
+        return 0
+    for path in sorted(skills_root.rglob("*")):
+        rel = path.relative_to(skills_root)
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or path.suffix not in SKILL_SUFFIXES
+            or any(part.startswith(".") for part in rel.parts)
+            or path.stat().st_size > MAX_BYTES
+            or rel.parts[0] in skip
+        ):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            if not pattern.search(text):
+                continue
+            mode = path.stat().st_mode & 0o777
+            fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(pattern.sub(replacement, text))
+                os.chmod(tmp, mode)
+                os.replace(tmp, path)
+            except BaseException:
+                pathlib.Path(tmp).unlink(missing_ok=True)
+                raise
+            changed += 1
+        except UnicodeDecodeError:
+            continue
+        except OSError as e:
+            failure = e
+    if failure is not None:
+        raise failure
+    return changed

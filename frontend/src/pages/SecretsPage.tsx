@@ -1,127 +1,140 @@
-// src/pages/SecretsPage.tsx — /secrets: every stored and cited secret with what uses it (spec web-ui "Manage stored secrets on the Secrets page").
+// src/pages/SecretsPage.tsx — /secrets[/<ref>[/<tab>]]: every stored and cited secret, beside the open one (spec web-ui "Manage stored secrets on the Secrets page").
 //
-// One filterable, sortable list (status and search; Last used and Created sort) under up to two
-// banners: no value on this Mac (Add value(s)), then changes waiting for approval (Review) — each
-// closable with × = Ignore, shared with Overview. Add secret stores a standalone secret; Find plaintext
-// keys moves values out of skills and MCP servers into the store. Each row's ⋯ menu replaces, reveals
-// (in the desktop app only), copies its reference, opens Activity, or deletes — which, for a
-// secret something still uses, says what does instead. No value is ever on this page until
-// Reveal is chosen.
+// The list pane filters by name, description and reference and by status; the open secret
+// (`/secrets/<ref>`, the ref URL-encoded) has its own detail pane with Overview and Usage tabs.
+// Above the split, up to two banners: no value on this Mac (Add value(s)), then changes waiting
+// for approval (Review) — each closable with × = Ignore, shared with Overview. Add secret stores a
+// standalone secret under an id Coffer mints; Find plaintext keys moves values out of skills and
+// MCP servers into the store. No value is ever on this page until Reveal is chosen.
 import { useState } from "react";
-import { IdCard, Plus, RotateCcw, ScanSearch } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { IdCard, Plus, ScanSearch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AddSecretDialog } from "@/components/secret/AddSecretDialog";
 import { AddValuesDialog } from "@/components/secret/AddValuesDialog";
-import { DeleteSecretDialog } from "@/components/secret/DeleteSecretDialog";
-import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
-import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
-import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
-import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
 import { ApprovalsOffNote } from "@/components/secret/ApprovalsOffNote";
+import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
+import { SecretPane } from "@/components/secret/SecretPane";
 import { SecretsBanners } from "@/components/secret/SecretsBanners";
-import { SecretsBrowser } from "@/components/secret/SecretsBrowser";
+import { SecretsList } from "@/components/secret/SecretsList";
 import { isMissingHere } from "@/components/secret/secretRows";
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
+import { NothingSelected } from "@/components/ListPaneStates";
 import { PageHeader } from "@/components/PageHeader";
+import { SplitView } from "@/components/SplitView";
+import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { Button } from "@/components/ui/button";
-import type { SecretRef } from "@/lib/api/secret";
-import { translateApiError } from "@/lib/api/errors";
 import { usePendingApprovals } from "@/lib/hooks/useApprovals";
 import { useSecrets } from "@/lib/hooks/useSecrets";
+import { cn } from "@/lib/utils";
 
-type Open =
-  | { dialog: "add" | "scan" | "values" }
-  | { dialog: SecretRowAction; row: SecretRef }
-  | null;
+type Open = "add" | "scan" | "values" | null;
 
 export function SecretsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { id = "" } = useParams<{ id?: string }>();
   const secrets = useSecrets();
   const approvals = usePendingApprovals();
   const waitingApprovals = approvals.data?.approvals ?? [];
   const [open, setOpen] = useState<Open>(null);
   const rows = secrets.data?.refs ?? [];
+  const match = id ? rows.find((r) => r.ref === id) : undefined;
   const missing = rows.filter(isMissingHere);
-  const firstRun = !secrets.isPending && !secrets.error && rows.length === 0;
+  const firstRun = !secrets.isPending && !secrets.error && rows.length === 0 && !id;
 
-  const rowFor = (dialog: SecretRowAction) =>
-    open && open.dialog === dialog && "row" in open ? open.row : null;
   const closeTo = (next: boolean) => {
     if (!next) setOpen(null);
   };
   const addButton = (
-    <Button onClick={() => setOpen({ dialog: "add" })}>
+    <Button onClick={() => setOpen("add")}>
       <Plus aria-hidden /> {t("secrets.add.open")}
     </Button>
   );
   const scanButton = (
-    <Button variant="outline" onClick={() => setOpen({ dialog: "scan" })}>
+    <Button variant="outline" onClick={() => setOpen("scan")}>
       <ScanSearch aria-hidden /> {t("secrets.scan.open")}
     </Button>
   );
 
+  // While the list loads or failed (its pane shows why), the right pane stays empty.
+  let pane: JSX.Element | null;
+  if (secrets.error || secrets.isPending) {
+    pane = null;
+  } else if (match) {
+    pane = (
+      <SecretPane
+        key={match.ref}
+        row={match}
+        basePath={`/secrets/${encodeURIComponent(match.ref)}`}
+        onDeleted={() => navigate("/secrets", { replace: true })}
+      />
+    );
+  } else if (id) {
+    pane = <DetailNotFound kind="secrets" id={id} backTo="/secrets" icon={IdCard} />;
+  } else {
+    pane = <NothingSelected icon={IdCard} />;
+  }
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t("secrets.title")}
-        subtitle={t("secrets.subtitle")}
-        actions={
-          firstRun ? null : (
-            <div className="flex flex-wrap items-center gap-2">
-              {scanButton}
-              {addButton}
-            </div>
-          )
-        }
-      />
-
-      <ApprovalsOffNote />
-
-      <SecretsBanners
-        rows={rows}
-        approvals={waitingApprovals}
-        onAddValues={() => setOpen({ dialog: "values" })}
-      />
-
-      {secrets.error ? (
-        <EmptyState
-          tone="error"
-          title={t("secrets.loadFailed")}
-          description={translateApiError(t, secrets.error)}
-          action={
-            <Button variant="outline" onClick={() => void secrets.refetch()}>
-              <RotateCcw aria-hidden /> {t("common.retry")}
-            </Button>
+    <div className={cn(PAGE_BLEED, "flex-col")}>
+      <div className={cn(PAGE_BLEED_HEAD, "flex shrink-0 flex-col gap-4 pb-4")}>
+        <PageHeader
+          title={t("secrets.title")}
+          subtitle={t("secrets.subtitle")}
+          actions={
+            firstRun ? null : (
+              <div className="flex flex-wrap items-center gap-2">
+                {scanButton}
+                {addButton}
+              </div>
+            )
           }
         />
-      ) : firstRun ? (
-        <EmptyState
-          icon={IdCard}
-          title={t("secrets.empty.title")}
-          description={t("secrets.empty.body")}
-          action={addButton}
-          secondaryAction={scanButton}
-        />
-      ) : (
-        <SecretsBrowser
+        <ApprovalsOffNote />
+        <SecretsBanners
           rows={rows}
-          isLoading={secrets.isPending}
-          onAction={(dialog, row) => setOpen({ dialog, row })}
+          approvals={waitingApprovals}
+          onAddValues={() => setOpen("values")}
+        />
+      </div>
+
+      {firstRun ? (
+        <div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-8 pb-20">
+          <EmptyState
+            icon={IdCard}
+            title={t("secrets.empty.title")}
+            description={t("secrets.empty.body")}
+            action={addButton}
+            secondaryAction={scanButton}
+          />
+        </div>
+      ) : (
+        <SplitView
+          storageKey="secrets.list"
+          defaultListWidth={340}
+          label={t("splitView.resizeList")}
+          className="min-h-0 flex-1 border-t border-border-subtle"
+          listClassName="bg-surface-sidebar"
+          detailClassName="overflow-y-auto"
+          list={
+            <SecretsList
+              rows={rows}
+              isLoading={secrets.isPending}
+              error={secrets.error}
+              onRetry={() => void secrets.refetch()}
+              selectedRef={match?.ref ?? null}
+            />
+          }
+          detail={<div className="px-7 pb-5 pt-5">{pane}</div>}
         />
       )}
 
-      <AddSecretDialog
-        open={open?.dialog === "add"}
-        onOpenChange={closeTo}
-        existing={rows}
-        onReplaceInstead={(row) => setOpen({ dialog: "replace", row })}
-      />
-      <ScanSecretsDialog open={open?.dialog === "scan"} onOpenChange={closeTo} />
-      <AddValuesDialog open={open?.dialog === "values"} onOpenChange={closeTo} rows={missing} />
-      <ReplaceSecretDialog row={rowFor("replace")} onOpenChange={closeTo} />
-      <RevealSecretDialog row={rowFor("reveal")} onOpenChange={closeTo} />
-      <DeleteSecretDialog row={rowFor("delete")} onOpenChange={closeTo} />
+      <AddSecretDialog open={open === "add"} onOpenChange={closeTo} />
+      <ScanSecretsDialog open={open === "scan"} onOpenChange={closeTo} />
+      <AddValuesDialog open={open === "values"} onOpenChange={closeTo} rows={missing} />
     </div>
   );
 }

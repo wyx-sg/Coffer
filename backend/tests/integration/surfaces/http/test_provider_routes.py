@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import tomllib
 
 import pytest
@@ -158,7 +159,7 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
         # The minted ref is opaque — the connection's name must not be
         # recoverable from it, or the name is a key again.
         ref = body["secret_ref"]
-        assert ref.startswith("provider/") and "acme" not in ref
+        assert re.fullmatch(r"secret/[0-9a-f]{32}", ref) and "acme" not in ref
         # the secret landed in the vault under that ref
         ex = c.get(f"/api/v1/secrets/{ref}/exists")
         assert ex.status_code == 200 and ex.json()["present"] is True
@@ -173,18 +174,18 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
 def test_create_reusing_secret_ref(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59720)
     with _client(app) as c:
-        c.post("/api/v1/secrets", json={"ref": "shared/key", "value": "sk-shared"})
+        c.post("/api/v1/secrets", json={"ref": "secret/" + "d" * 32, "value": "sk-shared"})
         r = c.post(
             "/api/v1/providers",
             json={
                 "name": "reuse",
                 "protocol": "openai",
                 "base_url": "https://gw/v1",
-                "secret_ref": "shared/key",
+                "secret_ref": "secret/" + "d" * 32,
             },
         )
         assert r.status_code == 201, r.text
-        assert r.json()["secret_ref"] == "shared/key"
+        assert r.json()["secret_ref"] == "secret/" + "d" * 32
 
 
 @pytest.mark.acceptance(

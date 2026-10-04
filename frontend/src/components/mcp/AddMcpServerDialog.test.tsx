@@ -146,7 +146,7 @@ describe("AddMcpServerDialog — paste box", () => {
     // No Secret switch: the value is the shared row, a new secret from its 🔑 menu.
     expect(screen.queryByRole("switch")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "NOTION_TOKEN: secret notion_token" }),
+      screen.getByRole("button", { name: "NOTION_TOKEN: secret NOTION_TOKEN" }),
     ).toBeInTheDocument();
     expect(screen.getByText("New · saved on Add")).toBeInTheDocument();
     expect(screen.getByTestId("add-server-reach")).toBeInTheDocument();
@@ -171,9 +171,9 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(value("Name")).toBe("github");
     expect(value("Command")).toBe("npx");
     expect(value("Arguments")).toBe("-y @modelcontextprotocol/server-github");
-    // The token looks like a secret: it becomes a new one, kept by name.
+    // The token looks like a secret: it becomes a new one, labelled with its key.
     expect(
-      screen.getByRole("button", { name: "GITHUB_TOKEN: secret github_token" }),
+      screen.getByRole("button", { name: "GITHUB_TOKEN: secret GITHUB_TOKEN" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
@@ -183,8 +183,13 @@ describe("AddMcpServerDialog — paste box", () => {
     };
     expect(register.config.transport.args).toEqual(["-y", "@modelcontextprotocol/server-github"]);
     expect(calls.map((c) => c[0]).slice(0, 2)).toEqual(["/secrets", "/resources"]);
-    expect(posts("/secrets")[0][1]?.body).toEqual({ ref: "secret/github_token", value: "ghp_x" });
-    expect(register.config.transport.secret_refs).toEqual({ GITHUB_TOKEN: "secret/github_token" });
+    expect(posts("/secrets")[0][1]?.body).toEqual({
+      ref: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
+      value: "ghp_x",
+    });
+    expect(register.config.transport.secret_refs).toEqual({
+      GITHUB_TOKEN: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
+    });
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(1));
   });
 
@@ -215,7 +220,7 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(value("Command")).toBe("uvx");
     expect(value("Arguments")).toBe("docs-mcp --verbose");
     expect(
-      screen.getByRole("button", { name: "DOCS_TOKEN: secret docs_token" }),
+      screen.getByRole("button", { name: "DOCS_TOKEN: secret DOCS_TOKEN" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Value of REGION")).toHaveValue("eu");
   });
@@ -394,7 +399,7 @@ describe("AddMcpServerDialog — form", () => {
     );
     await continueWhenRead();
     expect(
-      screen.getByRole("button", { name: "Authorization: secret authorization" }),
+      screen.getByRole("button", { name: "Authorization: secret Authorization" }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("api"));
@@ -403,9 +408,11 @@ describe("AddMcpServerDialog — form", () => {
     const transport = (posts("/resources")[0][1]?.body as { config: { transport: Http } }).config
       .transport;
     expect(transport.headers).toEqual({ "X-Region": "us-east" });
-    expect(transport.secret_refs).toEqual({ Authorization: "secret/authorization" });
+    expect(transport.secret_refs).toEqual({
+      Authorization: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
+    });
     expect(posts("/secrets")[0][1]?.body).toEqual({
-      ref: "secret/authorization",
+      ref: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
       value: "Bearer abc",
     });
   });
@@ -429,7 +436,7 @@ describe("AddMcpServerDialog — form", () => {
     // What the paste flagged secret is stored in Coffer, not left as plain text.
     await waitFor(() => expect(posts("/secrets")).toHaveLength(1));
     expect(posts("/secrets")[0][1]?.body).toEqual({
-      ref: "secret/authorization",
+      ref: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
       value: "Bearer t0k",
     });
   });

@@ -18,7 +18,9 @@ the provider connection's base URL and a custom tool's auth are the next two.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import pathlib
+import time
 from collections.abc import Awaitable, Callable, Mapping
 
 from coffer.application.audit_service import AuditService
@@ -26,8 +28,15 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.secret.boundary import SecretBoundary
 from coffer.application.secret.presence import PresenceGrants, derive_grant_key
 from coffer.application.secret.resolver import SecretResolver, SecretStorePort
+from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource
-from coffer.domain.secrets import SecretApproval, SecretDestination
+from coffer.domain.secrets import (
+    ORIGIN_DIALOG,
+    SecretApproval,
+    SecretDestination,
+    SecretNote,
+    is_minted_ref,
+)
 from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
 from coffer.infrastructure.secret.build_identity import keychain_access_group
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
@@ -38,6 +47,7 @@ from coffer.infrastructure.secret.master_key_backends import (
     KeychainAccessGroupBackend,
 )
 from coffer.infrastructure.vault import home as vault_home
+from coffer.surfaces.http.secret_notes_wiring import optional_secret_notes
 from coffer.surfaces.http.secret_schemas import ApprovalOut
 
 #: One resource's secrets as the boundary sees them: where they go, and which
@@ -106,9 +116,44 @@ def set_secret_boundary(boundary: SecretBoundary | None, grants: PresenceGrants 
     _boundary, _grants = boundary, grants
 
 
+_USE_AUDIT_EVERY = 60.0
+_use_audit: tuple[AuditService, asyncio.AbstractEventLoop] | None = None
+_last_use_audit: dict[tuple[str, str, str, str], float] = {}
+
+
+def _audit_use(ref: str, dest: SecretDestination, slot: str) -> None:
+    """Audit one decrypt-for-use as ``secret_resolved``, naming the destination
+    and slot and never the value; a (ref, destination, slot) at most once a
+    minute, so a path that decrypts on every request does not flood the trail."""
+    if _use_audit is None:
+        return
+    audit, loop = _use_audit
+    key = (ref, dest.kind, dest.uid, slot)
+    now = time.monotonic()
+    last = _last_use_audit.get(key)
+    if last is not None and now - last < _USE_AUDIT_EVERY:
+        return
+    _last_use_audit[key] = now
+    coro = audit.record(
+        AuditEventType.SECRET_RESOLVED.value,
+        actor="coffer",
+        details={
+            "ref": ref,
+            "destination_kind": dest.kind,
+            "destination_uid": dest.uid,
+            "destination_name": dest.label,
+            "slot": slot,
+        },
+    )
+    try:
+        asyncio.run_coroutine_threadsafe(coro, loop)
+    except RuntimeError:
+        coro.close()
+
+
 def boundary_resolver(store: SecretStorePort) -> SecretResolver:
     """The resolver every consumer of a secret gets: guarded once the daemon is up."""
-    return SecretResolver(store, _boundary)
+    return SecretResolver(store, _boundary, on_use=_audit_use)
 
 
 def master_key_path(home: pathlib.Path | None = None) -> pathlib.Path:
@@ -156,12 +201,20 @@ def init_secret_boundary(
     # would act on this home with them.
     _ON_APPROVED.clear()
     _OTHER_SOURCES.clear()
+
     # A build that keeps its master key in the signed access group protects it, so
     # approvals default on; any other build cannot, and they default off (spec
     # secret "Default the approval protection by the build"). The same fact that
     # chooses the master key's storage (:func:`make_master_key_manager`).
+    def note_of(ref: str) -> SecretNote | None:
+        notes = optional_secret_notes()
+        return notes.get(ref) if notes is not None else None
+
     boundary = SecretBoundary(
-        FileBoundaryStore(home), store, default_on=keychain_access_group() is not None
+        FileBoundaryStore(home),
+        store,
+        default_on=keychain_access_group() is not None,
+        note_of=note_of,
     )
     # Every path that deletes a ref (the route, a resource's release, a failed
     # registration's rollback) forgets its approved destinations.
@@ -214,6 +267,39 @@ async def current_destinations(resources: ResourceService, audit: AuditService) 
     return out
 
 
+async def _claim_minted(resource: Resource, actor: str) -> None:
+    """A secret written for a resource (origin ``dialog``) and cited first by
+    ``resource`` was minted for it: record that, so deleting the resource releases the secret
+    once nothing else cites it (spec secret "Release unshared
+    references when a resource is deleted")."""
+    notes = optional_secret_notes()
+    if _sources is None or notes is None:
+        return
+    resources = _sources[0]
+    refs = [r for r in resources.secret_slots(resource).values() if is_minted_ref(r)]
+    if not refs:
+        return
+    cited = await resources.cited_secret_refs()
+    for ref in dict.fromkeys(refs):
+        if any(c.uid != resource.uid for c in cited.get(ref, [])):
+            continue
+
+        # Only a secret written for a resource (a dialog's, an import's) is
+        # claimed; one a person added on the page stays theirs.
+        def claim(note: SecretNote | None, uid: str = resource.uid) -> SecretNote | None:
+            if note is not None and note.origin == ORIGIN_DIALOG and note.created_for is None:
+                return dataclasses.replace(note, created_for=uid)
+            return note
+
+        await asyncio.to_thread(
+            notes.update,
+            ref,
+            claim,
+            summary=f"secret {ref} was minted for {resource.name}",
+            actor=actor,
+        )
+
+
 class ResourceBindingSettler:
     """The post-register seam (``ResourceService`` calls it after every create
     and every config change): the destination its kind declared is evaluated
@@ -223,6 +309,7 @@ class ResourceBindingSettler:
     secret's binding when its destination is registered")."""
 
     async def settle(self, resource: Resource, actor: str) -> None:
+        await _claim_minted(resource, actor)
         describe = _RESOURCE_DESTINATIONS.get(resource.kind)
         boundary = optional_secret_boundary()
         if describe is None or boundary is None:
@@ -243,8 +330,9 @@ def remember_destination_sources(resources: ResourceService, audit: AuditService
 
     Called once per start, after every kind has registered its destinations.
     """
-    global _sources
+    global _sources, _use_audit
     _sources = (resources, audit)
+    _use_audit = (audit, asyncio.get_running_loop())
     # From here on a registration settles its bindings (the post-register seam).
     resources.set_binding_settler(ResourceBindingSettler())
 

@@ -147,9 +147,11 @@ shape is the framework's):
 | `secret_set`       | `{ref}`                          |
 | `secret_revealed`  | `{ref}` — the desktop app's presence-gated reveal |
 | `secret_deleted`   | `{ref}`                          |
+| `secret_notes_updated` | `{ref, fields}` — which of label, description changed, never their text |
+| `secret_migrated`  | `{from, to}` — an old ref moved to a minted `secret/<hex>` at start |
 | `master_key_relocated` | `{to}` |
 | `master_key_exported`  | `{path, fingerprint}` — the desktop app's key backup |
-| `secret_resolved`      | `{name, argv0, cwd}` — one `coffer run` resolve, never the rest of argv |
+| `secret_resolved`      | `{ref, destination_kind, destination_uid, destination_name, slot}` — a decrypt-for-use by a resource's destination, once a minute per destination; `{ref, name, argv0, cwd}` — one `coffer run` resolve, never the rest of argv |
 | `secret_approval_requested` / `_approved` / `_rejected` | `{approval_id, op, ref}` |
 
 No payload carries a value (see "Keep secret values out of secret audit

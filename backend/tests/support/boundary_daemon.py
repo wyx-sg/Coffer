@@ -23,6 +23,7 @@ import coffer.surfaces.cli._client as _cli_client
 from coffer.application.secret.presence import derive_grant_key, sign_grant
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.domain.secrets import is_minted_ref
 from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
 from coffer.infrastructure.vault.home import local_root
 from coffer.surfaces.http.app import create_app
@@ -66,9 +67,14 @@ class BoundaryDaemon:
     # --- convenience ---------------------------------------------------------
 
     def store(self, ref: str, value: str) -> None:
-        """Store a value (a new ref, standalone or not, is written at once)."""
-        r = self.client.post("/api/v1/secrets", json={"ref": ref, "value": value})
-        assert r.status_code == 204, r.text
+        """Store a value under ``ref`` at once. The route only creates a secret
+        under a minted id (a person cannot pick one), so a test's own name goes
+        straight to the store, as an older vault's would already be."""
+        if is_minted_ref(ref) or get_secret_store().exists(ref):
+            r = self.client.post("/api/v1/secrets", json={"ref": ref, "value": value})
+            assert r.status_code == 204, r.text
+        else:
+            get_secret_store().set(ref, value)
 
     def value(self, ref: str) -> str | None:
         return get_secret_store().get(ref)

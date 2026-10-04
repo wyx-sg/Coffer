@@ -29,8 +29,3 @@ export function withListState(prev: URLSearchParams, state: SecretListState): UR
   else out.delete("status");
   return out;
 }
-
-/** Whether any filter narrows the list. */
-export function isFiltered(state: SecretListState): boolean {
-  return state.q.trim() !== "" || state.status !== "all";
-}

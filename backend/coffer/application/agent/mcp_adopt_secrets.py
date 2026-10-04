@@ -14,7 +14,6 @@ from collections.abc import Mapping
 from typing import Protocol
 
 from coffer.domain.agent.mcp_entries import McpEntry
-from coffer.domain.secrets import is_standalone_ref
 from coffer.domain.workspace_errors import AdoptSecretRefExists
 
 
@@ -31,14 +30,14 @@ class SecretStorePort(Protocol):
 async def write_new_refs(store: SecretStorePort, refs: Mapping[str, str], entry: McpEntry) -> None:
     """Store each flagged value of ``entry`` under its ``refs`` entry.
 
-    Refuses (``AdoptSecretRefExists``) a ref that already holds a value or is a
-    standalone name, before anything is written. The writes run in one worker
-    thread: off the loop, and once started they finish even if the awaiting
-    task is cancelled, so a partial write is always rolled back.
+    Refuses (``AdoptSecretRefExists``) a ref that already holds a value, before
+    anything is written. The writes run in one worker thread: off the loop, and
+    once started they finish even if the awaiting task is cancelled, so a
+    partial write is always rolled back.
     """
 
     def _taken() -> list[str]:
-        return [r for r in set(refs.values()) if is_standalone_ref(r) or store.exists(r)]
+        return [r for r in set(refs.values()) if store.exists(r)]
 
     taken = await asyncio.to_thread(_taken)
     if taken:

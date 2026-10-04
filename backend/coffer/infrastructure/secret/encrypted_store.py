@@ -29,8 +29,7 @@ Files are ``0600`` and the directories holding them ``0700``. Plaintext exists
 only in memory between decrypt and the spawn that consumes it; no ciphertext
 reaches logs or audit rows, and a commit summary names the ref only.
 
-Async callers go through the ``a*`` wrappers: a vault write runs git, and
-nothing blocking belongs on the event loop.
+Async callers go through the ``a*`` wrappers: a vault write runs git.
 """
 
 from __future__ import annotations
@@ -80,6 +79,7 @@ class EncryptedSecretStore:
         self._home = home
         self._local_lock = threading.RLock()
         self._removed_hooks: list[Callable[[str], None]] = []
+        self._created_hooks: list[Callable[[str], None]] = []
         self._times = JsonStore(lambda: local_root(self._home) / "secret-boundary" / "times.json")
         self._used = JsonStore(
             lambda: local_root(self._home) / "secret-boundary" / "last-used.json"
@@ -95,10 +95,7 @@ class EncryptedSecretStore:
 
     def on_removed(self, hook: Callable[[str], None]) -> None:
         """Call ``hook(ref)`` after a ref's ciphertext is really removed, by
-        whichever path removed it. The secret boundary uses it to forget where
-        the ref had been approved to go (spec secret "List every stored and cited
-        secret with what uses it": a delete that removes a ref forgets its
-        destinations)."""
+        whichever path removed it (the boundary forgets its approved destinations)."""
         self._removed_hooks.append(hook)
 
     def use_key(self, key: bytes) -> None:
@@ -168,7 +165,12 @@ class EncryptedSecretStore:
 
         self._used.update(stamp)
 
+    def on_created(self, hook: Callable[[str], None]) -> None:
+        """Call ``hook(ref)`` after a value is written under a new ref."""
+        self._created_hooks.append(hook)
+
     def set(self, ref: str, value: str) -> None:
+        existed = bool(self._created_hooks) and self.exists(ref)
         data = self._fernet.encrypt(value.encode()) + b"\n"
         if is_local_ref(ref):
             path = self.path_of(ref)
@@ -182,10 +184,11 @@ class EncryptedSecretStore:
             times.setdefault(ref, _now())
 
         self._times.update(first_seen)
+        for hook in self._created_hooks if not existed else ():
+            hook(ref)
 
     def exists(self, ref: str) -> bool:
-        """Presence probe that never decrypts, so ciphertext written under
-        another key still reports present."""
+        """Presence probe that never decrypts (another key's ciphertext is present)."""
         return self.path_of(ref).is_file()
 
     def delete(self, ref: str) -> None:
@@ -214,6 +217,16 @@ class EncryptedSecretStore:
             for hook in self._removed_hooks:
                 hook(ref)
         return removed
+
+    def carry_records(self, old: str, new: str) -> None:
+        """Give ``new`` the creation and last-used stamps held for ``old``."""
+
+        def carry(records: dict[str, object]) -> None:
+            if old in records:
+                records[new] = records[old]
+
+        self._times.update(carry)
+        self._used.update(carry)
 
     def created_at(self, ref: str) -> datetime | None:
         """When this machine first stored ``ref``; None when it is not stored
@@ -320,8 +333,7 @@ class EncryptedSecretStore:
             txn.delete(rel, current.fingerprint)
         return True
 
-    # --- async facade: the same calls, off the event loop --------------------
-
+    # --- async facade: the same calls, off the event loop
     async def aget(self, ref: str) -> str | None:
         return await asyncio.to_thread(self.get, ref)
 

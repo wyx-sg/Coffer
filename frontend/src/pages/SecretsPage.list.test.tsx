@@ -1,4 +1,4 @@
-// src/pages/SecretsPage.list.test.tsx — the Secrets list at scale: readable names, status and search, time-column sort, batching, and bulk selection.
+// src/pages/SecretsPage.list.test.tsx — the Secrets list pane at scale: readable names, status and search, batching, and bulk selection.
 //
 // Only the network boundary (`secretsApi`) and the desktop shell's seam are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -49,21 +49,24 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     readable_by_local_processes: false,
     unreferenced: false,
     uri: null,
+    label: null,
+    description: null,
+    created_for: null,
     ...over,
   };
 }
 
 const JIRA = ref({
   ref: "mcp_server/26dddfa9ff00/JIRA_PERSONAL_TOKEN",
-  cited_by: [{ kind: "mcp_server", name: "jira", uid: "u-jira" }],
+  cited_by: [{ kind: "mcp_server", name: "jira", uid: "u-jira", slot: null }],
 });
 const SEATALK = ref({
   ref: "channel/4c838e8fa72e/app-secret",
-  cited_by: [{ kind: "channel", name: "seatalk", uid: "u-st" }],
+  cited_by: [{ kind: "channel", name: "seatalk", uid: "u-st", slot: null }],
 });
 const GROQ = ref({
   ref: "provider/b7b7526c/key",
-  cited_by: [{ kind: "provider", name: "groq", uid: "u-groq" }],
+  cited_by: [{ kind: "provider", name: "groq", uid: "u-groq", slot: null }],
   readable_by_local_processes: true,
 });
 const OLD_A = ref({
@@ -98,6 +101,7 @@ function renderPage(url = "/secrets") {
             <Where />
             <Routes>
               <Route path="/secrets" element={<SecretsPage />} />
+              <Route path="/secrets/:id" element={<SecretsPage />} />
             </Routes>
           </MemoryRouter>
         </TooltipProvider>
@@ -107,13 +111,9 @@ function renderPage(url = "/secrets") {
 }
 
 const names = () =>
-  screen
-    .getAllByRole("row")
-    .slice(1)
-    .map(
-      (r) =>
-        within(r).queryByText(/^[A-Za-z0-9_.-]+$/, { selector: "span.font-mono" })?.textContent,
-    );
+  within(screen.getByRole("list", { name: "Secrets" }))
+    .getAllByRole("link")
+    .map((a) => a.querySelector("span.font-label")?.textContent);
 const where = () => screen.getByTestId("where").textContent;
 
 beforeEach(() => {
@@ -125,64 +125,37 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SecretsPage list", () => {
-  test("a secret is listed by its own short name, with its users in the Used by column", async () => {
-    renderPage();
-    const row = (await screen.findByText("JIRA_PERSONAL_TOKEN")).closest("tr")!;
-    // No owner line under the name: what uses a secret is the Used by column.
-    expect(within(row).queryByText("MCP server · jira")).not.toBeInTheDocument();
-    expect(within(row).getByRole("button", { name: /is used by 1 thing/ })).toHaveTextContent(
-      "jira",
-    );
-    expect(screen.queryByText(JIRA.ref)).not.toBeInTheDocument();
-    // The mark for a value local processes can read stays.
-    const groq = screen.getByText("key").closest("tr")!;
-    expect(within(groq).getByLabelText("Readable by local processes")).toBeInTheDocument();
-    // The full reference stays one hover away, and copyable.
-    fireEvent.click(within(row).getByRole("button", { name: `Actions for ${JIRA.ref}` }));
-    expect(
-      screen.getByRole("menuitem", { name: `Copy reference (${JIRA.ref})` }),
-    ).toBeInTheDocument();
-  });
-
-  test("Used by names the first two users and +N, and the popover finds and scrolls", async () => {
-    const many = ref({
-      ref: "secret/shared",
-      uri: "coffer://secret/shared",
-      cited_by: [
-        { kind: "mcp_server", name: "github", uid: "g" },
-        { kind: "provider", name: "OpenAI", uid: "o" },
-        ...Array.from({ length: 6 }, (_, i) => ({
-          kind: "skill",
-          name: `skill-${i}`,
-          uid: `s${i}`,
-        })),
+  test("a secret is listed by a readable name, never a hex id, and opens on its own page", async () => {
+    const hex = ref({
+      ref: "secret/0123456789abcdef0123456789abcdef",
+      cited_by: [{ kind: "mcp_server", name: "server", uid: "u-s", slot: null }],
+      bindings: [
+        {
+          approval_id: null,
+          destination_kind: "mcp_server",
+          destination_uid: "u-s",
+          slot: "API_KEY",
+          status: "approved" as const,
+        },
       ],
     });
-    api.list.mockResolvedValue({ refs: [many] });
+    api.list.mockResolvedValue({ refs: [JIRA, hex, OLD_A] });
     renderPage();
-    const trigger = await screen.findByRole("button", { name: /is used by 8 things/ });
-    expect(trigger).toHaveTextContent("github, OpenAI");
-    expect(trigger).toHaveTextContent("+6");
-    expect(trigger.textContent).not.toMatch(/^8/);
-    fireEvent.click(trigger);
-    // The type blocks come in order: Model provider first, then MCP server, then Skills.
-    const find = await screen.findByRole("textbox", { name: "Find…" });
-    expect(find).toHaveFocus();
-    const rows = screen.getAllByRole("link").map((l) => l.textContent);
-    expect(rows[0]).toContain("OpenAI");
-    expect(rows[1]).toContain("github");
-    fireEvent.change(find, { target: { value: "skill-3" } });
-    expect(screen.getAllByRole("link")).toHaveLength(1);
-    // Names only: the type ("MCP server") matches nothing.
-    fireEvent.change(find, { target: { value: "mcp" } });
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
-    fireEvent.change(find, { target: { value: "git" } });
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    // A legacy resource ref reads "citer · slot"; a hex id with a binding reads the same way.
+    expect(await screen.findByText("jira · JIRA_PERSONAL_TOKEN")).toBeInTheDocument();
+    expect(screen.getByText("server · API_KEY")).toBeInTheDocument();
+    expect(screen.queryByText(/0123456789abcdef/)).not.toBeInTheDocument();
+    // What uses a secret is a count on the row, with no popover.
+    const row = screen.getByText("jira · JIRA_PERSONAL_TOKEN").closest("li")!;
+    expect(within(row).getByText("used by 1")).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /is used by/ })).toBeNull();
+    fireEvent.click(within(row).getByRole("link"));
+    expect(where()).toBe(`/secrets/${encodeURIComponent(JIRA.ref)}`);
   });
 
   test("the status segments have no counts and narrow the list", async () => {
     renderPage();
-    await screen.findByText("key");
+    await screen.findByText("groq · key");
     expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "In use" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Not used" }));
@@ -197,11 +170,11 @@ describe("SecretsPage list", () => {
 
   test("no match offers Clear filters, which resets the search and the status", async () => {
     renderPage("/secrets?status=unused&q=nothing-here");
-    expect(await screen.findByText("No secret matches this search.")).toBeInTheDocument();
-    const clears = screen.getAllByRole("button", { name: "Clear filters" });
+    expect(await screen.findByText("No secret matches “nothing-here”")).toBeInTheDocument();
+    const clears = screen.getAllByRole("button", { name: "Clear filter" });
     fireEvent.click(clears[clears.length - 1]);
     expect(where()).toBe("/secrets");
-    expect(await screen.findByText("key")).toBeInTheDocument();
+    expect(await screen.findByText("groq · key")).toBeInTheDocument();
   });
 
   test("a destination waiting for approval puts its row first, with its status word", async () => {
@@ -226,42 +199,20 @@ describe("SecretsPage list", () => {
       ],
     });
     renderPage();
-    const row = (await screen.findByText("key")).closest("tr")!;
+    const row = (await screen.findByText("groq · key")).closest("li")!;
     expect(await within(row).findByText("Waiting for approval")).toBeInTheDocument();
-    expect(names()[0]).toBe("key");
+    expect(names()[0]).toBe("groq · key");
     expect(screen.queryByText("Refused")).not.toBeInTheDocument();
   });
 
   test("search and status come from the URL", async () => {
     renderPage("/secrets?status=inUse&q=o");
-    await screen.findByText("key");
+    await screen.findByText("groq · key");
     expect((screen.getByRole("textbox", { name: "Find a secret" }) as HTMLInputElement).value).toBe(
       "o",
     );
-    // "o" matches a secret's name or the name of what uses it; unused ones are out.
-    expect(names()).toEqual(["JIRA_PERSONAL_TOKEN", "key"]);
-  });
-
-  test("only time columns sort, in three clicks, and the sort stays in the URL", async () => {
-    renderPage();
-    await screen.findByText("key");
-    // Names never sort.
-    expect(screen.queryByRole("button", { name: "Name" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Used by" })).not.toBeInTheDocument();
-    const lastUsed = () => screen.getByRole("button", { name: "Last used" });
-    expect(names().slice(-2)).toEqual(["old-a", "old-b"]);
-    fireEvent.click(lastUsed());
-    expect(where()).toBe("/secrets?sort=last_used");
-    expect(names().slice(0, 2)).toEqual(["old-b", "old-a"]);
-    fireEvent.click(lastUsed());
-    expect(where()).toBe("/secrets?sort=last_used%3Aasc");
-    expect(names().slice(0, 2)).toEqual(["old-a", "old-b"]);
-    fireEvent.click(lastUsed());
-    expect(where()).toBe("/secrets");
-    fireEvent.click(screen.getByRole("button", { name: "Created" }));
-    expect(where()).toBe("/secrets?sort=created");
-    // Newest first: the two oldest are last.
-    expect(names().slice(-2)).toEqual(["old-b", "old-a"]);
+    // "o" matches a secret's display name or reference; unused ones are out.
+    expect(names()).toEqual(["groq · key", "jira · JIRA_PERSONAL_TOKEN"]);
   });
 
   test("a thousand secrets render in batches while search covers all of them", async () => {
@@ -275,11 +226,11 @@ describe("SecretsPage list", () => {
     api.list.mockResolvedValue({ refs: many });
     renderPage();
     await screen.findByText("key-0000");
-    expect(screen.getAllByRole("row")).toHaveLength(51);
+    expect(names()).toHaveLength(50);
     expect(screen.getByText("Showing 50 of 1000")).toBeInTheDocument();
     expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
-    expect(screen.getAllByRole("row")).toHaveLength(101);
+    expect(names()).toHaveLength(100);
     fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
       target: { value: "key-0999" },
     });
@@ -289,16 +240,13 @@ describe("SecretsPage list", () => {
 
   test("the header box selects every secret the filters show, and the bar reads N of M", async () => {
     renderPage();
-    await screen.findByText("key");
-    // The checkbox column is always first, the header box is the select-all.
-    const first = screen.getAllByRole("row")[0];
-    expect(within(first).getAllByRole("checkbox")).toHaveLength(1);
+    await screen.findByText("groq · key");
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-a" }));
     const bar = screen.getByRole("region", { name: "Selected secrets" });
     expect(bar).toHaveTextContent("1 of 5 selected");
     expect(screen.queryByRole("textbox", { name: "Find a secret" })).not.toBeInTheDocument();
     expect(within(bar).queryByRole("checkbox")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select all secrets" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     expect(bar).toHaveTextContent("5 of 5 selected");
     // Esc clears the selection and brings the filters back.
     fireEvent.keyDown(document, { key: "Escape" });
@@ -307,9 +255,9 @@ describe("SecretsPage list", () => {
 
   test("a bulk delete skips and names what is in use, and deletes only the rest", async () => {
     renderPage();
-    await screen.findByText("key");
+    await screen.findByText("groq · key");
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-a" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select key" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select groq · key" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-b" }));
     const bar = screen.getByRole("region", { name: "Selected secrets" });
     // A secret in use does not turn Delete off: the confirmation names it and skips it.
@@ -318,7 +266,7 @@ describe("SecretsPage list", () => {
     fireEvent.click(del);
     const dialog = await screen.findByRole("dialog", { name: "Delete 3 secrets?" });
     expect(dialog).toHaveTextContent("old-a and old-b");
-    expect(dialog).toHaveTextContent("key is in use and will be skipped.");
+    expect(dialog).toHaveTextContent("groq · key is in use and will be skipped.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete 2 secrets" }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledTimes(2));
     expect(api.remove).toHaveBeenCalledWith("secret/old-a");

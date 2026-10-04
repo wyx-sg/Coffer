@@ -156,10 +156,10 @@ metadata:
 
 - **No virtualenv inside the skill.** A venv contains symlinks that resolve outside the folder, and Coffer refuses to import a folder with any such link. Keep it outside, for example `~/.cache/coffer-skill-venv`, and document the one-line rebuild in `SKILL.md`.
 - **No test caches.** Point pytest's `cache_dir` outside the folder and run with `PYTHONDONTWRITEBYTECODE=1`.
-- **No secrets.** A skill folder travels through vault sync into git, so it never holds a value. Store the secret in Coffer as a standalone secret (`coffer secret set secret/<name>`) and cite it as `coffer://secret/<name>` — in `connection.md`, or as the value in an env file the skill ships. Commands that need it run under `coffer run`, which sets the value only in that command's environment:
+- **No secrets.** A skill folder travels through vault sync into git, so it never holds a value. Store the secret in Coffer as a standalone secret (`coffer secret set --name "Orders DB"` mints its id and prints its `coffer://secret/<id>` URI) and cite that URI — in `connection.md`, or as the value in an env file the skill ships. Commands that need it run under `coffer run`, which sets the value only in that command's environment:
 
   ```sh
-  coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
+  coffer run --secret PGPASSWORD=<id> -- psql -h db.internal orders
   coffer run --env-file connection.env -- ./query.sh
   ```
 

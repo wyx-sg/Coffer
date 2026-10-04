@@ -97,6 +97,7 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     remember_destination_sources,
 )
 from coffer.surfaces.http.secret_composition import init_secret_store
+from coffer.surfaces.http.secret_index_wiring import wire_secret_index
 from coffer.surfaces.http.session_conversation_wiring import wire_session_conversations
 from coffer.surfaces.http.setup_lifespan import guarded
 from coffer.surfaces.http.vault_composition import build_vault_stores
@@ -246,6 +247,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Every kind has registered its secret destinations: the approval refresh
     # reads them from here on.
     remember_destination_sources(resource_svc, audit)
+    # What cites each secret, and the one-time move of old refs to minted ids.
+    await wire_secret_index(resource_svc, secret_store, audit, events)
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.

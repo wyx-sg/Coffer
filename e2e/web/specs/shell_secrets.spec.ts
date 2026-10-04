@@ -1,9 +1,10 @@
 // e2e/web/specs/shell_secrets.spec.ts
 //
 // The Secrets page at /secrets against a real daemon. Adding a secret from the
-// page stores it at once, with nothing to approve. A secret an MCP server cites
-// lists under In use naming that server, and Delete then says what still uses
-// it instead of deleting; an unused secret is deleted from its ⋯ menu. Those
+// page (a label and a value) stores it at once under a minted id, with nothing
+// to approve. A secret an MCP server cites opens on its own page naming that
+// server under Used by, and Delete then says what still uses it instead of
+// deleting; an unused secret is deleted from its ⋯ menu. Those
 // two store a resource-style ref (`e2e/<name>`). Only data this file creates is
 // touched, and each test removes it.
 //
@@ -12,7 +13,7 @@
 // covered in frontend/src/pages/SecretsPage.test.tsx, where the daemon's
 // answers can be fixed.
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -101,10 +102,21 @@ async function rejectApprovalsFor(ref: string): Promise<void> {
   }
 }
 
-test("adding a secret stores it at once, with nothing to approve", async ({
+/** The list pane's link for a secret, found by the name it is shown under. */
+const listLink = (page: Page, text: string) =>
+  page
+    .getByRole("list", { name: "Secrets" })
+    .getByRole("link")
+    .filter({ hasText: text });
+
+/** Where a secret's own page lives. */
+const pageOf = (ref: string) => `/secrets/${encodeURIComponent(ref)}`;
+
+test("adding a secret stores it at once under a minted id, with nothing to approve", async ({
   page,
 }) => {
-  const name = generateUniqueName("e2e-secret");
+  const label = generateUniqueName("e2e-secret");
+  let id = "";
   try {
     await page.goto("/secrets");
     await expect(
@@ -113,20 +125,23 @@ test("adding a secret stores it at once, with nothing to approve", async ({
 
     await page.getByRole("button", { name: "Add secret" }).first().click();
     const dialog = page.getByRole("dialog", { name: "Add secret" });
-    await dialog.getByLabel("Name").fill(name);
+    // A label and a value: no name to type.
+    await dialog.getByLabel("Name").fill(label);
     await dialog.getByLabel("Value").fill("e2e-not-a-real-value");
-    await expect(dialog).toContainText(`coffer://secret/${name}`);
     await dialog.getByRole("button", { name: "Add secret" }).click();
+    // The minted URI is offered to copy, and the dialog waits for Done.
+    const uri = dialog.getByText(/^coffer:\/\/secret\/[0-9a-f]{32}$/);
+    await expect(uri).toBeVisible();
+    id = ((await uri.textContent()) ?? "").replace("coffer://secret/", "");
+    await dialog.getByRole("button", { name: "Done" }).click();
     await expect(dialog).toBeHidden();
 
-    // It is listed, no approval waits, and no value is on the page.
-    await expect(page.getByText(name, { exact: true })).toBeVisible();
+    // It is listed by its label, no approval waits, and no value is on the page.
+    await expect(listLink(page, label)).toBeVisible();
     await expect(page.getByText(/Saved, waiting for approval/)).toHaveCount(0);
     await expect(page.getByText("e2e-not-a-real-value")).toHaveCount(0);
   } finally {
-    await api(`/secrets/secret/${encodeURIComponent(name)}`, {
-      method: "DELETE",
-    });
+    if (id) await api(`/secrets/secret/${id}`, { method: "DELETE" });
   }
 });
 
@@ -140,22 +155,18 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
     await registerCitingServer(server, secret);
     await rejectApprovalsFor(refOf(secret));
 
+    // A row in the list opens the secret on its own page.
     await page.goto("/secrets");
-    // One table of every secret; a row's Used by cell names what cites it.
-    const row = page
-      .getByRole("table")
-      .getByRole("row")
-      .filter({ has: page.getByRole("button", { name: `Actions for ${refOf(secret)}` }) });
-    await expect(row).toBeVisible();
-    await expect(row).toContainText(server);
+    await listLink(page, server).click();
+    await expect(page).toHaveURL(new RegExp(`${pageOf(refOf(secret))}$`));
+    const usedBy = page.getByRole("region", { name: "Used by" });
+    await expect(usedBy).toContainText(server);
 
-    await row
+    await page
       .getByRole("button", { name: `Actions for ${refOf(secret)}` })
       .click();
     await page.getByRole("menuitem", { name: "Delete…" }).click();
-    const blocked = page.getByRole("dialog", {
-      name: `${refOf(secret)} is in use`,
-    });
+    const blocked = page.getByRole("dialog", { name: /is in use$/ });
     await expect(blocked).toContainText(server);
     await expect(blocked).toContainText("MCP server");
     // The dialog only names what still reads the secret: it offers no delete,
@@ -168,13 +179,10 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
       `/mcp-servers/${server}`,
     );
     await blocked.getByRole("button", { name: "Close" }).last().click();
-    await expect(row).toBeVisible();
+    await expect(usedBy).toBeVisible();
 
-    // The citer opens that server's page.
-    await row
-      .getByRole("button", { name: new RegExp(`${refOf(secret)} is used by`) })
-      .click();
-    await page.getByRole("link", { name: server }).click();
+    // The citer, in Used by, opens that server's page.
+    await usedBy.getByRole("link", { name: new RegExp(server) }).click();
     await expect(page).toHaveURL(new RegExp(`/mcp-servers/${server}$`));
   } finally {
     await rejectApprovalsFor(refOf(secret));
@@ -187,31 +195,25 @@ test("an unused secret is deleted from its menu", async ({ page }) => {
   const name = generateUniqueName("e2e-secret");
   try {
     await storeSecret(name, "e2e-not-a-real-value");
-    await page.goto("/secrets");
-    const row = page
-      .getByRole("table")
-      .getByRole("row")
-      .filter({ has: page.getByRole("button", { name: `Actions for ${refOf(name)}` }) });
-    await expect(row).toBeVisible();
-    // Nothing cites it: its Used by cell offers no citer to open.
-    await expect(
-      row.getByRole("button", { name: new RegExp(`${refOf(name)} is used by`) }),
-    ).toHaveCount(0);
+    await page.goto(pageOf(refOf(name)));
+    // Nothing cites it.
+    await expect(page.getByRole("region", { name: "Used by" })).toContainText(
+      "Nothing",
+    );
 
+    // A browser cannot run the presence check, so Reveal names the app.
+    await expect(
+      page.getByRole("button", { name: "Reveal in the Coffer app" }),
+    ).toBeDisabled();
     await page
       .getByRole("button", { name: `Actions for ${refOf(name)}` })
       .click();
-    // A browser cannot run the presence check, so Reveal names the app.
-    await expect(
-      page.getByRole("menuitem", { name: "Reveal in the Coffer app" }),
-    ).toBeDisabled();
     await page.getByRole("menuitem", { name: "Delete…" }).click();
-    const confirm = page.getByRole("dialog", {
-      name: `Delete ${refOf(name)}?`,
-    });
+    const confirm = page.getByRole("dialog", { name: /^Delete .*\?$/ });
     await confirm.getByRole("button", { name: "Delete secret" }).click();
     await expect(confirm).toBeHidden();
-    await expect(row).toHaveCount(0);
+    await expect(page).toHaveURL(/\/secrets$/);
+    await expect(listLink(page, name)).toHaveCount(0);
   } finally {
     await deleteSecret(name);
   }

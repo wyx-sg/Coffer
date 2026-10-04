@@ -9,7 +9,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
@@ -42,14 +41,20 @@ interface Row {
   asked: Set<string>;
 }
 
-export function ReviewStep({ initial, taken, added, failures, pending, onBack, onClose, onSubmit }: Props) {
+export function ReviewStep({
+  initial,
+  taken,
+  added,
+  failures,
+  pending,
+  onBack,
+  onClose,
+  onSubmit,
+}: Props) {
   const { t } = useTranslation();
-  const { names: secretNames } = useSecretChoices();
   const [rows, setRows] = useState<Row[]>(() => {
-    // One set across the batch, so two servers' API_KEY never share a name.
-    const names = new Set(secretNames);
     return initial.map((server) => ({
-      server: { ...server, env: rowsFromParsed(server.env, names, true) },
+      server: { ...server, env: rowsFromParsed(server.env, true) },
       include: true,
       asked: askedKeysOf(server.env),
     }));
@@ -71,7 +76,9 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
   };
   // An asked key stays asked for until its value is typed in.
   const unfilled = (r: Row) =>
-    r.server.env.some((e) => r.asked.has(e.key.trim()) && e.value.kind === "plain" && e.value.value === "");
+    r.server.env.some(
+      (e) => r.asked.has(e.key.trim()) && e.value.kind === "plain" && e.value.value === "",
+    );
   const pendingRows = rows.filter((r) => r.include && !added.has(r.server.name));
   const blocked = rows.some(
     (r, i) =>
@@ -86,7 +93,7 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
     .filter((r) => r.include)
     .map((r) => ({
       ...r.server,
-      env: promoteAsked(keptRows(r.server.env), r.asked, secretNames),
+      env: promoteAsked(keptRows(r.server.env), r.asked),
     }));
 
   return (

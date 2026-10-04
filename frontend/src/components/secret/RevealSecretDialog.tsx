@@ -78,7 +78,7 @@ export function RevealSecretDialog({ row, onOpenChange }: Props) {
   }, [value, onOpenChange]);
 
   if (!row) return null;
-  const name = displayName(row);
+  const name = displayName(row, t("secrets.unnamed"));
 
   const start = () =>
     reveal.mutate(row.ref, { onSuccess: () => setRevealedAt(new Date().toISOString()) });

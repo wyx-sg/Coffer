@@ -1634,6 +1634,14 @@
         "notFoundTitle": "这个分区已不存在",
         "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的记忆分区。它已被删除。",
         "back": "返回记忆"
+      },
+      "secrets": {
+        "plural": "密钥",
+        "singular": "密钥",
+        "filterHelp": "按名称、描述和引用筛选密钥。",
+        "notFoundTitle": "这个密钥已不存在",
+        "notFoundBody": "没有以 <mono>{{id}}</mono> 保存的密钥，它已被删除。",
+        "back": "返回密钥列表"
       }
     }
   },
@@ -5414,13 +5422,12 @@
     "newSecret": "新建密钥…",
     "changeValue": "修改 {{name}} 的值…",
     "plain": "改为填写普通值",
-    "rename": "新密钥的名字",
     "pick": "为 {{label}} 选择密钥",
     "chosen": "{{label}}：密钥 {{name}}",
     "dialog": {
-      "title": "新建密钥",
-      "taken": "{{name}} 已存在，换一个名字。"
-    }
+      "title": "新建密钥"
+    },
+    "pendingLabel": "新密钥的名称"
   },
   "secretRows": {
     "value": "值",
@@ -5438,8 +5445,6 @@
     "title": "密钥",
     "subtitle": "你的 MCP 服务器和提供商使用的 API 密钥与令牌，加密保存在这台 Mac 的保险库中。",
     "search": "查找密钥",
-    "loadFailed": "无法加载密钥",
-    "noMatch": "没有匹配的密钥。",
     "empty": {
       "title": "还没有密钥",
       "body": "把 API 密钥和令牌放在这里，而不是写在配置文件里。所有用到它们的地方都按名称引用。"
@@ -5470,9 +5475,7 @@
       "skippedWaiting_other": "{{names}} 正在等待批准，将被跳过。"
     },
     "cols": {
-      "name": "名称",
       "usedBy": "使用方",
-      "actions": "操作",
       "lastUsed": "上次使用",
       "created": "创建于"
     },
@@ -5481,8 +5484,7 @@
       "missing": "这台 Mac 上没有值",
       "pending": "等待批准",
       "localReadable": "本机进程可读",
-      "addValue": "添加值",
-      "addValueFor": "为 {{name}} 添加值"
+      "addValue": "添加值"
     },
     "kind": {
       "mcp_server": "MCP 服务器",
@@ -5496,11 +5498,7 @@
     },
     "usedBy": {
       "nothing": "无",
-      "trigger_one": "{{name}} 被 {{count}} 处使用",
-      "trigger_other": "{{name}} 被 {{count}} 处使用",
-      "title": "使用方",
-      "note": "它们都以 {{reference}} 读取。替换值会同时更新所有使用处。",
-      "find": "查找…"
+      "title": "使用方"
     },
     "menu": {
       "label": "{{name}} 的操作",
@@ -5515,18 +5513,16 @@
     "add": {
       "open": "添加密钥",
       "title": "添加密钥",
-      "name": "名称",
-      "nameHint": "字母、数字、点、下划线和连字符，最多 64 个字符。添加后不能修改。",
-      "nameInvalid": "只能使用字母、数字、点、下划线和连字符，最多 64 个字符。",
-      "nameTaken": "{{name}} 已存在——",
-      "replaceInstead": "改为替换它的值",
-      "namePlaceholder": "<名称>",
       "value": "值",
       "valueHint": "粘贴的值不会再显示，除非你主动显示。",
-      "encrypted": "用这台 Mac 的主密钥加密。以 {{reference}} 引用它。",
       "submit": "添加密钥",
       "submitting": "正在添加…",
-      "added": "已添加 {{name}}"
+      "added": "已添加 {{name}}",
+      "label": "名称",
+      "labelHint": "你给它起的名字，之后可以修改；引用它的地址不会变。",
+      "labelPlaceholder": "GitHub token",
+      "addedTitle": "已添加 {{name}}",
+      "addedHint": "在文件中这样引用它："
     },
     "replace": {
       "title": "替换 {{name}} 的值",
@@ -5685,7 +5681,6 @@
       "rejectN": "拒绝 {{count}} 项",
       "rejectAll": "全部拒绝"
     },
-    "selectAll": "全选密钥",
     "approvalsOffByBuild": {
       "line": "此版本默认关闭审批。",
       "help": "未签名的版本无法保护主密钥：以你身份运行的任何程序都能读取它并伪造审批，所以审批只能挡住误操作，挡不住智能体。已签名的正式版默认开启。你仍可在“设置 > 安全”中开启；之后再关闭需要通过 Coffer 桌面应用。"
@@ -5726,6 +5721,34 @@
       "save_other": "保存 {{count}} 个值",
       "saved_one": "已保存 {{count}} 个值",
       "saved_other": "已保存 {{count}} 个值"
+    },
+    "detail": {
+      "description": "描述",
+      "descriptionPlaceholder": "这个密钥用来做什么",
+      "reference": "引用",
+      "copyReference": "复制引用",
+      "value": "值",
+      "present": "在这台 Mac 上",
+      "access": "访问",
+      "approvals": "审批",
+      "approved": "已批准",
+      "label": "名称",
+      "labelPlaceholder": "你怎么称呼这个密钥",
+      "uri": "URI",
+      "copyUri": "复制 URI",
+      "recentUses": "最近使用",
+      "notUsedHere": "这台 Mac 上还没有用过",
+      "runCommand": "coffer run {{command}}",
+      "viewAllActivity": "在活动中查看全部"
+    },
+    "unnamed": "未命名密钥",
+    "tabs": {
+      "overview": "概览",
+      "usage": "使用记录"
+    },
+    "list": {
+      "usedBy_one": "{{count}} 处使用",
+      "usedBy_other": "{{count}} 处使用"
     }
   },
   "usage": {

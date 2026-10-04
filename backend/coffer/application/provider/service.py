@@ -20,7 +20,6 @@ import asyncio
 import contextlib
 from collections.abc import Callable
 from typing import Protocol as _Protocol
-from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.delete_ops import delete as _delete_op
@@ -47,6 +46,7 @@ from coffer.domain.provider.errors import ProviderProtocolRetired, ProviderSecre
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretMissing
+from coffer.domain.secrets import mint_secret_name, secret_ref
 
 KIND = "provider"
 
@@ -124,14 +124,13 @@ class ProviderService:
 
     @staticmethod
     def _mint_ref() -> str:
-        """A fresh vault address for a profile created with an inline secret.
-
-        Deliberately opaque: a ref is an ADDRESS, and one derived from the
-        connection's name would make the name a key, so a rename would have to
-        move the secret. Nothing reads the ref's shape; ownership is decided by
-        citation (``release_orphaned_secrets``).
+        """A fresh id for a profile created with an inline secret: ``secret/<uuid4 hex>``,
+        like every secret's (spec secret "Mint every secret's id; a person names
+        it"). Opaque: a ref is an ADDRESS. The connection that cites it first
+        becomes its owner (``created_for``), which is what lets deleting the
+        connection release it (``release_orphaned_secrets``).
         """
-        return f"provider/{uuid4().hex}/key"
+        return secret_ref(mint_secret_name())
 
     @staticmethod
     def _cfg(resource: Resource) -> ProviderConfig:

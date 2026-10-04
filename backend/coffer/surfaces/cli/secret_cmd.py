@@ -47,7 +47,14 @@ def _read_value(value: str | None) -> str:
 @app.command("set")
 def set_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Secret reference key"),
+    ref: str | None = typer.Argument(
+        None, help="An existing secret's reference, to replace its value"
+    ),
+    name: str | None = typer.Option(
+        None,
+        "--name",
+        help="Create a new secret with this label; Coffer mints its id",
+    ),
     value: str | None = typer.Option(
         None,
         "--value",
@@ -57,7 +64,11 @@ def set_secret(
         ),
     ),
 ) -> None:
-    """Store a secret in the encrypted secret store (via the daemon).
+    """Create a secret with `--name "<label>"`, or replace an existing one by ref.
+
+    A new secret is given a label by you and an id by Coffer: the command
+    prints its ref and `coffer://secret/<id>`, which is how files cite it.
+    `coffer secret set <ref>` only replaces the value of a secret that exists.
 
     Without --value the secret is read from stdin, or prompted for. --value
     still stores, but warns that the value lands in your shell history; the
@@ -67,6 +78,9 @@ def set_secret(
     Spec secret "Read a secret on the command line without shell history".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
+    if (ref is None) == (name is None):
+        typer.echo('give --name "<label>" to create a secret, or a ref to replace one', err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
     if value is not None:
         typer.echo(
             "warning: --value puts the secret in your shell history; "
@@ -79,9 +93,24 @@ def set_secret(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/secrets", json={"ref": ref, "value": secret})
+        if ref is not None:
+            found = c.get(f"/secrets/{ref}/exists")
+            _cli_client.check(found, verbose=verbose)
+            if not found.json().get("present"):
+                typer.echo(
+                    f'no secret {ref!r}: create one with --name "<label>" (Coffer mints the id)',
+                    err=True,
+                )
+                raise typer.Exit(int(ExitCode.INVALID_INPUT))
+            r = c.post("/secrets", json={"ref": ref, "value": secret})
+            _cli_client.check(r, verbose=verbose)
+            typer.echo(f"stored: {ref}")
+            return
+        r = c.post("/secrets", json={"label": name, "value": secret})
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"stored: {ref}")
+        minted = r.json()
+    typer.echo(f"stored: {minted['ref']}")
+    typer.echo(f"cite it as: {minted['uri']}")
 
 
 @app.command("list")
@@ -109,6 +138,7 @@ def list_refs(
         typer.echo("(no secret refs registered in any resource)")
         return
     table = Table(title="Secrets")
+    table.add_column("Label")
     table.add_column("Ref")
     table.add_column("Present in store")
     table.add_column("Used by")
@@ -121,6 +151,7 @@ def list_refs(
         if pending:
             used.append(f"{len(pending)} waiting for approval")
         table.add_row(
+            entry.get("label") or "",
             entry["ref"],
             "yes" if entry.get("present") else "no",
             ", ".join(used) or "(unreferenced)",

@@ -6,12 +6,7 @@
 // stored secret, or a new one written to Secrets when the form is submitted. A
 // config keeps plain values in `transport.env` (stdio) or `transport.headers`
 // (HTTP) and a chosen secret in `transport.secret_refs` as `secret/<name>`.
-import {
-  defaultSecretName,
-  secretNameOf,
-  secretRef,
-  type KeyValueSecretRow,
-} from "@/lib/secretValue";
+import { mintSecretName, secretNameOf, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
 import type { ParsedEnvVar } from "./pasteTypes";
 
 /** The name a ref is called in the picker: a Secrets-page secret by its name, a
@@ -29,23 +24,20 @@ export const askedKeysOf = (env: readonly ParsedEnvVar[]): Set<string> =>
   new Set(env.filter((e) => e.isSecret && e.value === "" && !e.ref).map((e) => e.key));
 
 /** A pasted / imported pair as a row. A pair flagged secret becomes a new
- *  secret named from its key (unique among `taken`, which grows); a plain pair
+ *  secret labelled with its key and stored under a minted id; a plain pair
  *  stays plain; a flagged pair without a value waits for one — as a new secret
  *  with no value (the review's password box), or with `askAsPlain` (the form)
  *  as an empty plain row the person types into (see `promoteAsked`). */
-export function rowsFromParsed(
-  env: ParsedEnvVar[],
-  taken: Set<string>,
-  askAsPlain = false,
-): KeyValueSecretRow[] {
+export function rowsFromParsed(env: ParsedEnvVar[], askAsPlain = false): KeyValueSecretRow[] {
   return env.map((e) => {
     if (!e.isSecret || (askAsPlain && e.value === "" && !e.ref)) {
       return { key: e.key, value: { kind: "plain", value: e.value } };
     }
     if (e.ref) return { key: e.key, value: { kind: "stored", name: refLabel(e.ref) } };
-    const name = defaultSecretName(e.key, taken);
-    taken.add(name);
-    return { key: e.key, value: { kind: "new", name, value: e.value } };
+    return {
+      key: e.key,
+      value: { kind: "new", name: mintSecretName(), label: e.key, value: e.value },
+    };
   });
 }
 
@@ -55,16 +47,14 @@ export function rowsFromParsed(
 export function promoteAsked(
   rows: readonly KeyValueSecretRow[],
   asked: ReadonlySet<string>,
-  taken: ReadonlySet<string>,
 ): KeyValueSecretRow[] {
-  const used = new Set(taken);
-  for (const r of rows) if (r.value.kind === "new") used.add(r.value.name);
   return rows.map((r) => {
     const key = r.key.trim();
     if (!asked.has(key) || r.value.kind !== "plain" || r.value.value === "") return r;
-    const name = defaultSecretName(key, used);
-    used.add(name);
-    return { ...r, value: { kind: "new", name, value: r.value.value } };
+    return {
+      ...r,
+      value: { kind: "new", name: mintSecretName(), label: key, value: r.value.value },
+    };
   });
 }
 

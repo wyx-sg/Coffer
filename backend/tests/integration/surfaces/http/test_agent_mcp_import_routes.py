@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import sqlite3
 import tomllib
 
@@ -212,10 +213,8 @@ def test_applying_an_import_adds_merges_and_removes_duplicates_as_planned(
     assert added["name"] == "fetcher"
     by_name = {r["name"]: r for r in _resources(client)}
     assert by_name["fetcher"]["scope"]["agents"] == [cx, cc]
-    assert by_name["fetcher"]["config"]["transport"]["secret_refs"] == {
-        "API_TOKEN": "mcp/codex/fetcher/API_TOKEN"
-    }
-    ref = "mcp/codex/fetcher/API_TOKEN"
+    ref = by_name["fetcher"]["config"]["transport"]["secret_refs"]["API_TOKEN"]
+    assert re.fullmatch(r"secret/[0-9a-f]{32}", ref)
     assert client.get(f"/api/v1/secrets/{ref}/exists").json()["present"] is True
     assert sorted(by_name["solo"]["scope"]["agents"]) == sorted([cx, cc])
 

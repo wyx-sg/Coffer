@@ -106,23 +106,6 @@ export interface ChannelEditPlan extends ChannelPlan {
   title?: string | null;
 }
 
-/** The secrets a channel can hold, and the logical key each one's ref ends in. */
-type ChannelSecret = "bot-token" | "app-secret";
-
-/**
- * Mint the secret-store ref for one of a channel's secrets:
- * `channel/<uuid4 hex>/<secret>`.
- *
- * It takes no name. It used to — `channel/<name>/<secret>` — and that made the
- * channel's name a key into the encrypted store, so renaming a channel left its
- * config citing an address that no longer described it. Renaming is now a field
- * on `PATCH /resources/{uid}` for every kind, which is what reached the hazard;
- * an opaque address is what closes it. See `@/lib/secretRef`.
- */
-function channelSecretRef(secret: ChannelSecret): string {
-  return mintSecretRef("channel", secret);
-}
-
 /**
  * Turn validated form values into the resource config plus the secret-store
  * writes. Pure (no network) — the config is fully built before any side
@@ -142,7 +125,7 @@ export function planChannel(
   defaultAgentUid: string,
 ): ChannelPlan {
   if (values.channel_type === "telegram") {
-    const ref = channelSecretRef("bot-token");
+    const ref = mintSecretRef();
     return {
       name: values.name,
       config: {
@@ -156,7 +139,7 @@ export function planChannel(
   }
   // The bot dials out and the register handshake (app id + app secret)
   // authenticates the connection, so the app secret is the only secret.
-  const appSecretRef = channelSecretRef("app-secret");
+  const appSecretRef = mintSecretRef();
   return {
     name: values.name,
     config: {
