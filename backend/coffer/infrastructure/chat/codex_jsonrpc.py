@@ -141,6 +141,10 @@ class CodexRpcClient:
             self._pending.pop(req_id, None)
             if not future.done():
                 future.cancel()
+            elif not future.cancelled():
+                # The read loop can fail the future while this call is still
+                # writing; a write error then leaves that exception unread.
+                future.exception()
 
     def on_request(self, method: str, handler: RequestHandler) -> None:
         """Register an async handler for an inbound server→client request method."""
