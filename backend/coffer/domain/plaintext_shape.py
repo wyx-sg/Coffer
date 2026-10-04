@@ -28,8 +28,12 @@ MASK_CHAR = "•"
 #: The well-known token formats whose prefix is public, longest first.
 _PREFIXES = ("github_pat_", "ghp_", "gho_", "ghu_", "ghs_", "xoxa-", "xoxb-", "xoxp-", "xoxr-")
 _PREFIX_RE = re.compile(r"^(?:sk-|AKIA|https?://)")
-#: Names joined by dots: ``process.env.API_TOKEN``, ``settings.secret_key``.
-_REFERENCE = re.compile(r"^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$")
+#: Names joined by ``.`` or ``?.``: ``process.env.API_TOKEN``, ``args.token``.
+_REFERENCE = re.compile(r"^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+$")
+#: One name in a reference: letters and underscores, with digits only at its
+#: end (``SPACE_TOKEN``, ``v2``). A random token's segments mix digits in.
+_NAME = re.compile(r"^[A-Za-z_$][A-Za-z_$]*\d*$")
+_MEMBER = re.compile(r"\??\.")
 _PLACEHOLDER_WORDS = (
     "example",
     "sample",
@@ -94,13 +98,24 @@ def _classes(value: str) -> tuple[str, ...]:
     return tuple(out)
 
 
+def is_reference(value: str) -> bool:
+    """Whether ``value`` reads as code naming a value rather than holding one:
+    names joined by dots, such as an environment-variable read
+    (``process.env.SPACE_TOKEN``) or a member (``args.token``,
+    ``page.next_page_token``). A JSON Web Token (``eyJ…``) is dotted too, and
+    is not one."""
+    if value.startswith("eyJ") or not _REFERENCE.match(value):
+        return False
+    return all(_NAME.match(name) for name in _MEMBER.split(value))
+
+
 def shape_of(value: str) -> ValueShape:
     """The shape a person judges ``value`` by."""
     prefix = _prefix(value)
     hint: str | None = None
     word: str | None = None
     lowered = value.lower()
-    if _REFERENCE.match(value):
+    if is_reference(value):
         hint = "reference"
     else:
         word = next((w for w in _PLACEHOLDER_WORDS if w in lowered), None)
@@ -117,4 +132,4 @@ def mask(value: str, shape: ValueShape) -> str:
     return value[:keep] + MASK_CHAR * (len(value) - keep)
 
 
-__all__ = ["MASK_CHAR", "MaskedValue", "ValueShape", "mask", "shape_of"]
+__all__ = ["MASK_CHAR", "MaskedValue", "ValueShape", "is_reference", "mask", "shape_of"]

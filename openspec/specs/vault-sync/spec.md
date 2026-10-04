@@ -1391,8 +1391,16 @@ imported and exported in Settings › Security, not on the Sync page.
 Before a round pushes — a round that merged, a push with nothing to pull, or a join — it MUST read
 every file version the push would publish: each blob reachable from the commit being pushed and
 not from the remote's head, from every commit in between. It reads them for an assignment whose name says secret and for the well-known token shapes.
-An unquoted value holding call, index or list punctuation (`(`, `)`, `[`, `]`, `,`, `;`) is code,
-not a secret, so `token = m.group(0)` or `password=password,` is not reported.
+An unquoted value that is code names a value rather than holding one, and MUST NOT be reported:
+a value holding call, index or list punctuation (`(`, `)`, `[`, `]`, `,`, `;`), so
+`token = m.group(0)` or `password=password,` is not reported; names joined by `.` or `?.`, each
+made of letters and underscores with digits only at its end, such as an environment-variable read
+or a member (`process.env.SPACE_TOKEN`, `args.token`, `page.next_page_token`); and a bare name a
+declaration (`const`, `let`, `var`, `final`, `val`, `auto`) or a member assignment (`self.`,
+`this.`, `cls.`) gives. A JSON Web Token (`eyJ…`) and a dotted value whose parts mix digits in are
+values. A quoted value is always a value, and a well-known token shape (`ghp_`, `github_pat_`,
+`sk-`, `xoxb-` and its siblings, `AKIA`) MUST be reported wherever it sits on the line, code around
+it or not.
 An encrypted `secret/<ref>.enc` file is ciphertext and MUST NOT be read; a binary file or one over
 1 MB is not read either.
 
@@ -1444,6 +1452,12 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 - **WHEN** it is shown
 - **THEN** its card lists each file, line and key a file still holds, with the agent hand-off that moves each value into a secret, and no Retry
 - **AND** Push anyway runs only after a confirmation that says it is recorded in the audit log
+
+#### Scenario: code that reads a secret from elsewhere is not a plaintext secret
+- **GIVEN** a skill script with `const token = process.env.SPACE_TOKEN || require(…)`, `token = args.token or os.environ.get(…)`, `token=page.next_page_token;` and `const token = accessToken`
+- **WHEN** it is read for plaintext secrets
+- **THEN** nothing is reported
+- **AND** a quoted literal, a `.env`-style `API_KEY=` value, a JSON Web Token, and a `ghp_` token beside `process.env.SPACE_TOKEN ||` on the same line still are
 
 ### Requirement: Undo a retired machine
 Retiring another machine MUST run at once and MUST be undoable: `POST
@@ -1656,9 +1670,9 @@ file the masked diff behind "Show changes".
 - **AND** neither value appears in the response, and a line the round did not find is `SYNC_PLAINTEXT_NOT_LISTED`
 
 #### Scenario: a finding in a file the remote holds shows its masked change
-- **GIVEN** a document the remote already holds with the line `const token = process.env.ORDERS_TOKEN`, to which this machine adds a line with a GitHub token
+- **GIVEN** a document the remote already holds with the line `API_KEY=my-example-key-123`, pushed anyway, to which this machine adds a line with a GitHub token
 - **WHEN** a round stops as `plaintext_found` and each place's context is asked for
-- **THEN** the old line is `modified`, already on the remote, and hinted as a code reference, and the token keeps only `ghp_` visible
+- **THEN** the old line is `modified`, already on the remote, and hinted as a placeholder holding `example`, and the token keeps only `ghp_` visible
 - **AND** the masked diff adds one line and carries no value
 
 #### Scenario: the Sync page opens each place to its masked lines
