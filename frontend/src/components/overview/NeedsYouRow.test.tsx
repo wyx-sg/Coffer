@@ -12,8 +12,11 @@ import { acceptance } from "@/test/acceptance";
 import { NeedsYouRow } from "./NeedsYouRow";
 
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
+const { fsApi } = await import("@/lib/api/fs");
 const listAgents = vi.mocked(agentProvidersApi.list);
+const openTerminal = vi.mocked(fsApi.openTerminal);
 
 const PROMPT = "Please install `uvx` on this machine so MCP server fetch can start.";
 
@@ -66,6 +69,8 @@ function renderRow(row: AttentionItem, available: boolean) {
 const writeText = vi.fn().mockResolvedValue(undefined);
 beforeEach(() => {
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
+  openTerminal.mockResolvedValue(undefined);
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -76,19 +81,29 @@ function openMenu() {
 acceptance("web-ui", "a needs-you row offers the item's hand-off in its menu", async () => {
   renderRow(item(), true);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
-  // Until a hand-off starts the agent in a terminal, the row's hand-off is Copy prompt.
-  fireEvent.click(await screen.findByRole("button", { name: /^Copy prompt/ }));
-  // Copying is asynchronous now (it toasts "Prompt copied" afterwards).
+  fireEvent.click(await screen.findByRole("button", { name: "More options" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /^Copy prompt/ }));
+  // Copying is asynchronous (it toasts "Prompt copied" afterwards).
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(PROMPT));
+  expect(openTerminal).not.toHaveBeenCalled();
+
+  // The main part starts the hand-off agent in the preferred terminal with the prompt.
+  fireEvent.click(screen.getByRole("button", { name: "Hand off to Claude Code" }));
+  await waitFor(() =>
+    expect(openTerminal).toHaveBeenCalledWith({
+      agent: "claude_code",
+      prompt: PROMPT,
+      terminal: null,
+    }),
+  );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Ask an agent" })).not.toBeInTheDocument();
 });
 
 test("with no managed agent available the row offers a Copy prompt button only", async () => {
   renderRow(item(), false);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
   expect(await screen.findByRole("button", { name: /^Copy prompt/ })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Ask an agent" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Hand off to/ })).not.toBeInTheDocument();
 });
 
 test("every row's menu ends with Ignore", async () => {

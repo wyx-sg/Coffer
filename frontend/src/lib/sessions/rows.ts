@@ -12,6 +12,8 @@ export type SessionChannel = NonNullable<Conversation["channel_binding"]>;
 export interface SessionRowData {
   /** The conversation id, or the native session id. */
   id: string;
+  /** The agent's native session id: what opens in a terminal. Null until a turn has run. */
+  sessionId: string | null;
   /** The conversation this row is, or points at: what Stop interrupts. */
   conversationId: string | null;
   title: string;
@@ -29,6 +31,7 @@ export interface SessionRowData {
 export function conversationRow(c: Conversation): SessionRowData {
   return {
     id: c.id,
+    sessionId: c.session_id,
     conversationId: c.id,
     title: c.title,
     cwd: c.cwd,
@@ -43,6 +46,7 @@ export function conversationRow(c: Conversation): SessionRowData {
 export function sessionRow(s: AgentSession): SessionRowData {
   return {
     id: s.session_id,
+    sessionId: s.session_id,
     conversationId: s.conversation_id,
     title: s.title,
     cwd: s.cwd,

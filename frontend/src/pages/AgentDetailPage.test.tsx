@@ -5,6 +5,7 @@
 // counts, and each tab — every tab has its own test next to it.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import "@/i18n";
@@ -103,14 +104,18 @@ function Where() {
 }
 
 function renderAt(path = "/agents/claude_code") {
+  // The hand-off split button reads the detected terminals.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/agents/:type" element={<AgentDetailPage />} />
-        <Route path="/agents/:type/:tab" element={<AgentDetailPage />} />
-      </Routes>
-      <Where />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/agents/:type" element={<AgentDetailPage />} />
+          <Route path="/agents/:type/:tab" element={<AgentDetailPage />} />
+        </Routes>
+        <Where />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

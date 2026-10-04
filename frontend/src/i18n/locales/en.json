@@ -1114,7 +1114,19 @@
       "appearance": "Appearance",
       "language": "Language",
       "languageHelp": "The language of Coffer's own interface.",
-      "tablesAndFiles": "Tables and files"
+      "tablesAndFiles": "Tables and files",
+      "agentsAndTerminal": "Agents and terminal",
+      "preferredTerminal": "Preferred terminal",
+      "preferredTerminalHelp": "Where Coffer opens a session or starts a hand-off.",
+      "preferredTerminalSystem": "System terminal",
+      "preferredTerminalCustom": "Custom…",
+      "preferredTerminalCustomTemplate": "Custom terminal command",
+      "preferredTerminalCustomPlaceholder": "e.g. kitty --directory {cwd} sh -lc {command}",
+      "preferredTerminalCustomHint": "Use {cwd} for the folder and {command} for what to run.",
+      "preferredTerminalNeedsCommand": "The template needs {command}.",
+      "handoffAgent": "Hand-off agent",
+      "handoffAgentHelp": "The agent a hand-off button starts.",
+      "handoffAgentNone": "No agent is available. Install Claude Code or Codex to hand work off."
     },
     "daemon": {
       "autostart": "Start at login",
@@ -1789,7 +1801,10 @@
     "SYNC_VAULT_TARGET_IN_CLOUD": "That folder is inside iCloud Drive, Dropbox or Syncthing. Choose one outside them.",
     "SYNC_VAULT_TARGET_NOT_EMPTY": "That folder isn’t empty. Choose an empty one.",
     "GIT_NEEDED": "Coffer needs git before it can open the vault. Install or update git, then press Check again.",
-    "PROVIDER_PROTOCOL_RETIRED": "The ollama protocol is no longer offered — add a local Ollama runtime on its Anthropic or OpenAI wire instead"
+    "PROVIDER_PROTOCOL_RETIRED": "The ollama protocol is no longer offered — add a local Ollama runtime on its Anthropic or OpenAI wire instead",
+    "FS_TERMINAL_INVALID": "That session can’t be opened in a terminal",
+    "FS_TERMINAL_FAILED": "The terminal couldn’t be started. Check the preferred terminal in Settings › General.",
+    "SESSION_IN_USE": "This session is open in a terminal. Continue there, or start a new one."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -3461,7 +3476,11 @@
       "running": "Running",
       "stop": "Stop",
       "stopAria": "Stop {{title}}",
-      "moreActions": "More actions for {{title}}"
+      "moreActions": "More actions for {{title}}",
+      "open": "Open in terminal",
+      "noSession": "No session yet: no turn has run on this conversation.",
+      "openOptions": "Open options for {{title}}",
+      "copyCommand": "Copy command"
     },
     "delete": {
       "title": "Delete “{{title}}”?",
@@ -3470,6 +3489,16 @@
       "sessionBody": "The session is deleted from the agent and cannot be recovered. Files the agent changed stay.",
       "sessionConfirm": "Delete session",
       "failed": "Couldn’t delete it"
+    },
+    "busy": {
+      "title": "This session is busy",
+      "chat": "the chat",
+      "running": "This turn is running in {{platform}}. Answer in {{platform}}, or stop this turn and continue in the terminal.",
+      "waiting": "This turn is waiting for your answer in {{platform}}. Answer in {{platform}}, or stop this turn and continue in the terminal.",
+      "answer": "Answer in {{platform}}",
+      "stop": "Stop the turn and continue in the terminal",
+      "stopping": "Stopping…",
+      "failed": "Couldn’t stop the turn"
     }
   },
   "channels": {
@@ -4163,8 +4192,7 @@
       "merged": {
         "anAgent": "An agent",
         "title": "{{agent}} merged both versions at {{time}}",
-        "body": "Check what changes on this Mac, then mark it resolved. {{machine}} gets the merge in the next push.",
-        "openConversation": "Open conversation"
+        "body": "Check what changes on this Mac, then mark it resolved. {{machine}} gets the merge in the next push."
       },
       "progress": "{{resolved}} of {{total}} files resolved",
       "progressJoin": "{{resolved}} of {{total}} files chosen",
@@ -6235,9 +6263,11 @@
     "copyPrompt": "Copy prompt",
     "copyPromptHint": "For an agent outside Coffer",
     "moreOptions": "More options",
-    "askAgent": "Ask an agent",
     "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine.",
-    "promptCopied": "Prompt copied"
+    "promptCopied": "Prompt copied",
+    "handoffTo": "Hand off to {{agent}}",
+    "handoffToHint": "Starts it in {{terminal}}",
+    "tooltip": "Start {{agent}} in {{terminal}} to handle this"
   },
   "upkeep": {
     "every": "Every",
@@ -6283,5 +6313,12 @@
       "cancel": "Cancel",
       "apply": "Apply"
     }
+  },
+  "terminal": {
+    "system": "System terminal",
+    "custom": "Custom terminal",
+    "opened": "Opened in {{terminal}}",
+    "copyCommand": "Copy command",
+    "commandCopied": "Command copied"
   }
 }

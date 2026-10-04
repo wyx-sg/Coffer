@@ -523,7 +523,7 @@ describe("overview welcomes a first run with the agents to connect", () => {
     renderPage();
     expect(await screen.findByText(/and found neither\./)).toBeInTheDocument();
     // Each agent not found carries an Install link to its official page; the
-    // page itself offers no install prompt and no Ask an agent.
+    // page itself offers no install prompt and no hand-off.
     expect(screen.getByRole("link", { name: "Install Claude Code" })).toHaveAttribute(
       "href",
       "https://docs.claude.com/en/docs/claude-code/setup",

@@ -2,7 +2,9 @@
 // tab: the agent's own sessions as the same rows the Conversations page uses,
 // asked of the agent through /agents/{uid}/sessions; the fake daemon answers at
 // the network boundary so the request functions, hooks and cache are real.
-import { beforeEach, describe, expect, test } from "vitest";
+// Pressing a row opens its session in the preferred terminal (asking first while
+// a channel turn is running on it).
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -61,6 +63,7 @@ beforeEach(() => {
     }),
   ];
   call.mockImplementation(async (path, opts) => {
+    if (path === "/fs/terminals") return { terminals: [] };
     if (opts.method === "GET" && path.startsWith("/agents/ag-cc/sessions")) {
       const q = new URL(`http://x${path}`).searchParams.get("q")?.toLowerCase() ?? "";
       return page(
@@ -111,6 +114,58 @@ describe("AgentSessionsTab", () => {
       expect(within(row("Plain one")).queryByRole("button", { name: /^Stop/ })).toBeNull();
     },
   );
+
+  acceptance("agent-registry", "a session row opens in the terminal", async () => {
+    renderTab();
+    await screen.findByText("Alpha rollout");
+    fireEvent.click(row("Alpha rollout"));
+    await waitFor(() => expect(sessionCalls("POST")).toHaveLength(1));
+    // The daemon is asked to resume that session in its directory, for this agent.
+    expect(sessionCalls("POST")[0]).toMatchObject({
+      path: "/fs/terminal",
+      body: { agent: "claude_code", cwd: "/work/api", resume: "abc-123", terminal: null },
+    });
+    expect(await screen.findByText("Opened in System terminal")).toBeInTheDocument();
+
+    // The split button's main part and its Copy command item work on this list too.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    fireEvent.click(within(row("Gamma")).getByRole("button", { name: "Open options for Gamma" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy command" }));
+    expect(writeText).toHaveBeenCalledWith("cd '/work/alpha-api' && claude --resume def-456");
+    expect(sessionCalls("POST")).toHaveLength(1);
+  });
+
+  test("a session whose channel turn is running asks before it opens, then stops it", async () => {
+    sessions = [
+      makeSession({
+        session_id: "s-run",
+        title: "From SeaTalk",
+        cwd: "/work/api",
+        conversation_id: "conv-1",
+        running: true,
+        channel_binding: makeBinding(),
+      }),
+    ];
+    renderTab();
+    await screen.findByText("From SeaTalk");
+    fireEvent.click(row("From SeaTalk"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("This turn is running in SeaTalk.");
+    expect(sessionCalls("POST")).toHaveLength(0);
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Stop the turn and continue in the terminal" }),
+    );
+    await waitFor(() => expect(sessionCalls("POST")).toHaveLength(2));
+    expect(sessionCalls("POST").map((c) => c.path)).toEqual([
+      "/chat/conversations/conv-1/interrupt",
+      "/fs/terminal",
+    ]);
+    expect(sessionCalls("POST")[1]).toMatchObject({
+      body: { agent: "claude_code", cwd: "/work/api", resume: "s-run" },
+    });
+  });
 
   acceptance("agent-registry", "the sessions list searches title and directory", async () => {
     renderTab();

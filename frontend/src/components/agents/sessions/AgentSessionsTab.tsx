@@ -5,14 +5,16 @@
 // directory and last activity, plus the channel, Running / Needs you and an
 // inline Stop when the session is a channel conversation's. A search box over
 // title and working directory filters in the server; the list pages by cursor
-// as it is scrolled and reads again when the window gets focus. ⋯ holds Rename
-// and Delete…. Coffer shows no session text. Pressing a row has no action yet:
-// `onPrimaryAction` is the slot where a row opens its session in a terminal.
+// as it is scrolled and reads again when the window gets focus. Pressing a row, or
+// the main part of its split button, opens the session in the preferred terminal
+// (asking first when it is busy); ⋯ holds Rename and Delete…. Coffer shows no
+// session text.
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DeleteSessionDialog } from "@/components/sessions/DeleteSessionDialog";
 import { SessionList } from "@/components/sessions/SessionList";
+import { useOpenSession } from "@/components/sessions/useOpenSession";
 import { LoadErrorRow } from "@/components/LoadErrorRow";
 import { SearchInput } from "@/components/SearchInput";
 import { LoadMoreFooter } from "@/components/ui/load-more";
@@ -27,14 +29,7 @@ import { useInterruptConversation } from "@/lib/hooks/useConversations";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { sessionRow, type SessionRowData } from "@/lib/sessions/rows";
 
-export function AgentSessionsTab({
-  agent,
-  onPrimaryAction,
-}: {
-  agent: AgentOut;
-  /** What pressing a row does. Left out, a row does nothing. */
-  onPrimaryAction?: (row: SessionRowData) => void;
-}) {
+export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const q = useDebouncedValue(search.trim());
@@ -43,6 +38,7 @@ export function AgentSessionsTab({
   const remove = useDeleteAgentSession(agent.uid);
   const stop = useInterruptConversation();
   const [deleting, setDeleting] = useState<SessionRowData | null>(null);
+  const opener = useOpenSession(agent.type);
   const rows = useMemo(() => list.items.map(sessionRow), [list.items]);
 
   const onRename = useCallback(
@@ -108,7 +104,9 @@ export function AgentSessionsTab({
               stoppingId={
                 stop.isPending ? rows.find((r) => r.conversationId === stop.variables)?.id : null
               }
-              onPrimaryAction={onPrimaryAction}
+              onPrimaryAction={opener.open}
+              onCopyCommand={opener.copyCommand}
+              canOpen={opener.canOpen}
               onRename={onRename}
               onDelete={setDeleting}
               onStop={onStop}
@@ -123,6 +121,7 @@ export function AgentSessionsTab({
           />
         </>
       )}
+      {opener.dialog}
       <DeleteSessionDialog
         row={deleting}
         kind="session"

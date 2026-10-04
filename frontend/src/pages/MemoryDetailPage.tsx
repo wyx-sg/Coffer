@@ -88,7 +88,7 @@ export function MemoryDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <AgentHandoff
               prompt={row.tidy_handoff.prompt}
-              autoSend={{ label: t("memory.tidy.one") }}
+              label={t("memory.tidy.one")}
               help={false}
             />
             <MemoryUpdateButton variant="outline" running={running} />

@@ -5,15 +5,20 @@
 // it came from, the agent (where the list spans agents), the working
 // directory, when it was last active, an inline Stop while a turn runs and a
 // ⋯ menu with Rename and Delete…. Rename edits the title in place — Enter
-// saves, Esc cancels. The row's primary action is `onPrimaryAction`; a list
-// that has none leaves the row inert.
+// saves, Esc cancels. The row's primary action is `onPrimaryAction` (Open in
+// terminal, spec chat "Open a conversation in the terminal"): pressing the row
+// or the main part of its split button runs it, and the ▾ menu holds Copy
+// command. A row with no native session yet shows the split button disabled,
+// with the reason in a tooltip. A list that has no primary action leaves the
+// row inert.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, Square, Trash2 } from "lucide-react";
+import { Copy, Pencil, Square, SquareTerminal, Trash2 } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
+import { SplitButton } from "@/components/ui/split-button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath } from "@/lib/agents/display";
@@ -35,6 +40,10 @@ interface Props {
   now: Date;
   /** What pressing the row does; leave out and the row is inert. */
   onPrimaryAction?: (row: SessionRowData) => void;
+  /** Copies the row's resume command (the split button's ▾ menu). */
+  onCopyCommand?: (row: SessionRowData) => void;
+  /** Whether the row has a session to open; a row that has none is disabled. Default: it does. */
+  canOpen?: (row: SessionRowData) => boolean;
   /** Saves a new title; the row keeps its editor until this settles. */
   onRename: (row: SessionRowData, title: string) => Promise<unknown>;
   onDelete: (row: SessionRowData) => void;
@@ -49,6 +58,8 @@ export function SessionRow({
   agentName,
   now,
   onPrimaryAction,
+  onCopyCommand,
+  canOpen = () => true,
   onRename,
   onDelete,
   onStop,
@@ -101,11 +112,12 @@ export function SessionRow({
       setEditing(false);
     }
   };
+  const openable = onPrimaryAction !== undefined && canOpen(row);
   const onRowKey = (event: KeyboardEvent<HTMLLIElement>) => {
-    if (event.target !== event.currentTarget || !onPrimaryAction) return;
+    if (event.target !== event.currentTarget || !openable) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onPrimaryAction(row);
+      onPrimaryAction?.(row);
     }
   };
 
@@ -123,15 +135,15 @@ export function SessionRow({
 
   return (
     <li
-      tabIndex={onPrimaryAction ? 0 : -1}
+      tabIndex={openable ? 0 : -1}
       data-session={row.id}
-      onClick={onPrimaryAction && !editing ? () => onPrimaryAction(row) : undefined}
+      onClick={openable && !editing ? () => onPrimaryAction?.(row) : undefined}
       onKeyDown={onRowKey}
       className={cn(
         "group/row grid min-h-14 items-center gap-x-3 border-t border-border-subtle py-2 pl-3.5 pr-2.5 transition-colors duration-fast",
         GRID[columns],
         "hover:bg-surface-hover focus-within:bg-surface-hover",
-        onPrimaryAction && "cursor-pointer",
+        openable && "cursor-pointer",
       )}
     >
       <div className="flex min-w-0 items-center gap-2.5">
@@ -197,6 +209,31 @@ export function SessionRow({
             <Square aria-hidden className="!size-3 fill-current" />
             {t("sessions.row.stop")}
           </Button>
+        ) : null}
+        {onPrimaryAction ? (
+          <span className={cn("inline-flex", REVEAL)}>
+            <SplitButton
+              size="sm"
+              icon={<SquareTerminal aria-hidden />}
+              label={t("sessions.row.open")}
+              disabled={!openable}
+              tooltip={openable ? undefined : t("sessions.row.noSession")}
+              onClick={() => onPrimaryAction(row)}
+              menuLabel={t("sessions.row.openOptions", { title: row.title })}
+              actions={
+                openable && onCopyCommand
+                  ? [
+                      {
+                        key: "copy-command",
+                        label: t("sessions.row.copyCommand"),
+                        icon: Copy,
+                        onSelect: () => onCopyCommand(row),
+                      },
+                    ]
+                  : []
+              }
+            />
+          </span>
         ) : null}
         <span className={cn("inline-flex", REVEAL)}>
           <ActionMenu

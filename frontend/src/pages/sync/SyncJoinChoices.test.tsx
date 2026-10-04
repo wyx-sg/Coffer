@@ -3,7 +3,7 @@
 // The files a join left differing (6.4.23): the same bordered list as a stopped
 // round's conflicts, each row saying when each Mac edited it and that a version
 // is still to be chosen, with Choose versions (the Resolve page in join mode)
-// and one Ask an agent for every file an agent may merge. Nothing is answered
+// and one Hand off to Claude Code for every file an agent may merge. Nothing is answered
 // from here.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -24,7 +24,7 @@ vi.mock("@/components/handoff/AgentHandoff", () => ({
       type="button"
       onClick={() => typeof prompt !== "string" && void prompt({ agent: "Claude Code" })}
     >
-      Ask an agent
+      Hand off to Claude Code
     </button>
   ),
 }));
@@ -71,17 +71,17 @@ describe("SyncJoinChoices", () => {
     );
   });
 
-  test("Ask an agent hands over every file at once, naming the agent", () => {
+  test("Hand off to Claude Code hands over every file at once, naming the agent", () => {
     show();
-    fireEvent.click(screen.getByRole("button", { name: "Ask an agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hand off to Claude Code" }));
     expect(hooks.useHandoffRequest).toHaveBeenCalledWith({ join: true });
     expect(handoff).toHaveBeenCalledWith({ agent: "Claude Code" });
   });
 
-  test("no file an agent may merge, no Ask an agent", () => {
+  test("no file an agent may merge, no Hand off to Claude Code", () => {
     seed([differing("secret/a.enc", { agent_mergeable: false, secret: true })]);
     show();
-    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hand off to Claude Code" })).toBeNull();
   });
 
   test("a long list shows five and a way to the rest", () => {

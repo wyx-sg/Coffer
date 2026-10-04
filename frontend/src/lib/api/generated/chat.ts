@@ -62,18 +62,18 @@ export interface paths {
         post?: never;
         /**
          * Delete Conversation
-         * @description Delete a conversation.
+         * @description Delete a conversation through its agent, then its index row.
          *
          *     Any in-flight turn for this conversation is cancelled (and discarded)
          *     before deletion so the background task does not keep running after the row
-         *     is gone.
+         *     is gone. An agent that refuses leaves the index row in place.
          */
         delete: operations["delete_conversation_api_v1_chat_conversations__id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Conversation
-         * @description Rename a conversation.
+         * @description Rename a conversation through its agent, then in the index.
          *
          *     A body that names no ``title`` changes nothing and returns the conversation
          *     as it stands.

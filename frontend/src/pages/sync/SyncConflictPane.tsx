@@ -1,7 +1,7 @@
 // frontend/src/pages/sync/SyncConflictPane.tsx
 //
 // The right pane of Resolve conflicts, for one file: its path and who changed
-// it when, Open in editor and Ask an agent (for this one file), and then one of
+// it when, Open in editor and Hand off to <Agent> (for this one file), and then one of
 // three states — the two choices (6.4.06), the editor (6.4.07) or an agent's
 // merge to check (6.4.34). An encrypted secret (`secret/*.enc`) is only ever
 // answered by one of the two choices — no editor, no agent, and its contents

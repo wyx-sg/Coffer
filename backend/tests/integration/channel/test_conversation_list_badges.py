@@ -140,9 +140,7 @@ def _counting_queries(env: ChannelEnv) -> Iterator[list[str]]:
         event.remove(env.engine.sync_engine, "before_cursor_execute", _record)
 
 
-@pytest.mark.acceptance(
-    spec="chat", scenario="a channel's conversation is listed beside the web's with a badge"
-)
+@pytest.mark.acceptance(spec="chat", scenario="a row names the chat and thread it came from")
 async def test_each_row_names_its_source_chat_and_directory(
     env: ChannelEnv, client: httpx.AsyncClient
 ) -> None:

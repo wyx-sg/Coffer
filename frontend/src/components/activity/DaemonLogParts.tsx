@@ -1,6 +1,6 @@
 // src/components/activity/DaemonLogParts.tsx — the Daemon log tab's own piece: a record opened in place.
 //
-// Design 6.2.08: a row opens under its own line with its traceback and a button row: Ask an agent (only for an error
+// Design 6.2.08: a row opens under its own line with its traceback and a button row: Hand off to <Agent> (only for an error
 // about the environment — the backend sends the prompt), a way to the MCP call
 // it is about, and Copy record.
 import { useTranslation } from "react-i18next";

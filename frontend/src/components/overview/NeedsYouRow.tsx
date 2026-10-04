@@ -5,7 +5,7 @@
 // page — or the tab — where the person deals with it: a missing secret on
 // Secrets, a memory hook changed by hand in the agent's settings on that
 // agent's Hooks tab (lib/overview/attention). Every row carries the hand-off
-// split button, Ask an agent ▾ with Copy prompt behind it (AgentHandoff; the
+// split button, Hand off to <Agent> ▾ with Copy prompt behind it (AgentHandoff; the
 // daemon gives every item a hand-off prompt), and a ⋯ holding Ignore, which
 // takes the item off the Overview, the sidebar badges and the menu-bar count
 // whatever its severity (Overview boards 1.2.01 / 1.2.09). The button reads
@@ -48,7 +48,7 @@ import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { cn } from "@/lib/utils";
 
 /** Dot · name 168 · reason · since 96 · action 364, 14 apart (board 1.2.09).
- *  364 holds the longest action ("Review held changes") beside Ask an agent ▾
+ *  364 holds the longest action ("Review held changes") beside Hand off to <Agent> ▾
  *  and the ⋯, so the ⋯ lines up on every row; a longer label truncates in its
  *  button rather than widening the cell. */
 const ROW_GRID =

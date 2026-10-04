@@ -2,7 +2,9 @@
 // conversations IM channels opened, as a list and nothing else (spec chat
 // "Show channel conversations on the Conversations page"). A header with no
 // primary action, the filter row, then the conversations grouped by day; with
-// none at all, one quiet empty state. Rows are the shared SessionRow.
+// none at all, one quiet empty state. Rows are the shared SessionRow: pressing
+// one opens its session in the preferred terminal (spec chat "Open a
+// conversation in the terminal").
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MessageSquare } from "lucide-react";
@@ -12,6 +14,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { channelHeading } from "@/components/channel/channelLabels";
 import { DeleteSessionDialog } from "@/components/sessions/DeleteSessionDialog";
 import { SessionList } from "@/components/sessions/SessionList";
+import { useOpenSession } from "@/components/sessions/useOpenSession";
 import { Button } from "@/components/ui/button";
 import { LoadMoreFooter } from "@/components/ui/load-more";
 import { translateApiError } from "@/lib/api/errors";
@@ -30,12 +33,7 @@ import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { conversationRow, type SessionRowData } from "@/lib/sessions/rows";
 import { ConversationsFilterBar, type SourceChannel } from "./ConversationsFilterBar";
 
-interface Props {
-  /** What pressing a row does. Left out, a row does nothing. */
-  onPrimaryAction?: (row: SessionRowData) => void;
-}
-
-export function ConversationsIndex({ onPrimaryAction }: Props) {
+export function ConversationsIndex() {
   const { t } = useTranslation();
   const { filters, setFilters } = useConversationFilters();
   // Typing is the URL's, instantly; the request follows once it settles.
@@ -47,6 +45,7 @@ export function ConversationsIndex({ onPrimaryAction }: Props) {
   const remove = useDeleteConversation();
   const stop = useInterruptConversation();
   const [deleting, setDeleting] = useState<SessionRowData | null>(null);
+  const opener = useOpenSession();
 
   const agentNames = useMemo(
     () => new Map(agents.map((a) => [a.agent_key, a.display_name])),
@@ -133,7 +132,9 @@ export function ConversationsIndex({ onPrimaryAction }: Props) {
               showChannel
               agentNames={agentNames}
               stoppingId={stop.isPending ? (stop.variables ?? null) : null}
-              onPrimaryAction={onPrimaryAction}
+              onPrimaryAction={opener.open}
+              onCopyCommand={opener.copyCommand}
+              canOpen={opener.canOpen}
               onRename={onRename}
               onDelete={setDeleting}
               onStop={onStop}
@@ -149,6 +150,7 @@ export function ConversationsIndex({ onPrimaryAction }: Props) {
         </>
       )}
 
+      {opener.dialog}
       <DeleteSessionDialog
         row={deleting}
         kind="conversation"

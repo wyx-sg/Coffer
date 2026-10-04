@@ -14,7 +14,7 @@ import { SessionRow } from "./SessionRow";
 
 type RowHandlers = Pick<
   React.ComponentProps<typeof SessionRow>,
-  "onPrimaryAction" | "onRename" | "onDelete" | "onStop"
+  "onPrimaryAction" | "onCopyCommand" | "canOpen" | "onRename" | "onDelete" | "onStop"
 >;
 
 interface Props extends RowHandlers {

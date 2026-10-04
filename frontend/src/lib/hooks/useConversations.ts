@@ -47,12 +47,13 @@ export function useDeleteConversation() {
   });
 }
 
-export function useInterruptConversation() {
+/** `silent`: the caller shows the refusal itself (the busy dialog does, inline). */
+export function useInterruptConversation({ silent = false }: { silent?: boolean } = {}) {
   const refresh = useRefreshLists();
-  const onError = useToastError();
+  const toastError = useToastError();
   return useMutation({
     mutationFn: (id: string) => chatApi.interruptTurn(id),
     onSuccess: () => refresh(),
-    onError,
+    onError: silent ? undefined : toastError,
   });
 }

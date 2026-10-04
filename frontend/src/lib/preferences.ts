@@ -92,3 +92,58 @@ export function usePreferredEditor(): string {
 export function useSetPreferredEditor(): (editor: string) => void {
   return useCallback((editor: string) => setPreferredEditor(editor), []);
 }
+
+const PREFERRED_TERMINAL_KEY = "coffer.preferredTerminal";
+
+/**
+ * The terminal Coffer opens an agent session in: a launcher value from the
+ * daemon's detected list (`GET /fs/terminals`) or a custom command template
+ * holding `{cwd}` and `{command}`. An empty string means the system terminal.
+ * Browser-only like the editor; it travels to the daemon only as the `terminal`
+ * of an open, read at click time.
+ */
+export function getPreferredTerminal(): string {
+  return readStored(PREFERRED_TERMINAL_KEY) ?? "";
+}
+
+function setPreferredTerminal(terminal: string): void {
+  const trimmed = terminal.trim();
+  writeStored(PREFERRED_TERMINAL_KEY, trimmed || null);
+  listeners.forEach((cb) => cb());
+}
+
+/** Reactive read of the preferred terminal ("" = the system terminal). */
+export function usePreferredTerminal(): string {
+  return useSyncExternalStore(subscribe, getPreferredTerminal, () => "");
+}
+
+/** Setter hook for the Settings control. */
+export function useSetPreferredTerminal(): (terminal: string) => void {
+  return useCallback((terminal: string) => setPreferredTerminal(terminal), []);
+}
+
+/** The agents a hand-off can start. */
+export type HandoffAgent = "claude_code" | "codex";
+
+const HANDOFF_AGENT_KEY = "coffer.handoffAgent";
+
+/** The stored hand-off agent, or "" when none is stored (or the stored value is not one we know). */
+export function getHandoffAgent(): HandoffAgent | "" {
+  const raw = readStored(HANDOFF_AGENT_KEY);
+  return raw === "claude_code" || raw === "codex" ? raw : "";
+}
+
+function setHandoffAgent(agent: HandoffAgent | ""): void {
+  writeStored(HANDOFF_AGENT_KEY, agent || null);
+  listeners.forEach((cb) => cb());
+}
+
+/** Reactive read of the stored hand-off agent ("" = none chosen). */
+export function useHandoffAgentPreference(): HandoffAgent | "" {
+  return useSyncExternalStore(subscribe, getHandoffAgent, () => "");
+}
+
+/** Setter hook for the Settings control. */
+export function useSetHandoffAgent(): (agent: HandoffAgent | "") => void {
+  return useCallback((agent: HandoffAgent | "") => setHandoffAgent(agent), []);
+}

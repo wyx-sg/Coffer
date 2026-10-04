@@ -59,7 +59,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
           <>
             <AgentHandoff
               prompt={collection.tidy_handoff.prompt}
-              autoSend={{ label: t("knowledge.tidy.one") }}
+              label={t("knowledge.tidy.one")}
               size="sm"
               help={false}
             />

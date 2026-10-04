@@ -39,6 +39,10 @@ vi.mock("@/lib/api/agentProviders", () => ({
   },
 }));
 
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: { listTerminals: vi.fn().mockResolvedValue([]), openTerminal: vi.fn() },
+}));
+
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 
 const SUBTITLE = "Documents you and your agents write together. Every agent can read them.";
@@ -61,9 +65,8 @@ function tree() {
 describe("the header", () => {
   acceptance("knowledge", "the page's one primary action is Upload", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    // Until a hand-off starts the agent in a terminal, Tidy all is Copy prompt.
     const tidyAll = await within(screen.getByRole("banner")).findByRole("button", {
-      name: "Copy prompt",
+      name: "Tidy all",
     });
     expect(within(screen.getByRole("banner")).getByRole("heading")).toHaveTextContent("Knowledge");
     expect(screen.getByText("Experimental")).toBeInTheDocument();
@@ -85,7 +88,7 @@ describe("the header", () => {
 
   test("Upload drops to secondary while a document is being edited", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    await screen.findAllByRole("button", { name: "Copy prompt" });
+    await screen.findByRole("button", { name: "Tidy all" });
     act(() => setEditingDocument(GATEWAY.path));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Upload" }).className).not.toMatch(/bg-accent/),

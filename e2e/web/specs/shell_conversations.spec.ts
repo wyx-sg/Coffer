@@ -150,6 +150,11 @@ test.describe("Conversations page", () => {
       ).toHaveCount(0);
       await rowOf(titleA).click();
       await expect(page).toHaveURL(/\/conversations$/);
+      // These rows carry no native session (no turn has run), so Open in terminal
+      // is disabled; the row opens nothing and the page stays a list.
+      await expect(
+        rowOf(titleA).getByRole("button", { name: "Open in terminal" }),
+      ).toBeDisabled();
 
       // The Channel pill narrows the list in the server and the address.
       await page.getByRole("button", { name: /^Channel/ }).click();

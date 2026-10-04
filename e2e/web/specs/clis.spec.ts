@@ -4,8 +4,9 @@
 // requires on the CLIs page"). A throwaway skill declares two commands under
 // `requires:` — one that cannot exist and `sh`, which always does — and is
 // imported over REST. The test then walks the list (Needs you before Ready),
-// the command's pane and its hand-off (Copy prompt — an e2e run installs
-// nothing) and the skill's Requires tab. The skill is removed afterwards. The scenarios'
+// the command's pane and its hand-off (Hand off to <Agent> where a managed
+// agent is installed, else Copy prompt — an e2e run installs nothing) and the
+// skill's Requires tab. The skill is removed afterwards. The scenarios'
 // markers are on the unit tests (ClisPage.test.tsx, SkillRequiresTab.test.tsx).
 
 import { expect, test } from "@playwright/test";
@@ -98,8 +99,11 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
     await expect(banner).toContainText(`${MISSING} isn’t found on this machine`);
     await expect(banner).toContainText(skillName);
     await expect(page.getByText("Not on PATH")).toBeVisible();
-    // The hand-off is a Copy prompt button until a terminal hand-off replaces it.
-    await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+    // The hand-off is the split button Hand off to <Agent> when a managed agent
+    // is installed on the runner, and a plain Copy prompt button when none is.
+    await expect(
+      page.getByRole("button", { name: /^(Hand off to .+|Copy prompt)$/ }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Ask an agent" })).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Install|Update/ }),

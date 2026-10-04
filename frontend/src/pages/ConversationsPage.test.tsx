@@ -1,9 +1,10 @@
 // pages/ConversationsPage.test.tsx — the Conversations page as the Run canvas
 // draws it: a list of the conversations IM channels opened and nothing else —
 // day groups without counts, a row's channel, status word, Stop and ⋯ menu, the
-// filter row and its URL, rename and delete, and the list's states.
+// filter row and its URL, rename and delete, opening a row in the preferred
+// terminal (and asking first while its turn is busy), and the list's states.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -23,6 +24,7 @@ vi.mock("@/lib/api/chat", () => ({
   },
 }));
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 vi.mock("@/lib/hooks/useChannels", () => ({
   useChannels: () => ({
     data: [
@@ -35,6 +37,8 @@ vi.mock("@/lib/hooks/useChannels", () => ({
 const { chatApi } = await import("@/lib/api/chat");
 const api = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const { agentProvidersApi } = await import("@/lib/api/agentProviders");
+const { fsApi } = await import("@/lib/api/fs");
+const openTerminal = vi.mocked(fsApi.openTerminal);
 
 const at = (daysAgo: number, hour = 12) => {
   const d = new Date();
@@ -126,6 +130,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   listed(today, yesterday, earlier);
+  vi.mocked(fsApi.listTerminals).mockResolvedValue([{ label: "iTerm", value: "iterm" }]);
+  openTerminal.mockResolvedValue(undefined);
 });
 
 describe("Conversations list", () => {
@@ -261,14 +267,6 @@ describe("Conversations list", () => {
     await screen.findByText("Today one");
     fireEvent.click(within(row("Today one")).getByRole("button", { name: "Stop Today one" }));
     await waitFor(() => expect(api.interruptTurn.mock.calls[0][0]).toBe("t"));
-  });
-
-  test("pressing a row does nothing yet", async () => {
-    renderPage();
-    await screen.findByText("Today one");
-    fireEvent.click(row("Today one"));
-    expect(loc()).toBe("/conversations");
-    expect(api.interruptTurn).not.toHaveBeenCalled();
   });
 
   acceptance("chat", "the conversation list pages by cursor", async () => {
@@ -461,5 +459,216 @@ describe("Conversations list states", () => {
     listed(today);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Today one")).toBeInTheDocument();
+  });
+});
+
+describe("Opening a conversation in the terminal", () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  beforeEach(() => {
+    writeText.mockClear();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  });
+
+  const alpha = makeConversation({
+    id: "c1",
+    title: "Alpha rollout",
+    cwd: "/work/api",
+    session_id: "abc-123",
+  });
+  const openButton = (title: string) =>
+    within(row(title)).getByRole("button", { name: "Open in terminal" });
+
+  acceptance("chat", "a row opens its session in the preferred terminal", async () => {
+    localStorage.setItem("coffer.preferredTerminal", "iterm");
+    const codex = makeConversation({
+      id: "c2",
+      title: "Beta",
+      agent_key: "codex",
+      cwd: "/work/web",
+      session_id: "def-456",
+    });
+    listed(alpha, codex);
+    renderPage();
+    await screen.findByText("Alpha rollout");
+    // Nothing has opened, and nothing but the open itself carries the terminal.
+    expect(openTerminal).not.toHaveBeenCalled();
+    expect(vi.mocked(fsApi.listTerminals)).toHaveBeenCalledWith();
+
+    fireEvent.click(row("Alpha rollout"));
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        cwd: "/work/api",
+        resume: "abc-123",
+        terminal: "iterm",
+      }),
+    );
+    expect(await screen.findByText("Opened in iTerm")).toBeInTheDocument();
+
+    // A Codex conversation is opened the same way, for Codex; the main part of the split button does it too.
+    fireEvent.click(openButton("Beta"));
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenLastCalledWith({
+        agent: "codex",
+        cwd: "/work/web",
+        resume: "def-456",
+        terminal: "iterm",
+      }),
+    );
+    expect(openTerminal).toHaveBeenCalledTimes(2);
+  });
+
+  acceptance("web-ui", "the preferred terminal is sent only when a session opens", async () => {
+    localStorage.setItem("coffer.preferredTerminal", "kitty {command}");
+    listed(alpha);
+    renderPage();
+    await screen.findByText("Alpha rollout");
+    // The list, the filters and the detection are read with the terminal never on them.
+    expect(openTerminal).not.toHaveBeenCalled();
+    expect(vi.mocked(fsApi.listTerminals)).toHaveBeenCalledWith();
+    expect(api.listConversations.mock.calls.flat().join()).not.toContain("kitty");
+
+    fireEvent.click(row("Alpha rollout"));
+    await waitFor(() => expect(openTerminal).toHaveBeenCalledTimes(1));
+    expect(openTerminal.mock.calls[0][0].terminal).toBe("kitty {command}");
+  });
+
+  acceptance("chat", "copy command copies the resume command", async () => {
+    const codex = makeConversation({
+      id: "c2",
+      title: "Beta",
+      agent_key: "codex",
+      cwd: "/work/it's",
+      session_id: "def-456",
+    });
+    listed(alpha, codex);
+    renderPage();
+    await screen.findByText("Alpha rollout");
+    fireEvent.click(
+      within(row("Alpha rollout")).getByRole("button", { name: "Open options for Alpha rollout" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy command" }));
+    expect(writeText).toHaveBeenCalledWith("cd '/work/api' && claude --resume abc-123");
+    expect(openTerminal).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+
+    fireEvent.click(within(row("Beta")).getByRole("button", { name: "Open options for Beta" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy command" }));
+    expect(writeText).toHaveBeenLastCalledWith(`cd '/work/it'\\''s' && codex resume def-456`);
+  });
+
+  acceptance("chat", "a conversation with no native session cannot be opened", async () => {
+    listed(makeConversation({ id: "n", title: "Fresh", session_id: null }));
+    renderPage();
+    await screen.findByText("Fresh");
+    const open = openButton("Fresh");
+    expect(open).toBeDisabled();
+    expect(
+      within(row("Fresh")).getByRole("button", { name: "Open options for Fresh" }),
+    ).toBeDisabled();
+    // The tooltip says why.
+    act(() => (open.parentElement as HTMLElement).focus());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/no session yet/i);
+    fireEvent.click(row("Fresh"));
+    expect(openTerminal).not.toHaveBeenCalled();
+    expect(screen.queryByRole("menuitem", { name: "Copy command" })).toBeNull();
+  });
+
+  acceptance("chat", "a refused open is reported with a way out", async () => {
+    openTerminal.mockRejectedValue(new ApiError("FS_TERMINAL_FAILED", "no terminal found"));
+    listed(alpha);
+    renderPage();
+    await screen.findByText("Alpha rollout");
+    fireEvent.click(row("Alpha rollout"));
+    expect(await screen.findByText(/terminal couldn.t be started/i)).toBeInTheDocument();
+    // Copy command is the way out, in the toast.
+    fireEvent.click(await screen.findByRole("button", { name: "Copy command" }));
+    expect(writeText).toHaveBeenCalledWith("cd '/work/api' && claude --resume abc-123");
+  });
+
+  describe("a session that is running", () => {
+    const running = makeConversation({
+      id: "r",
+      title: "Busy one",
+      cwd: "/work/api",
+      session_id: "abc-123",
+      running: true,
+    });
+    const waiting = makeConversation({
+      id: "w",
+      title: "Waiting one",
+      cwd: "/work/api",
+      session_id: "def-456",
+      running: true,
+      needs_you: true,
+    });
+
+    acceptance("chat", "a running conversation asks before it opens", async () => {
+      listed(running);
+      renderPage();
+      await screen.findByText("Busy one");
+      fireEvent.click(row("Busy one"));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent(
+        "This turn is running in SeaTalk. Answer in SeaTalk, or stop this turn and continue in the terminal.",
+      );
+      expect(within(dialog).getByRole("button", { name: "Answer in SeaTalk" })).toBeVisible();
+      expect(
+        within(dialog).getByRole("button", { name: "Stop the turn and continue in the terminal" }),
+      ).toBeVisible();
+      expect(openTerminal).not.toHaveBeenCalled();
+      expect(api.interruptTurn).not.toHaveBeenCalled();
+    });
+
+    acceptance("chat", "stopping the turn then opens the terminal", async () => {
+      api.interruptTurn.mockResolvedValue(undefined);
+      listed(waiting);
+      renderPage();
+      await screen.findByText("Waiting one");
+      fireEvent.click(openButton("Waiting one"));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent("This turn is waiting for your answer in SeaTalk.");
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Stop the turn and continue in the terminal" }),
+      );
+      // The turn is interrupted exactly as the row's Stop does, then the terminal opens.
+      await waitFor(() => expect(openTerminal).toHaveBeenCalledTimes(1));
+      expect(api.interruptTurn.mock.calls[0][0]).toBe("w");
+      expect(api.interruptTurn.mock.invocationCallOrder[0]).toBeLessThan(
+        openTerminal.mock.invocationCallOrder[0],
+      );
+      expect(openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        cwd: "/work/api",
+        resume: "def-456",
+        terminal: null,
+      });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    acceptance("chat", "answering in the chat leaves the session alone", async () => {
+      listed(waiting);
+      renderPage();
+      await screen.findByText("Waiting one");
+      fireEvent.click(row("Waiting one"));
+      fireEvent.click(await screen.findByRole("button", { name: "Answer in SeaTalk" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(api.interruptTurn).not.toHaveBeenCalled();
+      expect(openTerminal).not.toHaveBeenCalled();
+    });
+
+    test("a stop the daemon refuses keeps the dialog open and opens nothing", async () => {
+      api.interruptTurn.mockRejectedValue(new ApiError("CONVERSATION_NOT_FOUND", "gone"));
+      listed(running);
+      renderPage();
+      await screen.findByText("Busy one");
+      fireEvent.click(row("Busy one"));
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Stop the turn and continue in the terminal" }),
+      );
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(openTerminal).not.toHaveBeenCalled();
+    });
   });
 });

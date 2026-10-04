@@ -144,6 +144,7 @@ export const daemonFeaturesKey = ["daemon", "features"] as const;
 
 export const fsBrowseKey = (path: string) => ["fs", "browse", path] as const;
 export const fsEditorsKey = ["fs", "editors"] as const;
+export const fsTerminalsKey = ["fs", "terminals"] as const;
 
 // --- audit / retention -----------------------------------------------------
 
