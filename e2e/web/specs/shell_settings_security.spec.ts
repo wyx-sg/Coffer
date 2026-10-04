@@ -159,7 +159,7 @@ test("settings general picks the speech-to-text model from a provider's curated 
       section.getByRole("combobox", { name: /^Transcription model$/ }),
     ).toHaveText(/e2e-whisper-a/);
 
-    await section.getByRole("button", { name: /Test speech to text/ }).click();
+    await section.getByRole("button", { name: /Test speech to text/i }).click();
     await expect(state).toContainText(/Failing/, { timeout: 15_000 });
     // The failed test changed nothing.
     const saved = await api<{ transcribe_model: string | null }>(
