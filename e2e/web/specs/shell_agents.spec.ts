@@ -72,7 +72,12 @@ async function removeCodex(): Promise<void> {
 }
 
 function row(page: Page, name: string) {
-  return page.locator("tbody tr", { hasText: name }).first();
+  // Match the name cell, not the row text: another row's "Hand off to <name>"
+  // button would otherwise match too.
+  return page
+    .locator("tbody tr")
+    .filter({ has: page.locator("td", { hasText: new RegExp(`^\\s*${name}`) }) })
+    .first();
 }
 
 acceptance("agent-registry", "desktop app agents page", async ({ page }) => {

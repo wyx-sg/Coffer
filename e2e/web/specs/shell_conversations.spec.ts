@@ -207,7 +207,7 @@ test.describe("Conversations page", () => {
       ]);
       await page.getByRole("menuitem", { name: "Rename" }).click();
       const renamed = `${title} renamed`;
-      const input = row.getByRole("textbox", { name: "Title" });
+      const input = list.getByRole("textbox", { name: "Title" });
       await input.fill(renamed);
       await input.press("Enter");
       const renamedRow = list
