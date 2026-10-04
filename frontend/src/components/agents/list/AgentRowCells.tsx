@@ -6,6 +6,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ActionMenu } from "@/components/ui/menu";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
@@ -203,14 +204,24 @@ export function CofferCell({
 
 export function ActionsCell({ row }: { row: AgentTypeOut }) {
   const { t } = useTranslation();
-  const { primary, actions, dialogs, pending } = useAgentRowActions(row, { inList: true });
+  const { primary, handoff, actions, dialogs, pending } = useAgentRowActions(row, {
+    inList: true,
+  });
   const name = agentTypeLabel(row.type);
   return (
     <div className="flex items-center justify-end gap-1">
       {primary ? (
         <TableActionButton label={primary.label} loading={!!pending} onClick={primary.run} />
       ) : null}
-      <ActionMenu label={t("agents.rowMenu.label", { name })} actions={actions} />
+      {handoff ? (
+        // A click in the split button or its menu must not open the agent under it.
+        <span className="contents" onClick={(event) => event.stopPropagation()}>
+          <AgentHandoff prompt={handoff} size="sm" help={false} />
+        </span>
+      ) : null}
+      {actions.length > 0 ? (
+        <ActionMenu label={t("agents.rowMenu.label", { name })} actions={actions} />
+      ) : null}
       {/* A dialog is portalled but its clicks still bubble through React to
           the row, which would open the agent under it. */}
       <span className="contents" onClick={(event) => event.stopPropagation()}>

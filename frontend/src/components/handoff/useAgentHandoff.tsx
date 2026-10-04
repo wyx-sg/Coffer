@@ -1,8 +1,7 @@
-// src/components/handoff/useAgentHandoff.tsx — the two hand-off verbs, for a surface that lays them out itself.
+// src/components/handoff/useAgentHandoff.tsx — the two hand-off verbs behind `AgentHandoff`.
 //
-// `AgentHandoff` renders them as one split button; a dense surface with no room
-// for it (an Overview "Needs you" row) puts them in its ⋯ menu instead. Either
-// way the verbs are the same: copy the daemon's prompt as given (a "Prompt
+// Every hand-off in the app is the `AgentHandoff` split button; this hook is
+// its logic. The verbs: copy the daemon's prompt as given (a "Prompt
 // copied" toast says so), or open the draft (New conversation) with the prompt
 // in its composer — never sent until the person presses Send. `canAsk` is false
 // while no managed agent is available, and the caller then offers Copy prompt only.

@@ -3964,8 +3964,7 @@
       "approvalRefused": {
         "title": "这个渠道的密钥被拒绝了",
         "body": "你在 Coffer 应用里拒绝了它的密钥，所以渠道无法连接 {{platform}}。打开密钥页点击“重新请求”可以重新发起——配对和设置都会保留。"
-      },
-      "moreHandoff": "更多交接方式"
+      }
     },
     "meta": {
       "seatalkApp": "SeaTalk 应用 {{appId}}",

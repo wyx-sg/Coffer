@@ -22,7 +22,7 @@ import type { ChannelStateKey, ChannelView } from "@/lib/channels/channelState";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { displayName } from "@/lib/resourceTitle";
 import type { ChannelCommand } from "./ChannelDetailHeader";
-import { HandoffSplit } from "./HandoffSplit";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { useMachineName } from "./channelLabels";
 import { platformLabel } from "./PlatformMark";
 
@@ -131,7 +131,7 @@ export function ChannelStatusBanner({ channel, view, status, onCommand, onPair, 
                     {fixLabel}
                   </Button>
                 ) : null}
-                {handoff ? <HandoffSplit prompt={handoff} /> : null}
+                {handoff ? <AgentHandoff prompt={handoff} size="sm" /> : null}
               </div>
             ) : null}
           </AlertDescription>

@@ -183,8 +183,9 @@ describe("AgentsPage", () => {
     renderPage();
     const claude = await waitFor(() => rowOf("Claude Code"));
     await waitFor(() => expect(claude).toHaveTextContent("Not on this Mac"));
-    // Neither row has a visible button: Copy prompt heads each ⋯ menu.
-    expect(within(claude).queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
+    // No fix Coffer can make: each row hands installing off with the split
+    // button beside its ⋯ (no managed agent here, so it is Copy prompt alone).
+    expect(within(claude).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
     expect(within(claude).getAllByText("Not installed").length).toBeGreaterThan(0);
     expect(document.body).not.toHaveTextContent(/npm|install -g/);
     expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
@@ -197,8 +198,9 @@ describe("AgentsPage", () => {
     const items = within(menu)
       .getAllByRole("menuitem")
       .map((i) => i.textContent);
-    expect(items.slice(0, 2)).toEqual(["Copy prompt", "Use a different config directory…"]);
-    expect(within(menu).getByRole("separator")).toBeInTheDocument();
+    // The ⋯ never repeats the hand-off.
+    expect(items[0]).toBe("Use a different config directory…");
+    expect(items).not.toContain("Copy prompt");
     expect(items).not.toContain("Remove from Coffer");
   };
   acceptance(
