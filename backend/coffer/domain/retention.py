@@ -42,6 +42,11 @@ class RetentionPolicy:
 #: user can change it or keep attachments forever (Settings > Data > Local content).
 DEFAULT_ATTACHMENT_RETENTION_DAYS = 30
 
+#: The skill working files policy's default window (by file mtime, anywhere under
+#: ``~/.coffer/skill-data``). The user can change it or keep them forever
+#: (Settings > Data > History).
+DEFAULT_SKILL_DATA_RETENTION_DAYS = 30
+
 
 def files_to_prune(
     entries: Sequence[tuple[str, datetime]],

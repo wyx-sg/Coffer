@@ -38,7 +38,6 @@ from coffer.application.mcp.supervisor_failures import UpstreamFailureLedger
 from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_registry import (
-    FilePolicy,
     PrunableRegistry,
     PrunableTable,
 )
@@ -48,10 +47,7 @@ from coffer.application.retention_service import (
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
-from coffer.domain.retention import DEFAULT_ATTACHMENT_RETENTION_DAYS
 from coffer.domain.secrets import SecretDestination
-from coffer.infrastructure.channel.seatalk_media import default_media_dir
-from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
 from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
@@ -60,7 +56,6 @@ from coffer.infrastructure.mcp.persistence import (
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.media_retention import count_media_dir, prune_media_dir
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.cli_wiring import build_command_probe
 from coffer.surfaces.http.mcp.custom_tool_dependencies import set_custom_tool_services
@@ -72,6 +67,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     set_preferences_repo,
     set_server_requirements,
 )
+from coffer.surfaces.http.retention_wiring import build_file_policies
 from coffer.surfaces.http.secret_boundary_wiring import (
     optional_secret_boundary,
     register_resource_destination,
@@ -311,37 +307,12 @@ def build_prunable_registry() -> PrunableRegistry:
     return registry
 
 
-def _channel_media_sweep(now: datetime, max_age_days: int) -> list[str]:
-    """Prune ``~/.coffer/content/channel-media`` with the attachments window."""
-    return prune_media_dir(default_media_dir(), max_age_days=max_age_days, now=now)
-
-
-def _attachments_policy() -> FilePolicy:
-    """The ``attachments`` retention policy over both media dirs: what a channel
-    downloaded and what the web composer uploaded (spec resource-framework
-    "Retain attachments on an adjustable policy")."""
-    chat = FileChatMediaStore(default_chat_media_dir())
-
-    def count(now: datetime, max_age_days: int) -> tuple[int, int]:
-        c_total, c_old = count_media_dir(default_media_dir(), max_age_days=max_age_days, now=now)
-        w_total, w_old = chat.count(now, max_age_days)
-        return c_total + w_total, c_old + w_old
-
-    return FilePolicy(
-        name="attachments",
-        display_name="Attachments",
-        description="Files and images sent in conversations and channels.",
-        default_retention_days=DEFAULT_ATTACHMENT_RETENTION_DAYS,
-        sweeps=(_channel_media_sweep, chat.prune),
-        count=count,
-    )
-
-
 def build_retention_service(
     sm: async_sessionmaker[AsyncSession], *, audit: AuditService
 ) -> RetentionService:
     """Compose the ``RetentionService`` (registry + repo + audit) and bind the
-    ``attachments`` file policy (``channel-media`` and ``chat-media``) at
+    file policies (``attachments`` over ``channel-media`` and ``chat-media``,
+    ``skill_data`` over ``skill-data``) at
     composition root, so the
     application layer never imports the infrastructure prune. The caller runs
     ``initialize_defaults`` and drives the worker cadence."""
@@ -358,7 +329,7 @@ def build_retention_service(
         registry=registry,
         repo=FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=audit,
-        file_policy=_attachments_policy(),
+        file_policies=build_file_policies(),
     )
 
 

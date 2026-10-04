@@ -286,6 +286,22 @@ def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
     assert "<!--" not in both_off
 
 
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the manual says where a skill's scripts keep their files"
+)
+def test_the_manual_says_where_a_skills_scripts_keep_their_files() -> None:
+    for text in (
+        render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY),
+        render("~/.coffer/knowledge", None),
+    ):
+        assert "`~/.coffer/skill-data/<skill-name>/`" in text
+        assert "`coffer path skill-data`" in text
+        flat = " ".join(text.split())
+        assert "Never write them inside the skill's own folder" in flat
+        assert "Skill working files retention window" in flat
+        assert "durable data does not belong there" in flat
+
+
 def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
     assert "<!--" not in text

@@ -1158,7 +1158,7 @@
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
       "pruneConfirmTitle": "Clear expired data now?",
-      "pruneConfirmBody": "Records and attachments older than each policy's retention window are deleted permanently.",
+      "pruneConfirmBody": "Records, attachments and skill working files older than each policy's retention window are deleted permanently.",
       "pruneRow": "Removed {{rows}} rows from {{name}}",
       "pruneNothing": "Nothing to clear",
       "policy": {
@@ -1192,6 +1192,15 @@
           "description": "Files and images sent in conversations and channels",
           "shortenTitle": "Keep attachments for {{days}} days?",
           "shortenBody": "The next prune will delete older attachments.",
+          "pruneRow": "Removed {{rows}} files from {{name}}",
+          "unit_one": "file",
+          "unit_other": "files"
+        },
+        "skill_data": {
+          "name": "Skill working files",
+          "description": "Logs, journals and temporary files skills write under ~/.coffer/skill-data",
+          "shortenTitle": "Keep skill working files for {{days}} days?",
+          "shortenBody": "The next prune will delete older skill working files.",
           "pruneRow": "Removed {{rows}} files from {{name}}",
           "unit_one": "file",
           "unit_other": "files"

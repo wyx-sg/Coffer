@@ -318,6 +318,10 @@ Each entry is the name the MCP server or the custom tool group has in Coffer, ei
 The skill's **Requires** tab lists each tool under **Tools** as on, off or failing, linking to its page. A required tool that is off puts the skill under **Needs attention** with the banner **Tool off**, whose action turns it on. As with commands and secrets, the skill is delivered whether or not its tools are on.
 
 
+## Where a skill's scripts keep their files
+
+A skill's scripts write the logs, operation journals and temporary files they generate under `~/.coffer/skill-data/<skill-name>/`, one folder per skill; `coffer path skill-data` prints the directory. It is outside the vault, so none of it syncs, and a skill must not write inside its own folder (that is the vault) or elsewhere in `~/.coffer`. Coffer deletes files there once they are older than the **Skill working files** retention window (30 days by default, **Settings → Data → History**), so anything that has to last does not belong there. The `coffer-guide` skill tells agents the same.
+
 ## Skill names and descriptions
 
 A skill's name comes from the `name` line of its `SKILL.md` and is fixed once the skill is registered. It is the name of the directory an agent loads the skill from and the identifier an agent invokes it by, so instructions, other skills and permission rules that quote it would break on a rename. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, remove the skill and add it again under the new name, which resets its reach and delivered links (its bindings). The decision is recorded in the ADR "names-visible-to-agents-are-fixed".

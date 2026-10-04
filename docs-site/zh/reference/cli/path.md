@@ -1,12 +1,12 @@
 ---
 title: coffer path
-description: "Where Coffer's log files live"
+description: "Where Coffer's log files and skill working files live"
 pageClass: cli-ref
 ---
 
 # coffer path
 
-Where Coffer's log files live
+Where Coffer's log files and skill working files live
 
 ```sh
 coffer path [OPTIONS] COMMAND [ARGS]...
@@ -19,6 +19,7 @@ coffer path [OPTIONS] COMMAND [ARGS]...
 | 命令 | 说明 |
 | --- | --- |
 | [`path logs`](#path-logs) | The log directory and the daemon.log in it (COFFER_LOG_DIR moves both). |
+| [`path skill-data`](#path-skill-data) | The directory skill scripts write logs, journals and temp files under. |
 
 ## path logs
 
@@ -28,6 +29,22 @@ The log directory and the daemon.log in it (COFFER_LOG_DIR moves both).
 
 ```sh
 coffer path logs [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON object keyed by name |
+
+## path skill-data
+
+The directory skill scripts write logs, journals and temp files under.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer path skill-data [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

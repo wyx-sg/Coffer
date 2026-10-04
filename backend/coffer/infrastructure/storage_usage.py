@@ -13,7 +13,9 @@ through ``infrastructure.vault.home`` like every other reader of them:
   which never sync;
 - **history** — ``runs.db`` (with its WAL), or the database ``COFFER_DB_URL``
   names, together with the log directory (``COFFER_LOG_DIR`` honoured): logs
-  are records of what happened too, pruned by the same retention pass;
+  are records of what happened too, pruned by the same retention pass, as are
+  the skills' working files in ``skill-data/`` (logs, journals and temp files
+  their scripts write; the ``skill_data`` retention policy);
 - **rebuildable cache** — the memory tree (fully derived from the agents' own
   memory; spec memory "Keep the memory tree derived and local") and the
   transcript summary cache, both under ``derived/``. Clearing it deletes the
@@ -37,7 +39,7 @@ from coffer.infrastructure.channel.media_root import default_media_dir
 from coffer.infrastructure.chat.media_store import default_chat_media_dir
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.memory.paths import memory_root
-from coffer.infrastructure.vault.home import content_root, runs_db_path, vault_root
+from coffer.infrastructure.vault.home import content_root, runs_db_path, skill_data_dir, vault_root
 
 
 def database_path() -> pathlib.Path | None:
@@ -145,7 +147,7 @@ def measure() -> StorageUsage:
     )
     history = Measured(
         path=str(db) if db is not None else "",
-        bytes=db_bytes + tree_bytes(log_dir()),
+        bytes=db_bytes + tree_bytes(log_dir()) + tree_bytes(skill_data_dir()),
     )
     return StorageUsage(
         vault=vault,

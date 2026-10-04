@@ -66,6 +66,15 @@ const POLICIES: Policy[] = [
     last_pruned_rows: 0,
   },
   {
+    table_name: "skill_data",
+    display_name: "Skill working files",
+    description: "x",
+    default_retention_days: 30,
+    retention_days: 30,
+    last_pruned_at: null,
+    last_pruned_rows: 0,
+  },
+  {
     table_name: "sync_runs",
     display_name: "Sync rounds",
     description: "x",
@@ -155,7 +164,8 @@ describe("DataSettings", () => {
     expect(await within(history).findByText("Changes")).toBeInTheDocument();
     expect(within(history).getByText("MCP calls")).toBeInTheDocument();
     expect(within(history).getByText("Conversations")).toBeInTheDocument();
-    // Only the three record kinds; the other pruned tables keep their defaults.
+    expect(within(history).getByText("Skill working files")).toBeInTheDocument();
+    // Only the four record kinds; the other pruned tables keep their defaults.
     expect(within(history).queryByText("Sync rounds")).toBeNull();
     expect(within(history).queryByText("Attachments")).toBeNull();
     expect(within(history).getByRole("button", { name: /clear expired data now/i })).toBeVisible();
@@ -203,6 +213,24 @@ describe("DataSettings", () => {
     fireEvent.click(await within(local).findByRole("switch", { name: /keep forever/i }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Keep attachments for 30 days?")).toBeInTheDocument();
+    expect(await within(dialog).findByText(/4 files/)).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "skill working files are kept for a chosen window", async () => {
+    mockApi();
+    render(wrap(<DataSettings />));
+    const history = await screen.findByTestId("settings-data-history");
+    const labels = (
+      await within(history).findAllByText(/^(Conversations|Skill working files)$/)
+    ).map((el) => el.textContent);
+    expect(labels).toEqual(["Conversations", "Skill working files"]);
+    // Shortening 30 days asks first and counts files.
+    // The last number field in History is the Skill working files row.
+    const input = within(history).getAllByRole("spinbutton").at(-1) as HTMLElement;
+    fireEvent.change(input, { target: { value: "7" } });
+    fireEvent.blur(input);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Keep skill working files for 7 days?")).toBeInTheDocument();
     expect(await within(dialog).findByText(/4 files/)).toBeInTheDocument();
   });
 

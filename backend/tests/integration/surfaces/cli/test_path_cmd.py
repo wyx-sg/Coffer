@@ -29,6 +29,23 @@ def test_the_command_line_names_the_daemon_log_file(
     assert not relocated.exists(), "naming the files creates nothing"
 
 
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="path skill-data names the skill working folder"
+)
+def test_path_skill_data_names_the_skill_working_folder(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    expected = str((tmp_path / ".coffer" / "skill-data").resolve())
+
+    plain = _runner.invoke(cli_app, ["path", "skill-data"])
+    assert plain.exit_code == 0, plain.output
+    assert plain.output.strip() == expected
+    as_json = json.loads(_runner.invoke(cli_app, ["path", "skill-data", "--json"]).output)
+    assert as_json == {"skill_data": expected}
+    assert not (tmp_path / ".coffer").exists(), "naming the folder creates nothing"
+
+
 def test_the_other_path_targets_are_gone() -> None:
     for target in ("knowledge", "memory", "skill", "agent", "vault"):
         r = _runner.invoke(cli_app, ["path", target])
