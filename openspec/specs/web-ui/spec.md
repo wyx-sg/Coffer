@@ -1023,12 +1023,12 @@ rather than by how Coffer is built, and MUST open on General:
   and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **About** (`/settings/about`) — version, license, source, whether a newer
-  version is available (see "Check for and install updates on Settings › About"),
-  and a small **Copy diagnostics** action beside the version.
 - **Features** (`/settings/features`) — the four experimental features, each
   marked Experimental, with its switch (spec
   [experimental-features](../experimental-features/spec.md) "Show the Features tab in every build").
+- **About** (`/settings/about`) — version, license, source, whether a newer
+  version is available (see "Check for and install updates on Settings › About"),
+  and a small **Copy diagnostics** action beside the version.
 
 Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
@@ -2562,7 +2562,7 @@ any skill requires or any enabled stdio MCP server starts with (spec
 skill-manager "Check every required command where the agent runs"), with the
 version found beside the minimum the skills ask for, the login state where the
 command has one, and how many MCP servers and skills need it, problems first —
-missing, older than the minimum, or not logged in, grouped under Needs you above
+missing, older than the minimum, or not logged in, grouped under Needs attention above
 Ready — as a split view with the selected CLI's detail beside the list
 (`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
 with the command, each opening that server's page and naming its launcher, and
@@ -2595,7 +2595,7 @@ is probed are specified by skill-manager; this page shows what they report.
 #### Scenario: the CLIs page lists problems first
 - **GIVEN** skills requiring `jq` (not found), `gh` (minimum 2.40, found 2.30.0), `gcloud` (not logged in) and `uv` (found, current)
 - **WHEN** the user opens `/clis`
-- **THEN** `jq`, `gh` and `gcloud` are listed under Needs you above `uv` under Ready, `gh` shows 2.30.0 against 2.40, `gcloud` shows not logged in, and each row counts the skills that need it
+- **THEN** `jq`, `gh` and `gcloud` are listed under Needs attention above `uv` under Ready, `gh` shows 2.30.0 against 2.40, `gcloud` shows not logged in, and each row counts the skills that need it
 
 #### Scenario: a CLI that needs the user offers a prompt for an agent
 - **GIVEN** a required CLI that is missing and a Coffer-managed agent

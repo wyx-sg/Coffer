@@ -34,8 +34,8 @@ acceptance(
       "Security",
       "Data",
       "Daemon",
-      "About",
       "Features",
+      "About",
     ]);
 
     // Clicking a tab swaps the pane without closing the modal.
@@ -95,7 +95,7 @@ acceptance(
       ["security", /^Encryption$/], // SecuritySettings
       ["data", /^Vault$/], // DataSettings
       ["daemon", /^Startup$/], // DaemonSettings
-      ["about", /^Coffer$/], // AboutPage
+      ["about", /^About$/], // AboutPage
       ["features", /^Features$/], // ExperimentalFeaturesSettings
     ];
     for (const [tab, heading] of panes) {
@@ -283,15 +283,16 @@ test("the daemon tab refuses a port out of range and leaves a saved one pending 
     ).json()) as { port: number };
     const field = modal.getByRole("textbox", { name: /^port$/i });
     await expect(field).toHaveValue(String(configured.port));
+    // The row has no Save button: Enter applies the value.
     await field.fill("80");
-    await modal.getByRole("button", { name: /^save$/i }).click();
+    await field.press("Enter");
     await expect(
       modal.getByRole("alert").getByText(/use a port from 1024 to 65535/i),
     ).toBeVisible();
 
     const next = port === 65000 ? 65001 : 65000;
     await field.fill(String(next));
-    await modal.getByRole("button", { name: /^save$/i }).click();
+    await field.press("Enter");
     await expect(
       modal.getByTestId("settings-daemon-port-pending"),
     ).toContainText(`Port ${next} saved`);

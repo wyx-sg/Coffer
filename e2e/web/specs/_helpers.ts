@@ -6,6 +6,8 @@
 
 import { test } from "@playwright/test";
 import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 export interface DaemonInfo {
   token: string;
@@ -102,4 +104,70 @@ export async function resolveResourceUid(
   if (!resp.ok) return null;
   const body = (await resp.json()) as { resources: Array<{ uid: string }> };
   return body.resources[0]?.uid ?? null;
+}
+
+/**
+ * Put a stand-in `codex` ahead of everything else on the daemon's PATH.
+ *
+ * Chat offers an agent type only while its program is installed AND an enabled
+ * agent of the type is registered (spec chat "Offer and run only managed
+ * agents"). The stand-in answers `--version` and exits on anything else, so a
+ * turn started against it fails at once and identically on a laptop with a real
+ * Codex and on a CI runner with none — the suite never starts a real
+ * `codex app-server`.
+ */
+export function ensureStubCodex(): void {
+  const pointer = process.env.COFFER_E2E_HOME_FILE ?? "/tmp/coffer-e2e-home.path";
+  const bin = path.join(fs.readFileSync(pointer, "utf-8").trim(), "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  const program = path.join(bin, "codex");
+  if (!fs.existsSync(program)) {
+    fs.writeFileSync(program, '#!/bin/sh\necho "codex-cli 0.41.0"\n', {
+      mode: 0o755,
+    });
+  }
+}
+
+export interface ManagedCodex {
+  /** Remove the agent (and its config directory) the helper registered. */
+  dispose: () => Promise<void>;
+}
+
+/**
+ * Make Codex a managed agent for the test: the stand-in program (see
+ * {@link ensureStubCodex}) plus one registered codex agent over a throwaway
+ * config directory. Any codex agent already registered is removed first (an
+ * agent is one per type); call `dispose` in a `finally`.
+ */
+export async function registerManagedCodex(): Promise<ManagedCodex> {
+  ensureStubCodex();
+  const { token, port } = readDaemonToken();
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Coffer-Token": token,
+    "X-Coffer-Actor": "e2e",
+  };
+  const remove = async (uid: string | null): Promise<void> => {
+    if (uid === null) return;
+    await fetch(`http://127.0.0.1:${port}/api/v1/agents/${uid}`, {
+      method: "DELETE",
+      headers,
+    }).catch(() => undefined);
+  };
+  await remove(await resolveResourceUid("agent", "codex"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "coffer-e2e-managed-cfg-"));
+  const created = await fetch(`http://127.0.0.1:${port}/api/v1/agents`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ type: "codex", config_dir: dir }),
+  });
+  if (created.status !== 201) {
+    throw new Error(`registering the codex agent answered ${created.status}`);
+  }
+  return {
+    dispose: async () => {
+      await remove(await resolveResourceUid("agent", "codex"));
+      fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
 }

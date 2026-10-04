@@ -13,14 +13,21 @@
 // written straight into the isolated HOME's database — the binding and the
 // thread row an inbound message would have left. Conversations name Codex:
 // the isolated HOME holds no Codex login, so a turn fails fast without reaching
-// a model; a stand-in `codex` on the daemon's PATH makes the agent available.
+// a model; a stand-in `codex` on the daemon's PATH plus a registered codex agent
+// make the agent a managed one, which chat offers and runs (spec chat "Offer and
+// run only managed agents").
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
-import { beforeEachInjectToken, generateUniqueName, readDaemonToken } from "./_helpers";
+import {
+  beforeEachInjectToken,
+  generateUniqueName,
+  readDaemonToken,
+  registerManagedCodex,
+} from "./_helpers";
 
 beforeEachInjectToken();
 
@@ -39,15 +46,6 @@ async function api(method: string, route: string, body?: unknown): Promise<Respo
     headers: { "Content-Type": "application/json", "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-}
-
-function ensureCodexProgram(): void {
-  const bin = path.join(home(), "bin");
-  fs.mkdirSync(bin, { recursive: true });
-  const program = path.join(bin, "codex");
-  if (!fs.existsSync(program)) {
-    fs.writeFileSync(program, '#!/bin/sh\necho "codex-cli 0.41.0"\n', { mode: 0o755 });
-  }
 }
 
 async function createConversation(title: string): Promise<string> {
@@ -97,34 +95,45 @@ test.describe("Conversations page", () => {
   test("lists every conversation with its source, filters by source, opens one beside the list", async ({
     page,
   }) => {
-    const channel = await createElsewhereChannel(generateUniqueName("e2e-conv-ch"));
-    const web = await createConversation(generateUniqueName("from the web"));
+    const channelName = generateUniqueName("e2e-conv-ch");
+    const channel = await createElsewhereChannel(channelName);
+    const webTitle = generateUniqueName("from the web");
+    const web = await createConversation(webTitle);
     const viaChannel = await createConversation(generateUniqueName("from seatalk"));
     bindToChannel(viaChannel, channel);
     try {
       await page.goto("/conversations");
-      const table = page.getByRole("table", { name: "Conversations" });
-      const webRow = table.locator(`tr[data-conversation="${web}"]`);
-      const channelRow = table.locator(`tr[data-conversation="${viaChannel}"]`);
+      // A list of rows (no table): each row is the list item holding its link
+      // (which carries the active filter in its query).
+      const list = page.getByRole("list", { name: "Conversations" });
+      const rowOf = (id: string) =>
+        list.getByRole("listitem").filter({ has: page.locator(`a[href^="/conversations/${id}"]`) });
+      const webRow = rowOf(web);
+      const channelRow = rowOf(viaChannel);
       await expect(webRow).toContainText("Coffer");
       await expect(channelRow).toContainText("SeaTalk · DM");
       // No welcome page and no composer: the page opens on the list.
       await expect(page.getByRole("textbox", { name: /message input/i })).toHaveCount(0);
 
-      await page.getByRole("group", { name: "Source" }).getByRole("button", { name: "SeaTalk" }).click();
-      await expect(page).toHaveURL(/source=seatalk/);
+      // The Source pill lists Coffer and each channel, several at once.
+      await page.getByRole("button", { name: /^Source/ }).click();
+      await page.getByRole("option", { name: `SeaTalk · ${channelName}` }).click();
+      await page.keyboard.press("Escape");
+      await expect(page).toHaveURL(new RegExp(`source=${channel}`));
       await expect(webRow).toHaveCount(0);
       await expect(channelRow).toBeVisible();
 
-      // A channel's own link narrows the list to it.
+      // A channel's own link narrows the list to it; the earlier ?channel= form
+      // is read once as that source and the address rewritten.
       await page.goto(`/conversations?channel=${channel}`);
+      await expect(page).toHaveURL(new RegExp(`source=${channel}`));
       await expect(channelRow).toBeVisible();
       await expect(webRow).toHaveCount(0);
 
       await page.goto("/conversations");
       await webRow.getByRole("link").click();
       await expect(page).toHaveURL(new RegExp(`/conversations/${web}$`));
-      await expect(page.getByRole("list", { name: /conversation history/i })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: webTitle })).toBeVisible();
       await expect(page.getByRole("textbox", { name: /message input/i })).toBeVisible();
     } finally {
       await api("DELETE", `/chat/conversations/${web}`);
@@ -136,12 +145,14 @@ test.describe("Conversations page", () => {
   test("a channel conversation says where a reply also goes, and marks one not delivered yet", async ({
     page,
   }) => {
+    const codex = await registerManagedCodex();
     const channel = await createElsewhereChannel(generateUniqueName("e2e-mirror-ch"));
     const id = await createConversation(generateUniqueName("mirrored"));
     bindToChannel(id, channel);
     try {
       await page.goto(`/conversations/${id}`);
-      await expect(page.getByText("Also sends to SeaTalk · direct chat")).toBeVisible();
+      // The title bar names where a reply also goes; the reply box says nothing.
+      await expect(page.getByText("SeaTalk · DM", { exact: true })).toBeVisible();
 
       // The channel's adapter runs on another machine, so the reply waits.
       const box = page.getByRole("textbox", { name: /message input/i });
@@ -151,13 +162,14 @@ test.describe("Conversations page", () => {
     } finally {
       await api("DELETE", `/chat/conversations/${id}`);
       await api("DELETE", `/resources/${channel}`);
+      await codex.dispose();
     }
   });
 
   test("New conversation opens the draft; the first send creates the conversation", async ({
     page,
   }) => {
-    ensureCodexProgram();
+    const codex = await registerManagedCodex();
     let created: string | null = null;
     try {
       await page.goto("/conversations");
@@ -167,7 +179,7 @@ test.describe("Conversations page", () => {
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Workspace" })).toBeVisible();
       // Codex: with no login in the isolated HOME its turn fails fast, locally.
-      await page.getByRole("combobox", { name: "Agent" }).click();
+      await page.getByRole("combobox", { name: "Agent", exact: true }).click();
       await page.getByRole("option", { name: /codex/i }).click();
       const box = page.getByRole("textbox", { name: /message input/i });
       await box.fill("hello from the draft");
@@ -177,6 +189,7 @@ test.describe("Conversations page", () => {
       await expect(page.getByText("hello from the draft")).toBeVisible();
     } finally {
       if (created) await api("DELETE", `/chat/conversations/${created}`);
+      await codex.dispose();
     }
   });
 });

@@ -125,7 +125,8 @@ acceptance(
       // 4. Reload: the library lists the skill, and opening its row shows
       //    the skill beside the list, on its Files tab with SKILL.md open.
       await page.reload();
-      const library = page.getByRole("list", { name: "Library" });
+      // The list is grouped (In use, Built-in, ...): look for the row anywhere in it.
+      const library = page.getByRole("main");
       const row = library.getByRole("link", { name: new RegExp(skillName) });
       await expect(row).toBeVisible({ timeout: 10_000 });
       await row.click();
