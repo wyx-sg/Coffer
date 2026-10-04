@@ -176,8 +176,9 @@ Rules a change must respect:
   feature on never needs a schema change.
 - A new unfinished capability lands on `main` behind a registry entry, not on a
   side branch. A feature leaves the registry once it is proven: its entry and
-  every gate that names it are deleted, and a migration strips its stored switch
-  from `daemon-config.json`.
+  every gate that names it are deleted, and a table entry (graduated or retired)
+  makes the daemon remove its stored switch from `daemon-config.json` at startup,
+  moving or removing the settings the entry names.
 - A feature never hard-depends on another; a cross-feature link degrades.
 
 ## Consequences

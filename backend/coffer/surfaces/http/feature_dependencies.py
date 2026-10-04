@@ -14,11 +14,17 @@ from collections.abc import Callable
 from coffer.application.features import FeatureService
 from coffer.domain.features import FeatureDisabled, feature_for_kind, feature_keys, get_feature
 from coffer.infrastructure.daemon import config as daemon_config
+from coffer.infrastructure.daemon.feature_lifecycle import apply_feature_lifecycle
 from coffer.infrastructure.daemon.feature_settings import DaemonConfigFeatureSettings
 
 
 def build_feature_service() -> FeatureService:
-    """This machine's settings, this process's pins."""
+    """This machine's settings, this process's pins.
+
+    The daemon config is migrated first (graduated and retired features), so
+    the service reads settings the registry still names.
+    """
+    apply_feature_lifecycle()
     return FeatureService(
         settings=DaemonConfigFeatureSettings(),
         pins=daemon_config.read_feature_pins(feature_keys()),
