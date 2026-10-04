@@ -26,7 +26,6 @@ import { whenLabel } from "@/lib/knowledge/changes";
 import { diffLines } from "@/lib/knowledge/lineDiff";
 import { changePath } from "@/lib/knowledge/routes";
 import { parseUnifiedDiff } from "@/lib/knowledge/unifiedDiff";
-import { parseUnifiedDiff } from "@/lib/knowledge/unifiedDiff";
 import { useRestoreVersion, useVersionBody, useVersionDiff } from "@/lib/hooks/useKnowledgeHistory";
 
 interface Props {

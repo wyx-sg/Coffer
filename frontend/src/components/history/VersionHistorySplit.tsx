@@ -16,7 +16,7 @@ import { SplitView } from "@/components/SplitView";
 import { cn } from "@/lib/utils";
 
 /** What one row of the version list shows. */
-export interface VersionRow {
+interface VersionRow {
   /** The leading mark (a tile or a badge). */
   icon: ReactNode;
   title: ReactNode;
