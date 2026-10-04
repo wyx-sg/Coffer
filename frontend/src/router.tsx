@@ -99,9 +99,14 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "custom-tools",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
-  // One custom-tool group, by its fixed name — one page with no tabs.
+  // One custom-tool group, by its fixed name; its tab (Overview bare, Tools,
+  // Invocations) is the path.
   {
     path: "custom-tools/:group",
+    element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
+  },
+  {
+    path: "custom-tools/:group/:tab",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
