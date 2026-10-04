@@ -180,6 +180,6 @@ export const modelProbeApi = {
       }),
     ),
   /** Probe a chat provider with a minimal request. */
-  test: (p: TestConnectionIn) =>
-    unwrap(getApiClient().POST("/models/test-connection", { body: p })),
+  test: (p: TestConnectionIn, signal?: AbortSignal) =>
+    unwrap(getApiClient().POST("/models/test-connection", { body: p, signal })),
 };

@@ -402,7 +402,7 @@ An agent's model MUST be changed in two calls, so the person sees the lines befo
 
 The files are the agent's own: for Claude Code, `settings.json` — the top-level `model` and the `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins; for Codex, `config.toml` — `model` and `[model_providers.coffer]` — together with Coffer's own model-list file `coffer-model-catalog.json` beside it, so a Codex change reads as two changes. A model the user has since changed with `/model` no longer equals the agent's binding and is theirs. No reasoning effort is written, so none is previewed.
 
-The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a `.bak` is kept, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider chosen, Coffer tests the connection with the chosen model while the preview is computed; a failed test is shown as a warning and does not stop the apply. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model itself (`/model`) and that Coffer sets it only for a provider the user adds.
+The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a `.bak` is kept, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider and a model chosen, Coffer tests that provider with that model by itself once the draft has rested for a moment (`POST /api/v1/models/test-connection` with the connection's protocol, base URL and stored secret ref — the call of Overview › Model › Test; the page never handles a key), cancels a run the draft has moved past, and shows the result as a line under Model: **Testing connection…**, **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** is enabled only when the draft differs from what is applied, names a model, AND the test for exactly this provider and model passed; while it is testing or after a failure it stays off and a line beside it says why. A local runtime connection is tested the same way. The review runs no second test. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model itself (`/model`) and that Coffer sets it only for a provider the user adds.
 
 #### Scenario: previewing a model change writes nothing
 - **GIVEN** a Claude Code agent on its built-in login and a connection that reaches it
@@ -425,6 +425,23 @@ The web UI's **Change model** dialog (Overview › Model › Change…, or `?cha
 - **GIVEN** the Change model dialog for a Claude Code agent on a connection
 - **WHEN** the user picks the built-in login
 - **THEN** no Model or tier field is shown, Review changes lists only the removal of the keys Coffer wrote, and applying leaves the agent's `connection_uid` empty
+
+#### Scenario: a model change is tested before it can be reviewed
+- **GIVEN** the Change model dialog for an agent with an enabled connection that reaches it
+- **WHEN** the user picks a model on the connection
+- **THEN** Coffer tests the connection with that model without being asked, the line under Model reads "Testing connection…" and Review changes is off
+- **AND** when the test passes the line reads "Connection OK" with its duration and Review changes is on
+
+#### Scenario: a failed connection test keeps Review changes off and offers Retry
+- **GIVEN** a draft naming a connection and a model whose test fails
+- **WHEN** the test answers
+- **THEN** the line under Model reads "Connection failed" with the reason and a **Retry** button, Review changes stays off and a hint says why
+- **AND** choosing Retry tests again and, when it passes, turns Review changes on
+
+#### Scenario: the built-in login needs no connection test
+- **GIVEN** the Change model dialog for an agent on a connection
+- **WHEN** the user picks the built-in login
+- **THEN** no test runs, no test line is shown and Review changes is on
 
 ### Requirement: Review what deleting a connection changes
 Deleting a connection that agents run on MUST put each of those agents back on its built-in login first — the same de-projection "Revert an agent type to its built-in login" performs, audited the same way — and only then delete the connection, its owned secret and the engine settings that named it; a de-projection refused because a file was edited on disk aborts the delete and keeps the connection. `GET /api/v1/providers/{uid}/delete-preview` MUST answer, per agent running on the connection, which of its files the delete would change and exactly the lines it would remove or the file it would remove, and write nothing; it is a 404 for a connection that does not exist. On the web, deleting a connection nothing uses asks once and returns to the list; deleting one in use is not blocked but opens a review — what will happen to each user of the connection (an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted) beside the daemon's own lines for each agent file — and **Delete** applies it. The lines shown are the daemon's dry run, never drawn by the page.
@@ -1453,7 +1470,7 @@ The web surfaces:
   other model setting — no output-limit, subagent, fallback, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
-  the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied and names a model. The built-in login needs no model. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
+  the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied, names a model and has passed its connection test ("Review a model change before writing it"). The built-in login needs no model and no test. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
 
 #### Scenario: update a provider profile
 - **GIVEN** a connection exists,

@@ -2,7 +2,7 @@
 //
 // The shared 1060 ChangePreview over what the daemon says the change writes:
 // Claude Code's settings.json, or Codex's config.toml plus Coffer's own model
-// list file. The connection test runs while the preview is computed. Apply
+// list file. The connection test already passed in the form. Apply
 // sends the fingerprints the preview read; a file edited since refuses the
 // write inside this dialog, with Reload preview.
 import { useTranslation } from "react-i18next";
@@ -53,7 +53,7 @@ function toItem(agent: AgentOut, file: ModelSwitchFile, status?: ChangeItem["sta
 
 export function ChangeModelReview({ agent, draft, open, onOpenChange, onApplied }: Props) {
   const { t } = useTranslation();
-  const r = useModelSwitchReview(draft.request, draft.draftConnObj, open);
+  const r = useModelSwitchReview(draft.request, open);
   const files = r.preview.data?.files ?? [];
   const name = agentTypeLabel(agent.type);
   const target = draft.draftConnObj ? displayName(draft.draftConnObj) : null;
@@ -95,10 +95,6 @@ export function ChangeModelReview({ agent, draft, open, onOpenChange, onApplied 
   ) : r.previewError ? (
     <p role="alert" className="text-xs text-danger">
       {translateApiError(t, r.previewError)}
-    </p>
-  ) : r.test.data && !r.test.data.ok ? (
-    <p role="alert" className="text-xs text-warning">
-      {t(`${K}.testFailed`, { message: r.test.data.message })}
     </p>
   ) : null;
 
