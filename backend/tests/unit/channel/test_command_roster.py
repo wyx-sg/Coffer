@@ -12,20 +12,21 @@ from coffer.domain.channel.commands import (
     COMMAND_ROSTER,
     command_name,
     help_text,
+    is_dm_only,
     is_group_private,
     menu_entries,
     names,
     near_miss,
 )
 
-_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "kb", "help"}
+_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "help"}
 
 
 @pytest.mark.acceptance(
     spec="channels", scenario="the command menu matches the commands that exist"
 )
 def test_the_menu_offers_exactly_the_reserved_words() -> None:
-    assert {c.name for c in menu_entries(group=False, knowledge=True)} == _ALL
+    assert {c.name for c in menu_entries(group=False)} == _ALL
     assert {c.name for c in COMMAND_ROSTER} == _ALL
     # Removed with no pointer: they are ordinary words now.
     for gone in ("agent", "effort", "threads", "save"):
@@ -33,20 +34,20 @@ def test_the_menu_offers_exactly_the_reserved_words() -> None:
 
 
 def test_a_group_menu_offers_the_group_set() -> None:
-    group = {c.name for c in menu_entries(group=True, knowledge=True)}
-    assert group == {"new", "stop", "model", "status", "resume", "help"}
+    group = {c.name for c in menu_entries(group=True)}
+    assert group == {"new", "stop", "help"}
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="knowledge off answers /kb as switched off",
-)
-def test_kb_is_offered_only_while_knowledge_is_on() -> None:
-    assert "/kb" in help_text(knowledge=True)
-    assert "/kb" not in help_text(knowledge=False)
-    assert "kb" not in {c.name for c in menu_entries(group=False, knowledge=False)}
-    # Still reserved, so it answers why it cannot run rather than reaching the agent.
-    assert command_name("/kb notes") == "kb"
+def test_a_group_help_lists_only_the_group_commands() -> None:
+    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /help"
+    assert "/model" in help_text() and "/thread" in help_text()
+
+
+def test_the_direct_chat_commands_are_dm_only() -> None:
+    for command in ("/model", "/dir", "/status", "/resume", "/thread", "/Model opus"):
+        assert is_dm_only(command)
+    for command in ("/new", "/stop", "/help", "/start", "/compact"):
+        assert not is_dm_only(command)
 
 
 def test_help_text_lists_every_command_with_its_arguments() -> None:
@@ -59,7 +60,6 @@ def test_help_text_lists_every_command_with_its_arguments() -> None:
 
 def test_names_returns_typed_forms() -> None:
     assert names() == {f"/{n}" for n in _ALL}
-    assert names(knowledge=False) == {f"/{n}" for n in _ALL - {"kb"}}
 
 
 def test_start_is_a_hidden_alias_of_help() -> None:
@@ -100,9 +100,8 @@ def test_a_near_miss_is_named(text: str, guess: str | None) -> None:
         ("/resume", True),
         ("/new", False),
         ("/stop", False),
-        # Opening a thread posts into the chat either way.
-        ("/thread", False),
-        ("/kb", False),
+        # Direct-chat commands answer a group privately (their notice).
+        ("/thread", True),
     ],
 )
 def test_group_private_marks_the_asker_only_commands(command: str, private: bool) -> None:

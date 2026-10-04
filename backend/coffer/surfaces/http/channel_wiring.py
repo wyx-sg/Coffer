@@ -3,7 +3,7 @@
 Wires the kind, the peer repo, the inbound processor (against the chat
 platform's service handles), the adapter factory, the SeaTalk WebSocket
 controller, and the reconciling runtime. Runs
-AFTER ``wire_chat`` and ``wire_knowledge_kind``, whose results it takes as
+AFTER ``wire_chat``, whose result it takes as
 parameters.
 
 It also resolves this machine's identity, because a channel names the one
@@ -35,7 +35,6 @@ from coffer.application.channel.service import ChannelService
 from coffer.application.chat import questions
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.chat.question import QuestionBlock
-from coffer.domain.features import KNOWLEDGE
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination, channel_destination
 from coffer.infrastructure.channel.persistence import (
@@ -56,7 +55,6 @@ from coffer.surfaces.http.channel_routes import (
 )
 from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
 from coffer.surfaces.http.chat_wiring import ChatWiring
-from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
 from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
 from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.vault_composition import VaultStores
@@ -120,13 +118,11 @@ def wire_channel_kind(
     vault: VaultStores,
     secret_store: EncryptedSecretStore,
     chat: ChatWiring,
-    knowledge: KnowledgeWiring,
 ) -> ChannelRuntime:
     # Derived from the host, cached in ``daemon-config.json``, and stable for
     # the life of the daemon — so it is resolved once here rather than on every
     # reconcile tick and every status read.
     machine_id = resolve_identity().machine_id
-    features = app.state.feature_service
 
     async def local_machine_id() -> str:
         return machine_id
@@ -151,17 +147,6 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
-        # `/kb` (spec channels "Save a sent document into a collection"): both
-        # already satisfy the channel
-        # core's Protocol shape structurally (``CollectionCatalogPort`` /
-        # ``IngestPort``), so the knowledge kind's own services go in
-        # directly — the channel core never imports the knowledge kind itself
-        # (import-linter contract 5f).
-        collections=knowledge.service,
-        ingest=knowledge.ingest_service,
-        # While knowledge is switched off `/kb` answers that and saves
-        # nothing (spec experimental-features).
-        knowledge_enabled=lambda: features.is_enabled(KNOWLEDGE),
         # Questions an agent asks the owner (spec channels "Ask the owner in the
         # chat and take the answer back to the agent").
         questions=ChatQuestions(),
@@ -181,7 +166,7 @@ def wire_channel_kind(
         if parsed.channel_type == "telegram":
             dest = channel_destination(uid, name, "telegram")
             token = (await materialize({"token": parsed.bot_token_ref}, dest))["token"]
-            return TelegramAdapter(uid, token, knowledge_enabled=features.is_enabled(KNOWLEDGE))
+            return TelegramAdapter(uid, token)
         dest = channel_destination(uid, name, "seatalk", parsed.app_id)
         secret = (await materialize({"secret": parsed.app_secret_ref}, dest))["secret"]
         return SeaTalkAdapter(uid, parsed.app_id, secret)
@@ -227,18 +212,9 @@ def wire_channel_kind(
         materialize=materialize,
         secret_revision=secret_revision,
         machine_id=local_machine_id,
-        knowledge_enabled=lambda: features.is_enabled(KNOWLEDGE),
         # Each tick delivers what a running channel still owes its chats.
         on_tick=mirror.flush,
     )
-
-    async def _follow_switch(key: str, _enabled: bool) -> None:
-        """Rebuild the adapters when ``knowledge`` is switched, so their command
-        menus follow."""
-        if key == KNOWLEDGE:
-            await runtime.reconcile_once()
-
-    features.subscribe(_follow_switch)
 
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)

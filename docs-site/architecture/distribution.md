@@ -175,7 +175,7 @@ An experimental feature is a capability that ships in every build but is off unt
 
 The registry holds four entries, in this order: `knowledge`, `memory`, `sync` (vault sync) and `models` (model providers, the local model proxy and Usage). Conversations and Channels are always on. An earlier design also had `run` and `context` entries; they are gone, and `context` split into `knowledge` and `memory`. Settings stored under a key the registry does not declare are ignored, so a leftover one is harmless, and nothing is migrated.
 
-No feature hard-depends on another. A switched-off feature simply leaves its part out of whatever else shows it: with `knowledge` off the `coffer-guide` skill has no knowledge sections and a channel's `/kb` says Knowledge is off; with `memory` off channel turns carry no memory; with `models` off the internal engine's chosen connection still resolves.
+No feature hard-depends on another. A switched-off feature simply leaves its part out of whatever else shows it: with `knowledge` off the `coffer-guide` skill has no knowledge sections; with `memory` off channel turns carry no memory; with `models` off the internal engine's chosen connection still resolves.
 
 A feature's state is resolved on every read, highest precedence first:
 

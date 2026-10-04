@@ -1,6 +1,7 @@
-"""A setting sent in a SeaTalk group's main chat configures the group's
-defaults (spec channels "Set a group's defaults from its main chat" and "Keep a
-chat's settings across its conversations").
+"""The agent sent with ``/new`` in a SeaTalk group's main chat becomes the group's
+default (spec channels "Set a group's defaults from its main chat" and "Keep a
+chat's settings across its conversations"); the direct-chat commands only answer
+where they work.
 
 A main-chat @mention roots a new thread at itself, so the message carries
 ``group_main=True`` and ``thread_id`` = its own id: the answer goes to that
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from coffer.application.channel.resume_switch import GROUP_MAIN_RESUME
+from coffer.domain.channel.commands import DM_ONLY_NOTICE
 
 from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, uid_of, wait_until
 from .test_queue_and_stop import GatedAdapter
@@ -50,44 +51,44 @@ async def _channel(
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="a setting sent in a SeaTalk group's main chat becomes the default for new threads",
+    scenario="an agent sent in a SeaTalk group's main chat becomes the default for new threads",
 )
-async def test_a_main_chat_setting_becomes_the_default_for_new_threads(
-    env: ChannelEnv, tmp_path: Path
-) -> None:
+async def test_a_main_chat_agent_becomes_the_default_for_new_threads(env: ChannelEnv) -> None:
     env.add_agent("codex", reply="codex-here")
-    resource, adapter = await _channel(env, [str(tmp_path)])
+    resource, adapter = await _channel(env)
 
     await env.processor.on_message(_main("/new codex", "m-1"))
-    await env.processor.on_message(_main("/model gpt-5 high", "m-2"))
-    await env.processor.on_message(_main(f"/dir {tmp_path}", "m-3"))
 
     row = await env.threads.get(resource.uid, GROUP, "")
-    assert row is not None
-    assert (row.preferred_agent, row.preferred_model, row.preferred_effort, row.preferred_cwd) == (
-        "codex",
-        "gpt-5",
-        "high",
-        str(tmp_path),
-    )
-    # Nothing was opened: neither for the group row nor for the rooted threads.
-    for thread in ("", "m-1", "m-2", "m-3"):
+    assert row is not None and row.preferred_agent == "codex"
+    # Nothing was opened: neither for the group row nor for the rooted thread.
+    for thread in ("", "m-1"):
         assert await env.active_conversation(resource, GROUP, thread) is None
     answers = [(text, thread) for _chat, text, thread, _kind in adapter.sent_routed]
-    assert answers == [
-        ("🔀 Agent set to Codex — default for new threads in this group.", "m-1"),
-        ("Model: gpt-5 · effort High — default for new threads in this group", "m-2"),
-        (f"📁 Directory set to {tmp_path} — default for new threads in this group.", "m-3"),
-    ]
+    assert answers == [("🔀 Agent set to Codex — default for new threads in this group.", "m-1")]
 
     # Bare /new there says what the defaults are.
     await env.processor.on_message(_main("/new", "m-4"))
-    assert adapter.texts()[-1].startswith(
-        f"Defaults for new threads in this group: Codex · gpt-5 · High · {tmp_path}"
-    )
-    # /resume there points into a thread.
-    await env.processor.on_message(_main("/resume", "m-5"))
-    assert adapter.texts()[-1] == GROUP_MAIN_RESUME
+    assert adapter.texts()[-1].startswith("Defaults for new threads in this group: Codex")
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a direct-chat command in a group is declined with one line"
+)
+async def test_a_dm_only_command_in_a_group_is_declined_and_changes_nothing(
+    env: ChannelEnv, tmp_path: Path
+) -> None:
+    resource, adapter = await _channel(env, [str(tmp_path)])
+
+    for command in ("/model gpt-5 high", f"/dir {tmp_path}", "/status", "/resume", "/thread x"):
+        before = len(adapter.sent)
+        await env.processor.on_message(_main(command, "m-1"))
+        assert adapter.texts()[before:] == [DM_ONLY_NOTICE]
+
+    assert await env.threads.get(resource.uid, GROUP, "") is None
+    assert await env.threads.get(resource.uid, GROUP, "m-1") is None
+    # Nothing reached the agent as a message.
+    assert await env.active_conversation(resource, GROUP, "m-1") is None
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a group thread inherits the group's defaults")
@@ -95,7 +96,6 @@ async def test_a_group_thread_inherits_the_groups_defaults(env: ChannelEnv) -> N
     codex = env.add_agent("codex", reply="codex-here")
     resource, adapter = await _channel(env)
     await env.processor.on_message(_main("/new codex"))
-    await env.processor.on_message(_main("/model gpt-5 high", "m-2"))
 
     # A plain message in the main chat is an ordinary turn in the new thread,
     # and that thread opens on the group's defaults.
@@ -105,13 +105,7 @@ async def test_a_group_thread_inherits_the_groups_defaults(env: ChannelEnv) -> N
     conversation_id = await env.active_conversation(resource, GROUP, "m-9")
     assert conversation_id is not None
     assert (await env.chat.get_conversation(conversation_id)).agent_key == "codex"
-    assert codex.last_agent_config == {"model": "gpt-5", "effort": "high"}
-    # A thread's own setting wins over the group's.
-    await env.processor.on_message(_in_thread("/model low", "th-2"))
-    row = await env.threads.get(resource.uid, GROUP, "th-2")
-    assert row is not None and row.preferred_effort == "low"
-    group = await env.threads.get(resource.uid, GROUP, "")
-    assert group is not None and group.preferred_effort == "high"
+    assert codex.last_agent_config is not None
 
 
 @pytest.mark.acceptance(
@@ -134,10 +128,6 @@ async def test_stop_in_the_main_chat_stops_every_turn_in_the_group(env: ChannelE
         (await env.chat.get_conversation(await env.active_conversation(resource, GROUP, t))).title
         for t in ("th-1", "th-2")
     ]
-
-    await env.processor.on_message(_main("/status", "m-1"))
-    status = adapter.texts()[-1]
-    assert "Running in this group (2):" in status
 
     await env.processor.on_message(_main("/stop", "m-2"))
 

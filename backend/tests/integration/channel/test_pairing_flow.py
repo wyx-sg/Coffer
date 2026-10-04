@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from coffer.application.channel.pairing import claim_pairing
+from coffer.domain.channel.commands import help_text
 from coffer.domain.resource import Resource
 from coffer.infrastructure.vault.writer import Transaction
 
@@ -30,9 +31,10 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "Alice"
 
-    # The three-line confirmation, and nothing after it (no help card).
-    assert len(adapter.sent) == 1
+    # The three-line confirmation, then the help card.
+    assert len(adapter.sent) == 2
     chat_id, text = adapter.sent[0]
+    assert adapter.sent[1][1] == help_text()
     assert chat_id == "chat-1"
     assert text.splitlines()[0] == "✅ Paired — you own tg."
     assert "Only you can use it." in text
@@ -51,7 +53,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     peer = await env.peers.owner_peer(resource.uid)
     assert peer is not None
     assert peer.chat_id == "chat-1"
-    assert len(adapter.sent) == 1  # no confirmation for the second chat
+    assert len(adapter.sent) == 2  # no confirmation for the second chat
     assert len(await env.audit_entries("channel_paired", resource)) == 1
 
 
@@ -169,8 +171,9 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
     code, _ = env.pairing.issue(resource.uid)
     await env.processor.on_message(inbound("tg", "old-dm-2", code, sender_id="old-1"))
 
-    assert adapter.sent[-1][0] == "old-dm-2"
-    assert adapter.sent[-1][1].startswith("✅ Paired — you own")
+    assert adapter.sent[-2][0] == "old-dm-2"
+    assert adapter.sent[-2][1].startswith("✅ Paired — you own")
+    assert adapter.sent[-1] == ("old-dm-2", help_text())
     peers = await env.peers.list_by_resource(resource.uid)
     assert sorted((p.chat_id, p.sender_id) for p in peers) == [
         ("grp-1", "old-1"),

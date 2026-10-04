@@ -77,10 +77,8 @@ class TelegramAdapter:
         base_url: str = "https://api.telegram.org",
         poll_timeout: int = _POLL_TIMEOUT_SECONDS,
         media_dir: pathlib.Path | None = None,
-        knowledge_enabled: bool = True,
     ) -> None:
         self._name = channel_name
-        self._knowledge_enabled = knowledge_enabled  # /kb is in the menus only while on
         self._base = f"{base_url}/bot{bot_token}"
         # File downloads use {base}/file/bot{token}/{path}, not {base}/bot{token}/{method}.
         self._file_base = f"{base_url}/file/bot{bot_token}"
@@ -127,7 +125,7 @@ class TelegramAdapter:
         # and the reconciler is waiting on start() — against an unreachable API
         # they would hold up the channel for a minute to change nothing.
         self._profile_task = spawn(
-            register_profile(self._call, knowledge_enabled=self._knowledge_enabled),
+            register_profile(self._call),
             name=f"telegram-profile:{self._name}",
         )
         self._task = spawn_restarting(self._poll_loop, name=f"telegram-poll:{self._name}")

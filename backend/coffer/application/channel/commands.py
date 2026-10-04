@@ -1,15 +1,15 @@
 """The channel's reserved commands: /new /stop /model /dir /status /resume
-/thread /kb /help (spec channels "Answer the conversation commands from any
+/thread /help (spec channels "Answer the conversation commands from any
 paired chat", and the requirements each command cites in its own module).
 
 The roster itself — which words are reserved, their help text and menus — is
 domain data (``domain.channel.commands``); this is where each word is
 dispatched. Every command is a function of a :class:`CommandContext` and the
 typed text, living in its own module (``new_conversation``, ``model_switch``,
-``dir_switch``, ``resume_switch``, ``status_card``, ``parallel_threads``,
-``document_save``); a card's ``cmd:<name>`` button runs through :meth:`run`
-exactly like the typed word. `/stop` lives here because the platform's own stop
-control shares its one path.
+``dir_switch``, ``resume_switch``, ``status_card``, ``parallel_threads``); a
+card's ``cmd:<name>`` button runs through :meth:`run` exactly like the typed
+word. `/stop` lives here because the platform's own stop control shares its one
+path.
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ from typing import Any
 
 from coffer.application.channel import (
     dir_switch,
-    document_save,
     model_switch,
     new_conversation,
     parallel_threads,
@@ -30,10 +29,9 @@ from coffer.application.channel import (
 from coffer.application.channel.card_delivery import dispatch_card_tap
 from coffer.application.channel.command_context import CommandContext, SafeSend
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
-from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.stop_notice import StopNotice
 from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversationRepoPort
-from coffer.domain.channel.commands import command_name
+from coffer.domain.channel.commands import DM_ONLY_NOTICE, command_name, is_dm_only
 from coffer.domain.chat.errors import ConversationNotFound
 
 __all__ = ["ChannelCommands", "SafeSend"]
@@ -49,7 +47,6 @@ _HANDLERS: dict[str, _Handler] = {
     "status": status_card.cmd_status,
     "resume": resume_switch.cmd_resume,
     "thread": parallel_threads.cmd_thread,
-    "kb": document_save.cmd_kb,
     "help": status_card.cmd_help,
 }
 
@@ -65,9 +62,6 @@ class ChannelCommands:
         turns: Any,
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
-        collections: CollectionCatalogPort,
-        ingest: IngestPort,
-        knowledge_enabled: Callable[[], bool] = lambda: True,
         running_in: Callable[[str, str, str], str | None] = lambda *_: None,
         running_in_chat: Callable[[str, str], list[str]] = lambda *_: [],
     ) -> None:
@@ -82,10 +76,6 @@ class ChannelCommands:
         self._turns = turns
         self._agents = agents
         self._model_suggestions = model_suggestions
-        self._collections = collections
-        self._ingest = ingest
-        #: Whether the knowledge feature is on right now; `/kb` and `/help` read it.
-        self._knowledge_enabled = knowledge_enabled
 
     async def handle(
         self,
@@ -123,6 +113,12 @@ class ChannelCommands:
         ``cmd:`` button (spec channels "Offer choices and actions as
         owner-gated cards": a command button runs the command it names)."""
         name = command_name(text)
+        if name is not None and ctx.chat_kind == "group" and is_dm_only(f"/{name}"):
+            # A direct-chat-only command in a group does nothing but say where
+            # it works (spec channels "Answer the conversation commands from
+            # any paired chat"); typed, the line goes to the sender privately.
+            await ctx.say(DM_ONLY_NOTICE)
+            return
         if name == "stop":
             await self._stop(ctx)
         elif name is not None:

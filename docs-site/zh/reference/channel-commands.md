@@ -1,13 +1,13 @@
 ---
 title: 渠道命令
-description: 九个渠道命令、各命令在直接聊天、线程和群组中的行为、设置如何跟着聊天走，以及命令菜单和选择卡片。
+description: 八个渠道命令、各命令在直接聊天、线程和群组中的行为、设置如何跟着聊天走，以及命令菜单和选择卡片。
 ---
 
 # 渠道命令 {#channel-commands}
 
-有九个词是 Coffer 的命令。你输入的其他所有内容，包括别的以 `/` 开头的文字，都是发给智能体的消息。
+有八个词是 Coffer 的命令。你输入的其他所有内容，包括别的以 `/` 开头的文字，都是发给智能体的消息。
 
-下表列出九个词。每个命令的读法、可用位置和卡片见下文。如何配对并开始聊天，请看[消息渠道](/zh/guides/channels)。
+下表列出八个词。每个命令的读法、可用位置和卡片见下文。如何配对并开始聊天，请看[消息渠道](/zh/guides/channels)。
 
 | 命令 | 作用 |
 | --- | --- |
@@ -18,16 +18,15 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | `/status` | 这个聊天正在运行什么，以带快捷操作的卡片显示。 |
 | `/resume [n]` | 重新打开这个聊天之前的一个对话。 |
 | `/thread [title]` | 在私聊中，在单独的话题里打开一个并行对话。 |
-| `/kb [collection]` | 把你刚发的文档存进一个[知识](/zh/guides/knowledge)知识集。 |
-| `/help` | 列出命令，带 New、Stop、Model、Status 和 Resume 按钮，卡片标题为 **Commands**。 |
+| `/help` | 列出命令，带 New、Stop、Model、Status 和 Resume 按钮（群组里只有 New 和 Stop），卡片标题为 **Commands**。 |
 
-Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`/new` 和 `/stop` 即使在轮次运行时也会立即生效。命令会先放行所有还在停顿等待中的消息，让它们在命令之前运行；`/stop` 则会丢弃它们。
+在群组里只有 `/new`、`/stop` 和 `/help` 可用；其余五个只能在私聊里用（见[各命令在哪里可用](#where-each-command-works)）。Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`/new` 和 `/stop` 即使在轮次运行时也会立即生效。命令会先放行所有还在停顿等待中的消息，让它们在命令之前运行；`/stop` 则会丢弃它们。
 
 ## 命令的读法 {#how-the-commands-read}
 
 所有带设置的命令都遵循同一套语法：
 
-- **不带参数**：显示当前生效的值；在支持按钮的平台上还会给出一张卡片来修改：`/model`、`/dir`、`/resume`、`/kb`。
+- **不带参数**：显示当前生效的值；在支持按钮的平台上还会给出一张卡片来修改：`/model`、`/dir`、`/resume`。
 - **带参数就是设置**：`/model opus`、`/dir coffer`、`/resume 2`。
 - **`default` 表示重置**：`/model default`、`/dir default`。
 
@@ -35,23 +34,24 @@ Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`
 
 ## 各命令在哪里可用 {#where-each-command-works}
 
-| 命令 | 私聊 | 并行话题 | 群组话题 | SeaTalk 群主聊天 |
-| --- | --- | --- | --- | --- |
-| `/new [agent]` | ✓ | ✓ | ✓ | 设置群组的默认智能体；不带参数则显示群组的默认值 |
-| `/stop` | ✓ | ✓ | ✓ | 停止群组里正在运行的所有轮次 |
-| `/model` | ✓ | ✓ | ✓ | 设置群组的默认值 |
-| `/dir` | ✓ | ✓ | ✓ | 设置群组的默认值 |
-| `/status` | ✓，并列出并行话题 | ✓ | ✓ | 群组的默认值和正在运行的话题 |
-| `/resume` | ✓ | ✓ | ✓ | 请你在话题里回复 |
-| `/thread` | ✓ | ✓ | 回答说群组里每个话题本来就是独立的对话 | 同样的回答 |
-| `/kb` | ✓ | ✓ | ✓ | ✓ |
-| `/help` | ✓ | ✓ | ✓ | ✓ |
+`/new`、`/stop` 和 `/help` 控制的是群自己的对话，所以在群里可用。`/model`、`/dir`、`/status`、`/resume` 和 `/thread` 配置或查看的是你和机器人自己的聊天，所以只能在私聊里用。
 
-在群组中，`/model`、`/dir`、`/status`、`/resume` 和 `/help` 的回答，以及任何「Did you mean」纠正，在平台支持时都只私下发给你。`/new`、`/stop`、`/thread` 和 `/kb` 会改变或指向全群共享的东西，所以保持公开可见。
+| 命令 | 私聊 | 并行话题 | 群组话题 | 群主聊天 |
+| --- | --- | --- | --- | --- |
+| `/new [agent]` | ✓ | ✓ | ✓ | SeaTalk：设置群组的默认智能体；不带参数则显示它 |
+| `/stop` | ✓ | ✓ | ✓ | SeaTalk：停止群组里正在运行的所有轮次 |
+| `/model` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
+| `/dir` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
+| `/status` | ✓，并列出并行话题 | ✓ | 仅限私聊 | 仅限私聊 |
+| `/resume` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
+| `/thread` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
+| `/help` | ✓，列出全部八个 | ✓ | ✓，列出三个群命令 | ✓，列出三个群命令 |
+
+所有者在群里发了仅限私聊的命令时，在平台支持私下发送的情况下，只会私下回给发送者一行「This command works in a private chat with me.」，什么都不做：不交给智能体，也不设置任何东西。`/help`、这行提示和任何「Did you mean」纠正是群里仅有的私密回答；`/new` 和 `/stop` 会改变全群共享的东西，所以保持公开可见。
 
 ## 其他斜杠文字交给智能体 {#other-slash-text-goes-to-the-agent}
 
-只有上面九个词会被从对话里拿出来。`/compact`、`/review` 这样的技能，或者以路径开头的消息，比如 `/Users/me/app crashes on start`，都和其他消息一样送到智能体那里，所以智能体自己的斜杠命令在手机上照样能用。
+只有上面八个词会被从对话里拿出来。`/compact`、`/review` 这样的技能，或者以路径开头的消息，比如 `/Users/me/app crashes on start`，都和其他消息一样送到智能体那里，所以智能体自己的斜杠命令在手机上照样能用。
 
 和某个命令只差一点的词，比如 `/stpo`、`/stat`、`/threads`，会得到一行 `Unknown command /stpo. Did you mean /stop? Send /help for all commands.` 这样的回答，什么都不运行。短命令（四个字母及以下）容许错一个字母，长命令容许错两个；相邻两个字母对调算错一个。
 
@@ -96,25 +96,24 @@ Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`
 
 `/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型、推理强度和目录；然后是 **Running**、**Running · 2 waiting** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、等待还是空闲。
 
-`/help` 在一行里列出所有命令，`/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /kb · /help`，并说明其他任何内容都是发给智能体的消息。
+在私聊里，`/help` 在一行里列出所有命令，`/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /help`，并说明其他任何内容都是发给智能体的消息。在群组里它只列出 `/new [agent] · /stop · /help`。
 
-`/new` 回复一行「🆕 New conversation · Codex · Default model · ~/src/coffer」，在支持按钮的平台上还带 **Agent**、**Model** 和 **Dir** 按钮。**Agent** 列出这个消息渠道可以驱动的智能体；点一个就在它上面开始新对话，和 `/new <agent>` 一样。
+`/new` 回复一行「🆕 New conversation · Codex · Default model · ~/src/coffer」，在支持按钮的平台上还带 **Agent**、**Model** 和 **Dir** 按钮（群组里只有 **Agent** 按钮）。**Agent** 列出这个消息渠道可以驱动的智能体；点一个就在它上面开始新对话，和 `/new <agent>` 一样。
 
-在支持按钮的平台上，`/status` 是一张带 **New**、**Model**、**Resume** 和 **Dir** 按钮的卡片，轮次运行时还有 **Stop**；`/help` 是一张带 **New**、**Stop**、**Model**、**Status** 和 **Resume** 的卡片。点按钮的效果和在那个聊天里输入对应命令完全一样，所以记住 `/status` 就能到达所有操作。对没有命令菜单的平台（SeaTalk），发 `/help` 就能看到机器人接受什么。
+在支持按钮的平台上，`/status` 是一张带 **New**、**Model**、**Resume** 和 **Dir** 按钮的卡片，轮次运行时还有 **Stop**；`/help` 在私聊里是一张带 **New**、**Stop**、**Model**、**Status** 和 **Resume** 的卡片，在群组里只带 **New** 和 **Stop**。点按钮的效果和在那个聊天里输入对应命令完全一样，所以记住 `/status` 就能到达所有操作。对没有命令菜单的平台（SeaTalk），发 `/help` 就能看到机器人接受什么。
 
 ## SeaTalk 上的群组默认值 {#group-defaults-on-seatalk}
 
-在 SeaTalk 上，群主聊天里的每次 @ 提及都会开一个新话题，所以在那里发的设置只会配置一个没人再继续的话题。因此，在主聊天里发的命令配置的是整个群组：
+在 SeaTalk 上，群主聊天里的每次 @ 提及都会开一个新话题，所以在那里发的设置只会配置一个没人再继续的话题。因此，群在主聊天里能发的两个命令配置的是整个群组：
 
-- `@bot /new <agent>`、`@bot /model …` 和 `@bot /dir …` 设置群组的默认值，回答里会写「default for new threads in this group」。群里每个新话题都从这些默认值开始；在话题内部，话题自己的设置仍然优先。
-- `@bot /status` 显示群组的默认值和各话题正在运行什么。
+- `@bot /new <agent>` 设置群组的默认智能体，回答里会写「default for new threads in this group」。群里每个新话题都从它开始；在话题内部，话题自己的设置仍然优先。
 - `@bot /stop` 中断群里正在运行的所有轮次，并列出停掉了什么。
 
-Telegram 群组的主聊天本身就是一个对话，所以在那里发的命令照常作用于这个对话。
+`/model`、`/dir`、`/status` 和 `/resume` 在那里不再设置群组默认值；它们是私聊命令，会得到那条私下的提示。Telegram 群组的主聊天本身就是一个对话，所以在那里发的 `/new` 和 `/stop` 照常作用于这个对话。
 
 ## 命令菜单 {#command-menus}
 
-Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部九个命令；群组里有 `/new`、`/stop`、`/model`、`/status`、`/resume` 和 `/help`，这些是适合当着别人面点的。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，发 `/help` 即可。
+Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部八个命令；群组里只有 `/new`、`/stop` 和 `/help`，这些是控制群自己对话的命令。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，只有一个入口：发 `/help` 即可，仅限私聊的命令会得到那一行私下的提示。
 
 英文描述如下（中文菜单含义相同）：
 
@@ -127,11 +126,10 @@ Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一�
 | `/status` | What is running, threads |
 | `/resume` | Go back to a conversation |
 | `/thread` | Open a parallel thread |
-| `/kb` | Save a document to Knowledge |
 | `/help` | Commands |
 
 ## 选择卡片 {#selection-cards}
 
-在支持按钮的平台上，不带参数的 `/model`、`/dir`、`/resume`，以及不带知识集的 `/kb`，会回复一张选择卡片。一张卡片最多六个按钮；更长的列表会分页，每页四个选项，加上 **← Prev** 和 **Next →**，在首页或末页时对应按钮显示为不可点。翻页不改变任何东西，只有点选项才会。当前生效的选项前面带 ✓。点过之后，卡片会原地重写，勾移到你的新选择上。
+在支持按钮的平台上，私聊里不带参数的 `/model`、`/dir` 和 `/resume` 会回复一张选择卡片。一张卡片最多六个按钮；更长的列表会分页，每页四个选项，加上 **← Prev** 和 **Next →**，在首页或末页时对应按钮显示为不可点。翻页不改变任何东西，只有点选项才会。当前生效的选项前面带 ✓。点过之后，卡片会原地重写，勾移到你的新选择上。
 
 按钮点击和消息一样接受检查：只有所有者的点击才算数。如果平台拒绝了卡片，命令会改用纯文本回答。

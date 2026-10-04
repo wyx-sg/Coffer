@@ -281,32 +281,6 @@ def effort_card(
     )
 
 
-def collection_card(*, choices: Sequence[str], page: int | None = None) -> SelectionCard:
-    """Pick which collection a pending `/kb` document lands in (spec channels
-    "Save a sent document into a collection").
-
-    Unlike a model there is no "current" choice to tick — every save is a fresh
-    decision, never a toggle a card must show as already in effect. A single-collection
-    vault still renders one button rather than acting on it unasked: "Save a sent
-    document into a collection" requires the owner confirm, and a lone collection is not
-    an exemption from that.
-    """
-    options = [
-        ChoiceButton(label=name, value=f"collection:{name}")
-        for name in choices
-        if callback_fits(f"collection:{name}")
-    ]
-    return paginate(
-        kind="collection",
-        title="Save to which collection?",
-        header="Tap a collection to save the document there:",
-        options=options,
-        current_value=None,
-        current_label="",
-        page=page,
-    )
-
-
 def path_label(path: str | None) -> str:
     """A directory as a person reads it — under the home directory as ``~/…`` —
     or ``Default directory`` when none is set."""

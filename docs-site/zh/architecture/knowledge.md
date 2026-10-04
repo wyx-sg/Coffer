@@ -91,14 +91,13 @@ Coffer 按固定顺序写五个键：`title`、`description`、`actor`（`agent`
 | --- | --- |
 | 写进 `<collection>/.inbox/` 的 Markdown 文件 | 智能体自己的文件工具；由扫描规范化 |
 | 上传，先转成 Markdown | 知识页面 |
-| 附件之后发 `/kb <collection>` | 已配对的 [消息渠道](/zh/architecture/chat) 所有者 |
 
 没有任何入口能在指定路径上创建文档，Web 界面里也没有手敲一篇文档的表单：人通过编辑器写（保存一篇已有文档的正文）或上传，所以由收件箱和同一套整理来决定新知识该放在哪里。
 
 ```mermaid
 flowchart TD
   W["智能体往 .inbox/ 写文件"] --> N["扫描补全缺失的 frontmatter，并审计"]
-  U["上传或渠道 /kb"] --> C["转成 Markdown"]
+  U["上传"] --> C["转成 Markdown"]
   C --> D["生成描述：模型或开头正文"]
   D --> S["提交进收件箱"]
   S --> I[".inbox/ 条目"]
@@ -116,7 +115,7 @@ flowchart TD
 
 ### 提交 {#submission}
 
-上传或 `/kb` 的提交会先检查知识集是否存在，然后写一个收件箱条目。条目的 frontmatter 和 Markdown 形态与文档相同，按标题的 slug 命名。它从不覆盖已有条目，因为同一标题的两次提交就是两份素材。提交只是一次普通的文件写入，没有模型、转换或索引步骤。它记录一条 `knowledge_written` 审计事件。
+上传的提交会先检查知识集是否存在，然后写一个收件箱条目。条目的 frontmatter 和 Markdown 形态与文档相同，按标题的 slug 命名。它从不覆盖已有条目，因为同一标题的两次提交就是两份素材。提交只是一次普通的文件写入，没有模型、转换或索引步骤。它记录一条 `knowledge_written` 审计事件。
 
 返回结果说明素材的去向：
 

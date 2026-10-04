@@ -126,15 +126,9 @@ One file per upload, at most 20 MB. An unsupported type is refused with the type
 
 The item's `title` comes from the document (a `# ` heading on its first line, or else the file name). Its `description` is written by Coffer's model when one is configured, and taken from the document's opening prose when not.
 
-### From your phone: `/kb` in a channel
+### From a chat: ask your agent {#from-a-chat-ask-your-agent}
 
-If you have a [channel](/guides/channels) paired, send a document to it as an attachment, then send:
-
-```text
-/kb payments
-```
-
-Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not one of your collections, it offers a card listing your collections to pick from. Only the channel's owner can save.
+If you have a [channel](/guides/channels) paired, there is no knowledge command. Send the document or the conversation to the agent in the chat, in a direct chat or a group, and ask it to put that into knowledge, for example "save this into payments". The agent writes it with its own file tools, the same way it writes any other knowledge file.
 
 ### Edit a file yourself
 

@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DEFAULT_TITLE",
-    "GROUP_ANSWER",
     "THREAD_BODY",
     "cmd_thread",
     "resolve_conversation_thread_id",
@@ -52,8 +51,6 @@ _TITLE_MAX = 60
 _LIST_MAX = 20
 #: What follows the mark on the thread's root message or first topic message.
 THREAD_BODY = "A parallel conversation with its own context. Reply in this thread to talk in it."
-#: `/thread` in a group, where there is nothing to open.
-GROUP_ANSWER = "Every group thread is already its own conversation — just start a thread."
 
 
 async def resolve_conversation_thread_id(
@@ -83,9 +80,6 @@ async def resolve_conversation_thread_id(
 
 async def cmd_thread(ctx: CommandContext, text: str) -> None:
     """`/thread [title]`: open a parallel conversation beside the direct chat."""
-    if ctx.chat_kind == "group":
-        await ctx.say(GROUP_ANSWER)
-        return
     failure = await _open_thread(ctx, _title(text))
     if failure:
         await ctx.say(failure)

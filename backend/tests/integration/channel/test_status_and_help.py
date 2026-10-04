@@ -72,17 +72,39 @@ async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> No
     assert adapter.texts() == [help_text()]
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="pairing points to the help instead of sending it"
-)
-async def test_pairing_points_to_the_help_instead_of_sending_it(env: ChannelEnv) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="the help card follows pairing")
+async def test_the_help_card_follows_pairing(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
     code, _expires = env.pairing.issue(resource.uid)
 
     await env.processor.on_message(inbound("tg", "chat-1", code))
 
-    # The three-line confirmation, and no help card after it.
+    # The three-line confirmation, then the help card with every command.
     assert adapter.texts()[0].startswith("✅ Paired — you own tg.")
-    assert len(adapter.sent) == 1
-    assert adapter.cards == []
+    [(_chat, text, buttons)] = adapter.cards
+    assert text == help_text()
+    assert [b.value for b in buttons] == HELP
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a group's help lists only the group commands")
+async def test_a_groups_help_lists_only_the_group_commands(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
+    await env.pair(resource, "grp-1", sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound("tg", "grp-1", "/help", chat_kind="group", sender_id="owner-1")
+    )
+    await env.processor.on_message(
+        inbound("tg", "grp-1", "/new", chat_kind="group", sender_id="owner-1")
+    )
+
+    help_card, new_card = adapter.cards[-2:]
+    assert help_card[1] == help_text(group=True)
+    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /help"
+    assert [b.value for b in help_card[2]] == ["cmd:new", "cmd:stop"]
+    # The /new card in a group offers Agent alone.
+    assert [b.label for b in new_card[2]] == ["Agent"]
+    # A direct chat gets all eight.
+    assert help_text().count("/") >= 8

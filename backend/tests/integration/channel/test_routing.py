@@ -128,8 +128,8 @@ async def test_status_reports_agent(env: ChannelEnv) -> None:
 @pytest.mark.acceptance(
     spec="channels", scenario="a group slash-command reply routes to the group/thread"
 )
-async def test_group_status_command_reply_routes_to_group_and_thread(env: ChannelEnv) -> None:
-    """Regression: an owner's ``/status`` sent inside a group thread must have
+async def test_group_help_command_reply_routes_to_group_and_thread(env: ChannelEnv) -> None:
+    """Regression: an owner's ``/help`` sent inside a group thread must have
     its reply routed with ``chat_kind="group"`` and that same ``thread_id`` —
     not fall through to the ``_safe_send`` DM defaults, which would target the
     wrong endpoint (and, on SeaTalk, get silently rejected)."""
@@ -139,7 +139,7 @@ async def test_group_status_command_reply_routes_to_group_and_thread(env: Channe
         inbound(
             "tg",
             "grp-1",
-            "/status",
+            "/help",
             chat_kind="group",
             addressed=True,
             sender_id="owner-1",
@@ -150,7 +150,7 @@ async def test_group_status_command_reply_routes_to_group_and_thread(env: Channe
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert "\nCoffer Assistant · Default model" in text
+    assert text.startswith("/new")
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
 
 

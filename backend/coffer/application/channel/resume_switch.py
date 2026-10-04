@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
 
 __all__ = [
-    "GROUP_MAIN_RESUME",
     "NOTHING_TO_RESUME",
     "apply_resume",
     "cmd_resume",
@@ -32,8 +31,6 @@ __all__ = [
 
 #: How many earlier conversations are offered.
 HISTORY_LIMIT = 20
-#: `/resume` in a SeaTalk group's main chat, which holds no conversation.
-GROUP_MAIN_RESUME = "Reply inside a thread to resume one of its conversations."
 NOTHING_TO_RESUME = "Nothing to resume — this chat has no earlier conversation yet."
 
 
@@ -70,9 +67,6 @@ def _listing(
 
 
 async def cmd_resume(ctx: CommandContext, text: str) -> None:
-    if ctx.group_main:
-        await ctx.say(GROUP_MAIN_RESUME)
-        return
     found, active = await _entries(ctx)
     if not found or (len(found) == 1 and str(found[0].id) == active):
         await ctx.say(NOTHING_TO_RESUME)

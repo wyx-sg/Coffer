@@ -121,7 +121,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 每个群组线程都是一个独立的对话，所以你可以在一个线程里用 Claude Code，在另一个线程里用 Codex。群组里的回答以 @ 你开头，所以 SeaTalk 会通知你。
 
-因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发的命令设置的是**群组默认值**：`@bot /model …`、`@bot /dir …` 和 `@bot /new <agent>` 决定群组里每个新线程从什么开始，`@bot /status` 显示这些默认值和正在运行的线程，`@bot /stop` 停止群组里正在运行的所有轮次。在线程里，命令只作用于该线程。见 [SeaTalk 上的群组默认值](/zh/reference/channel-commands#group-defaults-on-seatalk)。
+因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发 `@bot /new <agent>` 设置的是**群组的默认智能体**，群组里每个新线程都从它开始；`@bot /stop` 停止群组里正在运行的所有轮次。`/model`、`/dir`、`/status`、`/resume` 和 `/thread` 只能在私聊里用，在群里发会得到一行私下的提示。在群组线程里，`/new` 和 `/stop` 只作用于该线程。见 [SeaTalk 上的群组默认值](/zh/reference/channel-commands#group-defaults-on-seatalk)。
 
 如果希望机器人不理会同时 @ 了其他人的消息，在消息渠道**设置**标签页的**群聊中**下打开**忽略同时 @ 了其他人的消息**。SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及。
 
@@ -141,7 +141,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 ## 卡片 {#cards}
 
-不带参数的 `/model`、`/dir`、`/resume` 或 `/kb` 会回复一张交互卡片；`/status` 带 **New**、**Model**、**Resume** 和 **Dir** 按钮（轮次运行时还有 **Stop**），`/help` 带 **New**、**Stop**、**Model**、**Status** 和 **Resume**，`/new` 带 **Agent**、**Model** 和 **Dir**。点这些按钮和输入对应命令的效果完全一样。智能体提出的问题也会以卡片形式送达，每个选项一个按钮、各占一行（多选的选项会切换 `✓`，由 **Submit** 提交）；点一下或直接输入文字都是回答，之后卡片会被改写为 `✓ Answered: …`。
+在私聊里，不带参数的 `/model`、`/dir` 或 `/resume` 会回复一张交互卡片；`/status` 带 **New**、**Model**、**Resume** 和 **Dir** 按钮（轮次运行时还有 **Stop**）。`/help` 在私聊里带 **New**、**Stop**、**Model**、**Status** 和 **Resume**，在群组里只带 **New** 和 **Stop**；`/new` 在私聊里带 **Agent**、**Model** 和 **Dir**，在群组里只带 **Agent**。点这些按钮和输入对应命令的效果完全一样。智能体提出的问题也会以卡片形式送达，每个选项一个按钮、各占一行（多选的选项会切换 `✓`，由 **Submit** 提交）；点一下或直接输入文字都是回答，之后卡片会被改写为 `✓ Answered: …`。
 
 - 按钮最多排成三行。短标签共用一行；像 "Claude Code" 这样的长标签独占一行。
 - 一张卡片最多六个按钮；更长的列表用 **← Prev** 和 **Next →** 翻页。

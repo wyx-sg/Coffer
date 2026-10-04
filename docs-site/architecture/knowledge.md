@@ -91,14 +91,13 @@ Every entrance puts **material** into the collection's inbox. None of them write
 | --- | --- |
 | A Markdown file written into `<collection>/.inbox/` | An agent's own file tools; the sweep normalises it |
 | Upload, converted to Markdown first | The Knowledge page |
-| `/kb <collection>` after an attachment | A paired [channel](/architecture/chat) owner |
 
 There is no entrance that creates a document at a path, and the web UI has no form for typing one in: a person writes through the editor (a save of an existing document's body) or uploads, so the inbox and the same curation decide where new knowledge belongs.
 
 ```mermaid
 flowchart TD
   W["Agent writes a file into .inbox/"] --> N["Sweep fills missing frontmatter, audits"]
-  U["Upload or channel /kb"] --> C["Convert to Markdown"]
+  U["Upload"] --> C["Convert to Markdown"]
   C --> D["Describe: model or opening prose"]
   D --> S["Submit to the inbox"]
   S --> I[".inbox/ item"]
@@ -116,7 +115,7 @@ flowchart TD
 
 ### Submission
 
-Submission by upload or `/kb` checks that the collection exists, then writes one inbox item. The item has the same frontmatter and Markdown shape as a document and is named by the title's slug. It never overwrites an existing item, because two submissions with the same title are two pieces of material. A submission is a plain file write, with no model, conversion or indexing step. It records one `knowledge_written` audit event.
+Submission by upload checks that the collection exists, then writes one inbox item. The item has the same frontmatter and Markdown shape as a document and is named by the title's slug. It never overwrites an existing item, because two submissions with the same title are two pieces of material. A submission is a plain file write, with no model, conversion or indexing step. It records one `knowledge_written` audit event.
 
 The answer says what happened to the material:
 

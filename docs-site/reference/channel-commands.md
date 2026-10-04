@@ -1,13 +1,13 @@
 ---
 title: Channel commands
-description: The nine channel commands, how each behaves in direct chats, threads and groups, how settings stick to a chat, and the command menus and selection cards.
+description: The eight channel commands, how each behaves in direct chats, threads and groups, how settings stick to a chat, and the command menus and selection cards.
 ---
 
 # Channel commands
 
-Nine words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
+Eight words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
 
-The table lists the nine words. How each reads, where it works and the cards it answers with follow below. To pair and start chatting, see [Channels](/guides/channels).
+The table lists the eight words. How each reads, where it works and the cards it answers with follow below. To pair and start chatting, see [Channels](/guides/channels).
 
 | Command | What it does |
 | --- | --- |
@@ -18,16 +18,15 @@ The table lists the nine words. How each reads, where it works and the cards it 
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
-| `/kb [collection]` | Save the document you just sent into a [knowledge](/guides/knowledge) collection. |
-| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons, under the title **Commands**. |
+| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons (New and Stop in a group), under the title **Commands**. |
 
-`/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
+In a group only `/new`, `/stop` and `/help` work; the other five work only in a direct chat (see [Where each command works](#where-each-command-works)). `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
 ## How the commands read
 
 Every command that holds a setting follows one grammar:
 
-- **Bare** shows what is in effect, and on a platform with buttons offers a card to change it: `/model`, `/dir`, `/resume`, `/kb`.
+- **Bare** shows what is in effect, and on a platform with buttons offers a card to change it: `/model`, `/dir`, `/resume`.
 - **An argument sets it**: `/model opus`, `/dir coffer`, `/resume 2`.
 - **`default` resets it**: `/model default`, `/dir default`.
 
@@ -35,23 +34,24 @@ Names are the ones you see, never internal ids. An agent is its display name or 
 
 ## Where each command works
 
-| Command | Direct chat | Parallel thread | Group thread | SeaTalk group main chat |
-| --- | --- | --- | --- | --- |
-| `/new [agent]` | ✓ | ✓ | ✓ | Sets the group's default agent; bare shows the group's defaults |
-| `/stop` | ✓ | ✓ | ✓ | Stops every turn running in the group |
-| `/model` | ✓ | ✓ | ✓ | Sets the group's default |
-| `/dir` | ✓ | ✓ | ✓ | Sets the group's default |
-| `/status` | ✓, with the parallel threads | ✓ | ✓ | The group's defaults and its running threads |
-| `/resume` | ✓ | ✓ | ✓ | Asks you to reply inside a thread |
-| `/thread` | ✓ | ✓ | Answers that every group thread is already its own conversation | Same answer |
-| `/kb` | ✓ | ✓ | ✓ | ✓ |
-| `/help` | ✓ | ✓ | ✓ | ✓ |
+`/new`, `/stop` and `/help` control the group's own conversation, so they work in a group. `/model`, `/dir`, `/status`, `/resume` and `/thread` configure or inspect your own chat with the bot, so they work only in a direct chat.
 
-In a group, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help`, and any "Did you mean" correction, are delivered privately to you where the platform supports it. `/new`, `/stop`, `/thread` and `/kb` change or point at something the whole room shares, so they stay visible.
+| Command | Direct chat | Parallel thread | Group thread | Group main chat |
+| --- | --- | --- | --- | --- |
+| `/new [agent]` | ✓ | ✓ | ✓ | SeaTalk: sets the group's default agent; bare shows it |
+| `/stop` | ✓ | ✓ | ✓ | SeaTalk: stops every turn running in the group |
+| `/model` | ✓ | ✓ | Direct chat only | Direct chat only |
+| `/dir` | ✓ | ✓ | Direct chat only | Direct chat only |
+| `/status` | ✓, with the parallel threads | ✓ | Direct chat only | Direct chat only |
+| `/resume` | ✓ | ✓ | Direct chat only | Direct chat only |
+| `/thread` | ✓ | ✓ | Direct chat only | Direct chat only |
+| `/help` | ✓, all eight | ✓ | ✓, the three group commands | ✓, the three group commands |
+
+Sent in a group by the owner, a direct-chat-only command is answered privately to the sender where the platform supports private delivery, with one line, “This command works in a private chat with me.”, and does nothing else: it is not passed to the agent and sets nothing. `/help`, that notice and any "Did you mean" correction are the only private answers in a group; `/new` and `/stop` change something the whole room shares, so they stay visible.
 
 ## Other slash text goes to the agent
 
-Only the nine words above are taken out of the conversation. `/compact`, a skill such as `/review`, or a message that opens with a path such as `/Users/me/app crashes on start` reaches the agent like any other message, so the agent's own slash commands keep working from your phone.
+Only the eight words above are taken out of the conversation. `/compact`, a skill such as `/review`, or a message that opens with a path such as `/Users/me/app crashes on start` reaches the agent like any other message, so the agent's own slash commands keep working from your phone.
 
 A word that is one slip away from a command — `/stpo`, `/stat`, `/threads` — is answered with one line, `Unknown command /stpo. Did you mean /stop? Send /help for all commands.`, and nothing runs. Short commands (four letters or fewer) tolerate one wrong letter, longer ones two; a swap of two neighbouring letters counts as one.
 
@@ -96,25 +96,24 @@ Only conversations this chat opened are offered — never one from the web page 
 
 `/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model, the effort and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
 
-`/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /kb · /help`, and says that anything else is a message to the agent.
+In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /help`.
 
-`/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
+`/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons in a direct chat and only the **Agent** button in a group. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
 
-On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with **New**, **Stop**, **Model**, **Status** and **Resume**. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts.
+On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with **New**, **Stop**, **Model**, **Status** and **Resume** in a direct chat, and with **New** and **Stop** only in a group. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts.
 
 ## Group defaults on SeaTalk
 
-On SeaTalk every @mention in a group's main chat roots a fresh thread, so a setting sent there would configure a thread nobody continues. Instead, a command sent in the main chat configures the group:
+On SeaTalk every @mention in a group's main chat roots a fresh thread, so a setting sent there would configure a thread nobody continues. Instead, the two commands a group may send in the main chat configure the group:
 
-- `@bot /new <agent>`, `@bot /model …` and `@bot /dir …` set the group's defaults, and the answer says "default for new threads in this group". Every new thread in the group starts on them; a thread's own settings still win inside it.
-- `@bot /status` shows the group's defaults and what its threads are running.
+- `@bot /new <agent>` sets the group's default agent, and the answer says "default for new threads in this group". Every new thread in the group starts on it; a thread's own settings still win inside it.
 - `@bot /stop` interrupts every turn running in the group and lists what it stopped.
 
-A Telegram group's main chat is itself one conversation, so commands there apply to that conversation as usual.
+`/model`, `/dir`, `/status` and `/resume` no longer set group defaults there; they are direct-chat commands and get the private notice. A Telegram group's main chat is itself one conversation, so `/new` and `/stop` there apply to that conversation as usual.
 
 ## Command menus
 
-Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all nine commands; groups get `/new`, `/stop`, `/model`, `/status`, `/resume` and `/help`, the ones useful to tap in front of other people. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu; send `/help`.
+Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all eight commands; groups get only `/new`, `/stop` and `/help`, the ones that control the group's own conversation. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu, so it has a single surface: send `/help`, and a command that is only for a direct chat answers with the one-line private notice.
 
 The English descriptions are:
 
@@ -127,11 +126,10 @@ The English descriptions are:
 | `/status` | What is running, threads |
 | `/resume` | Go back to a conversation |
 | `/thread` | Open a parallel thread |
-| `/kb` | Save a document to Knowledge |
 | `/help` | Commands |
 
 ## Selection cards
 
-On a platform with buttons, a bare `/model`, `/dir`, `/resume` and a `/kb` with no collection answer with a selection card. A card carries at most six buttons; a longer list is paged, four choices at a time with **← Prev** and **Next →**, shown inactive at either end. Paging changes nothing — only tapping a choice does. The choice in effect carries a ✓ in front. After a tap, the card is rewritten in place so the tick moves to your new choice.
+On a platform with buttons, a bare `/model`, `/dir` and `/resume` in a direct chat answer with a selection card. A card carries at most six buttons; a longer list is paged, four choices at a time with **← Prev** and **Next →**, shown inactive at either end. Paging changes nothing — only tapping a choice does. The choice in effect carries a ✓ in front. After a tap, the card is rewritten in place so the tick moves to your new choice.
 
 A button tap is checked exactly like a message: only the owner's taps count. If the platform refuses a card, the command answers in plain text instead.

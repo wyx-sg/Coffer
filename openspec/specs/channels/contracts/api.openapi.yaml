@@ -334,16 +334,11 @@ components:
         name:
           title: Name
           type: string
-        needs_knowledge:
-          default: false
-          title: Needs Knowledge
-          type: boolean
       required:
       - name
       - args
       - description
       - description_zh
-      - needs_knowledge
       title: ChannelCommandOut
       type: object
     ChannelDiagnosticOut:

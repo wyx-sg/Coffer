@@ -206,14 +206,14 @@ async def test_a_defeated_configuration_is_diagnosed_on_status(env: ChannelEnv) 
 @pytest.mark.acceptance(
     spec="channels", scenario="a group command answer is shown only to the asker"
 )
-async def test_a_group_status_is_private_and_a_group_new_is_visible(env: ChannelEnv) -> None:
+async def test_a_group_help_is_private_and_a_group_new_is_visible(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(chat_id="owner", sender_id="4242")
 
     await env.processor.on_message(
         inbound(
             "tg",
             "-100group",
-            "/status",
+            "/help",
             chat_kind="group",
             sender_id="4242",
             ephemeral_id="77",

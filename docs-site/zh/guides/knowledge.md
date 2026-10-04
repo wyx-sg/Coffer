@@ -126,15 +126,9 @@ The `account-session` service owns ...
 
 条目的 `title` 取自文档本身（第一行的 `# ` 标题，没有就用文件名）。`description` 在配置了 Coffer 自用模型时由模型撰写，没配置时取文档开头的正文。
 
-### 用手机：在消息渠道里发 `/kb` {#from-your-phone-kb-in-a-channel}
+### 在聊天里：让智能体来存 {#from-a-chat-ask-your-agent}
 
-如果你配对了一个[消息渠道](/zh/guides/channels)，先把文档作为附件发过去，再发送：
-
-```text
-/kb payments
-```
-
-Coffer 会走同样的上传流程把附件存进该知识集，并回复一条确认，写明文件和知识集。不带名称，或者名称不是你的知识集时，它会给出一张列出所有知识集的卡片供你选择。只有消息渠道的所有者才能保存。
+如果你配对了一个[消息渠道](/zh/guides/channels)，并没有专门的知识命令。把文档或这段对话发给聊天里的智能体（私聊或群组都行），让它存进知识，比如「把这个存进 payments」。智能体用自己的文件工具来写，和它写其他知识文件的方式一样。
 
 ### 自己编辑文件 {#edit-a-file-yourself}
 

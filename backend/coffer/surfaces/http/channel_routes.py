@@ -127,8 +127,6 @@ class ChannelCommandOut(BaseModel):
     args: str
     description: str
     description_zh: str
-    #: Offered only while the `knowledge` feature is on.
-    needs_knowledge: bool = False
 
 
 class ChannelStatusOut(BaseModel):
@@ -317,7 +315,6 @@ async def channel_status(uid: str) -> ChannelStatusOut:
                 args=c.args,
                 description=c.description,
                 description_zh=c.description_zh,
-                needs_knowledge=c.needs_knowledge,
             )
             for c in COMMAND_ROSTER
         ],

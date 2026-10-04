@@ -197,8 +197,7 @@ While `knowledge` is off, `/api/v1/knowledge` MUST answer 404
 routes. The `coffer-guide`
 skill MUST be rendered without its knowledge catalogue, and switching
 `knowledge` on MUST restore it. The curation pass MUST
-skip its rounds. The channel `/kb` command MUST be out of `/help` and the menus
-and answer that Knowledge is switched off, keeping any pending document.
+skip its rounds.
 
 #### Scenario: knowledge off closes the knowledge routes
 - **GIVEN** `knowledge` off
@@ -219,11 +218,6 @@ and answer that Knowledge is switched off, keeping any pending document.
 - **GIVEN** `knowledge` off
 - **WHEN** the curation pass comes due
 - **THEN** it skips its round
-
-#### Scenario: knowledge off answers /kb as switched off
-- **GIVEN** `knowledge` off and a channel conversation with a pending document
-- **WHEN** the user sends `/kb`
-- **THEN** `/kb` is absent from `/help` and the menus and answers that Knowledge is switched off, and the pending document is kept
 
 ### Requirement: Close the memory feature's surfaces
 While `memory` is off, `/api/v1/memory` MUST answer 404 `FEATURE_DISABLED` and
@@ -347,7 +341,7 @@ embed data of a switched-off feature MUST leave that section out.
 #### Scenario: knowledge off leaves memory and channels working
 - **GIVEN** `knowledge` off and `memory` on
 - **WHEN** memory is used and a channel turn runs
-- **THEN** memory works as before and the channel turn answers, with `/kb` answering that Knowledge is switched off
+- **THEN** memory works as before and the channel turn answers
 
 #### Scenario: sync off leaves the vault single-machine
 - **GIVEN** `sync` off

@@ -55,7 +55,7 @@ Deliberately out of scope:
   chatter private in a group"; the per-platform mechanics are in
   [`channels/telegram`](telegram/spec.md).
 
-Channels are always on: no experimental feature gates their routes or adapters. While `memory` is off, a channel turn carries no memory index or retrieval; while `knowledge` is off, `/kb` is out of `/help` and the menus and answers that Knowledge is switched off, keeping any pending document (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the knowledge feature's surfaces").
+Channels are always on: no experimental feature gates their routes or adapters. While `memory` is off, a channel turn carries no memory index or retrieval; channels have no knowledge command — a person asks the agent in the chat to put a file or the conversation into knowledge, and the agent writes it (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the knowledge feature's surfaces").
 
 ## Requirements
 
@@ -166,7 +166,8 @@ any previous peer, and the sender receives a three-line confirmation — "✅
 Paired — you own <bot>.", that only the owner can use it and how to use it in a
 group, and how to see the commands ("send /help", or on Telegram "tap /") —
 where <bot> is the channel's name on SeaTalk and `@username` on Telegram. The
-help card is not sent after it. All other senders
+help card (see "Offer the commands as a help card") follows the confirmation
+automatically. All other senders
 MUST be ignored silently: a stranger messaging the bot produces zero observable
 response and zero turns, while the owner's traffic is unaffected, so the bot
 never reveals it is alive to strangers. A code that expires or suffers repeated
@@ -182,7 +183,7 @@ pairing again rebinds the channel to the new sender.
 #### Scenario: pair by sending the code
 - **GIVEN** an issued pairing code
 - **WHEN** a sender messages the bot with exactly that code
-- **THEN** the sender becomes the channel's peer and receives the confirmation "✅ Paired — you own <bot>."
+- **THEN** the sender becomes the channel's peer and receives the confirmation "✅ Paired — you own <bot>." followed by the help card
 - **AND** the pairing is audited and the code cannot be reused
 
 #### Scenario: an expired or wrong code does not pair
@@ -269,9 +270,19 @@ when the platform rate-limits outbound sends, sends back off and retry.
   from its input, because everyone in the group reads it
 
 ### Requirement: Answer the conversation commands from any paired chat
-Nine words are Coffer's commands in a paired chat, and nothing else: `/new`,
-`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/kb` and `/help`
-(`/start` is a hidden alias of `/help`). They MUST work from any paired chat.
+Eight words are Coffer's commands in a paired chat, and nothing else: `/new`,
+`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/help` (`/start`
+is a hidden alias of `/help`). They are split by chat type. In a **direct chat**
+all eight work. In a **group** only `/new`, `/stop` and `/help` work — they
+control the group's own conversation — and `/model`, `/dir`, `/status`,
+`/resume` and `/thread` work only in a direct chat: sent in a group by the owner
+(see "Act in a group only on an addressed message from the owner"), one of
+those five is answered with one line in English and Chinese saying it works in a
+private chat with the bot, delivered privately to the sender where the platform
+can (see "Keep non-answer chatter private in a group"), and does nothing else —
+it is not passed to the agent as a message. A group's `/help` lists only the
+three group commands, and a card offered in a group (the `/new` card, the help
+card) carries no button for a direct-chat command.
 `/new [agent]` starts a fresh conversation with the chat's settings (see "Keep a
 chat's settings across its conversations" and "Switch the agent with /new"),
 `/stop` interrupts the running turn, `/status` reports the chat's state (see
@@ -285,17 +296,17 @@ one finishes." Up to 10 may wait; only a message arriving while 10 already wait
 is dropped, and the chat MUST be told it was dropped and why (the only place the
 limit is mentioned).
 `/new` MUST answer with a one-line card — "🆕 New conversation · <agent> ·
-<model> · <directory>" — carrying Agent, Model and Dir buttons: Agent opens the
-agent card (see "Switch the agent with /new"), Model and Dir run `/model` and
-`/dir`; a transport without buttons gets the same line as text. A message arriving exactly
+<model> · <directory>" — carrying Agent, Model and Dir buttons in a direct chat
+and the Agent button alone in a group: Agent opens the agent card (see "Switch
+the agent with /new"), Model and Dir run `/model` and `/dir`; a transport
+without buttons gets the same line as text. A message arriving exactly
 when the previous turn finishes joins the queue rather than racing it: turns for
 one conversation never overlap.
 
 The commands that configure the conversation the chat is bound to are specified
 in their own requirements — `/model` in "Switch the model and reasoning effort
 from chat", `/dir` in "Choose the working directory from chat", `/resume` in
-"Resume an earlier conversation from chat", `/kb` in "Save a sent document into
-a collection", and `/thread` in "Open parallel conversations beside a direct chat".
+"Resume an earlier conversation from chat", and `/thread` in "Open parallel conversations beside a direct chat".
 All of them live on one roster (see "Register the bot's command menu and profile
 from one roster"), so none of the lists derived from it can go stale, and every
 other text that starts with `/` is a message (see "Pass unreserved slash text to
@@ -324,6 +335,18 @@ the agent").
 - **WHEN** the peer sends ten more messages, each after the quiet window of the one before has closed (so none merges into another), and then an eleventh
 - **THEN** each of the ten is answered "⏳ Queued — runs when the current one finishes.", and all ten run in order
 - **AND** the eleventh is dropped and the peer is told that ten were already waiting
+
+#### Scenario: a direct-chat command in a group is declined with one line
+- **GIVEN** a paired group where the owner is addressed
+- **WHEN** the owner sends `/model`, `/dir`, `/status`, `/resume` or `/thread`
+- **THEN** the sender alone is told, in one line, that the command works in a private chat with the bot
+- **AND** no setting changes, no thread opens, and nothing reaches the agent as a message
+
+#### Scenario: a group's help lists only the group commands
+- **GIVEN** a paired group and a paired direct chat
+- **WHEN** the owner sends `/help` in each
+- **THEN** the group's answer lists `/new`, `/stop` and `/help` only, with New and Stop as its buttons
+- **AND** the direct chat's answer lists all eight commands
 
 #### Scenario: /new answers with a one-line card
 - **GIVEN** a paired chat on a button-capable transport with two agents the channel may drive
@@ -1659,11 +1682,10 @@ always an ordinary message the group can see. This is the group-noise half of
 stops the bot from *acting* on everything, this one stops it from *saying*
 everything out loud. Every command declares which side of that line it falls on,
 on the same roster "Register the bot's command menu and profile from one roster"
-registers the menu from: `/new`, `/stop` and `/thread` change or point at state
-the whole room shares and stay visible, and so does `/kb`, whose outcome is a
-file the room's other members can be expected to want to know about; the ones
-that answer only the asker — `/model`, `/dir`, `/status`, `/resume`, `/help` —
-are delivered privately where the transport can. A roster entry that declares
+registers the menu from: `/new` and `/stop` change state the whole room shares
+and stay visible; the ones that answer only the asker — `/help`, and the
+one-line notice a direct-chat command (`/model`, `/dir`, `/status`, `/resume`,
+`/thread`) gets in a group — are delivered privately where the transport can. A roster entry that declares
 nothing is **visible**, so privacy is something a command opts into rather than
 something it acquires by omission; a "Did you mean" correction (see "Pass
 unreserved slash text to the agent") is answered privately, because a correction
@@ -1695,7 +1717,7 @@ the help text, the typo guard (see "Pass unreserved slash text to the agent")
 and the per-command privacy flag (see "Keep non-answer chatter private in a
 group") are all rendered from one roster, so adding a command is one entry plus
 its handler, with no second list to forget. Each entry carries its description
-in English and Chinese, and whether it belongs in a group's menu. A platform with no menu API (SeaTalk) introduces
+in English and Chinese, and whether it works only in a direct chat — which keeps it out of a group's menu and help. A platform with no menu API (SeaTalk) introduces
 the commands through the help card instead (see "Offer the commands as a help
 card"). Copy the owner already wrote, and the bot's name, are their branding
 decision and MUST NOT be overwritten.
@@ -2003,8 +2025,9 @@ further conversations beside it deliberately:
 - `/status` in the direct chat says how many parallel threads the chat has and
   lists each one's mark, agent, and whether a turn is running, waiting, or idle,
   newest first.
-- `/thread` in a group answers that every group thread is already its own
-  conversation, and opens nothing.
+- `/thread` works only in a direct chat; in a group it is declined (see
+  "Answer the conversation commands from any paired chat"), because every group
+  thread is already its own conversation.
 
 A thread in a direct chat that `/thread` did not open is, on a platform where
 such threads are casual replies, part of the direct chat's conversation. It is
@@ -2067,12 +2090,12 @@ default` are the ways back to the defaults.
   directory
 
 #### Scenario: a group thread inherits the group's defaults
-- **GIVEN** a group whose defaults name a model
+- **GIVEN** a group whose defaults name an agent
 - **WHEN** the owner starts a new thread in that group
-- **THEN** that thread's conversation opens on the group's model
+- **THEN** that thread's conversation opens on the group's agent
 
 ### Requirement: Pass unreserved slash text to the agent
-Only Coffer's nine commands (see "Answer the conversation commands from any
+Only Coffer's eight commands (see "Answer the conversation commands from any
 paired chat") MUST be taken out of the conversation. Any other text starting
 with `/` — an agent's own command such as `/compact` or a skill invoked as
 `/review`, or a message that opens with a path such as `/Users/me/app crashes` —
@@ -2206,8 +2229,11 @@ help card.
 `/help` MUST list the commands from the roster on one line, each with its
 arguments, then say that anything else is a message to the agent; where the
 transport has buttons it is a card titled "Commands" carrying New, Stop, Model,
-Status and Resume. A platform with no command menu (SeaTalk) shows what the bot
-accepts through `/help`, which the pairing confirmation points to.
+Status and Resume in a direct chat. In a group `/help` lists only `/new`,
+`/stop` and `/help`, and its card carries New and Stop alone. The help card is
+sent automatically right after pairing succeeds (pairing is a direct chat). A
+platform with no command menu (SeaTalk) shows what the bot accepts through
+`/help`.
 
 #### Scenario: /help is a card with the five actions
 - **GIVEN** a paired chat on a button-capable transport
@@ -2215,29 +2241,30 @@ accepts through `/help`, which the pairing confirmation points to.
 - **THEN** a card lists the commands and carries the New, Stop, Model, Status
   and Resume actions as buttons
 
-#### Scenario: pairing points to the help instead of sending it
+#### Scenario: the help card follows pairing
 - **GIVEN** an unpaired channel with an issued pairing code
 - **WHEN** the owner pairs by sending the code
-- **THEN** the pairing is confirmed and no help card follows it
+- **THEN** the pairing is confirmed and the help card listing every command follows it
 
 ### Requirement: Set a group's defaults from its main chat
 On a platform where every @mention in a group's main chat roots a fresh thread
 (SeaTalk), a command sent in the main chat MUST configure the group rather than
-that one-message thread: `/new <agent>`, `/model …` and `/dir …` set the group's
-defaults, which every new thread of the group inherits (see "Keep a chat's
-settings across its conversations"), and the answer says so; `/status` there
-reports the group's defaults and its running threads; `/resume` points to
-replying inside a thread; and `/stop` interrupts every turn running in that
-group and lists what it stopped. A thread's own settings still win inside it.
-Where a group's main chat is itself one conversation (a Telegram group without
-topics) nothing changes: commands apply to that conversation.
+that one-message thread: `/new <agent>` sets the group's default agent, which
+every new thread of the group inherits (see "Keep a chat's settings across its
+conversations"), and the answer says so, while bare `/new` says what the
+defaults are; and `/stop` interrupts every turn running in that group and lists
+what it stopped. A thread's own settings still win inside it. `/model`, `/dir`,
+`/status` and `/resume` are direct-chat commands and set nothing here (see
+"Answer the conversation commands from any paired chat"). Where a group's main
+chat is itself one conversation (a Telegram group without topics) nothing
+changes: commands apply to that conversation.
 
-#### Scenario: a setting sent in a SeaTalk group's main chat becomes the default for new threads
+#### Scenario: an agent sent in a SeaTalk group's main chat becomes the default for new threads
 - **GIVEN** a paired SeaTalk group
-- **WHEN** the owner sends `@bot /model <name>` in the group's main chat, and
+- **WHEN** the owner sends `@bot /new <agent>` in the group's main chat, and
   later @mentions the bot with a question in the main chat
-- **THEN** the first answer says the model is the default for new threads, and
-  the question's thread runs on that model
+- **THEN** the first answer says the agent is the default for new threads, and
+  the question's thread runs on that agent
 
 #### Scenario: /stop in a SeaTalk group's main chat stops every turn in the group
 - **GIVEN** a paired SeaTalk group with turns running in two of its threads
@@ -2420,30 +2447,6 @@ lost. A transport that collapses details (Telegram) sends no such card.
   section
 - **THEN** the reply carries the head only, and a card titled `Deploy is green on
   live.` reads `2 more lines of details.` with the buttons Details and As file
-
-### Requirement: Save a sent document into a collection
-A document sent to a Coffer channel MUST be ingestible into a collection through
-the same conversion path the Knowledge page uses, so the phone and that page are
-two ends of one entrance (spec `knowledge`). `/kb` is the command that does it.
-The channel MUST confirm the collection with the owner before storing, and MUST
-NOT store anything from a non-owner. `/kb` is offered in `/help` and in every
-registered menu.
-
-#### Scenario: a document sent to a channel is saved into a collection
-- **GIVEN** a paired owner who has sent a document to the channel,
-- **WHEN** the owner follows it with `/kb <collection>` naming a collection
-  that exists,
-- **THEN** the document is ingested into that collection through the same
-  conversion path the Knowledge page uses,
-- **AND** a `/kb` from anyone but the paired owner stores nothing.
-
-#### Scenario: a save that names no collection asks which one
-- **GIVEN** a paired owner who has sent a document but named no collection,
-- **WHEN** they send `/kb`,
-- **THEN** the channel offers the collections it may save into and stores
-  nothing until one is chosen — on a transport without buttons it lists them as
-  text,
-- **AND** a `/kb` with no document pending is refused in one line.
 
 ### Requirement: Name a channel by any display name
 A channel's name MUST be any display name a person types — spaces, capitals and

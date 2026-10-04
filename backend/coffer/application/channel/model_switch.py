@@ -24,7 +24,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from coffer.application.channel.command_text import (
-    GROUP_DEFAULT_SUFFIX,
     model_display,
 )
 from coffer.application.channel.conversation_ops import (
@@ -108,21 +107,19 @@ async def _remember(ctx: CommandContext, **values: str | None) -> None:
 
 
 async def _set(ctx: CommandContext, **values: str | None) -> bool:
-    """Write ``values`` (``model``/``effort``) to the conversation and the thread;
-    in a group's main chat to the group's defaults only."""
-    if not ctx.group_main:
-        conversation_id = await _conversation(ctx)
-        if conversation_id is None:
-            return False
-        conversations = ctx.commands._conversations
-        cfg = await conversations.get_agent_config(conversation_id)
-        await conversations.set_agent_config(conversation_id, replace(cfg, **values))
+    """Write ``values`` (``model``/``effort``) to the conversation and the thread."""
+    conversation_id = await _conversation(ctx)
+    if conversation_id is None:
+        return False
+    conversations = ctx.commands._conversations
+    cfg = await conversations.get_agent_config(conversation_id)
+    await conversations.set_agent_config(conversation_id, replace(cfg, **values))
     await _remember(ctx, **values)
     return True
 
 
-def _where(ctx: CommandContext) -> str:
-    return GROUP_DEFAULT_SUFFIX if ctx.group_main else " — from your next message"
+def _where(_ctx: CommandContext) -> str:
+    return " — from your next message"
 
 
 async def apply_model(
@@ -164,14 +161,11 @@ async def _show(ctx: CommandContext) -> None:
     """Bare `/model`: the model card, else the settings in text."""
     settings = await ctx.settings()
     labels = await ctx.commands._model_suggestions.model_labels(settings.agent)
-    if not ctx.group_main:
-        # A group's main chat answers in text: a card tapped there lands in
-        # the thread its message rooted, not on the group's defaults.
-        card = model_card(
-            current=settings.model, picks=list(labels), labels=labels, effort=settings.effort
-        )
-        if await ctx.show(card):
-            return
+    card = model_card(
+        current=settings.model, picks=list(labels), labels=labels, effort=settings.effort
+    )
+    if await ctx.show(card):
+        return
     shown = await model_display(ctx.commands, settings.agent, settings.model)
     lines = [f"Model: {shown}", f"Effort: {settings.effort or 'default'}"]
     if labels:

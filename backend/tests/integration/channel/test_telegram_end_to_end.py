@@ -15,6 +15,7 @@ import pytest
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.application.chat.turn_orchestrator import active_turns
+from coffer.domain.channel.commands import DM_ONLY_NOTICE
 from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from tests.integration.infrastructure.channel.conftest import (
@@ -142,20 +143,21 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
     _resource, adapter = await _telegram_channel(env, fake, owner_chat=str(_OWNER_ID))
     mention = [{"type": "mention", "offset": 0, "length": len("@mybot")}]
     try:
-        # The owner sent /model <level> as an ephemeral command, which is what
-        # gives the bot an ephemeral_message_id to answer privately against.
+        # The owner sent /help as an ephemeral command, which is what gives the
+        # bot an ephemeral_message_id to answer privately against.
         await fake.update_batches.put(
-            [_group_message(1, "@mybot /model high", entities=mention, ephemeral_message_id=77)]
+            [_group_message(1, "@mybot /help", entities=mention, ephemeral_message_id=77)]
         )
         await wait_until(lambda: len(fake.calls_for("sendMessage")) >= 1)
         answer = fake.calls_for("sendMessage")[0]
         assert answer["chat_id"] == str(_GROUP_ID)
         assert answer["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
         assert answer["reply_parameters"]["ephemeral_message_id"] == 77
-        assert "effort High — from your next message" in answer["text"]
+        assert answer["text"].startswith("/new")
 
-        # /status is the asker's own business too: it goes privately, as text —
-        # a card with buttons would be an ordinary message the room sees.
+        # A direct-chat command's decline line is the asker's own business too:
+        # it goes privately, as text — a card with buttons would be an ordinary
+        # message the room sees.
         await fake.update_batches.put(
             [_group_message(2, "@mybot /status", entities=mention, ephemeral_message_id=78)]
         )
@@ -163,7 +165,7 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
         status = fake.calls_for("sendMessage")[1]
         assert status["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
         assert "reply_markup" not in status
-        assert status["text"].startswith("Status")
+        assert status["text"] == DM_ONLY_NOTICE
     finally:
         await adapter.stop()
 

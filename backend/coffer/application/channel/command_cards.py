@@ -48,6 +48,11 @@ HELP_ACTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+#: A group's help card: only the two group actions with buttons (spec channels
+#: "Offer the commands as a help card").
+GROUP_HELP_ACTIONS: tuple[tuple[str, str], ...] = (("New", "new"), ("Stop", "stop"))
+
+
 def agent_card(
     *,
     current: str,
@@ -80,20 +85,19 @@ def agent_card(
     )
 
 
-def new_card(*, line: str) -> SelectionCard:
+def new_card(*, line: str, group: bool = False) -> SelectionCard:
     """The `/new` answer: one line naming the agent, model and directory the
     fresh conversation runs on, with Agent, Model and Dir buttons to change
     them (spec channels "Answer the conversation commands from any paired
-    chat")."""
-    return SelectionCard(
-        title="",
-        text=f"**🆕 New conversation · {line}**",
-        buttons=[
-            ChoiceButton(label="Agent", value=f"agent:{PICK_AGENT}"),
+    chat"). In a group only Agent is offered: Model and Dir are direct-chat
+    commands."""
+    buttons = [ChoiceButton(label="Agent", value=f"agent:{PICK_AGENT}")]
+    if not group:
+        buttons += [
             ChoiceButton(label="Model", value="cmd:model"),
             ChoiceButton(label="Dir", value="cmd:dir"),
-        ],
-    )
+        ]
+    return SelectionCard(title="", text=f"**🆕 New conversation · {line}**", buttons=buttons)
 
 
 def command_card(

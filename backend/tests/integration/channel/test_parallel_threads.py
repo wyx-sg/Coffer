@@ -16,10 +16,8 @@ import asyncio
 
 import pytest
 
-from coffer.application.channel.parallel_threads import (
-    GROUP_ANSWER,
-    THREAD_BODY,
-)
+from coffer.application.channel.parallel_threads import THREAD_BODY
+from coffer.domain.channel.commands import DM_ONLY_NOTICE
 from coffer.domain.channel.errors import ParallelThreadUnavailable
 from coffer.domain.chat.message import TextBlock
 from coffer.domain.resource import Resource
@@ -129,13 +127,13 @@ async def test_status_inside_a_parallel_thread_names_its_mark(env: ChannelEnv) -
     assert adapter.texts()[-1].startswith("Status\nNo conversation yet\n")
 
 
-async def test_thread_in_a_group_opens_nothing(env: ChannelEnv) -> None:
+async def test_thread_in_a_group_is_declined_and_opens_nothing(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel(sender_id="owner-1")
     await env.processor.on_message(
         inbound("tg", "grp-1", "/thread x", chat_kind="group", sender_id="owner-1", thread_id="g-t")
     )
     assert adapter.opened_threads == []
-    assert adapter.texts()[-1] == GROUP_ANSWER
+    assert adapter.texts()[-1] == DM_ONLY_NOTICE
     assert await env.threads.list_parallel(resource.uid, "grp-1") == []
 
 
