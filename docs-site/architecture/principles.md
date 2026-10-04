@@ -141,6 +141,8 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a firewall or a sandbox.** Coffer applies capability-level enable/disable policies, but it is a developer tool running as the user's own process — it does not sandbox upstream server code, confine what an agent does with its own shell, or enforce OS-level access control. It holds exactly one boundary against the agents it serves: a secret's plaintext, and where a secret is sent, are decided by a present human.
 
+**Not a second agent.** What a coding agent already does for itself — orchestrating a multi-step task (a skill and its subagents), running on a schedule (the agent's own automations), asking before a tool runs (the agent's own permission prompts) — Coffer does not rebuild. Coffer builds what spans agents or what no agent can do alone: one skill, MCP server, knowledge collection or memory serving every agent, the vault converged across machines, the agents' configuration managed in one place, and a channel that reaches an agent on this machine from elsewhere. A proposed capability an agent already has is declined, or reshaped into carrying that native capability across agents.
+
 ## Rejected alternatives
 
 These rejections are recorded in the ADRs; the summaries here anchor the principles:
