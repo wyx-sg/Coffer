@@ -30,14 +30,16 @@ describe("sectionGroups", () => {
     ]);
   });
 
-  test("filters by name, host or tool name and drops empty sections", () => {
+  test("filters by group name only and drops empty sections", () => {
     const withTool = [
       ...groups,
       makeGroup({ name: "billing", tools: [makeTool({ name: "refund_charge" })] }),
     ];
-    expect(sectionGroups(withTool, "refund").map((s) => s.groups.map((g) => g.name))).toEqual([
+    expect(sectionGroups(withTool, "bill").map((s) => s.groups.map((g) => g.name))).toEqual([
       ["billing"],
     ]);
-    expect(sectionGroups(withTool, "pager.internal")[0].section).toBe("off");
+    // A tool's name or the host matches nothing.
+    expect(sectionGroups(withTool, "refund")).toEqual([]);
+    expect(sectionGroups(withTool, "pager")[0].section).toBe("off");
   });
 });

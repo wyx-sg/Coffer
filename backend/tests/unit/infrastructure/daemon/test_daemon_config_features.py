@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from coffer.domain import features as feature_registry
+from coffer.domain.features import GraduatedFeature, RetiredFeature
 from coffer.infrastructure.daemon import config as daemon_config
+from coffer.infrastructure.daemon.feature_lifecycle import apply_feature_lifecycle
 from coffer.infrastructure.daemon.feature_settings import DaemonConfigFeatureSettings
 
 _KNOWN = ("fake_a", "fake_b", "fake_c")
@@ -95,3 +98,81 @@ def test_unknown_and_malformed_pins_are_skipped_with_a_warning(
 def test_pins_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(daemon_config.FEATURES_ENV, "fake_b=off")
     assert daemon_config.read_feature_pins(_KNOWN) == {"fake_b": False}
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="a graduated feature's switch is removed and its settings carry over at startup",
+)
+def test_a_graduated_features_switch_is_removed_and_its_settings_carry_over(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        feature_registry,
+        "GRADUATED_FEATURES",
+        (GraduatedFeature(key="fake_a", moved={"fake_a_limit": "limit", "fake_a_gone": "other"}),),
+    )
+    _write_raw(
+        {
+            "port": 9123,
+            "fake_a_limit": 5,
+            "features": {"fake_a": True, "fake_b": False},
+        }
+    )
+    with caplog.at_level(logging.INFO):
+        apply_feature_lifecycle()
+    assert json.loads(daemon_config.config_path().read_text()) == {
+        "port": 9123,
+        "limit": 5,
+        "features": {"fake_b": False},
+    }
+    assert [r.message for r in caplog.records if r.message.startswith("daemon.config.")] == [
+        "daemon.config.graduated_switch_removed",
+        "daemon.config.graduated_setting_moved",
+    ]
+
+    # Applied once: a second run finds nothing and leaves the file alone.
+    path = daemon_config.config_path()
+    before = path.stat().st_mtime_ns
+    apply_feature_lifecycle()
+    assert path.stat().st_mtime_ns == before
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="a retired feature's switch and settings are removed at startup",
+)
+def test_a_retired_features_switch_and_settings_are_removed(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        feature_registry,
+        "RETIRED_FEATURES",
+        (RetiredFeature(key="fake_a", strip=("fake_a_limit",)),),
+    )
+    _write_raw(
+        {
+            "port": 9123,
+            "fake_a_limit": 5,
+            "features": {"fake_a": True, "fake_b": False, "from_newer_build": True},
+        }
+    )
+    with caplog.at_level(logging.INFO):
+        apply_feature_lifecycle()
+    assert json.loads(daemon_config.config_path().read_text()) == {
+        "port": 9123,
+        "features": {"fake_b": False, "from_newer_build": True},
+    }
+    assert [r.message for r in caplog.records if r.message.startswith("daemon.config.")] == [
+        "daemon.config.retired_switch_removed",
+        "daemon.config.retired_setting_removed",
+    ]
+
+
+def test_an_unlisted_stored_key_is_left_alone_by_the_lifecycle() -> None:
+    _write_raw({"features": {"from_newer_build": True}})
+    path = daemon_config.config_path()
+    before = path.stat().st_mtime_ns
+    apply_feature_lifecycle()
+    assert path.stat().st_mtime_ns == before
+    assert daemon_config.read_feature_settings() == {"from_newer_build": True}

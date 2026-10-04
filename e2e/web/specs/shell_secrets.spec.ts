@@ -8,10 +8,9 @@
 // touched, and each test removes it.
 //
 // Reveal and Approve need the desktop app's presence check, so a browser only
-// shows them disabled; the reveal itself, the missing-on-this-Mac state and the
-// plaintext-key migration are covered in frontend/src/pages/SecretsPage.test.tsx
-// and frontend/src/components/secret/ScanSecretsDialog.test.tsx, where the
-// daemon's answers can be fixed.
+// shows them disabled; the reveal itself and the missing-on-this-Mac state are
+// covered in frontend/src/pages/SecretsPage.test.tsx, where the daemon's
+// answers can be fixed.
 
 import { expect, test } from "@playwright/test";
 import * as path from "node:path";
@@ -142,8 +141,11 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
     await rejectApprovalsFor(refOf(secret));
 
     await page.goto("/secrets");
-    const inUse = page.getByRole("region", { name: /In use/ });
-    const row = inUse.getByRole("row").filter({ hasText: refOf(secret) });
+    // One table of every secret; a row's Used by cell names what cites it.
+    const row = page
+      .getByRole("table")
+      .getByRole("row")
+      .filter({ has: page.getByRole("button", { name: `Actions for ${refOf(secret)}` }) });
     await expect(row).toBeVisible();
     await expect(row).toContainText(server);
 
@@ -156,9 +158,15 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
     });
     await expect(blocked).toContainText(server);
     await expect(blocked).toContainText("MCP server");
+    // The dialog only names what still reads the secret: it offers no delete,
+    // and each citer has an Open link to its page.
     await expect(
       blocked.getByRole("button", { name: "Delete secret" }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    await expect(blocked.getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      `/mcp-servers/${server}`,
+    );
     await blocked.getByRole("button", { name: "Close" }).last().click();
     await expect(row).toBeVisible();
 
@@ -180,8 +188,15 @@ test("an unused secret is deleted from its menu", async ({ page }) => {
   try {
     await storeSecret(name, "e2e-not-a-real-value");
     await page.goto("/secrets");
-    const unused = page.getByRole("region", { name: /Not used by anything/ });
-    await expect(unused.getByText(refOf(name), { exact: true })).toBeVisible();
+    const row = page
+      .getByRole("table")
+      .getByRole("row")
+      .filter({ has: page.getByRole("button", { name: `Actions for ${refOf(name)}` }) });
+    await expect(row).toBeVisible();
+    // Nothing cites it: its Used by cell offers no citer to open.
+    await expect(
+      row.getByRole("button", { name: new RegExp(`${refOf(name)} is used by`) }),
+    ).toHaveCount(0);
 
     await page
       .getByRole("button", { name: `Actions for ${refOf(name)}` })
@@ -196,7 +211,7 @@ test("an unused secret is deleted from its menu", async ({ page }) => {
     });
     await confirm.getByRole("button", { name: "Delete secret" }).click();
     await expect(confirm).toBeHidden();
-    await expect(page.getByText(refOf(name), { exact: true })).toHaveCount(0);
+    await expect(row).toHaveCount(0);
   } finally {
     await deleteSecret(name);
   }

@@ -101,12 +101,20 @@ test("overview lists an MCP server whose launcher is missing, with its reason an
     );
     await expect(row.getByRole("img", { name: "Failing" })).toBeVisible();
 
-    const action = row.getByRole("link", {
+    // The row's one action tests the server again in place (a button, not a
+    // link); the server itself is addressed by its fixed name.
+    const link = row.getByRole("link", { name: new RegExp(`^${name}`) });
+    await expect(link).toHaveAttribute("href", `/mcp-servers/${name}`);
+    const action = row.getByRole("button", {
       name: new RegExp(`^Test again: ${name}$`),
     });
-    // The server's page is addressed by its fixed name.
-    await expect(action).toHaveAttribute("href", `/mcp-servers/${name}`);
+    await expect(action).toBeVisible();
     await action.click();
+    // The launcher is still missing, so the server is still failing.
+    await expect(row).toContainText(
+      `Its launcher ${MISSING_LAUNCHER} isn't found on this machine`,
+    );
+    await link.click();
     await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}$`), {
       timeout: 10_000,
     });

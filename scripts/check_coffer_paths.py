@@ -65,7 +65,6 @@ LAYOUT_ENTRIES = frozenset(
         "daemon-config.json",
         "daemon.lock",
         "master.key",
-        "secrets",
         "upstream-pids",
         "vendor",
         "eval-capture.jsonl",

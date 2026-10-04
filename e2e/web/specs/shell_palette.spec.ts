@@ -82,6 +82,10 @@ test("the palette opens a Settings tab over the current page", async ({
   await expect(page).toHaveURL(/\/settings\/data$/);
   await expect(page.getByTestId("settings-modal")).toBeVisible();
   // The Skills page stays underneath.
-  await page.keyboard.press("Escape");
-  await expect(page).toHaveURL(/\/skills$/);
+  // The palette's exit animation can still hold focus when the modal first
+  // shows, swallowing an early Escape; press until the modal has taken it.
+  await expect(async () => {
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/skills$/, { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
 });

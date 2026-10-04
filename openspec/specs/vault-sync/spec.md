@@ -1191,6 +1191,12 @@ older layout must upgrade.
 - **THEN** the preview is of kind `REPLACE` with nothing pulled, the old tip, what goes up and the files that go away with their exact total
 - **AND** confirming replaces the remote, which is then at this vault's layout
 
+#### Scenario: code that assigns a secret-named variable is not a plaintext secret
+- **GIVEN** a script with `token = m.group(0)`, `user, _, password = creds.partition(":")` and `password=password,`
+- **WHEN** it is read for plaintext secrets
+- **THEN** nothing is reported
+- **AND** a quoted literal assigned to `password`, or a `.env`-style `API_KEY=` value, still is
+
 #### Scenario: replacing an older remote still refuses a plaintext secret
 - **GIVEN** a remote at an older layout and a vault holding a plaintext credential
 - **WHEN** a round runs
@@ -1378,8 +1384,9 @@ imported and exported in Settings › Security, not on the Sync page.
 ### Requirement: Refuse to push a plaintext secret
 Before a round pushes — a round that merged, a push with nothing to pull, or a join — it MUST read
 every file version the push would publish: each blob reachable from the commit being pushed and
-not from the remote's head, from every commit in between. It reads them with the detection
-the Secrets scan uses (an assignment whose name says secret, and the well-known token shapes).
+not from the remote's head, from every commit in between. It reads them for an assignment whose name says secret and for the well-known token shapes.
+An unquoted value holding call, index or list punctuation (`(`, `)`, `[`, `]`, `,`, `;`) is code,
+not a secret, so `token = m.group(0)` or `password=password,` is not reported.
 An encrypted `secret/<ref>.enc` file is ciphertext and MUST NOT be read; a binary file or one over
 1 MB is not read either.
 
@@ -1429,7 +1436,7 @@ again. When the last round is not `plaintext_found`, it MUST be refused with
 #### Scenario: the Sync page names each place and offers the hand-off and push anyway
 - **GIVEN** the Sync page with a `plaintext_found` problem
 - **WHEN** it is shown
-- **THEN** its card lists each file, line and key a file still holds, with "Move into secrets…", which opens the Secrets scan limited to those files, and no Retry
+- **THEN** its card lists each file, line and key a file still holds, with the agent hand-off that moves each value into a secret, and no Retry
 - **AND** Push anyway runs only after a confirmation that says it is recorded in the audit log
 
 ### Requirement: Undo a retired machine

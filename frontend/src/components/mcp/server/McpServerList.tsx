@@ -1,6 +1,7 @@
 // src/components/mcp/server/McpServerList.tsx — the left pane of the MCP servers page (design 4.1.01).
 //
-// "Filter servers" (name, title and command or URL), then the servers grouped
+// "Filter servers" (name and title) and under it the Reach filter (every
+// server, or those reaching one agent; `?agent=`), then the servers grouped
 // by what needs the user — Needs attention (failing, launcher missing, secret
 // missing, each with its reason), Not checked yet, Healthy, Off — then Built-in (Coffer's own `coffer` server, read-only). The search
 // filters every row, the built-in one included. While rows are ticked the
@@ -11,11 +12,12 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { SearchInput } from "@/components/SearchInput";
+import { AgentReachFilter } from "@/components/reach/AgentReachFilter";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
 import type { ResourceOut } from "@/lib/api/resources";
+import { searchableName } from "@/lib/resourceTitle";
 import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
@@ -23,7 +25,7 @@ import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
 import { McpBuiltinRow } from "./McpBuiltinRow";
 import { McpServerListRow } from "./McpServerListRow";
 import { McpServersBulkBar } from "./McpServersBulkBar";
-import { GROUP_ORDER, serverState, transportOf, type ServerGroup } from "@/lib/mcp/serverState";
+import { GROUP_ORDER, serverState, type ServerGroup } from "@/lib/mcp/serverState";
 
 /** The fixed name of Coffer's own server, and its address on this page. */
 export const BUILTIN_NAME = "coffer";
@@ -67,7 +69,7 @@ export function McpServerList({
     const q = query.trim().toLowerCase();
     const out = new Map<ServerGroup, number[]>(GROUP_ORDER.map((g) => [g, []]));
     servers.forEach((s, i) => {
-      const haystack = `${s.name} ${transportOf(s.config).target}`.toLowerCase();
+      const haystack = searchableName(s).toLowerCase();
       if (q && !haystack.includes(q)) return;
       if (agentFilter && !agentFilter.matches(s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);
@@ -80,8 +82,7 @@ export function McpServerList({
   // Coffer's own server: always on, for every agent; only the search can hide it.
   const showBuiltin =
     !!builtin &&
-    (query.trim() === "" ||
-      `${builtin.name} ${builtin.url}`.toLowerCase().includes(query.trim().toLowerCase()));
+    (query.trim() === "" || builtin.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   // The listed servers the search shows (never the built-in one): the bar's "of M".
   const visibleUids = [...groups.values()].flat().map((i) => servers[i].uid);
@@ -111,11 +112,9 @@ export function McpServerList({
               placeholder={t("mcp.page.filter")}
               ariaLabel={t("mcp.page.filter")}
             />
-            {agentFilter ? (
-              <div className="flex items-center gap-2">
-                <AgentFilterPill filter={agentFilter} />
-              </div>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <AgentReachFilter filter={agentFilter} />
+            </div>
           </>
         )}
       </div>

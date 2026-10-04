@@ -265,7 +265,7 @@ For Codex it also says whether Codex will run the hook. Codex skips an entry you
 
 It also shows when the hook last fired, from the [audit log](/guides/activity). **Never fired** on an agent you use every day is the sign that the agent is not running the hook; the block says the likely cause and links to **Activity**, and Overview lists it under **Needs you**.
 
-**The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over command and file and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in Config files**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in **Config files**.
+**The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over the command and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in Config files**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in **Config files**.
 
 ## Models
 

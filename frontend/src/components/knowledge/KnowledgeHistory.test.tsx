@@ -73,9 +73,9 @@ describe("a document's History tab", () => {
     expect(screen.queryByText("newest first")).toBeNull();
     expect(await screen.findByText("Current")).toBeInTheDocument();
     const older = screen.getByRole("button", { name: /^You/ });
-    expect(older).toHaveAttribute("aria-expanded", "false");
+    expect(older).not.toHaveAttribute("aria-current");
     fireEvent.click(older);
-    expect(older).toHaveAttribute("aria-expanded", "true");
+    expect(older).toHaveAttribute("aria-current", "true");
 
     await waitFor(() => expect(api.getVersionDiff).toHaveBeenCalledWith(GATEWAY.path, "c0ffee01"));
     expect(await screen.findByText("The orchestration layer.")).toBeInTheDocument();

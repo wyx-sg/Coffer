@@ -93,7 +93,7 @@ test(
   },
 );
 
-test("a record written while one is open waits behind the new pill", async ({
+test("a record written while one is open waits behind the new pill until it is closed", async ({
   page,
 }) => {
   const first = generateUniqueName("e2eheldone");
@@ -104,23 +104,28 @@ test("a record written while one is open waits behind the new pill", async ({
     const row = page.locator("tr[data-record]", { hasText: first });
     await expect(row.first()).toBeVisible({ timeout: 10_000 });
 
-    // Open the row: the list holds still while it is being read.
+    // Open the row: it opens as a dialog and the list holds still while it
+    // is being read.
     await row.first().click();
     await expect(
-      page.getByRole("complementary", { name: "Details" }),
+      page.getByRole("dialog", { name: new RegExp(first) }),
     ).toBeVisible();
 
     await registerFakeServer(second);
-    const pill = page.getByRole("button", { name: /^\d+ new$/ });
-    await expect(pill).toBeVisible({ timeout: 15_000 });
+    // The pill sits behind the modal (out of the accessibility tree), so it is
+    // found by its text.
+    await expect(page.getByText(/^\d+ new$/)).toBeVisible({ timeout: 15_000 });
     await expect(
       page.locator("tr[data-record]", { hasText: second }),
     ).toHaveCount(0);
 
-    await pill.click();
+    // Closing the record leaves the list live again: what was held goes in.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(
       page.locator("tr[data-record]", { hasText: second }).first(),
     ).toBeVisible();
+    await expect(page.getByText(/^\d+ new$/)).toHaveCount(0);
   } finally {
     await deregisterMcpServer(first);
     await deregisterMcpServer(second);

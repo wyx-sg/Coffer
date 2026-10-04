@@ -129,8 +129,8 @@ A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
 cited in files as `coffer://secret/<name>`. Write that reference into skills,
 scripts and env files — never the value. `coffer secret list` shows what
 exists; `coffer secret set <name>` stores a value read from stdin. If you find a
-plaintext secret left in `~/.coffer/secrets/` or in a skill, tell the developer:
-the Secrets page scans for them and offers to move each into a secret.
+plaintext secret left in a file or in a skill, tell the developer to store it as
+a secret and cite it by `coffer://secret/<name>`.
 
 A secret that would go somewhere it has not gone before — a new MCP server
 citing an existing token, a changed command line or URL —

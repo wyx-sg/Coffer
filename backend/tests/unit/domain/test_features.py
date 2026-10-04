@@ -6,6 +6,8 @@ import pytest
 
 from coffer.domain.features import (
     EXPERIMENTAL_FEATURES,
+    GRADUATED_FEATURES,
+    RETIRED_FEATURES,
     ExperimentalFeature,
     FeatureDisabled,
     FeaturePinned,
@@ -100,3 +102,13 @@ def test_the_pinned_error_names_its_key() -> None:
     err = FeaturePinned(FAKE_FEATURE)
     assert err.code == "FEATURE_PINNED"
     assert err.feature == FAKE_FEATURE
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="the lifecycle tables never name a live feature",
+)
+def test_the_lifecycle_tables_never_name_a_live_feature() -> None:
+    gone = [g.key for g in GRADUATED_FEATURES] + [r.key for r in RETIRED_FEATURES]
+    assert not set(gone) & set(feature_keys())
+    assert len(gone) == len(set(gone))

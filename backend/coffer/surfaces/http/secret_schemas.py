@@ -13,8 +13,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from coffer.surfaces.http.handoff_schemas import HandoffOut
-
 _GRANT_OPS = Literal["reveal", "approve", "approve_batch", "export_master_key"]
 
 
@@ -151,65 +149,6 @@ class ResolveSecretsIn(BaseModel):
 
 class ResolvedSecretsOut(BaseModel):
     values: dict[str, str]
-
-
-class SecretScanFindingOut(BaseModel):
-    id: str
-    path: str
-    source: Literal["secrets_file", "skill"]
-    key: str
-    line: int
-    proposed_name: str
-
-
-class SecretScanMentionOut(BaseModel):
-    skill: str
-    path: str
-    line: int
-    mention: str
-
-
-class SecretScanOut(BaseModel):
-    """Plaintext secrets found in files — where they are, never what they are."""
-
-    findings: list[SecretScanFindingOut]
-    mentions: list[SecretScanMentionOut]
-    #: How many files the scan read.
-    files_checked: int = 0
-    #: With mentions: rewriting those skills to get their values through
-    #: `coffer run`, handed to the person's agent. Names places and secret
-    #: names only, never a value.
-    handoff: HandoffOut | None
-
-
-class SecretImportIn(BaseModel):
-    #: Finding ids to move; omitted moves every finding.
-    ids: list[str] | None = None
-    dry_run: bool = False
-
-
-class SecretImportMovedOut(BaseModel):
-    id: str
-    path: str
-    name: str
-    uri: str
-
-
-class SecretImportSkippedOut(BaseModel):
-    id: str
-    path: str
-    reason: str
-    #: The secret the value was stored as, when it was stored.
-    name: str | None = None
-    #: The value is in the store, but its file could not be rewritten and
-    #: still holds it; moving the finding again retries the file.
-    stored: bool = False
-
-
-class SecretImportOut(BaseModel):
-    moved: list[SecretImportMovedOut]
-    skipped: list[SecretImportSkippedOut]
-    dry_run: bool
 
 
 class SecretBoundarySettingsOut(BaseModel):

@@ -5,7 +5,7 @@
 // layout principle 12: what needs you (no value on this Mac, a destination waiting) first, then by name.
 import type { SecretRef } from "@/lib/api/secret";
 import type { SecretListState, SecretStatus } from "@/lib/secrets/listState";
-import { citersOf, hasPendingBinding, isMissingHere, shortName } from "./secretRows";
+import { hasPendingBinding, isMissingHere, shortName } from "./secretRows";
 
 /** One row with what the list reads from it, worked out once. */
 export interface SecretItem {
@@ -40,11 +40,7 @@ function matchesStatus(item: SecretItem, status: SecretStatus): boolean {
 /** Search matches the secret's name and the names of what uses it. */
 function matchesSearch(item: SecretItem, q: string): boolean {
   if (!q) return true;
-  return (
-    item.row.ref.toLowerCase().includes(q) ||
-    item.short.toLowerCase().includes(q) ||
-    citersOf(item.row).some((c) => c.name.toLowerCase().includes(q))
-  );
+  return item.row.ref.toLowerCase().includes(q) || item.short.toLowerCase().includes(q);
 }
 
 /** The items the search text and the status keep. */

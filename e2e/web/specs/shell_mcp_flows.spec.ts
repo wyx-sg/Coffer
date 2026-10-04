@@ -470,11 +470,11 @@ test("pasting a command line prefills a stdio server", async ({ page }) => {
   await expect(page.locator("#add-server-args")).toHaveValue(
     "-y @modelcontextprotocol/server-github",
   );
+  // A pasted value is not kept in the config: the variable becomes a new
+  // secret, saved when the server is added.
   await expect(
-    page
-      .getByRole("group", { name: "How GITHUB_TOKEN is kept" })
-      .getByRole("button", { name: "Secret" }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("button", { name: "GITHUB_TOKEN: secret github_token" }),
+  ).toContainText("New · saved on Add");
   // Nothing was added: close without saving.
   await page.keyboard.press("Escape");
 });
