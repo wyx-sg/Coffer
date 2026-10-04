@@ -1,10 +1,10 @@
 // frontend/src/components/agents/AgentTranscriptView.tsx
 // The turns of one past conversation (board 2.1.52), rendered as a
 // conversation rather than dumped as JSON: one 720 column in a scroller, the
-// session's heading on top (`header`), then each turn as a 24px avatar — the
-// person's, or the agent's mark — a bold name with the time beside it, and the
-// text under the name. No bubbles and no boxes; a turn too long to show says
-// so in one quiet line. The raw `.jsonl` is one click away through the viewer
+// session's heading on top (`header`), then each turn set apart by who spoke:
+// the person's is a right-aligned accent bubble, the same one the Chat page
+// uses, and the agent's is unboxed on the left under its mark and name. A turn
+// too long to show says so in one quiet line. The raw `.jsonl` is one click away through the viewer
 // toolbar's Open in editor, for when the records themselves are the question.
 //
 // Assistant turns go through <FindableMarkdown> — the same renderer the skill
@@ -24,7 +24,6 @@
 // wire, so this component never has to decide what may be shown.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { User } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
@@ -32,15 +31,23 @@ import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
 import { splitTurnText } from "@/lib/transcriptText";
 import { formatDateTime } from "@/lib/utils";
 
-function UserTurnText({ text }: { text: string }) {
+const TIME = (iso: string) => formatDateTime(iso).slice(11, 16);
+
+/** The person's turn: a right-aligned bubble like the Chat page's, so the two
+ *  sides of the conversation read apart at a glance. The harness's blocks fold
+ *  above it; a turn that was nothing BUT harness stays muted and unbubbled —
+ *  a bubble would claim the person said it. */
+function UserTurn({ message }: { message: TranscriptMessage }) {
   const { t } = useTranslation();
-  const { harness, human } = splitTurnText(text);
+  const { harness, human } = splitTurnText(message.text);
+  const words = human.trim() ? human.trim() : harness ? "" : message.text;
 
   return (
-    <>
+    <li className="flex flex-col items-end gap-1">
+      <span className="sr-only">{t("agents.sessionsTab.roleUser")}</span>
       {harness ? (
-        <details className="mb-2">
-          <summary className="cursor-pointer text-xs text-text-muted">
+        <details className="w-fit max-w-[min(540px,100%)]">
+          <summary className="cursor-pointer text-right text-xs text-text-muted">
             {t("agents.sessionsTab.harnessPrefix")}
           </summary>
           <p className="mt-1.5 whitespace-pre-wrap break-words text-xs text-text-muted">
@@ -48,14 +55,20 @@ function UserTurnText({ text }: { text: string }) {
           </p>
         </details>
       ) : null}
-      {/* A turn that was nothing BUT harness still renders its own emptiness
-          honestly rather than as a blank card. */}
-      {human.trim() ? (
-        <p className="whitespace-pre-wrap break-words">{human.trim()}</p>
-      ) : harness ? null : (
-        <p className="whitespace-pre-wrap break-words">{text}</p>
-      )}
-    </>
+      {words ? (
+        <div className="w-fit max-w-[min(540px,100%)] break-words rounded-xl bg-accent-soft px-3.5 py-2.5 text-sm leading-relaxed text-text">
+          <p className="whitespace-pre-wrap break-words">{words}</p>
+        </div>
+      ) : null}
+      {message.truncated ? (
+        <p className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-text-muted">
+          {t("agents.sessionsTab.turnTruncated")}
+        </p>
+      ) : null}
+      {message.timestamp ? (
+        <span className="text-xs text-text-muted">{TIME(message.timestamp)}</span>
+      ) : null}
+    </li>
   );
 }
 
@@ -69,43 +82,24 @@ function Turn({
   agentType: string;
 }) {
   const { t } = useTranslation();
-  const isUser = message.role === "user";
-  // The person is "You" and the agent is named; an unrecognised role shows
-  // verbatim rather than as a missing-key placeholder,
-  // since a future agent format may introduce roles this build has not heard of.
-  const label = isUser
-    ? t("agents.sessionsTab.roleUser")
-    : message.role === "assistant"
-      ? agentName
-      : message.role;
+  if (message.role === "user") return <UserTurn message={message} />;
+  // The agent is named; an unrecognised role shows verbatim rather than as a
+  // missing-key placeholder, since a future agent format may introduce roles
+  // this build has not heard of.
+  const label = message.role === "assistant" ? agentName : message.role;
   return (
     <li className="flex gap-3">
-      {isUser ? (
-        <span
-          aria-hidden
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-item bg-chip text-text-muted"
-        >
-          <User className="size-3.5" strokeWidth={1.75} />
-        </span>
-      ) : (
-        <AgentBadge type={agentType} size="md" tooltip={false} />
-      )}
+      <AgentBadge type={agentType} size="md" tooltip={false} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold text-text">{label}</span>
           {message.timestamp ? (
-            <span className="text-xs text-text-muted">
-              {formatDateTime(message.timestamp).slice(11, 16)}
-            </span>
+            <span className="text-xs text-text-muted">{TIME(message.timestamp)}</span>
           ) : null}
         </div>
         <div className="mt-1 text-sm text-text">
-          {isUser ? (
-            <UserTurnText text={message.text} />
-          ) : (
-            // A reply opening with `---` is prose, not a file's frontmatter.
-            <FindableMarkdown frontmatter={false}>{message.text}</FindableMarkdown>
-          )}
+          {/* A reply opening with `---` is prose, not a file's frontmatter. */}
+          <FindableMarkdown frontmatter={false}>{message.text}</FindableMarkdown>
         </div>
         {message.truncated ? (
           <p className="mt-2 rounded-lg bg-surface-sunken px-3 py-2 text-xs text-text-muted">

@@ -19,6 +19,7 @@ import { StatusPill } from "@/components/status/StatusPill";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { agentTypeLabel } from "@/lib/agents/display";
+import { DRAFT_PATH, draftAgentState } from "@/lib/conversations/handoff";
 import { hookNotApproved } from "@/lib/agents/hookRows";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
@@ -79,7 +80,7 @@ export function AgentDetailHeader({ typeRow, rowActions }: Props) {
         <div className="flex items-center gap-2">
           {NO_PROGRAM.includes(state) ? null : (
             <Button variant="outline" size="sm" asChild>
-              <Link to="/conversations">
+              <Link to={DRAFT_PATH} state={draftAgentState(typeRow.type)}>
                 <MessageSquarePlus aria-hidden className="size-3.5" />
                 {t("agents.detail.newConversation")}
               </Link>

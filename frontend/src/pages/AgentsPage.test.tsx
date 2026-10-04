@@ -346,7 +346,7 @@ describe("AgentsPage", () => {
     expect(row).not.toHaveTextContent("agnes-2.0-flash");
   });
 
-  it("says the agent chooses when its own config names no default", async () => {
+  it("says built-in default when its own config names no default", async () => {
     setDaemon(
       fakeDaemon({
         types: [typeRow({ type: "codex", uid: "agt_c" })],
@@ -356,7 +356,7 @@ describe("AgentsPage", () => {
     );
     renderPage();
     const row = await screen.findByRole("row", { name: /Codex/ });
-    await waitFor(() => expect(row).toHaveTextContent("Chosen by the agent"));
+    await waitFor(() => expect(row).toHaveTextContent("Built-in default"));
     expect(row).not.toHaveTextContent("gpt-5");
     expect(row).not.toHaveTextContent("agnes-2.0-flash");
   });

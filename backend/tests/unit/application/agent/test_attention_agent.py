@@ -192,16 +192,27 @@ async def _hook_item(hook):  # type: ignore[no-untyped-def]
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="a hook the agent has not approved is a warning"
+    spec="agent-registry", scenario="a hook the agent will not run is left to the reconciler"
 )
-@pytest.mark.parametrize("trust", [HookTrust.UNTRUSTED, HookTrust.MODIFIED])
-async def test_an_unapproved_hook_is_a_warning(trust) -> None:  # type: ignore[no-untyped-def]
-    assert "approved" in (await _hook_item(_hook(trust))).reason
+@pytest.mark.parametrize(
+    "trust", [HookTrust.UNTRUSTED, HookTrust.MODIFIED, HookTrust.DISABLED, HookTrust.UNKNOWN]
+)
+@pytest.mark.parametrize("fired", [True, False])
+async def test_a_hook_the_agent_will_not_run_is_not_listed_here(trust, fired) -> None:  # type: ignore[no-untyped-def]
+    conn = FakeConnection({"a": _status(ConnectionState.CONNECTED, MCP_ON)})
+    source = AgentAttentionSource(
+        agents=FakeResources([_agent("a")]),
+        detect=FakeDetect({}),
+        connection=conn,
+        hooks=FakeHooks(_hook(trust, fired=fired)),
+    )
+    assert await source.items() == []
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="a hook that never fired is a warning")
-async def test_a_hook_that_never_fired_is_a_warning() -> None:
-    item = await _hook_item(_hook(HookTrust.NOT_REQUIRED, fired=False))
+@pytest.mark.parametrize("trust", [HookTrust.NOT_REQUIRED, HookTrust.TRUSTED])
+async def test_a_hook_that_never_fired_is_a_warning(trust) -> None:  # type: ignore[no-untyped-def]
+    item = await _hook_item(_hook(trust, fired=False))
     assert "never fired" in item.reason
 
 
@@ -222,7 +233,7 @@ async def test_a_healthy_or_absent_hook_reports_nothing(hook) -> None:  # type: 
 
 @pytest.mark.parametrize(
     "hook",
-    [_hook(HookTrust.UNTRUSTED), _hook(HookTrust.NOT_REQUIRED, fired=False)],
+    [_hook(HookTrust.NOT_REQUIRED, fired=False), _hook(HookTrust.TRUSTED, fired=False)],
 )
 async def test_with_memory_off_a_missing_or_unfired_hook_reports_nothing(hook) -> None:  # type: ignore[no-untyped-def]
     conn = FakeConnection({"a": _status(ConnectionState.CONNECTED, MCP_ON)})

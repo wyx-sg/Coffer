@@ -8,7 +8,6 @@
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { HelpTip } from "@/components/HelpTip";
 import { DataTable, type Column } from "@/components/DataTable";
 import { agentTabPath } from "@/lib/agents/routes";
 import type { AgentRowState } from "@/lib/agents/rowState";
@@ -20,6 +19,7 @@ import {
   ConfigDirCell,
   CountCell,
   ModelCell,
+  ProviderCell,
 } from "./AgentRowCells";
 
 export interface AgentListRow {
@@ -51,6 +51,12 @@ export function AgentsTable({ rows, isLoading }: Props) {
       cell: ({ row }) => <ConfigDirCell row={row} />,
     },
     {
+      key: "provider",
+      header: t("agents.list.col.provider"),
+      className: "w-[180px] max-w-[200px]",
+      cell: ({ row }) => <ProviderCell uid={row.uid} />,
+    },
+    {
       key: "model",
       header: t("agents.list.col.model"),
       className: "w-[160px]",
@@ -58,12 +64,7 @@ export function AgentsTable({ rows, isLoading }: Props) {
     },
     {
       key: "skills",
-      header: (
-        <span className="inline-flex items-center gap-1.5">
-          {t("agents.list.col.skills")}
-          <HelpTip label={t("agents.list.countsLabel")}>{t("agents.list.countsHelp")}</HelpTip>
-        </span>
-      ),
+      header: t("agents.list.col.skills"),
       className: "w-[44px]",
       cell: ({ row }) => <CountCell row={row} kind="skills" />,
     },
@@ -93,15 +94,19 @@ export function AgentsTable({ rows, isLoading }: Props) {
     },
   ];
   return (
-    <DataTable
-      rows={rows}
-      columns={columns}
-      rowKey={({ row }) => row.type}
-      isLoading={isLoading}
-      onRowClick={({ row }) => navigate(agentTabPath(row.type, "overview"))}
-      isRowClickable={({ row }) => !!row.uid}
-      emptyMessage={t("agents.list.empty")}
-      footer={false}
-    />
+    <div className="flex flex-col gap-2">
+      <DataTable
+        rows={rows}
+        columns={columns}
+        rowKey={({ row }) => row.type}
+        isLoading={isLoading}
+        onRowClick={({ row }) => navigate(agentTabPath(row.type, "overview"))}
+        isRowClickable={({ row }) => !!row.uid}
+        emptyMessage={t("agents.list.empty")}
+        footer={false}
+      />
+      {/* What the three counts mean, under the table rather than behind a "?" on one column. */}
+      <p className="text-xs text-text-muted">{t("agents.list.countsHelp")}</p>
+    </div>
   );
 }
