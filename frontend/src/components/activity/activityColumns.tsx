@@ -1,7 +1,7 @@
 // src/components/activity/activityColumns.tsx — the columns of each Activity tab's table.
 //
 // Design 6.2.01, 6.2.07, 6.2.08, 6.2.10. Everything: Time 76 · icon 26 · Event
-// · By 110 · Took 64. Changes: Time · icon · Change · By. MCP calls: Time ·
+// · By 110 · Took 64. Changes: Time · icon · Change · By. Tool calls: Time ·
 // Agent · `server.`(grey)+tool · Took (right-aligned, sortable) · Status. The
 // Daemon log: Time · Level · Logger · Message. Each width is the column's
 // content width; the table adds 5px either side of every cell (10px between

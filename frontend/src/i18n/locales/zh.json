@@ -846,12 +846,12 @@
     "tabs": {
       "everything": "全部",
       "changes": "改动",
-      "mcp": "MCP 调用",
+      "mcp": "工具调用",
       "daemon": "守护进程日志"
     },
     "sources": {
       "change": "改动",
-      "call": "MCP 调用",
+      "call": "工具调用",
       "daemon": "守护进程日志"
     },
     "actor": {
@@ -900,7 +900,7 @@
         "daemon": "搜索日志记录"
       },
       "kinds": {
-        "calls": "MCP 调用",
+        "calls": "工具调用",
         "changes": "改动",
         "daemon": "守护进程记录",
         "notDaemon": "除守护进程记录外的全部"
@@ -969,7 +969,7 @@
     "drawer": {
       "kinds": {
         "change": "改动",
-        "call": "MCP 调用",
+        "call": "工具调用",
         "daemon": "守护进程记录"
       },
       "who": "操作者",
@@ -1064,7 +1064,7 @@
     "summary": {
       "sources": {
         "change": "改动",
-        "call": "MCP 调用",
+        "call": "工具调用",
         "daemon": "守护进程记录"
       }
     },
@@ -1072,7 +1072,7 @@
       "showing": "已显示 {{shown}} 条",
       "showingOf": "已显示 {{shown}} / {{total}} 条",
       "next": "下 {{count}} 条来自 {{before}} 之前",
-      "kept": "MCP 调用保留 {{calls}} —",
+      "kept": "工具调用保留 {{calls}} —",
       "settings": "设置 › 数据",
       "forever": "永久",
       "days_one": "{{count}} 天",
@@ -1081,7 +1081,7 @@
       "years_other": "{{count}} 年"
     },
     "daemonLog": {
-      "showCall": "查看 MCP 调用"
+      "showCall": "查看 工具调用"
     },
     "reconnecting": "正在重新连接…",
     "tabFailed": "无法加载"
@@ -1168,9 +1168,9 @@
           "unit_other": "条改动"
         },
         "mcp_invocations": {
-          "name": "MCP 调用",
+          "name": "工具调用",
           "description": "谁调用了哪个工具，结果如何",
-          "shortenTitle": "MCP 调用只保留 {{days}} 天？",
+          "shortenTitle": "工具调用只保留 {{days}} 天？",
           "unit_one": "次调用",
           "unit_other": "次调用"
         },

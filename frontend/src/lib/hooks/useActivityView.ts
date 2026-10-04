@@ -9,7 +9,7 @@
 // log, whose records are far sparser. Moving to another tab closes the open
 // record and keeps the search, the range and who; the tab's own filters (kind,
 // status, level, logger) do not carry over. A move can also carry filters, so
-// "Show the MCP call" lands on MCP calls already looking for it.
+// "Show the tool call" lands on Tool calls already looking for it.
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 

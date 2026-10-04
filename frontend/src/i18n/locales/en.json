@@ -846,12 +846,12 @@
     "tabs": {
       "everything": "Everything",
       "changes": "Changes",
-      "mcp": "MCP calls",
+      "mcp": "Tool calls",
       "daemon": "Daemon log"
     },
     "sources": {
       "change": "Changes",
-      "call": "MCP calls",
+      "call": "Tool calls",
       "daemon": "Daemon log"
     },
     "actor": {
@@ -900,7 +900,7 @@
         "daemon": "Search log records"
       },
       "kinds": {
-        "calls": "MCP calls",
+        "calls": "Tool calls",
         "changes": "Changes",
         "daemon": "Daemon records",
         "notDaemon": "Everything except daemon records"
@@ -969,7 +969,7 @@
     "drawer": {
       "kinds": {
         "change": "change",
-        "call": "MCP call",
+        "call": "tool call",
         "daemon": "daemon record"
       },
       "who": "Who",
@@ -1064,7 +1064,7 @@
     "summary": {
       "sources": {
         "change": "changes",
-        "call": "MCP calls",
+        "call": "tool calls",
         "daemon": "daemon records"
       }
     },
@@ -1072,7 +1072,7 @@
       "showing": "Showing {{shown}}",
       "showingOf": "Showing {{shown}} of {{total}}",
       "next": "next {{count}} from before {{before}}",
-      "kept": "MCP calls are kept {{calls}} —",
+      "kept": "Tool calls are kept {{calls}} —",
       "settings": "Settings › Data",
       "forever": "forever",
       "days_one": "{{count}} day",
@@ -1081,7 +1081,7 @@
       "years_other": "{{count}} years"
     },
     "daemonLog": {
-      "showCall": "Show the MCP call"
+      "showCall": "Show the tool call"
     },
     "reconnecting": "Reconnecting…",
     "tabFailed": "Couldn't be loaded"
@@ -1168,9 +1168,9 @@
           "unit_other": "changes"
         },
         "mcp_invocations": {
-          "name": "MCP calls",
+          "name": "Tool calls",
           "description": "Who called which tool, and how it went",
-          "shortenTitle": "Keep MCP calls for {{days}} days?",
+          "shortenTitle": "Keep tool calls for {{days}} days?",
           "unit_one": "call",
           "unit_other": "calls"
         },

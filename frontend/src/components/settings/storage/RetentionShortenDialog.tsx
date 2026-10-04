@@ -12,7 +12,7 @@ import { useRetentionPreview } from "@/lib/hooks/useRetention";
 
 type RetentionPolicyOut = components["schemas"]["RetentionPolicyOut"];
 
-/** "Keep MCP calls for 7 days?" — what the shorter window deletes, counted before it is saved. */
+/** "Keep Tool calls for 7 days?" — what the shorter window deletes, counted before it is saved. */
 export function RetentionShortenDialog({
   policy,
   proposed,

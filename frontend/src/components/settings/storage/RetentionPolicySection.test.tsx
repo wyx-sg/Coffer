@@ -143,7 +143,7 @@ describe("RetentionPolicySection", () => {
     fireEvent.change(daysInput, { target: { value: "7" } });
     fireEvent.blur(daysInput);
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Keep MCP calls for 7 days?");
+    expect(dialog).toHaveTextContent("Keep tool calls for 7 days?");
     expect(dialog).toHaveTextContent(
       "About 9,400 calls older than 7 days are deleted at the next cleanup, within six hours.",
     );

@@ -825,12 +825,12 @@ for this server in the last 24 hours, newest first, All or Errors, one agent or
 all, each row its time, tool, calling agent, result and duration, and the
 chosen call (the newest by default) opened below with its result, how long it
 took and its session — the account of what an agent did when the agent is the
-thing that is broken. Activity's MCP calls tab reads every server's calls and
+thing that is broken. Activity's Tool calls tab reads every server's calls and
 names each row's server.
 
 #### Scenario: a server's invocations tab is the Activity calls table scoped to it
 - **GIVEN** a registered MCP server
-- **WHEN** its Invocations tab and Activity's MCP calls tab each render
+- **WHEN** its Invocations tab and Activity's Tool calls tab each render
 - **THEN** the server's tab asks only for that server's calls, lists them without a server column and opens the newest below the list
 - **AND** Activity's tab asks the cross-server route for every server's calls and names each row's server
 
@@ -844,10 +844,10 @@ under System. The header carries the title, a **Live** mark (a dot and the word,
 change, tool call and daemon record, newest first."
 Four tabs follow, without counts: **Everything**, the default, merging the
 changes, the calls and the daemon's warnings and errors into one newest-first
-stream, then one tab per record — **Changes**, **MCP calls**, **Daemon log** —
+stream, then one tab per record — **Changes**, **Tool calls**, **Daemon log** —
 each a newest-first table in a bordered box with the columns that record
 actually has: Everything — time, an icon, the event, who (an agent or the actor)
-and how long a call took; Changes — time, an icon, the change, who; MCP calls —
+and how long a call took; Changes — time, an icon, the change, who; Tool calls —
 time, agent, `server.` (muted) and tool, how long it took (right-aligned,
 sortable over the loaded rows) and the status as a dot and its word; Daemon log —
 time with milliseconds, level, logger and message. The day a run of rows falls
@@ -855,7 +855,7 @@ on is a sunken heading row inside the box ("Today · Sep 29"); no summary line
 sits above the table. A tab whose log failed to load shows a warning icon. Each tab pages older records on request:
 the box's last row says "Showing 30 of 1,204 · next 50 from before 13:58" with
 **Load 50 more**, and only once everything kept is shown does it say so, with how
-long MCP calls are kept and a link to Settings › Data.
+long tool calls are kept and a link to Settings › Data.
 
 #### Scenario: activity gives each record its own tab
 - **GIVEN** Coffer has recorded an audit entry, an MCP invocation and a daemon log record
@@ -876,20 +876,20 @@ long MCP calls are kept and a link to Settings › Data.
 - **GIVEN** the Changes tab with more records than the first page holds
 - **WHEN** the user reads to the end of the first page, and later of everything kept
 - **THEN** the box's last row first says how many are shown of how many, what the next page holds and from before when, with Load 50 more
-- **AND** only after the last page does it say "That's everything kept" with how long MCP calls are kept and a link to Settings › Data
+- **AND** only after the last page does it say "That's everything kept" with how long tool calls are kept and a link to Settings › Data
 
 ### Requirement: Filter each Activity tab and expand any row
 Every Activity tab MUST filter in one row — the search first (240 wide), then
 the time range and the pills, with **Clear filters** at the far right while
 anything is set — and show no counts in it. Everything: search, time range,
-**By** and **Kind**; Changes: search, time range, **By** and **Kind**; MCP calls:
+**By** and **Kind**; Changes: search, time range, **By** and **Kind**; Tool calls:
 a segmented **All / OK / Failed** first (Failed is an error, a timeout or a
 denial), then search, time range and **By**; Daemon log: a segmented **All /
 Info / Warnings / Errors** first, then search, time range and **Logger**. There
 is no filter for a server: the search matches a server's name. **By** chooses
 several values, listing the agents and, under "Not an agent", you (the web UI,
-the desktop app), the command line, Coffer itself and sync, last; on MCP calls
-it lists agents only. **Kind** on Everything is three flat values — MCP calls,
+the desktop app), the command line, Coffer itself and sync, last; on Tool calls
+it lists agents only. **Kind** on Everything is three flat values — Tool calls,
 Changes, Daemon records — and on Changes the eleven kinds of change (a resource
 kind, or secrets, sync, settings and CLIs for a change that names no resource),
 flat. A pill lists no counts and searches only above eight values. The time
@@ -898,7 +898,7 @@ a custom range (calendar days, optional HH:MM, an end of "now", at most 90 days
 back); a tab opens on the last hour, the Daemon log on the last 24 hours, until
 the user picks one. A record passes when it matches any chosen value.
 
-Selecting a row on Everything, Changes or MCP calls MUST open it in the shared
+Selecting a row on Everything, Changes or Tool calls MUST open it in the shared
 right-hand drawer (640 wide until its left edge is dragged, the page dimmed behind it; Esc, a click outside or
 its ✕ closes it, ↑ ↓ step to the previous or next record, focus returns to the
 row), answer first — a failed call's error and how its server has been doing
@@ -912,23 +912,23 @@ shows its metadata only, since Coffer stores no call's arguments or results. A
 change whose event the page has no sentence for reads through the same facts and
 diff. On the Daemon log a row opens in place under its own line instead, with its
 traceback, **Copy record** and, when the record names a server and tool, **Show
-the MCP call**, which opens the MCP calls tab looking for that call.
+the tool call**, which opens the Tool calls tab looking for that call.
 
 #### Scenario: activity row expands to its raw record
 - **GIVEN** an Activity tab has at least one row
-- **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or MCP calls
+- **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or Tool calls
 - **THEN** the shared drawer opens over the page with its raw underlying record open — the full JSON, pretty-printed in a monospace, scrollable block
 
 #### Scenario: a daemon log row opens in place
 - **GIVEN** the Daemon log tab with an error record carrying a traceback and naming `server=github tool=search_issues`
-- **WHEN** the user selects that row, then chooses Show the MCP call
+- **WHEN** the user selects that row, then chooses Show the tool call
 - **THEN** the row opens under its own line with the traceback and Copy record, and no drawer opens
-- **AND** Show the MCP call opens the MCP calls tab searching `github.search_issues`
+- **AND** Show the tool call opens the Tool calls tab searching `github.search_issues`
 
 #### Scenario: who and kind choose several values
 - **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
-- **WHEN** the user chooses the agent and "You" under By, then MCP calls and Changes under Kind
-- **THEN** the list keeps the agent's call and the web UI's change and drops the others, and the Kind pill reads "Kind: MCP calls, Changes"
+- **WHEN** the user chooses the agent and "You" under By, then Tool calls and Changes under Kind
+- **THEN** the list keeps the agent's call and the web UI's change and drops the others, and the Kind pill reads "Kind: Tool calls, Changes"
 
 ### Requirement: Query only the visible Activity tab and isolate failures
 Only the visible tab pages through records — Everything through all three
@@ -960,7 +960,7 @@ Each of the three records the Activity page shows MUST also be readable from the
 command line, over the same route the page reads: `coffer log audit` reads the
 audit log (`GET /api/v1/audit`), `coffer log mcp` reads the invocation log, and
 `coffer log daemon` reads the daemon log (`GET /api/v1/daemon/logs`). Without
-`--server`, `coffer log mcp` reads the same cross-server log the MCP calls tab
+`--server`, `coffer log mcp` reads the same cross-server log the Tool calls tab
 renders (`GET /api/v1/mcp/invocations`), Coffer's own built-in calls (`coffer`)
 and deleted servers' rows (`deleted:<name>`) included; with `--server <name>`, it
 reads that server's log. Each reader takes `--since`, `--limit` and `--json`,
@@ -1098,7 +1098,7 @@ machine only is a setting shown on the tab it belongs to:
   files, a Keep forever switch and a number of days (30 by default) that auto-saves like
   every History row, and shortening it asks first, counting the files the shorter
   window deletes.
-- **History** — the retention of each record kind — changes, MCP calls,
+- **History** — the retention of each record kind — changes, tool calls,
   conversations, **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action behind a confirmation, which reports what it
@@ -1125,7 +1125,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, MCP calls, conversations, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, conversations, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
@@ -1140,9 +1140,9 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **AND** shortening it asks first and the confirmation counts files, not records
 
 #### Scenario: shortening a retention window counts what it deletes
-- **GIVEN** MCP calls kept for 30 days, some of them older than 7 days
-- **WHEN** the user sets the MCP calls window to 7 days
-- **THEN** a confirmation asks "Keep MCP calls for 7 days?", says how many calls older than 7 days the next cleanup deletes, and shows the count now and after
+- **GIVEN** Tool calls kept for 30 days, some of them older than 7 days
+- **WHEN** the user sets the tool calls window to 7 days
+- **THEN** a confirmation asks "Keep tool calls for 7 days?", says how many calls older than 7 days the next cleanup deletes, and shows the count now and after
 - **AND** nothing is deleted or saved until the user confirms
 
 #### Scenario: clear expired now removes what retention has passed
@@ -1179,7 +1179,7 @@ under `coffer.language`.
 ### Requirement: Read each Activity tab from its record owner's route
 The Activity page MUST add no route of its own: each tab reads the read-only
 route belonging to whichever capability owns that record (see Purpose) — the
-Changes tab `GET /api/v1/audit`, the MCP calls tab `GET /api/v1/mcp/invocations`
+Changes tab `GET /api/v1/audit`, the Tool calls tab `GET /api/v1/mcp/invocations`
 and the Daemon tab `GET /api/v1/daemon/logs`, Everything all three — and its
 filters list agents and servers from those kinds' own list routes. An agent or
 a script that asks "what happened" reads the same three records from the
@@ -2643,7 +2643,7 @@ top by hand inserts them too. New records MUST honour the tab's filters: one the
 neither inserted nor counted.
 
 #### Scenario: new records stream in at the top
-- **GIVEN** the MCP calls tab open at the top of its list, with no row open
+- **GIVEN** the Tool calls tab open at the top of its list, with no row open
 - **WHEN** the gateway proxies two calls
 - **THEN** both appear at the top of the table without any control being used, and the page has no Pause or Resume control
 
@@ -2800,7 +2800,7 @@ the filters only the old tab had.
 #### Scenario: a link opens already searching
 - **GIVEN** the address `/activity?tab=mcp&q=github`
 - **WHEN** the page opens
-- **THEN** the MCP calls tab shows `github` in its search box and asks the route for calls matching it
+- **THEN** the Tool calls tab shows `github` in its search box and asks the route for calls matching it
 - **AND** Clear filters empties the box and removes `q` from the address
 
 ### Requirement: Show the first run with nothing to filter

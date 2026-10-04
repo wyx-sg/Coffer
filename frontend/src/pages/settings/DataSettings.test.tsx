@@ -171,7 +171,7 @@ describe("DataSettings", () => {
     const history = screen.getByTestId("settings-data-history");
     expect(within(history).getByText("48.2 MB")).toBeInTheDocument();
     expect(await within(history).findByText("Changes")).toBeInTheDocument();
-    expect(within(history).getByText("MCP calls")).toBeInTheDocument();
+    expect(within(history).getByText("Tool calls")).toBeInTheDocument();
     expect(within(history).getByText("Conversations")).toBeInTheDocument();
     expect(within(history).getByText("Skill working files")).toBeInTheDocument();
     expect(within(history).getByText("Config backups")).toBeInTheDocument();
@@ -313,7 +313,7 @@ describe("DataSettings", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /clear expired data now/i }));
     await waitFor(() => expect(post).toHaveBeenCalledWith("/retention/prune", { body: {} }));
-    expect(await screen.findByText("Removed 12 rows from MCP calls")).toBeInTheDocument();
+    expect(await screen.findByText("Removed 12 rows from Tool calls")).toBeInTheDocument();
   });
 
   // The page half; the backend half is test_daemon_port_and_storage_routes.py.
@@ -371,7 +371,7 @@ describe("DataSettings", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
     const failed = await screen.findByTestId("settings-data-save-failed");
     // The refused save names what is still in place.
-    expect(failed).toHaveTextContent("MCP calls are still kept forever.");
+    expect(failed).toHaveTextContent("Tool calls are still kept forever.");
     expect(screen.getByText("Not saved")).toBeInTheDocument();
     expect(screen.queryByTestId("settings-data-other-retention")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));

@@ -13,7 +13,7 @@ import { daemonContinuation, describeDaemonRecord } from "@/lib/activity/activit
 import type { ActivityRecord } from "@/lib/activity/records";
 
 /**
- * The MCP call a daemon record is about, as the text the MCP calls tab's box
+ * The MCP call a daemon record is about, as the text the Tool calls tab's box
  * finds it by (`server.tool`): from the record's own fields, or from the
  * `server=… tool=…` its message spells out.
  */

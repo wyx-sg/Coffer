@@ -85,7 +85,7 @@ export function NewRecordsStrip({
   );
 }
 
-/** "That's everything kept. MCP calls are kept 30 days — Settings › Data". */
+/** "That's everything kept. Tool calls are kept 30 days — Settings › Data". */
 function RetentionNote() {
   const { t } = useTranslation();
   const policies = useRetentionPolicies().data?.policies ?? [];

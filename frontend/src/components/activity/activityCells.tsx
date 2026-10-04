@@ -65,7 +65,7 @@ export function SourceIcon({ record }: { record: ActivityRecord }) {
   );
 }
 
-/** The call's target, `server.tool`, in mono; the MCP calls table mutes the server part. */
+/** The call's target, `server.tool`, in mono; the Tool calls table mutes the server part. */
 export function CallTarget({
   call,
   className,

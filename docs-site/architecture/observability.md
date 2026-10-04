@@ -222,7 +222,7 @@ Rows are keyed by uid rather than name, so a server's history belongs to that re
 
 Writes are buffered: an in-memory queue (up to 5,000 rows) is flushed by a writer task every 50 ms or every 50 rows, whichever comes first, so a tool-heavy session does not pay an SQLite commit per call. When the queue is full, callers wait rather than drop rows.
 
-You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`. Both routes page newest first by cursor, take `agent_uid` to show one agent's calls and `trace_id` to show one request's, and answer each row with its `id`. Their answer, like the audit log's, carries `total`: how many rows match the filters across every page, so a filtered view can say how big it is without paging to the end.
+You read it on the **Tool calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`. Both routes page newest first by cursor, take `agent_uid` to show one agent's calls and `trace_id` to show one request's, and answer each row with its `id`. Their answer, like the audit log's, carries `total`: how many rows match the filters across every page, so a filtered view can say how big it is without paging to the end.
 
 ## Retention
 

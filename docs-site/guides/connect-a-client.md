@@ -158,7 +158,7 @@ The identity is self-reported, not cryptographically verified. Any local process
 
 3. **List the tools in the client.** In Claude Code, the `/mcp` command shows the `coffer` server and its tools. You should see Coffer's own `coffer__…` tools and your upstream tools as `<server>__<tool>`. When you have many upstream tools, only a budgeted slice is listed; the rest stay callable and `coffer__search_tools` finds them (see [MCP servers](/guides/mcp-servers#many-tools-tiering-and-tool-search)).
 
-4. **Make a call and find it in the log.** Open **Activity → MCP calls**: the call appears with its server, tool, duration and status. `coffer log mcp --limit 5` prints the same rows.
+4. **Make a call and find it in the log.** Open **Activity → Tool calls**: the call appears with its server, tool, duration and status. `coffer log mcp --limit 5` prints the same rows.
 
 ## Troubleshooting
 
