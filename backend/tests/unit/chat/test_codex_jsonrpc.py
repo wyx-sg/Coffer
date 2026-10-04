@@ -272,3 +272,45 @@ async def test_failed_write_leaves_no_future_to_fail_unretrieved() -> None:
         loop.set_exception_handler(None)
     assert unretrieved == []
     await client.close()
+
+
+class SlowBrokenWriter(FakeWriter):
+    """A writer whose drain is still pending when the peer dies, then fails."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.release = asyncio.Event()
+
+    async def drain(self) -> None:
+        await self.release.wait()
+        raise BrokenPipeError("peer exited")
+
+
+async def test_stream_end_during_failing_write_leaves_no_unretrieved_future() -> None:
+    """The read loop fails the pending future while the request is still
+    writing; the write then errors, so nobody awaits that future. It must still
+    be marked retrieved."""
+    reader = FakeReader()
+    writer = SlowBrokenWriter()
+    client = CodexRpcClient(reader, writer)
+    client.start()
+
+    unretrieved: list[dict[str, Any]] = []
+    loop = asyncio.get_running_loop()
+    loop.set_exception_handler(lambda _loop, ctx: unretrieved.append(ctx))
+    try:
+        call = asyncio.ensure_future(client.request("thread/start", {}))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        reader.close()
+        await asyncio.wait_for(client.eof.wait(), timeout=1.0)
+        writer.release.set()
+        # Drop the traceback too: its frames hold the request's future.
+        assert isinstance(await asyncio.gather(call, return_exceptions=True), list)
+        del call
+        gc.collect()
+        await asyncio.sleep(0)
+    finally:
+        loop.set_exception_handler(None)
+    assert unretrieved == []
+    await client.close()

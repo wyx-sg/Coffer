@@ -51,7 +51,9 @@ function bootstrap(): void {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <App />
-        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+        {import.meta.env.DEV && !import.meta.env.VITE_COFFER_NO_DEVTOOLS && (
+          <ReactQueryDevtools initialIsOpen={false} />
+        )}
       </QueryClientProvider>
     </React.StrictMode>,
   );
