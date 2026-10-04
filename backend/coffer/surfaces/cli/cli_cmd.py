@@ -22,8 +22,13 @@ app = typer.Typer(help="Read the command-line tools Coffer manages.")
 _console = Console()
 
 
+_COFFER_USES = {"vault_history": "the vault's history", "sync": "sync"}
+
+
 def _needed_by(item: dict[str, Any]) -> str:
-    users = [f"skill {n['skill_name']}" for n in item.get("needed_by", [])]
+    uses = [_COFFER_USES.get(u, u) for u in item.get("needed_by_coffer", [])]
+    users = [f"Coffer ({' and '.join(uses)})"] if uses else []
+    users += [f"skill {n['skill_name']}" for n in item.get("needed_by", [])]
     users += [f"MCP server {s['server_name']}" for s in item.get("needed_by_servers", [])]
     if item.get("added"):
         users.append("added by hand")
@@ -42,11 +47,12 @@ def list_clis(
 ) -> None:
     """List every command-line tool Coffer manages, problems first.
 
-    The tools skills require, the launchers MCP servers start with, and the
-    tools the developer added by hand: what each is for, who needs it, and
-    whether it is ready, missing, outdated or logged out on this machine as of
-    Coffer's last check. --json carries the full rows, including the prompt
-    for an agent to install, update or log in to one that needs it.
+    The tools Coffer runs itself (git), the tools skills require, the
+    launchers MCP servers start with, and the tools the developer added by
+    hand: what each is for, who needs it, and whether it is ready, missing,
+    outdated or logged out on this machine as of Coffer's last check. --json
+    carries the full rows, including the prompt for an agent to install,
+    update or log in to one that needs it.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()

@@ -18,6 +18,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from coffer.domain.skill.cli_status import COFFER_NEEDS
 from coffer.infrastructure.platform.user_path import UserPath
 from coffer.infrastructure.skill.command_probe import CommandProbe
 from tests.support.cli_requirements import FAKE_MACHINE, FakeCommand, FakeCommandProbe
@@ -323,3 +324,25 @@ def test_a_stdio_servers_launcher_is_listed_with_the_server(daemon: CliDaemon) -
     prompt = uv["handoff"]["prompt"]
     assert "duckdb (started with `uvx`)" in prompt and "data-profiling" in prompt
     assert f"This machine: {FAKE_MACHINE}." in prompt
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="git is listed as needed by Coffer itself")
+def test_git_is_needed_by_coffer(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, probe: FakeCommandProbe
+) -> None:
+    for daemon in boot_cli_daemon(tmp_path, monkeypatch, probe=probe, coffer_needs=COFFER_NEEDS):
+        git = daemon.client.get("/clis/git").json()
+        assert git["status"] == "missing"
+        assert git["title"] == "Git"
+        assert git["needed_by_coffer"] == ["vault_history", "sync"]
+        assert git["needed_by"] == [] and git["needed_by_servers"] == []
+        assert (
+            "Coffer itself uses it to keep the vault's history and to sync the vault."
+            in (git["handoff"]["prompt"])
+        )
+        # Sync's own git_missing item reports it; no second item here.
+        items = daemon.client.get("/attention").json()["items"]
+        assert not [i for i in items if i["kind"] == "cli"]
+        probe.commands["git"] = FakeCommand("2.50.1")
+        ready = daemon.client.post("/clis/git/check").json()
+        assert ready["status"] == "ready" and ready["handoff"] is None

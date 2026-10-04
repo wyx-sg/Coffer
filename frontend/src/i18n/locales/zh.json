@@ -5612,7 +5612,7 @@
       "version": "版本",
       "login": "登录",
       "checkedWith": "· 检查命令",
-      "neededByNote": "调用它的技能和 MCP 服务器。打开一项可以看原因。",
+      "neededByNote": "调用它的 Coffer 自身、技能和 MCP 服务器。打开技能或服务器可以看原因。",
       "neededByNothing": "没有技能或 MCP 服务器要求它——它是你手动添加的，会一直留在列表里，直到你移除。",
       "cols": {
         "name": "名称",
@@ -5621,7 +5621,8 @@
       },
       "kind": {
         "server": "MCP 服务器",
-        "skill": "技能"
+        "skill": "技能",
+        "coffer": "Coffer 自身"
       },
       "startsWith": "用 {{launcher}} 启动",
       "neededBy": "{{needed}}需要",
@@ -5681,7 +5682,8 @@
         "missing": "把安装交给智能体，然后重新检查。",
         "outdated": "把更新交给智能体，然后重新检查。",
         "logged_out": "把登录交给智能体，然后重新检查。"
-      }
+      },
+      "cofferBody": "Coffer 无法{{uses}}。"
     },
     "list": {
       "needsYou": "需要你处理",
@@ -5698,7 +5700,17 @@
     "mcpServerCount_one": "{{count}} 个 MCP 服务器",
     "mcpServerCount_other": "{{count}} 个 MCP 服务器",
     "listPair": "{{servers}}、{{skills}}",
-    "neededPair": "{{servers}}和{{skills}}"
+    "neededPair": "{{servers}}和{{skills}}",
+    "withCofferList": "Coffer、{{rest}}",
+    "withCofferSentence": "Coffer 和{{rest}}",
+    "cofferUse": {
+      "vault_history": "保存保险库的历史",
+      "sync": "同步保险库"
+    },
+    "cofferUseShort": {
+      "vault_history": "保险库历史",
+      "sync": "同步"
+    }
   },
   "secretField": {
     "placeholder": "选择一个密钥，或粘贴新的值",

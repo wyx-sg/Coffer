@@ -4,8 +4,9 @@ require and the ones the person added by hand; read, checked, handed off.
 ``CliRequirementService`` reads every managed skill's master SKILL.md at check
 time (so an edit made in the user's editor is picked up by the next read), the
 launcher of every enabled stdio MCP server (``McpLaunchersPort``, supplied
-by the composition root) and the tools added by hand
-(``DeclaredToolsPort``), aggregates one row per command
+by the composition root), the tools added by hand
+(``DeclaredToolsPort``) and the commands Coffer runs itself (``git``),
+aggregates one row per command
 (``domain/skill/cli_status.py``), and probes
 each command through a :class:`CommandProbePort` in a worker thread. Results
 are cached per command until the user asks to check again or the daemon
@@ -38,6 +39,7 @@ from coffer.domain.skill.cli_errors import CliNotKnown
 from coffer.domain.skill.cli_status import (
     STATUS_ORDER,
     CliStatus,
+    CofferNeed,
     LoginState,
     ProbeResult,
     RequiredCommand,
@@ -150,9 +152,12 @@ class CliRequirementService:
         paths: CliPathsPort | None = None,
         secret_set: Callable[[str], bool] | None = None,
         tools: ToolStatesPort | None = None,
+        coffer: Sequence[CofferNeed] = (),
         clock: Callable[[], datetime] = _now,
     ) -> None:
         self._skills = skills
+        #: The commands Coffer itself runs (``COFFER_NEEDS`` in production).
+        self._coffer = tuple(coffer)
         #: Whether a secret NAME is in the store; ``None`` when not wired.
         self._secret_set = secret_set
         self._servers = servers
@@ -220,7 +225,7 @@ class CliRequirementService:
                 warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in unknown)
         servers = await self._servers.stdio_launchers() if self._servers else ()
         added = self._declared.all() if self._declared else ()
-        return aggregate(parsed, servers, added), warnings
+        return aggregate(parsed, servers, added, self._coffer), warnings
 
     async def _listing(self, *, force: bool) -> CliListing:
         required, warnings = await self._required()

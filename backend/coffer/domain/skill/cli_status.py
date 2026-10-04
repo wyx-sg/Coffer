@@ -7,7 +7,9 @@ from the hand-added declaration first, then from the first skill (by name) that
 declares each, and the login command from the first skill that gives one. The launcher an
 enabled stdio MCP server starts with is required too — by that server, under
 the command that provides it (``uv`` for ``uvx``, see :func:`launcher_cli`),
-with no minimum and no login. The status is
+with no minimum and no login. The commands Coffer runs itself
+(:data:`COFFER_NEEDS`: ``git`` for the vault's history and sync) are required
+by Coffer, so they are listed even when no skill or server asks. The status is
 problem-first — ``missing``, ``outdated``, ``logged_out``, ``ready`` — and a
 version that cannot be read is reported as unknown, never as outdated.
 """
@@ -82,6 +84,30 @@ class RequiredCommand:
     #: The person added this command by hand.
     added: bool = False
     description: str | None = None
+    #: What Coffer itself runs the command for; empty when Coffer does not.
+    needed_by_coffer: tuple[CofferUse, ...] = ()
+
+
+class CofferUse(StrEnum):
+    """What Coffer itself runs a command for."""
+
+    VAULT_HISTORY = "vault_history"
+    SYNC = "sync"
+
+
+@dataclass(frozen=True)
+class CofferNeed:
+    """A command Coffer itself runs, and what for."""
+
+    command: str
+    title: str | None
+    uses: tuple[CofferUse, ...]
+
+
+#: The commands Coffer itself needs on this machine.
+COFFER_NEEDS: tuple[CofferNeed, ...] = (
+    CofferNeed("git", "Git", (CofferUse.VAULT_HISTORY, CofferUse.SYNC)),
+)
 
 
 #: Launchers that ship inside another command: checking the CLI checks them.
@@ -118,9 +144,11 @@ def aggregate(
     skills: Iterable[SkillRequirements],
     servers: Iterable[ServerLauncher] = (),
     declared: Iterable[DeclaredTool] = (),
+    coffer: Iterable[CofferNeed] = (),
 ) -> list[RequiredCommand]:
     """One :class:`RequiredCommand` per command, sorted by command name."""
     by_declared = {d.command: d for d in declared}
+    by_coffer = {c.command: c for c in coffer}
     by_command: dict[str, list[tuple[str, str, CommandRequirement]]] = {}
     for skill in sorted(skills, key=lambda s: (s.skill_name, s.skill_uid)):
         for req in skill.requirements:
@@ -136,8 +164,11 @@ def aggregate(
             by_command.get(command, ()),
             by_server.get(command, ()),
             by_declared.get(command),
+            by_coffer.get(command),
         )
-        for command in sorted(by_command.keys() | by_server.keys() | by_declared.keys())
+        for command in sorted(
+            by_command.keys() | by_server.keys() | by_declared.keys() | by_coffer.keys()
+        )
     ]
 
 
@@ -146,12 +177,15 @@ def _row(
     entries: Sequence[tuple[str, str, CommandRequirement]],
     servers: Sequence[ServerLauncher] = (),
     declared: DeclaredTool | None = None,
+    coffer: CofferNeed | None = None,
 ) -> RequiredCommand:
     reqs = [req for _uid, _name, req in entries]
     own = declared or DeclaredTool(command)
     return RequiredCommand(
         command=command,
-        title=own.title or next((r.title for r in reqs if r.title), None),
+        title=own.title
+        or (coffer.title if coffer else None)
+        or next((r.title for r in reqs if r.title), None),
         min_version=highest_minimum([own.min_version, *(r.min_version for r in reqs)]),
         login_check=own.login_check or next((r.login_check for r in reqs if r.login_check), None),
         login=next((r.login for r in reqs if r.login), None),
@@ -162,6 +196,7 @@ def _row(
         needed_by_servers=tuple(servers),
         added=declared is not None,
         description=own.description,
+        needed_by_coffer=coffer.uses if coffer else (),
     )
 
 
@@ -198,8 +233,11 @@ def login_state(required_check: tuple[str, ...] | None, ok: bool | None) -> Logi
 
 
 __all__ = [
+    "COFFER_NEEDS",
     "STATUS_ORDER",
     "CliStatus",
+    "CofferNeed",
+    "CofferUse",
     "LoginState",
     "NeededBy",
     "ProbeResult",

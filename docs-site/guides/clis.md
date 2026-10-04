@@ -42,6 +42,10 @@ A bare name (`- uv`) is a command with no conditions, and `- "node>=20.1"` a com
 
 Coffer reads `requires:` from the skill's folder every time it checks, so an edit in your editor is picked up by the next **Check again** without importing the skill again. This top-level `requires:` lists commands; it is unrelated to `metadata.requires`, which a skill library uses for [the skills a domain depends on](/guides/writing-skill-libraries#declared-dependencies).
 
+## Commands Coffer runs itself
+
+Coffer needs one command of its own: `git`, which keeps the vault's history and syncs it. It is always listed, titled Git, with **Coffer** under **Needed by** naming what it is used for (Vault history · Sync), whether or not any skill or server needs it too. If `git` is missing, its banner says what Coffer can't do without it and offers the same hand-off as any other command. Overview does not list it a second time as a CLI: sync's own "git is not installed" item already reports it.
+
 ## Launchers your MCP servers start with
 
 Every MCP server that is on and started as a command (stdio) needs its launcher. Coffer lists the launcher under the command that provides it — `uv` for `uvx`, `node` (Node.js) for `npx`, `bun` for `bunx`, and the launcher itself for anything else, such as `docker`. Nothing needs declaring: the server's own command is enough. A launcher has no minimum version and no login check; a server started from a path (`./run.sh`) is a file, not a command, and is not listed, and a server that is off or reached over HTTP needs nothing.

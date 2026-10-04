@@ -22,8 +22,12 @@ function useBody(cli: Cli): string {
   const skills = list.format(cli.needed_by.map((n) => n.skill_name));
   const count = cli.needed_by.length;
   const command = cli.command;
+  const uses = list.format(cli.needed_by_coffer.map((u) => t(`clis.cofferUse.${u}`)));
+  const coffer = uses ? t("clis.banner.cofferBody", { uses }) : null;
   let reason: string;
-  if (cli.status === "outdated") {
+  if (count === 0 && cli.needed_by_servers.length === 0) {
+    reason = coffer ?? "";
+  } else if (cli.status === "outdated") {
     reason = t("clis.banner.outdatedBody", {
       skills,
       command,
@@ -37,6 +41,7 @@ function useBody(cli: Cli): string {
   } else {
     reason = t("clis.banner.bothBody", { servers: serverNames(cli), skills, command, count });
   }
+  if (coffer && reason !== coffer) reason = `${coffer} ${reason}`;
   const check = cli.login.check?.join(" ");
   if (cli.status === "logged_out" && check) {
     const time = new Date(cli.checked_at).toLocaleTimeString(i18n.language, {

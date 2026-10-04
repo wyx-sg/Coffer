@@ -14,6 +14,7 @@ import {
   GCLOUD_LOGGED_OUT,
   DEMO_ADDED,
   GH_OUTDATED,
+  GIT_MISSING_FOR_COFFER,
   JQ_MISSING,
   UV_MISSING_FOR_SERVER,
   UV_READY,
@@ -256,6 +257,17 @@ describe("ClisPage", () => {
     );
     expect(screen.getByText("No login needed")).toBeInTheDocument();
     expect(await within(banner).findByRole("button", { name: "Ask an agent" })).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "git shows Coffer under Needed by", async () => {
+    api.list.mockResolvedValue(listOf([GIT_MISSING_FOR_COFFER, UV_READY]));
+    renderPage("/clis/git");
+    const banner = await screen.findByTestId("cli-problem");
+    expect(rowOf("git")).toHaveTextContent("Not found · Coffer needs it");
+    expect(screen.getByText("Git · needed by Coffer")).toBeInTheDocument();
+    expect(banner).toHaveTextContent("Coffer can’t keep the vault’s history and sync the vault.");
+    expect(screen.getByText("Vault history · Sync")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Coffer/ })).toBeNull();
   });
 
   acceptance(

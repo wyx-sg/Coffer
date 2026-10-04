@@ -28,7 +28,8 @@ export function CliActions({ cli, onRemoved }: Props) {
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const remove = useRemoveCli();
-  const stays = cli.needed_by.length > 0 || cli.needed_by_servers.length > 0;
+  const stays =
+    cli.needed_by.length > 0 || cli.needed_by_servers.length > 0 || cli.needed_by_coffer.length > 0;
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setEditing(true)}>

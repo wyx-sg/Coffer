@@ -17,6 +17,7 @@ from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 CliStatusOut = Literal["missing", "outdated", "logged_out", "ready"]
 CliLoginStateOut = Literal["logged_in", "logged_out", "not_needed"]
+CliCofferUseOut = Literal["vault_history", "sync"]
 
 
 class CliNeededByOut(BaseModel):
@@ -73,6 +74,9 @@ class CliOut(BaseModel):
     needed_by: list[CliNeededByOut]
     #: The MCP servers that start with it.
     needed_by_servers: list[CliServerOut]
+    #: What Coffer itself runs it for (``git``: the vault's history and
+    #: sync); empty when Coffer does not run it.
+    needed_by_coffer: list[CliCofferUseOut]
     checked_at: datetime
 
 
@@ -164,6 +168,7 @@ def cli_out(view: CliView) -> CliOut:
             CliServerOut(server_uid=s.server_uid, server_name=s.server_name, launcher=s.launcher)
             for s in row.needed_by_servers
         ],
+        needed_by_coffer=[u.value for u in row.needed_by_coffer],
         checked_at=probe.checked_at,
     )
 
