@@ -126,8 +126,13 @@ export function SkillChoiceDialog<T extends string>({
                   {t("changePreview.whatWillHappen")}
                 </h3>
                 {happen.map((line, index) => (
-                  <p key={`${line.agentType}-${index}`} className="flex gap-2">
-                    <AgentBadge type={line.agentType} name={line.agentName} size="sm" />
+                  <p key={`${line.agentType}-${index}`} className="flex items-start gap-2">
+                    <AgentBadge
+                      type={line.agentType}
+                      name={line.agentName}
+                      size="sm"
+                      className="mt-px shrink-0"
+                    />
                     <span className="min-w-0 text-xs leading-[1.45] text-text-muted">
                       <span className="font-label text-text">
                         {line.agentName ?? agentTypeLabel(line.agentType)}.

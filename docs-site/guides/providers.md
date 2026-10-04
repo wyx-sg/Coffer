@@ -22,9 +22,9 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 **Model providers** is one page with one header — the title, an **Experimental** tag, a line saying what the page is for, and **Add provider** — over two tabs, **Providers** and **Usage**. The header and its **Add provider** button are the same on both tabs. This section is the **Providers** tab, one list beside one provider; the **Usage** tab, `/model-providers?tab=usage`, is described in [Usage](/guides/usage).
 
-- **The list** (left) has a **Filter** and one row per provider: a drag handle, its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer's engine only" for an Ollama-protocol provider), and the marks of the agents running on it. It is headed **Fallback order**, with a help tip: **the order is fallback priority** (see [Failover](#failover-between-providers)). Drag a row, or focus its handle and press ↑ / ↓, to move it. A chip marks the provider Coffer's own engine uses (**Coffer · background model**) and the one that transcribes speech (**Coffer · speech to text**); both are changed in **Settings › General**. Opening the page opens the first provider.
+- **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer's engine only" for an Ollama-protocol provider), and the marks of the agents running on it. A chip marks the provider Coffer's own engine uses (**Coffer · background model**) and the one that transcribes speech (**Coffer · speech to text**); both are changed in **Settings › General**. Opening the page opens the first provider.
 - **The header** of the open provider shows its health, read from listing the endpoint's models when you open it — **Reachable**, **Key rejected** or **Unreachable** — its protocol, host and, when the endpoint answered, how long it took, the **Reach** control, **Test**, **Edit**, and a **⋯** menu with **Delete provider**.
-- **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:38471`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**, and **Fallback**: the switch **Use as a fallback** (a local runtime is never a fallback). **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
+- **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:38471`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**. **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
 
 The provider's address is `/model-providers/<uid>`.
 
@@ -175,17 +175,9 @@ What a model picker offers for an agent is decided in one place and served to ev
 
 Non-text models are never offered as chat models. A provider that curates only non-text models offers no chat model at all. Reading this list never touches the network.
 
-## Failover between providers
+## One provider per agent
 
-When an agent's model is offered by more than one enabled provider, Coffer's proxy moves a request that fails before its first byte (a connection error, a 5xx, 529 or 429, a rejected key, or a first-byte timeout) to the next provider that offers the same model. It is automatic and needs no setup:
-
-- The providers are tried in the **order of the Model providers list**, the agent's own provider first. Drag the rows to change it.
-- **Use as a fallback** (on by default, in the provider's **Endpoint**) decides whether other providers' requests may fail over to it.
-- A local runtime never fails over and is never a fallback.
-- The model never changes, and nothing fails over after the first byte of the answer; the agent's own retry lands on a healthy provider.
-- Each failover is recorded in **Activity**, and **Usage** meters the provider that actually answered.
-
-See [The local model proxy](../architecture/model-proxy.md#failover) for the exact rules.
+An agent's requests go to exactly the provider it is switched onto, through Coffer's proxy. The proxy relays the request unchanged and returns whatever the provider answers — an error included — so the agent's own retries handle transient failures; if the provider cannot be reached at all, the agent gets a 502. **Usage** meters each request on that provider. See [The local model proxy](../architecture/model-proxy.md#one-connection-one-upstream) for the details.
 
 ## Edit, rename and delete
 

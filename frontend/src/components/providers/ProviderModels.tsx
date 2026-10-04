@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { MODALITIES, type Modality, type Provider } from "@/lib/api/providers";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
-import { useModelPrices } from "@/lib/hooks/useProviderFallback";
+import { useModelPrices } from "@/lib/hooks/useProviderPrices";
 import { formatPriceDate } from "@/lib/providers/priceDate";
 import { probeFailed } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";

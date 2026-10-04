@@ -37,7 +37,7 @@ def _routed() -> ProxyState:
         key="k",
     )
     return ProxyState(
-        revision=1, routes=[ProxyRoute(agent_uid="a", wire=Wire.ANTHROPIC, members=[member])]
+        revision=1, routes=[ProxyRoute(agent_uid="a", wire=Wire.ANTHROPIC, member=member)]
     )
 
 

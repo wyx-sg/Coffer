@@ -34,25 +34,6 @@ class PricedRecord:
 
 
 @dataclass(frozen=True)
-class FailoverEvent:
-    """One request the proxy moved off a connection before its first byte.
-
-    ``to_*`` is the connection that was tried next, when the same spool pass
-    carried its attempt; ``None`` when it did not (every later candidate was
-    also resting, or its record lands in a later file)."""
-
-    at: datetime
-    agent_uid: str | None
-    agent_type: str | None
-    model: str | None
-    from_uid: str | None
-    from_name: str | None
-    reason: str
-    to_uid: str | None = None
-    to_name: str | None = None
-
-
-@dataclass(frozen=True)
 class StoredUsage:
     """One ``usage_requests`` row, as read back."""
 
@@ -160,12 +141,6 @@ class ConnectionPriceLookup(Protocol):
         ...
 
 
-class FailoverLog(Protocol):
-    async def failed_over(self, event: FailoverEvent) -> None:
-        """Record that the proxy moved a request off one connection."""
-        ...
-
-
 class ConnectionNames(Protocol):
     async def names(self, uids: Iterable[str]) -> Mapping[str, str]:
         """Current display names of those connections that still exist."""
@@ -188,8 +163,6 @@ __all__ = [
     "ConnectionNames",
     "ConnectionPriceLookup",
     "DailyUsage",
-    "FailoverEvent",
-    "FailoverLog",
     "PricedRecord",
     "RequestFilters",
     "SpoolBatch",

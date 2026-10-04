@@ -824,8 +824,6 @@
       "storage_cache_cleared": "清除了可重建的缓存",
       "vault_file_edited": "在磁盘上编辑了一个保险库文件",
       "vault_file_restored": "恢复了一个保险库文件的早期版本",
-      "provider_failover": "{{model}} 从 {{from}} 切换到了 {{to}}",
-      "provider_reordered": "调整了模型提供商的顺序",
       "secret_deleted": "已删除密钥",
       "secret_set": "已存储密钥",
       "attention_ignored": "在总览中忽略了一项",
@@ -837,8 +835,6 @@
       "resource": "资源",
       "prompt": "提示词"
     },
-    "failoverNext": "下一个提供商",
-    "failoverAnyModel": "一次请求",
     "agentFallback": "智能体"
   },
   "activity": {
@@ -6132,15 +6128,10 @@
     },
     "list": {
       "filter": "筛选提供商",
-      "heading": "故障切换顺序",
       "engineOnly": "仅供 Coffer 引擎",
       "allModels": "全部模型",
       "models_one": "{{count}} 个模型",
       "models_other": "{{count}} 个模型",
-      "dragToReorder": "拖动以调整顺序",
-      "reorderAria": "移动 {{name}}（↑ / ↓）",
-      "orderHelpLabel": "关于提供商列表",
-      "orderHelp": "顺序 = 故障切换优先级。如果一个智能体的模型由多个提供商提供，Coffer 的中转会在首字节前按这个顺序切换。拖动以调整顺序。",
       "localRuntime": "本地运行时"
     },
     "detail": {
@@ -6186,16 +6177,11 @@
       "runtime": "运行时",
       "wires": "提供 {{wires}}",
       "route": "路由",
-      "fallback": "故障切换",
-      "fallbackSwitch": "作为备用",
-      "fallbackLocal": "本地提供商从不作为备用",
       "lead": "请求发往哪里，以及如何签名。",
       "unreachableTitle": "无法连接 {{host}}",
       "unreachableBody": "{{reason}} 在它恢复应答之前，所有使用它的地方都会失败。",
       "unreachablePrompt": "Coffer 无法连接模型提供商「{{name}}」（{{url}}）。最近一次的结果是：{{reason}}。请查明原因——网络、VPN、网关宕机、地址错误——并修复，或告诉我该改什么。未经询问不要改动 Coffer 的设置。",
-      "routeThrough": "经由 Coffer 的中转：",
-      "fallbackDescription": "其他提供商失败时接手请求，按故障切换顺序。",
-      "never": "从不"
+      "routeThrough": "经由 Coffer 的中转："
     },
     "key": {
       "secretLabel": "API Key 对应的密钥",

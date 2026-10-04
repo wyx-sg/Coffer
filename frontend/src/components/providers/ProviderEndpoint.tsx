@@ -5,9 +5,7 @@
 // key moves into the problem box above the rows. The
 // protocol is locked while an agent runs on the provider (spec
 // provider-switching "Refuse to move the wire of a live connection"). Route
-// says agents reach it through Coffer's proxy; Fallback is "Use as fallback
-// for other providers" (spec provider-switching "Order providers, and fail over
-// in that order"), which a local runtime never is.
+// says agents reach it through Coffer's proxy.
 // Problems of the endpoint show here, in a box above the rows: Unreachable
 // (Ask an agent) and Key rejected (Replace key…).
 import { Link } from "react-router-dom";
@@ -18,10 +16,8 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import { Switch } from "@/components/ui/switch";
 import type { Provider } from "@/lib/api/providers";
-import { useProxyAddress } from "@/lib/hooks/useProviderFallback";
-import { useUpdateProvider } from "@/lib/hooks/useProviders";
+import { useProxyAddress } from "@/lib/hooks/useProviderPrices";
 import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
@@ -64,7 +60,6 @@ export function ProviderEndpoint({
   const lockedBy = useLockedBy(use);
   const runtime = provider.local_runtime;
   const proxy = useProxyAddress();
-  const update = useUpdateProvider();
   const keyed = provider.protocol !== "ollama";
   const rejected = status === "keyRejected";
   const host = hostOf(provider.base_url);
@@ -178,29 +173,6 @@ export function ProviderEndpoint({
             <span className="text-sm">{t("providers.key.noneValue")}</span>
           )}
         </SettingRow>
-        {keyed || runtime ? (
-          <SettingRow
-            label={t("providers.endpoint.fallback")}
-            description={
-              runtime
-                ? t("providers.endpoint.fallbackLocal")
-                : t("providers.endpoint.fallbackDescription")
-            }
-          >
-            {runtime ? (
-              <span className="text-sm">{t("providers.endpoint.never")}</span>
-            ) : (
-              <Switch
-                checked={provider.fallback}
-                disabled={update.isPending}
-                onCheckedChange={(fallback) =>
-                  update.mutate({ uid: provider.uid, patch: { fallback } })
-                }
-                aria-label={t("providers.endpoint.fallbackSwitch")}
-              />
-            )}
-          </SettingRow>
-        ) : null}
       </div>
     </Section>
   );

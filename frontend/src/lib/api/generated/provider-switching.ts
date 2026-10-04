@@ -138,28 +138,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/providers/order": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Reorder Providers
-         * @description Reorder the Model providers list — the order fallbacks are tried in
-         *     (spec provider-switching "Order providers, and fail over in that order").
-         *     422 unless ``uids`` names every provider exactly once.
-         */
-        put: operations["reorder_providers_api_v1_providers_order_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/providers/price-list": {
         parameters: {
             query?: never;
@@ -345,26 +323,6 @@ export interface paths {
          *     the agent the audio file untouched. 404 if the connection is absent.
          */
         post: operations["set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/proxy/routes/{agent_uid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Proxy Route
-         * @description The agent's provider and its fallbacks, as the proxy would be served now.
-         */
-        get: operations["proxy_route_api_v1_proxy_routes__agent_uid__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -889,8 +847,7 @@ export interface components {
         };
         /**
          * ProviderListOut
-         * @description Every connection in Model providers list order — which is also the
-         *     order the model proxy tries fallbacks in.
+         * @description Every connection, by name.
          */
         ProviderListOut: {
             /** Providers */
@@ -937,14 +894,6 @@ export interface components {
             reachable: boolean;
         };
         /**
-         * ProviderOrderIn
-         * @description The new list order: every connection's uid, exactly once.
-         */
-        ProviderOrderIn: {
-            /** Uids */
-            uids: string[];
-        };
-        /**
          * ProviderOut
          * @description An LLM connection as returned by the API (no secret).
          *
@@ -987,11 +936,6 @@ export interface components {
             description: string | null;
             /** Enabled */
             enabled: boolean;
-            /**
-             * Fallback
-             * @default true
-             */
-            fallback: boolean;
             /** Internal Default */
             internal_default: boolean;
             local_runtime: components["schemas"]["LocalRuntime"] | null;
@@ -1039,40 +983,11 @@ export interface components {
             base_url?: string | null;
             /** Description */
             description?: string | null;
-            /** Fallback */
-            fallback?: boolean | null;
             /** Models */
             models?: components["schemas"]["ProviderModel"][] | null;
             protocol?: components["schemas"]["Protocol"] | null;
             /** Secret Value */
             secret_value?: string | null;
-        };
-        /** ProxyRouteMemberOut */
-        ProxyRouteMemberOut: {
-            /** Connection Uid */
-            connection_uid: string;
-            /** Local */
-            local: boolean;
-            /** Name */
-            name: string;
-        };
-        /**
-         * ProxyRouteOut
-         * @description Where an agent's requests go (spec provider-switching "Order providers,
-         *     and fail over in that order"): its provider, and the providers tried next,
-         *     in order, when it fails before the first byte. ``primary`` is ``None``
-         *     while the agent runs on its own built-in login, which bypasses the proxy.
-         *     With ``model``, ``fallbacks`` holds only the providers that offer it —
-         *     failover never changes the model.
-         */
-        ProxyRouteOut: {
-            /** Agent Uid */
-            agent_uid: string;
-            /** Fallbacks */
-            fallbacks: components["schemas"]["ProxyRouteMemberOut"][];
-            /** Model */
-            model: string | null;
-            primary: components["schemas"]["ProxyRouteMemberOut"] | null;
         };
         /** ProxyStatusOut */
         ProxyStatusOut: {
@@ -1179,8 +1094,6 @@ export interface components {
             endpoint: string;
             /** Estimated Cost Usd */
             estimated_cost_usd: number | null;
-            /** Failed Over */
-            failed_over: boolean;
             /** Id */
             id: number;
             /** Input Tokens */
@@ -1588,51 +1501,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelSwitchOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    reorder_providers_api_v1_providers_order_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderOrderIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -2111,50 +1979,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    proxy_route_api_v1_proxy_routes__agent_uid__get: {
-        parameters: {
-            query?: {
-                model?: string | null;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                agent_uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProxyRouteOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

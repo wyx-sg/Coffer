@@ -4,14 +4,7 @@
 The proxy holds no database; the daemon pushes it one :class:`ProxyState` —
 every managed agent's token digest, and for each agent on a connection
 (``AgentConfig.connection_uid``, read through ``targets.connection_for_agent``)
-the members that may serve it: that connection first, then every other
-enabled connection that reaches the same agent type, speaks the same protocol
-and is switched on as a fallback, in Model providers list order (spec
-provider-switching "Order providers, and fail over in that order"; failover
-never changes the model, so the proxy uses a fallback member only for a model
-it lists). A local runtime is a single member: there is nothing
-local to fail over to, and a prompt meant for a local model never leaves the
-machine by failing over.
+the one upstream that serves it: that connection's endpoint and key.
 
 Keys are decrypted here, in the daemon, the only holder of the master key,
 and travel to the proxy over its authenticated loopback control route.
@@ -23,7 +16,7 @@ import itertools
 from typing import TYPE_CHECKING
 
 from coffer.application.provider.proxy_tokens import ProxyTokenService
-from coffer.application.provider.targets import connection_for_agent, reaches
+from coffer.application.provider.targets import connection_for_agent
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.model_proxy.state import (
@@ -35,7 +28,6 @@ from coffer.domain.model_proxy.state import (
     upstream_root,
 )
 from coffer.domain.provider.config import ProviderConfig
-from coffer.domain.provider.modality import Modality
 from coffer.domain.resource import Resource
 from coffer.domain.usage.records import Wire
 
@@ -77,7 +69,6 @@ async def _member(
         upstream_root=upstream_root(cfg.base_url),
         auth=auth,
         key=key,
-        models=cfg.model_ids(Modality.TEXT),
         local=cfg.is_local,
     )
 
@@ -96,7 +87,6 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
     # (a removed agent's) is deleted here, where every agent is in hand.
     await tokens.prune(row.name for row in agents)
     digests = await tokens.digests(row.name for row, _ in enabled)
-    # Already in list order — the order fallbacks are tried in.
     connections = await service.list()
 
     routes: list[ProxyRoute] = []
@@ -108,21 +98,10 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
         if chosen is None:
             continue
         active, active_cfg = chosen
-        primary = await _member(service, active, active_cfg, wire)
-        if primary is None:
+        member = await _member(service, active, active_cfg, wire)
+        if member is None:
             continue
-        members = [primary]
-        if not active_cfg.is_local:
-            for other in connections:
-                other_cfg = service._cfg(other)
-                if other.uid == active.uid or not other_cfg.offers_fallback:
-                    continue
-                if not reaches(other, other_cfg, row) or other_cfg.protocol != active_cfg.protocol:
-                    continue
-                member = await _member(service, other, other_cfg, wire)
-                if member is not None and member.models:
-                    members.append(member)
-        routes.append(ProxyRoute(agent_uid=row.uid, wire=wire, members=members))
+        routes.append(ProxyRoute(agent_uid=row.uid, wire=wire, member=member))
 
     return ProxyState(
         revision=next(_revisions),

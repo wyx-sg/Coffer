@@ -7,19 +7,11 @@ import { getApiClient, unwrap } from "@/lib/api/client";
 export const proxyAddress = (port: number | undefined) => `127.0.0.1:${port ?? 38471}`;
 
 // Query keys for the proxy's reads (kept here: queryKeys.ts is at its size limit).
-export const proxyRouteKey = (agentUid: string, model: string | null) =>
-  ["proxy", "route", agentUid, model] as const;
 export const proxyStatusKey = ["proxy", "status"] as const;
 export const proxyTokenHintKey = (agentUid: string) => ["proxy", "token", agentUid] as const;
 
 export const proxyApi = {
   status: () => unwrap(getApiClient().GET("/proxy/status")),
-  route: (agentUid: string, model: string | null) =>
-    unwrap(
-      getApiClient().GET("/proxy/routes/{agent_uid}", {
-        params: { path: { agent_uid: agentUid }, query: model ? { model } : {} },
-      }),
-    ),
   tokenHint: (agentUid: string) =>
     unwrap(
       getApiClient().GET("/proxy/tokens/{agent_uid}/hint", {

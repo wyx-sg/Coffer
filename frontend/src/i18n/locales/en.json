@@ -824,8 +824,6 @@
       "storage_cache_cleared": "Cleared the rebuildable cache",
       "vault_file_edited": "Edited a vault file on disk",
       "vault_file_restored": "Restored an earlier version of a vault file",
-      "provider_failover": "Failed over from {{from}} to {{to}} for {{model}}",
-      "provider_reordered": "Reordered model providers",
       "secret_deleted": "Removed a secret",
       "secret_set": "Stored a secret",
       "attention_ignored": "Ignored an item on Overview",
@@ -837,8 +835,6 @@
       "resource": "resource",
       "prompt": "prompt"
     },
-    "failoverNext": "the next provider",
-    "failoverAnyModel": "a request",
     "agentFallback": "an agent"
   },
   "activity": {
@@ -6132,15 +6128,10 @@
     },
     "list": {
       "filter": "Filter providers",
-      "heading": "Fallback order",
       "engineOnly": "Coffer's engine only",
       "allModels": "all models",
       "models_one": "{{count}} model",
       "models_other": "{{count}} models",
-      "dragToReorder": "Drag to reorder",
-      "reorderAria": "Move {{name}} (↑ / ↓)",
-      "orderHelpLabel": "About the providers list",
-      "orderHelp": "Order = fallback priority. If an agent’s model is offered by more than one provider, Coffer’s proxy fails over in this order before the first byte. Drag to reorder.",
       "localRuntime": "Local runtime"
     },
     "detail": {
@@ -6186,16 +6177,11 @@
       "runtime": "Runtime",
       "wires": "serves {{wires}}",
       "route": "Route",
-      "fallback": "Fallback",
-      "fallbackSwitch": "Use as a fallback",
-      "fallbackLocal": "Local providers are never used as a fallback",
       "lead": "Where requests go and how they are signed.",
       "unreachableTitle": "Can’t reach {{host}}",
       "unreachableBody": "{{reason}} Everything that uses it fails until it answers.",
       "unreachablePrompt": "Coffer can’t reach the model provider “{{name}}” at {{url}}. The last answer was: {{reason}}. Find out why — network, VPN, the gateway being down, a wrong address — and fix it or tell me what to change. Don’t change Coffer’s settings without asking.",
-      "routeThrough": "Through Coffer’s proxy at",
-      "fallbackDescription": "Takes requests another provider failed, in the fallback order.",
-      "never": "Never"
+      "routeThrough": "Through Coffer’s proxy at"
     },
     "key": {
       "secretLabel": "API key secret",

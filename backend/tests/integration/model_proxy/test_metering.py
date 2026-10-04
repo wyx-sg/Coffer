@@ -42,7 +42,7 @@ def test_responses_stream_records_cached_and_reasoning_tokens(proxy: Proxy, upst
         ],
         headers={"x-request-id": "req_oai_1"},
     )
-    proxy.push(state(openai=[member(server, "oai", auth=UpstreamAuth.BEARER)]))
+    proxy.push(state(openai=member(server, "oai", auth=UpstreamAuth.BEARER)))
     r = proxy.client.post(
         "/openai/v1/responses",
         content=b'{"model":"gpt-5","stream":true}',
@@ -89,7 +89,7 @@ def test_non_streamed_anthropic_message_is_metered(proxy: Proxy, upstreams) -> N
         },
         headers={"request-id": "req_x"},
     )
-    proxy.push(state([member(server, "a")]))
+    proxy.push(state(member(server, "a")))
     r = proxy.client.post(
         "/anthropic/v1/messages",
         content=b'{"model":"m1"}',
@@ -118,7 +118,7 @@ def test_non_streamed_anthropic_message_is_metered(proxy: Proxy, upstreams) -> N
 def test_spool_lines_never_carry_bodies_or_keys(proxy: Proxy, upstreams) -> None:
     up, server = upstreams()
     up.script = json_reply(200, {"type": "message", "content": "SECRET-COMPLETION", "usage": {}})
-    proxy.push(state([member(server, "a", key="sk-SECRET-KEY")]))
+    proxy.push(state(member(server, "a", key="sk-SECRET-KEY")))
     proxy.client.post(
         "/anthropic/v1/messages",
         content=b'{"model":"m1","messages":"SECRET-PROMPT"}',

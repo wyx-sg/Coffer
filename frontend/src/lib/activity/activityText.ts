@@ -36,10 +36,6 @@ export function describeActivity(t: TFunction, entry: AuditEntry): string {
     agent: text("agent") ? agentTypeLabel(text("agent")) : t("audit.agentFallback"),
     command: text("command"),
     capType: capTypeLabel(t, capTypeRaw),
-    // A failover (provider_failover): the provider left, the one tried next.
-    from: text("from") || entry.resource_name || "",
-    to: text("to") || t("audit.failoverNext"),
-    model: text("model") || t("audit.failoverAnyModel"),
   });
 }
 

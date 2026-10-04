@@ -22,7 +22,7 @@ On a machine where nothing has gone through the proxy yet, the tab is only its e
 
 ### What is counted
 
-The proxy records one row per request it sends upstream — failed-over attempts too — with:
+The proxy records one row per request, with:
 
 - the agent (from its local proxy token), the session and the provider;
 - the model the agent asked for, the status and how the request ended (`completed`, `error_event`, `truncated`, `client_cancel`, `upstream_error`, `connect_error`);

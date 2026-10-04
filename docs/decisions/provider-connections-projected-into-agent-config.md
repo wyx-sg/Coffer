@@ -36,7 +36,7 @@ gateway. Codex speaks only the OpenAI Responses wire; it refuses to load a
 A connection is a `kind='provider'` resource whose config is `ProviderConfig`
 (`domain/provider/config.py`): `protocol` (`anthropic`, `openai`, `ollama` or
 `unknown`), `base_url`, an optional `secret_ref`, the curated `models` it offers,
-`local_runtime`, the failover `fallback` and `position`, and two defaults —
+`local_runtime`, and two defaults —
 `internal_default` and `transcribe_default`. The protocol is chosen from provider
 presets in the add dialog or set explicitly (`coffer provider add --protocol`). It
 carries no model to run and no flag saying it is switched on: the model is chosen
@@ -119,10 +119,10 @@ Coffer-driven and user-driven agent processes read.
 
 Point both agents once at a Coffer-hosted endpoint (the claude-code-router /
 LiteLLM shape). The proxy forwards to whichever connection is chosen, and can
-translate wires and fail over.
+translate wires.
 
 Pros: switching is instant, even for running processes; one endpoint could serve
-both agents through wire translation; failover and usage metering come for free.
+both agents through wire translation; usage metering comes for free.
 Cons: a resident component on every model call, adding latency and a new failure
 mode; the proxy sees every prompt and completion, a much larger trust surface than
 a config writer; wire translation between Anthropic Messages and OpenAI Responses
@@ -216,7 +216,7 @@ Rules that follow:
 ## Consequences
 
 - Surfaces: `/api/v1/providers` (CRUD, `/{uid}/activate`,
-  `/use-builtin/{agent_type}`, the two default flags, the fallback order),
+  `/use-builtin/{agent_type}`, the two default flags),
   `coffer provider …`, and the connections page.
 - A running agent keeps its old endpoint until restarted. Claude Code re-invokes
   `apiKeyHelper` periodically; moving between two API-key connections changes only

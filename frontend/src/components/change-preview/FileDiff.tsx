@@ -115,7 +115,7 @@ export const FileDiff = forwardRef<HTMLElement, Props>(function FileDiff(
     >
       <div className="flex min-w-0 items-center gap-2">
         {item.agentType === "coffer" ? null : (
-          <AgentBadge type={item.agentType} name={item.agentName} size="sm" />
+          <AgentBadge type={item.agentType} name={item.agentName} size="sm" className="shrink-0" />
         )}
         <span className="min-w-0 truncate font-mono text-xs font-medium text-text">
           {item.path}

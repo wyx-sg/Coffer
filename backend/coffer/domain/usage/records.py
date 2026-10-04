@@ -71,9 +71,7 @@ class UsageRecord(BaseModel):
     #: crash writes nothing twice.
     dedupe_key: str
     attempt_id: str
-    #: One id per request the agent sent: every attempt at it — the one that
-    #: failed over and the one that answered — carries the same, so a
-    #: failover can name where the request went next.
+    #: One id per request the agent sent.
     relay_id: str | None = None
     started_at: datetime
     #: The agent, from the per-agent local token — never self-reported.
@@ -94,9 +92,6 @@ class UsageRecord(BaseModel):
     stream: bool = False
     status: int | None = None
     outcome: Outcome
-    #: This attempt failed before the first content byte and the request moved
-    #: to another member.
-    failed_over: bool = False
     ttft_ms: int | None = None
     duration_ms: int = 0
     usage_known: bool = False

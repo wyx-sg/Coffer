@@ -102,7 +102,6 @@ def _request(s: StoredUsage) -> UsageRequestOut:
         stream=rec.stream,
         status=rec.status,
         outcome=str(rec.outcome),
-        failed_over=rec.failed_over,
         ttft_ms=rec.ttft_ms,
         duration_ms=rec.duration_ms,
         usage_known=rec.usage_known,
