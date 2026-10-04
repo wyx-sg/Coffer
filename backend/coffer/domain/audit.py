@@ -120,11 +120,6 @@ class AuditEventType(StrEnum):
     # The reconciler rewrote, or removed, an agent's projection whose keys no
     # longer matched the connection the registry marks active.
     PROVIDER_PROJECTION_REPAIRED = "provider_projection_repaired"
-    # The model proxy moved a request off a connection before its first byte
-    # (spec provider-switching "Log every failover in Activity").
-    PROVIDER_FAILOVER = "provider_failover"
-    # The Model providers list was reordered: the fallback priority changed.
-    PROVIDER_REORDERED = "provider_reordered"
 
 
 @dataclass

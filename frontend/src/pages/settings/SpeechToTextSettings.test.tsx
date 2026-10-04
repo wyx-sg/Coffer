@@ -68,7 +68,6 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     title: null,
     internal_default: false,
     transcribe_default: false,
-    fallback: true,
     models: [],
     enabled: true,
     description: null,

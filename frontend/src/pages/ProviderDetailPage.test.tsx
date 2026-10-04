@@ -92,7 +92,6 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   compatible_agents: ["codex"],
   internal_default: false,
   transcribe_default: false,
-  fallback: true,
   models: [],
   enabled: true,
   description: null,

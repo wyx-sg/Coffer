@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Usage Is Metered at the Proxy; Subscription Agents Are Not Metered](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Secrets; Network defaults), research note [provider switching](../research/provider-switching.md), spec provider-switching "Reach API-key and local connections through the local model proxy", spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without overwriting it", spec provider-switching "Authenticate each agent to the proxy with its own local token", spec provider-switching "Fail over only before the first content byte", spec secret "Hold plaintext only in memory at the moment of use", PR #412, PR #464
+**Related**: [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Usage Is Metered at the Proxy; Subscription Agents Are Not Metered](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Secrets; Network defaults), research note [provider switching](../research/provider-switching.md), spec provider-switching "Reach API-key and local connections through the local model proxy", spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without overwriting it", spec provider-switching "Authenticate each agent to the proxy with its own local token", spec secret "Hold plaintext only in memory at the moment of use", PR #412, PR #464
 
 ## Context
 
@@ -29,15 +29,13 @@ repos and backups, read by other tools and restored wholesale by the user, and
 the principles say secret plaintext exists only in memory between decrypt and the
 injection that consumes it.
 
-The second step is this ADR, because three things the product needs cannot be
+The second step is this ADR, because two things the product needs cannot be
 done from a config file:
 
 - **Usage and cost of API-key traffic.** Nothing Coffer runs sees the
   requests, so usage could only be estimated from transcripts, which do not
   record every request an agent makes (background, compaction and classifier
   calls) and whose format is the agent's internal business.
-- **Failover.** A connection with several keys, or several endpoints serving
-  the same model, has no way to move a failing request to a healthy member.
 - **The raw key out of the agent's reach.** Codex held the real key in its
   environment. PR #464 had to exclude `COFFER_PROVIDER_KEY` from Codex's
   shell commands after it was found reachable by `env`, and a Codex started
@@ -94,8 +92,8 @@ under an opaque ref.
   supervise; no plaintext key in any file Coffer writes; a key rotation in Coffer
   reaches Claude Code on its next helper call; removing the connection makes the
   helper fail closed.
-- **Cons.** It meters nothing and fails over nothing, so it cannot deliver
-  the two things the Usage page and failover need. The real key still reaches
+- **Cons.** It meters nothing, so it cannot deliver
+  what the Usage page needs. The real key still reaches
   the agent: it sits in every Coffer-spawned Codex process's environment,
   guarded only by a shell-policy exclude the user or a later Codex default can
   undo, and Claude Code's helper prints it to any caller. A terminal Codex needs
@@ -235,31 +233,17 @@ touches the relay. Timeouts: 10 s to connect, no total timeout, at least
 upstream leg honours the user's `HTTPS_PROXY` for a remote member; a local
 runtime is reached directly.
 
-**Failover.** Only across connections that serve the **same model id**, in the
-same upstream family (Anthropic-direct and a cloud-hosted Anthropic are not one
-pool: signatures and cache do not transfer). A connection holds one key and one
-endpoint, so the pool is the agent's own connection first, then every other
-enabled connection that reaches the same agent type, speaks the same protocol,
-is switched on as a fallback and lists the requested model among its curated
-models, in the order of the Model providers list. A local runtime has no
-fallback members and is never one. A session — `x-claude-code-session-id`, Codex's `session_id` — stays
-on one member until that member fails, which keeps the prompt cache warm. A
-request fails over only **before the first content byte** reaches the agent:
-on a connect, TLS or DNS error, a 5xx, 529 or 429 status, a first-byte
-timeout, or an `event: error` that arrives before the first content event
-(the proxy holds the response until that point, bounded to 64 KiB and
-5 seconds). After that it never switches: the error or truncation goes to
-the agent and the agent's own retry runs, landing on a healthy member because
-the failure has marked this one. The same key is never retried, since both
-agents already retry (Codex four request and five stream retries by default),
-and a retry storm is what cc-switch recorded before its PR #7426 — nineteen
-retries in four minutes against one overloaded upstream. A 429 with
-`retry-after` cools its member for that long; 401 or 403 also fail over (the
-key is at fault, not the request) and disable the member until its key changes;
-400, 404 and 413 never fail over. Mid-stream errors
-and truncations count as member failures. There is no model substitution.
+**Routing.** An agent's requests go to exactly one connection: the one the
+agent is switched onto. The proxy never moves a request to another connection
+and never substitutes a model. Whatever the upstream answers, an error status
+included, reaches the agent as sent (`retry-after`, `x-should-retry` and the
+rate-limit headers with it), so the agent's own retry logic acts on its
+vendor's words; both agents already retry (Codex four request and five stream
+retries by default). When the upstream cannot be reached — a connect, TLS or
+DNS error, or a first-byte timeout — the proxy answers 502 in the wire's own
+error shape.
 
-**Logging.** Metadata only: the usage record and each failover decision. No
+**Logging.** Metadata only: the usage record. No
 bodies, no prompts, no completions, no credentials; `authorization`,
 `x-api-key` and cookies are redacted at the logger, as the audit ADR already
 requires of invocation logs.
@@ -273,7 +257,7 @@ runtime serves both wires itself.
 no proxy base URL and no helper projected, and the proxy refuses the
 credential such an agent would send.
 
-- **Pros.** Metering and failover become possible for every API-key request,
+- **Pros.** Metering becomes possible for every API-key request,
   whoever started the agent. The only secret an agent holds is a local token
   that unlocks a loopback relay; the real key never enters an agent's config
   or environment, and the Codex terminal case needs no export. A daemon
@@ -285,7 +269,7 @@ credential such an agent would send.
   Secrets clause names. It sees every prompt in transit, which the
   metadata-only rule keeps out of anything stored. And it is one more process
   to supervise, version and drain on upgrade.
-- **Why it wins.** It is the only option that meters and fails over without
+- **Why it wins.** It is the only option that meters without
   putting the hot path inside the process that restarts on every upgrade.
 
 ### Option D — Adopt an existing gateway (LiteLLM proxy or claude-code-router) as a dependency
@@ -331,6 +315,34 @@ one place.
 - **Why it loses.** It takes on a policy risk and a breakage surface for a
   number that official feeds already provide.
 
+### Option F — Fail a request over to another connection that serves the same model
+
+Within Option C, let the proxy hold a pool per agent: its own connection first,
+then the other enabled connections that reach the same agent type, speak the
+same protocol, are switched on as a fallback and list the requested model, in
+the order of the Model providers list. A request that failed before its first
+content byte (a connect error, a 5xx, 529, 429, a rejected key, a first-byte
+timeout, an early `event: error`) would move to the next member, with cool-downs
+from `retry-after`, a held response bounded to 64 KiB and 5 seconds, session
+affinity to keep the prompt cache warm, and a `provider_failover` audit row per
+move. This was built and shipped, then removed.
+
+- **Pros.** A transient outage at one gateway could be hidden from the agent
+  when a second connection served the identical model id.
+- **Cons.** It only ever applies when two connections list the *same* model id,
+  and real use showed none: zero proxied requests were failed over. It was
+  nevertheless the most complex part of the proxy — a pool and its ordering, a
+  response hold before the first content byte, member health and cool-downs,
+  disabling a member on 401 or 403, a per-attempt usage record with a
+  `failed_over` flag, an audit event and a drag-to-reorder list that existed
+  only to set priority. Each of those is a place a request can be delayed,
+  duplicated or sent somewhere the user did not expect, and a local runtime had
+  to be special-cased so a prompt meant for a local model never left the machine.
+  Both agents already retry transient errors themselves.
+- **Why it loses.** A mechanism that serves a case that did not occur, at the
+  cost of the proxy's simplest property — a request goes where the user pointed
+  the agent and what comes back is what that upstream said — is not worth keeping.
+
 ## Decision
 
 An API-key connection reaches Claude Code and Codex through a local model
@@ -341,8 +353,9 @@ agent is pointed at it through its own config — `ANTHROPIC_BASE_URL` plus an
 `wire_api = "responses"`, WebSockets off and command-based auth for Codex —
 and authenticates with a per-agent local token that also attributes its usage.
 The proxy relays each request byte for byte to an upstream of the same wire,
-reads usage from a copy of the stream, fails over only among members serving
-the same model and only before the first content byte, and logs metadata only.
+reads usage from a copy of the stream, routes each agent to exactly one
+connection, returns the upstream's own errors as sent (502 when the upstream
+cannot be reached), and logs metadata only.
 Agents on a subscription login are never pointed at it, and it refuses their
 credentials.
 
@@ -361,8 +374,8 @@ Rules a future change must respect:
   own wire. Adding translation is a new decision.
 - The proxy never forwards a client credential and never accepts one that is
   not a Coffer proxy token.
-- Failover never changes the model and never happens after the first content
-  byte; the proxy never retries the same key.
+- A request goes to the agent's own connection only; the proxy never moves it
+  to another connection and never changes the model.
 - `anthropic-*` headers and body fields are an open list; nothing is
   allow-listed, reordered or re-serialized.
 - Nothing the proxy stores or logs contains a body, a prompt, a completion or
@@ -390,8 +403,8 @@ Rules a future change must respect:
   when the approval is applied, with no restart.
 - **Tests.** A byte-equality relay test over recorded SSE, pings included; an
   open-list header test (an unknown `anthropic-beta` value and an unknown body
-  field arrive untouched); a failover commit-point test (an error before and
-  after the first content byte); auth tests (no token, an OAuth-shaped token, a
+  field arrive untouched); an upstream-error test (a 503 reaches the agent as sent, and an unreachable
+  upstream answers 502); auth tests (no token, an OAuth-shaped token, a
   foreign `Host`, an `Origin` present).
 - The architecture page [The local model proxy](../../docs-site/architecture/model-proxy.md)
   explains the proxy, the token and what it does not log.

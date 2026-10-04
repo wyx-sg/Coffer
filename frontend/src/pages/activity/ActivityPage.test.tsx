@@ -993,7 +993,7 @@ test("a change of a kind this page has no words for still reads as a change", as
     audit: [
       {
         ...AUDIT_ENTRY,
-        event_type: "provider_failed_over",
+        event_type: "provider_something_new",
         resource_kind: "provider",
         resource_name: "anthropic-api",
         actor: "system",
@@ -1002,7 +1002,7 @@ test("a change of a kind this page has no words for still reads as a change", as
     ],
   });
   render(wrap(<ActivityPage />));
-  fireEvent.click((await screen.findByText("provider_failed_over")).closest("tr")!);
+  fireEvent.click((await screen.findByText("provider_something_new")).closest("tr")!);
   const panel = await drawer();
   expect(within(panel).getByText("Coffer")).toBeInTheDocument();
   expect(panel.querySelector('[data-line="add"]')?.textContent).toContain("anthropic-api");

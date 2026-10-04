@@ -49,7 +49,6 @@ from coffer.domain.model_proxy.state import (
 )
 from coffer.domain.usage.records import Wire
 from coffer.infrastructure.model_proxy import wire as w
-from coffer.infrastructure.model_proxy.members import MemberBook
 from coffer.infrastructure.model_proxy.relay import Relay, RelayConfig, RelayRequest
 from coffer.infrastructure.model_proxy.spool import UsageSpool
 from coffer.infrastructure.net.loopback_authority import is_allowed_host
@@ -61,17 +60,16 @@ _JSON = [(b"content-type", b"application/json")]
 #: A request body larger than this is refused rather than held in memory.
 MAX_BODY_BYTES = 64 * 1024 * 1024
 
-#: ``(method, path)`` -> ``(wire, endpoint, metered, primary_only)``.
-_MODEL_ROUTES: dict[tuple[str, str], tuple[Wire, str, bool, bool]] = {
-    ("POST", "/anthropic/v1/messages"): (Wire.ANTHROPIC, "/v1/messages", True, False),
+#: ``(method, path)`` -> ``(wire, endpoint, metered)``.
+_MODEL_ROUTES: dict[tuple[str, str], tuple[Wire, str, bool]] = {
+    ("POST", "/anthropic/v1/messages"): (Wire.ANTHROPIC, "/v1/messages", True),
     ("POST", "/anthropic/v1/messages/count_tokens"): (
         Wire.ANTHROPIC,
         "/v1/messages/count_tokens",
         False,
-        False,
     ),
-    ("GET", "/anthropic/v1/models"): (Wire.ANTHROPIC, "/v1/models", False, True),
-    ("POST", "/openai/v1/responses"): (Wire.OPENAI, "/v1/responses", True, False),
+    ("GET", "/anthropic/v1/models"): (Wire.ANTHROPIC, "/v1/models", False),
+    ("POST", "/openai/v1/responses"): (Wire.OPENAI, "/v1/responses", True),
 }
 _HELLO_PATHS = frozenset({"/api/hello", "/anthropic/api/hello"})
 
@@ -109,8 +107,7 @@ class ModelProxyApp:
         self.started_at = started_at
         self.pid = os.getpid()
         self.spool = spool
-        self.book = MemberBook()
-        self.relay = Relay(self.book, spool, relay_config)
+        self.relay = Relay(spool, relay_config)
         self.state = ProxyState()
         self.inflight = 0
         self.draining = False
@@ -205,9 +202,9 @@ class ModelProxyApp:
         receive: Receive,
         send: Send,
         raw: w.RawHeaders,
-        spec: tuple[Wire, str, bool, bool],
+        spec: tuple[Wire, str, bool],
     ) -> None:
-        wire, endpoint, metered, primary_only = spec
+        wire, endpoint, metered = spec
         agent = self.authenticate(raw)
         if agent is None:
             await _reply(
@@ -231,7 +228,7 @@ class ModelProxyApp:
             (r for r in self.state.routes if r.agent_uid == agent.agent_uid and r.wire is wire),
             None,
         )
-        if route is None or not route.members:
+        if route is None:
             await _reply(
                 send,
                 503,
@@ -256,7 +253,6 @@ class ModelProxyApp:
                 agent=agent,
                 route=route,
                 metered=metered,
-                primary_only=primary_only,
             )
             await self.relay.serve(request, receive, send)
         finally:
@@ -280,9 +276,8 @@ class ModelProxyApp:
         }
 
     def replace_state(self, state: ProxyState) -> None:
-        """Adopt a pushed state wholesale; a member whose key changed starts clean."""
+        """Adopt a pushed state wholesale."""
         self.state = state
-        self.book.reconcile(m for r in state.routes for m in r.members)
 
     async def _control(
         self,

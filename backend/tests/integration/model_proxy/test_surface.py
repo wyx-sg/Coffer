@@ -21,7 +21,7 @@ BODY = b'{"model":"m1"}'
 @pytest.fixture
 def live(proxy: Proxy, upstreams):
     up, server = upstreams()
-    proxy.push(state([member(server, "a")]))
+    proxy.push(state(member(server, "a")))
     return proxy, up
 
 
@@ -103,7 +103,7 @@ def test_token_rotation(live, upstreams) -> None:
         == 200
     )
     new_token = "rotated-" + "z" * 40
-    proxy.push(state([member(server, "a")], revision=2, claude_token=new_token))
+    proxy.push(state(member(server, "a"), revision=2, claude_token=new_token))
     assert (
         proxy.client.post(
             "/anthropic/v1/messages", content=BODY, headers=claude_headers()

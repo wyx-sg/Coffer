@@ -53,7 +53,6 @@ class UsageRequestModel(Base):
     stream: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[int | None] = mapped_column(Integer, nullable=True)
     outcome: Mapped[str] = mapped_column(String, nullable=False)
-    failed_over: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     ttft_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     usage_known: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

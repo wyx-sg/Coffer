@@ -4,7 +4,7 @@
 // header and the open dialog: `/model-providers` (the list opens on its first
 // provider), `/model-providers/<uid>` (a provider open) and
 // `/model-providers?tab=usage` (the Usage tab). Providers is a split — the list is
-// the fallback order, the detail stacks Used by → Endpoint → Models; with no
+// by name, the detail stacks Used by → Endpoint → Models; with no
 // provider yet it is the first-run state. Which agent runs on what is changed
 // on each agent's Change model; Coffer's own model in Settings › General.
 import { useState } from "react";

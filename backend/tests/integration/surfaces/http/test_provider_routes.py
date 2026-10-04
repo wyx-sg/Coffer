@@ -36,11 +36,9 @@ def _proxy_state(c: TestClient) -> ProxyState:
     return c.portal.call(get_proxy_facade().state)  # type: ignore[union-attr]
 
 
-def _route_keys(c: TestClient) -> dict[str, list[tuple[str, str | None]]]:
-    """``agent_uid -> [(connection_uid, key)]`` for every route in the state."""
-    return {
-        r.agent_uid: [(m.connection_uid, m.key) for m in r.members] for r in _proxy_state(c).routes
-    }
+def _route_keys(c: TestClient) -> dict[str, tuple[str, str | None]]:
+    """``agent_uid -> (connection_uid, key)`` for every route in the state."""
+    return {r.agent_uid: (r.member.connection_uid, r.member.key) for r in _proxy_state(c).routes}
 
 
 TOKEN = "test-token-011"
@@ -573,7 +571,7 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         data = json.loads((cfg / "settings.json").read_text())
         _assert_proxy_form(data)
         # The proxy relays Claude Code's requests to agnes, with agnes's key.
-        assert _route_keys(c)[cc] == [(uid, "sk-agnes")]
+        assert _route_keys(c)[cc] == (uid, "sk-agnes")
 
 
 @pytest.mark.acceptance(
@@ -1057,7 +1055,7 @@ def test_renamed_connection_still_serves_its_agent(tmp_path, monkeypatch):
 
         # The proxy keeps routing the agent to the same connection and key, and
         # the agent's file — which names only the proxy — did not move at all.
-        assert _route_keys(c)[cc] == [(uid, "sk-the-key")]
+        assert _route_keys(c)[cc] == (uid, "sk-the-key")
         assert (cfg / "settings.json").read_text() == before
         body = c.get(f"/api/v1/providers/{uid}").json()
         assert body["name"] == "acme-2"
@@ -1122,8 +1120,8 @@ def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
         assert _activate(c, for_codex, "codex").status_code == 200
 
         routes = _route_keys(c)
-        assert routes[cc] == [(for_claude, "sk-claude")]
-        assert routes[cx] == [(for_codex, "sk-codex")]
+        assert routes[cc] == (for_claude, "sk-claude")
+        assert routes[cx] == (for_codex, "sk-codex")
 
 
 def test_a_disabled_connection_serves_no_agent(tmp_path, monkeypatch):

@@ -10,7 +10,6 @@ from functools import cache
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from coffer.application.provider.local_runtime_handoff import local_runtime_handoff
-from coffer.application.provider.order_ops import ProviderOrderError
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.targets import scoped_targets
@@ -44,7 +43,6 @@ from coffer.surfaces.http.provider_schemas import (
     ProviderDeletePreviewOut,
     ProviderListOut,
     ProviderModel,
-    ProviderOrderIn,
     ProviderOut,
     ProviderPatch,
 )
@@ -134,7 +132,6 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
             for m in cfg.models
         ],
         local_runtime=cfg.local_runtime,
-        fallback=cfg.fallback,
         internal_default=cfg.internal_default,
         transcribe_default=cfg.transcribe_default,
         enabled=resource.enabled,
@@ -237,28 +234,9 @@ async def update_provider(
         secret_value=body.secret_value,
         models=_curated(body.models),
         description=body.description,
-        fallback=body.fallback,
         actor=actor,
     )
     return _provider_out(resource, await resources.list(kind="agent"))
-
-
-@router.put("/order", response_model=ProviderListOut)
-async def reorder_providers(
-    body: ProviderOrderIn,
-    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
-    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> ProviderListOut:
-    """Reorder the Model providers list — the order fallbacks are tried in
-    (spec provider-switching "Order providers, and fail over in that order").
-    422 unless ``uids`` names every provider exactly once."""
-    try:
-        rows = await svc.reorder(body.uids, actor=actor)
-    except ProviderOrderError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    registry = await resources.list(kind="agent")
-    return ProviderListOut(providers=[_provider_out(r, registry) for r in rows])
 
 
 @router.post("/{uid}/prices", response_model=ModelPricesOut)

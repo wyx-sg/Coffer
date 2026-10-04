@@ -318,58 +318,6 @@ paths:
       summary: Preview Model Switch
       tags:
       - providers
-  /api/v1/providers/order:
-    put:
-      description: |-
-        Reorder the Model providers list — the order fallbacks are tried in
-        (spec provider-switching "Order providers, and fail over in that order").
-        422 unless ``uids`` names every provider exactly once.
-      operationId: reorder_providers_api_v1_providers_order_put
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProviderOrderIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderListOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Reorder Providers
-      tags:
-      - providers
   /api/v1/providers/price-list:
     get:
       description: The price list in use and its refresh.
@@ -899,55 +847,6 @@ paths:
       summary: Set Transcribe Default Provider
       tags:
       - providers
-  /api/v1/proxy/routes/{agent_uid}:
-    get:
-      description: The agent's provider and its fallbacks, as the proxy would be served now.
-      operationId: proxy_route_api_v1_proxy_routes__agent_uid__get
-      parameters:
-      - in: path
-        name: agent_uid
-        required: true
-        schema:
-          title: Agent Uid
-          type: string
-      - in: query
-        name: model
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Model
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProxyRouteOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Proxy Route
-      tags:
-      - proxy
   /api/v1/proxy/status:
     get:
       description: The supervised proxy's state, as the daemon last saw it.
@@ -2010,9 +1909,7 @@ components:
       title: ProviderDeletePreviewOut
       type: object
     ProviderListOut:
-      description: |-
-        Every connection in Model providers list order — which is also the
-        order the model proxy tries fallbacks in.
+      description: Every connection, by name.
       properties:
         providers:
           items:
@@ -2082,20 +1979,6 @@ components:
       - reachable
       title: ProviderModelsOut
       type: object
-    ProviderOrderIn:
-      description: 'The new list order: every connection''s uid, exactly once.'
-      properties:
-        uids:
-          items:
-            type: string
-          maxItems: 500
-          minItems: 1
-          title: Uids
-          type: array
-      required:
-      - uids
-      title: ProviderOrderIn
-      type: object
     ProviderOut:
       description: |-
         An LLM connection as returned by the API (no secret).
@@ -2144,10 +2027,6 @@ components:
           title: Description
         enabled:
           title: Enabled
-          type: boolean
-        fallback:
-          default: true
-          title: Fallback
           type: boolean
         internal_default:
           title: Internal Default
@@ -2201,7 +2080,6 @@ components:
       - description
       - created_at
       - local_runtime
-      - fallback
       - updated_at
       title: ProviderOut
       type: object
@@ -2235,11 +2113,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        fallback:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Fallback
         models:
           anyOf:
           - items:
@@ -2258,56 +2131,6 @@ components:
           - type: 'null'
           title: Secret Value
       title: ProviderPatch
-      type: object
-    ProxyRouteMemberOut:
-      properties:
-        connection_uid:
-          title: Connection Uid
-          type: string
-        local:
-          title: Local
-          type: boolean
-        name:
-          title: Name
-          type: string
-      required:
-      - connection_uid
-      - name
-      - local
-      title: ProxyRouteMemberOut
-      type: object
-    ProxyRouteOut:
-      description: |-
-        Where an agent's requests go (spec provider-switching "Order providers,
-        and fail over in that order"): its provider, and the providers tried next,
-        in order, when it fails before the first byte. ``primary`` is ``None``
-        while the agent runs on its own built-in login, which bypasses the proxy.
-        With ``model``, ``fallbacks`` holds only the providers that offer it —
-        failover never changes the model.
-      properties:
-        agent_uid:
-          title: Agent Uid
-          type: string
-        fallbacks:
-          items:
-            $ref: '#/components/schemas/ProxyRouteMemberOut'
-          title: Fallbacks
-          type: array
-        model:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Model
-        primary:
-          anyOf:
-          - $ref: '#/components/schemas/ProxyRouteMemberOut'
-          - type: 'null'
-      required:
-      - agent_uid
-      - model
-      - primary
-      - fallbacks
-      title: ProxyRouteOut
       type: object
     ProxyStatusOut:
       properties:
@@ -2515,9 +2338,6 @@ components:
           - type: number
           - type: 'null'
           title: Estimated Cost Usd
-        failed_over:
-          title: Failed Over
-          type: boolean
         id:
           title: Id
           type: integer
@@ -2614,7 +2434,6 @@ components:
       - stream
       - status
       - outcome
-      - failed_over
       - ttft_ms
       - duration_ms
       - usage_known

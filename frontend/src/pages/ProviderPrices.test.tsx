@@ -1,4 +1,4 @@
-// src/pages/ProviderPricesAndOrder.test.tsx — prices with their source, the fallback switch, and list order (spec provider-switching).
+// src/pages/ProviderPrices.test.tsx — prices with their source (spec provider-switching).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -14,7 +14,6 @@ vi.mock("@/lib/api/providers", async (orig) => ({
     list: vi.fn(),
     get: vi.fn(),
     update: vi.fn(),
-    reorder: vi.fn(),
     prices: vi.fn(),
   },
 }));
@@ -59,7 +58,6 @@ const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   compatible_agents: ["codex"],
   internal_default: false,
   transcribe_default: false,
-  fallback: true,
   models: [],
   enabled: true,
   description: null,
@@ -107,7 +105,7 @@ function renderAt(uid: string) {
 const rowOf = (id: string) =>
   screen.getByRole("switch", { name: `Offered: ${id}` }).parentElement as HTMLElement;
 
-describe("prices, fallback and order", () => {
+describe("prices", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     endpoint.models = chat("mine", "reported", "listed", "unknown");
@@ -181,17 +179,7 @@ describe("prices, fallback and order", () => {
     expect(api.update.mock.calls[0][1].models[0]).toMatchObject({ id: "mine", price: null });
   });
 
-  test("the fallback switch is saved on the provider; a local runtime never falls back", async () => {
-    serve([provider("router")]);
-    const view = renderAt("router");
-    const toggle = await screen.findByRole("switch", {
-      name: "Use as a fallback",
-    });
-    expect(toggle).toBeChecked();
-    fireEvent.click(toggle);
-    await waitFor(() => expect(api.update).toHaveBeenCalledWith("router", { fallback: false }));
-    view.unmount();
-
+  test("a local runtime shows no cost", async () => {
     serve([
       provider("ollama", {
         base_url: "http://127.0.0.1:11434/v1",
@@ -204,22 +192,6 @@ describe("prices, fallback and order", () => {
       prices: endpoint.models.map((m) => price(m.id, { source: "local", input: 0, output: 0 })),
     });
     renderAt("ollama");
-    expect(
-      await screen.findByText("Local providers are never used as a fallback"),
-    ).toBeInTheDocument();
     expect(await screen.findAllByText("Local · no cost")).not.toHaveLength(0);
   });
-
-  acceptance(
-    "provider-switching",
-    "fallbacks are tried in the Model providers list order",
-    async () => {
-      serve([provider("a"), provider("b"), provider("c")]);
-      api.reorder.mockResolvedValue({ providers: [provider("b"), provider("a"), provider("c")] });
-      renderAt("a");
-      const handle = await screen.findByRole("button", { name: "Move b (↑ / ↓)" });
-      fireEvent.keyDown(handle, { key: "ArrowUp" });
-      await waitFor(() => expect(api.reorder).toHaveBeenCalledWith(["b", "a", "c"]));
-    },
-  );
 });

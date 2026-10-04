@@ -18,7 +18,6 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from coffer.application.audit_service import AuditService
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.usage_lookup import ProviderUsageLookup
@@ -28,7 +27,6 @@ from coffer.application.usage.ingest import UsageIngestService
 from coffer.application.usage.ports import (
     ConnectionNames,
     ConnectionPriceLookup,
-    FailoverLog,
 )
 from coffer.application.usage.query import UsageQueryService
 from coffer.infrastructure.persistence.usage_repo import SqlAlchemyUsageRepo
@@ -79,7 +77,6 @@ def wire_usage(
     *,
     price_lookup: ConnectionPriceLookup,
     connection_names: ConnectionNames,
-    failovers: FailoverLog | None = None,
     spool_dir: Path | None = None,
     is_enabled: Callable[[], bool] = lambda: True,
 ) -> UsageWiring:
@@ -89,7 +86,6 @@ def wire_usage(
         repo=usage_repo,
         spool=FileSpoolReader(spool_dir),
         prices=price_lookup,
-        failovers=failovers,
         is_enabled=is_enabled,
     )
     query = UsageQueryService(repo=usage_repo, connection_names=connection_names)
@@ -102,20 +98,18 @@ async def wire_model_usage(
     provider_svc: ProviderService,
     *,
     prices: ProviderPriceResolver,
-    audit: AuditService,
     is_enabled: Callable[[], bool] = lambda: True,
 ) -> UsageWiring:
     """The composition the lifespan uses: prices and names from the provider
-    kind, failovers filed in the audit log, and the ingest loop started.
+    kind, and the ingest loop started.
     ``is_enabled`` is whether the ``models`` feature is on: the loop skips its
     passes while it is off (spec experimental-features "Close every surface of
     a switched-off feature")."""
-    lookup = ProviderUsageLookup(provider_svc, prices, audit)
+    lookup = ProviderUsageLookup(provider_svc, prices)
     wiring = wire_usage(
         sm,
         price_lookup=lookup,
         connection_names=lookup,
-        failovers=lookup,
         is_enabled=is_enabled,
     )
     await wiring.start()

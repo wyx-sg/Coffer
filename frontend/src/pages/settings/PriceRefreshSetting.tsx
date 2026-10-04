@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Switch } from "@/components/ui/switch";
-import { usePriceList, useSetPriceRefresh } from "@/lib/hooks/useProviderFallback";
+import { usePriceList, useSetPriceRefresh } from "@/lib/hooks/useProviderPrices";
 import { formatPriceDate } from "@/lib/providers/priceDate";
 
 const ID = "price-refresh";

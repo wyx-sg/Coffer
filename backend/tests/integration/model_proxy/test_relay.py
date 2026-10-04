@@ -63,7 +63,7 @@ def test_recorded_sse_is_relayed_byte_for_byte(proxy: Proxy, upstreams) -> None:
             "x-should-retry": "false",
         },
     )
-    proxy.push(state([member(server, "a")]))
+    proxy.push(state(member(server, "a")))
     body = b'{"model":"m1","stream":true,"messages":[]}'
     with proxy.client.stream(
         "POST", "/anthropic/v1/messages", content=body, headers=claude_headers()
@@ -91,7 +91,7 @@ def test_unknown_headers_and_body_fields_reach_the_upstream_untouched(
 ) -> None:
     up, server = upstreams()
     up.script = sse_reply([b"event: message_stop\ndata: {}\n\n"])
-    proxy.push(state([member(server, "a")]))
+    proxy.push(state(member(server, "a")))
     # Odd spacing, key order and an unknown field: any re-serialization shows.
     body = b'{ "zz_unknown_field" : {"nested": [1, 2.50, "\\u00e9"]},"model":"m1",  "stream":true }'
     r = proxy.client.post(
@@ -131,7 +131,7 @@ def test_unknown_headers_and_body_fields_reach_the_upstream_untouched(
 )
 def test_keyless_local_member_gets_no_auth_header(proxy: Proxy, upstreams) -> None:
     up, server = upstreams()
-    proxy.push(state(openai=[member(server, "ollama", auth=UpstreamAuth.NONE, local=True)]))
+    proxy.push(state(openai=member(server, "ollama", auth=UpstreamAuth.NONE, local=True)))
     r = proxy.client.post(
         "/openai/v1/responses",
         content=b'{"model":"llama"}',
@@ -145,7 +145,7 @@ def test_keyless_local_member_gets_no_auth_header(proxy: Proxy, upstreams) -> No
 
 def test_bearer_member_on_the_responses_route(proxy: Proxy, upstreams) -> None:
     up, server = upstreams()
-    proxy.push(state(openai=[member(server, "oai", auth=UpstreamAuth.BEARER)]))
+    proxy.push(state(openai=member(server, "oai", auth=UpstreamAuth.BEARER)))
     r = proxy.client.post(
         "/openai/v1/responses",
         content=b'{"model":"gpt"}',
@@ -160,7 +160,7 @@ def test_bearer_member_on_the_responses_route(proxy: Proxy, upstreams) -> None:
 
 def test_count_tokens_and_models_are_forwarded_but_not_metered(proxy: Proxy, upstreams) -> None:
     up, server = upstreams()
-    proxy.push(state([member(server, "a"), member(server, "b", models=["m1"])]))
+    proxy.push(state(member(server, "a")))
     r = proxy.client.post(
         "/anthropic/v1/messages/count_tokens", content=b'{"model":"m1"}', headers=claude_headers()
     )
@@ -182,7 +182,7 @@ def test_client_disconnect_closes_the_upstream(proxy: Proxy, upstreams) -> None:
         b'event: content_block_start\ndata: {"type":"content_block_start"}\n\n'
     )
     up.script = sse_reply([first], hang_after=True)
-    proxy.push(state([member(server, "a")]))
+    proxy.push(state(member(server, "a")))
     with proxy.client.stream(
         "POST", "/anthropic/v1/messages", content=b'{"stream":true}', headers=claude_headers()
     ) as r:

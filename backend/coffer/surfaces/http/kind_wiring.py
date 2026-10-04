@@ -104,7 +104,6 @@ async def wire_resource_kinds(
         sm,
         provider.service,
         prices=provider.prices,
-        audit=audit,
         is_enabled=lambda: app.state.feature_service.is_enabled(MODELS),
     )
 
