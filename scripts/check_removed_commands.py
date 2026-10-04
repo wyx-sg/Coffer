@@ -77,7 +77,7 @@ _SKIP_FILES = {"package-lock.json"}
 #: The command line keeps only what needs it (OpenSpec change
 #: trim-the-cli-to-what-needs-it, design §1): `memory hook`, `proxy token`,
 #: `daemon start|stop|restart|status`, `path logs`, `config
-#: list|get|set|unset`, `run`, `secret list|set`, `log audit|mcp|daemon`, `mcp
+#: list|get|set|unset`, `run`, `secret list|set`, `cli list`, `log audit|mcp|daemon`, `mcp
 #: test` and `vault problems`. Everything else is removed, with no aliases;
 #: each spelling names the web UI page that does the job now.
 _AGENTS = "the Agents page"
@@ -98,7 +98,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer knowledge", _KNOWLEDGE),
     ("coffer provider", _MODELS),
     ("coffer tool", "the Custom tools page"),
-    ("coffer cli", "the Commands page"),
+    ("coffer cli show", "coffer cli list --json (or the CLIs page)"),
+    ("coffer cli check", "Check again on the CLIs page"),
+    ("coffer cli install", "the hand-off prompt on the CLIs page"),
     ("coffer usage", "the Usage tab"),
     ("coffer sync", _SYNC),
     (

@@ -180,6 +180,8 @@ def test_the_manual_names_one_tool_the_memory_root_and_the_log_reader() -> None:
     assert "`coffer log audit`" in text
     assert "`coffer log daemon`" in text
     assert "`coffer path logs`" in text
+    # The command-line tools Coffer manages are read with ``coffer cli list``.
+    assert "`coffer cli list`" in text
 
 
 # --- the frontmatter is not ours to interpolate ------------------------------
