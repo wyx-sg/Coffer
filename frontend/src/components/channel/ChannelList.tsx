@@ -11,8 +11,7 @@ import { SearchInput } from "@/components/SearchInput";
 import type { ResourceOut } from "@/lib/api/resources";
 import { searchableName } from "@/lib/resourceTitle";
 import { ChannelListRow } from "./ChannelListRow";
-import { CHANNEL_GROUPS, channelPlatform, type ChannelView } from "@/lib/channels/channelState";
-import { platformLabel } from "./PlatformMark";
+import { CHANNEL_GROUPS, type ChannelView } from "@/lib/channels/channelState";
 
 interface Props {
   channels: readonly ResourceOut[];
@@ -40,9 +39,7 @@ export function ChannelList({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return channels;
-    return channels.filter((c) =>
-      `${platformLabel(channelPlatform(c.config))} ${searchableName(c)}`.toLowerCase().includes(q),
-    );
+    return channels.filter((c) => searchableName(c).toLowerCase().includes(q));
   }, [channels, query]);
 
   return (

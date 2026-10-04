@@ -152,9 +152,7 @@ export function AgentMemoryTab({ agent, onRepair }: Props) {
   );
   const stores = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q
-      ? all.filter((s) => `${projectLabel(s)} ${s.memory_dir}`.toLowerCase().includes(q))
-      : all;
+    return q ? all.filter((s) => projectLabel(s).toLowerCase().includes(q)) : all;
   }, [all, query]);
 
   const open = (s: NativeMemoryStore) =>

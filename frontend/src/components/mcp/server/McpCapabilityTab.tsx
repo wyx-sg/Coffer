@@ -79,9 +79,7 @@ export function McpCapabilityTab({
   const on = rows.filter((r) => r.enabled).length;
   const usage = usageByTool(summary);
   const q = query.trim().toLowerCase();
-  const shown = q
-    ? rows.filter((r) => `${r.key} ${r.description ?? ""}`.toLowerCase().includes(q))
-    : rows;
+  const shown = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
   const page = useShowMore(shown, q);
   const ns = kind === "resource" ? "resources" : "prompts";
 

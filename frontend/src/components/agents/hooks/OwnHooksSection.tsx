@@ -46,9 +46,7 @@ export function OwnHooksSection({ hooks, agentType, fileKeyOf }: Props) {
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return hooks.filter(
-      (h) =>
-        (event === null || h.event === event) &&
-        (!q || `${h.command} ${h.path} ${fileLabel(h)}`.toLowerCase().includes(q)),
+      (h) => (event === null || h.event === event) && (!q || h.command.toLowerCase().includes(q)),
     );
   }, [hooks, query, event]);
   const totals = hookTotals(hooks);

@@ -651,7 +651,7 @@
       "noCalls": "最近 24 小时没有调用。",
       "offBody": "开启后，它会重新提供给你上次选择的智能体。",
       "offTitle": "已关闭 — 没有智能体能使用它",
-      "openInActivity": "在活动中查看",
+      "viewInvocations": "查看调用记录",
       "reason": {
         "failing": "失败",
         "failingSince": "{{error}} · 自 {{since}} 起",

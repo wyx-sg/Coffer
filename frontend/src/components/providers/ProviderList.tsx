@@ -47,9 +47,7 @@ export function ProviderList({
   const reorder = useReorderProviders();
   const needle = filter.trim().toLowerCase();
   const rows = needle
-    ? providers.filter((p) =>
-        `${searchableName(p)} ${p.base_url} ${p.description ?? ""}`.toLowerCase().includes(needle),
-      )
+    ? providers.filter((p) => searchableName(p).toLowerCase().includes(needle))
     : providers;
   const uids = providers.map((p) => p.uid);
   const canReorder = !needle && providers.length > 1 && !reorder.isPending;

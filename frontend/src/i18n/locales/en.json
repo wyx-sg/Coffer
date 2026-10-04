@@ -651,7 +651,7 @@
       "noCalls": "No calls in the last 24 hours.",
       "offBody": "Turning it on gives it back to the agents you chose last time.",
       "offTitle": "Off — no agent can use it",
-      "openInActivity": "View in Activity",
+      "viewInvocations": "View invocations",
       "reason": {
         "failing": "Failing",
         "failingSince": "{{error}} · since {{since}}",

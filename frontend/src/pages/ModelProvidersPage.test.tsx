@@ -281,7 +281,7 @@ describe("ModelProvidersPage", () => {
     expect(screen.queryByRole("button", { name: /hide list/i })).toBeNull();
   });
 
-  test("the filter narrows the rows over name and endpoint", async () => {
+  test("the filter narrows the rows by name, not by endpoint", async () => {
     serve([
       makeProvider({ name: "official" }),
       makeProvider({ name: "agnes", base_url: "https://apihub.agnes-ai.com/v1" }),
@@ -289,10 +289,14 @@ describe("ModelProvidersPage", () => {
     renderAt();
     await screen.findAllByTestId("provider-row");
     fireEvent.change(screen.getByRole("textbox", { name: "Filter providers" }), {
-      target: { value: "apihub" },
+      target: { value: "agn" },
     });
     expect(screen.getAllByTestId("provider-row")).toHaveLength(1);
     expect(rowFor("agnes")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter providers" }), {
+      target: { value: "apihub" },
+    });
+    expect(screen.queryAllByTestId("provider-row")).toHaveLength(0);
   });
 
   test("the header stays up while loading, and an empty library is the first-run state", async () => {

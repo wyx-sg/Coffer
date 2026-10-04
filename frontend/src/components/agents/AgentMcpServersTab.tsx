@@ -84,9 +84,7 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
         <AgentKindTab
           rows={rows}
           searchPlaceholder={t("agents.mcpTab.search")}
-          searchText={(row) =>
-            `${row.name} ${row.entry.command ?? ""} ${row.entry.args.join(" ")} ${row.entry.url ?? ""}`
-          }
+          searchText={(row) => row.name}
           isLoading={entries.isPending}
           error={entries.error}
           onRetry={() => void entries.refetch()}
