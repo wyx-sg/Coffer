@@ -73,13 +73,11 @@ def test_malformed_secret_ref_rejected() -> None:
         )
 
 
-def test_ollama_must_not_carry_secret() -> None:
-    with pytest.raises(ValidationError):
-        ProviderConfig(
-            protocol="ollama",  # type: ignore[arg-type]
-            base_url="http://localhost:11434",
-            secret_ref="r",
-        )
+def test_a_stored_retired_ollama_connection_still_reads() -> None:
+    """The ollama protocol is no longer offered, but a connection file that
+    holds it stays readable (keyless, as it was written)."""
+    c = ProviderConfig.model_validate({"protocol": "ollama", "base_url": "http://localhost:11434"})
+    assert c.protocol.value == "ollama" and c.secret_ref is None
 
 
 def test_cloud_protocol_requires_secret() -> None:
@@ -102,8 +100,8 @@ def test_only_a_keyless_wire_starts_dormant() -> None:
     knows none. That is what retired the table of ``claude_code`` / ``codex``
     strings this domain module used to spell out.
     """
-    # ollama is internal-only: no key, so a scope of "every agent" would
-    # advertise a reach it can never have. It starts scoped to nobody.
+    # A stored, retired ollama connection has no key, so a scope of "every
+    # agent" would advertise a reach it can never have. It starts scoped to nobody.
     assert starts_dormant("ollama") is True
     # Every credentialed wire starts UNSCOPED instead — the widest set, and
     # unlike the explicit list it replaces it keeps covering an agent the user
@@ -126,18 +124,6 @@ def test_compatible_agents_is_no_longer_a_config_field() -> None:
             base_url="x",
             secret_ref="r",
             compatible_agents=["claude_code"],  # type: ignore[call-arg]
-        )
-
-
-def test_ollama_still_refuses_a_secret() -> None:
-    """The one wire rule that survives on the config: a keyless connection
-    holds no secret ref. That it projects into no agent is now its empty
-    starting scope, enforced at the projection seam, not here."""
-    with pytest.raises(ValidationError):
-        ProviderConfig(
-            protocol="ollama",  # type: ignore[arg-type]
-            base_url="http://x",
-            secret_ref="r",
         )
 
 
@@ -262,9 +248,7 @@ def test_absurd_model_ids_rejected() -> None:
             )
 
 
-def test_ollama_may_curate_models() -> None:
-    # ollama projects into no agent, but the internal engine still picks a model
-    # from it — so curating that endpoint's list is meaningful.
+def test_a_stored_ollama_connection_keeps_its_curated_models() -> None:
     c = ProviderConfig(
         protocol="ollama",  # type: ignore[arg-type]
         base_url="http://localhost:11434",

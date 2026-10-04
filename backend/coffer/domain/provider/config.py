@@ -13,7 +13,8 @@ Each entry carries a ``modality`` (``text`` / ``embedding`` / ``image`` /
 asks for the kind it needs, so a chat dropdown never offers an image model.
 
 ``protocol`` is the upstream wire the endpoint speaks, detected at create time
-(``anthropic`` / ``openai`` / ``ollama`` / ``unknown``); it drives model
+(``anthropic`` / ``openai`` / ``unknown``, plus the retired ``ollama``, which
+is no longer offered and only read from a stored file); it drives model
 introspection and whether a key is needed. It does NOT fix which agent the
 connection projects into: that is the framework-level per-agent **scope** on the
 resource row (ADR per-agent-resource-scope), which the user may set to anything (e.g. an
@@ -26,8 +27,8 @@ NOT recorded here: it is ``AgentConfig.connection_uid`` on the agent.
 speech with.
 
 The secret is referenced by ``secret_ref`` only — the raw key lives in
-the Fernet vault and is never stored here, mirroring the MCP kind. ``ollama``
-connections carry no secret (``secret_ref`` is ``None``).
+the Fernet vault and is never stored here, mirroring the MCP kind. A stored retired ``ollama``
+connection carries no secret (``secret_ref`` is ``None``).
 """
 
 from __future__ import annotations
@@ -145,8 +146,9 @@ class Protocol(StrEnum):
     ``anthropic`` / ``openai`` / ``unknown`` connections start UNSCOPED — open
     to every agent, including one registered tomorrow — and the user narrows
     from there; ``unknown`` means the probe was inconclusive, and the
-    conservative answer to that is "ask", not "guess". ``ollama`` is
-    internal-only: it starts scoped to NO agent.
+    conservative answer to that is "ask", not "guess". ``ollama`` is a
+    retired value: it is no longer offered, and a stored one is only read
+    (and deleted) — it starts scoped to NO agent and reaches none.
     """
 
     ANTHROPIC = "anthropic"
@@ -178,8 +180,8 @@ def starts_dormant(protocol: str) -> bool:
     wire a starting agent LIST is gone, along with the ``claude_code`` /
     ``codex`` name strings this module had to spell out to build it. What
     survives is the one case where the framework's default would be wrong
-    rather than merely wide: ``ollama`` carries no key, so a scope of "every
-    agent" would advertise a reach it can never have. Every other wire starts
+    rather than merely wide: a retired ``ollama`` connection carries no key,
+    so a scope of "every agent" would advertise a reach it can never have. Every other wire starts
     unscoped, which is what "the widest set" now means — and, unlike the
     explicit list it replaces, it keeps covering an agent registered later.
 
@@ -284,11 +286,10 @@ class ProviderConfig(BaseModel):
     def _secret_matches_protocol(self) -> ProviderConfig:
         """anthropic/openai/unknown connections require a ``secret_ref``
         unless they are a local runtime, whose key is optional (LM Studio,
-        vLLM and llama-server can be started with one); an ollama-protocol
-        connection (Coffer's own engine, no key) must not carry one."""
+        vLLM and llama-server can be started with one); a stored, retired
+        ollama-protocol connection has no key and stays readable."""
         if self.protocol is Protocol.OLLAMA:
-            if self.secret_ref is not None:
-                raise ValueError("ollama connection must not carry a secret_ref")
+            pass
         elif not self.secret_ref and self.local_runtime is None:
             raise ValueError(f"{self.protocol.value} connection requires a secret_ref")
         if self.local_runtime is not None and not is_loopback_url(self.base_url):

@@ -1516,7 +1516,7 @@
     },
     "speechToText": {
       "title": "语音转文字",
-      "subtitle": "把语音消息转成文字所用的模型，以及单次调用最长可以等多久。"
+      "subtitle": "把语音消息转成文字所用的模型。"
     }
   },
   "daemon": {
@@ -1711,7 +1711,6 @@
     "PLUGIN_UNINSTALL_FAILED": "卸载失败",
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
-    "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为智能体开启",
     "PROVIDER_DOES_NOT_REACH_AGENT": "无法为该智能体开启此连接——连接已关闭，或连接的适用范围不包含该智能体",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "有智能体正在使用该连接，无法更改协议格式——请先让该智能体切回自带登录，再修改协议，然后重新让它切到该连接",
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "已有另一个连接是 Coffer 语音转文字的默认连接——请把默认切换到这个连接，而不是直接设置标记",
@@ -1805,7 +1804,8 @@
     "SYNC_VAULT_TARGET_INVALID": "请为金库选择本机上的一个空文件夹。",
     "SYNC_VAULT_TARGET_IN_CLOUD": "该文件夹位于 iCloud Drive、Dropbox 或 Syncthing 中，请选择它们之外的文件夹。",
     "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。",
-    "GIT_NEEDED": "Coffer 需要 git 才能打开 vault。安装或更新 git 后点「重新检查」。"
+    "GIT_NEEDED": "Coffer 需要 git 才能打开 vault。安装或更新 git 后点「重新检查」。",
+    "PROVIDER_PROTOCOL_RETIRED": "不再提供 ollama 协议——请改用本地 Ollama 运行时的 Anthropic 或 OpenAI 协议添加"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -6225,15 +6225,11 @@
       "protocols": {
         "openai": {
           "title": "OpenAI 兼容",
-          "body": "Codex、对话和 Coffer 引擎都能用。"
+          "body": "Codex 和对话都能用。"
         },
         "anthropic": {
           "title": "Anthropic 兼容",
-          "body": "Claude Code、对话和 Coffer 引擎都能用。"
-        },
-        "ollama": {
-          "title": "Ollama API",
-          "body": "仅供 Coffer 引擎，不给任何智能体用。"
+          "body": "Claude Code 和对话都能用。"
         },
         "unknown": {
           "title": "未知",

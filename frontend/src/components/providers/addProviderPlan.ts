@@ -5,18 +5,14 @@ import type {
   ProviderCreate,
   ProviderModel,
 } from "@/lib/api/providers";
-import { presetById } from "@/lib/providers/presets";
 import type { CandidateModel } from "./AddModelsStep";
 import type { EndpointValues } from "./providerSchemas";
 
-/** The wires a detected runtime serves to agents, plus the Ollama API (Coffer's
- *  engine only) for an Ollama runtime — or when nothing was detected. */
+/** The wires a detected runtime serves to agents. */
 export function localProtocolsOf(runtime: LocalRuntimeFound | null): Protocol[] {
-  const wires = (runtime?.runtime.wires ?? []).filter(
+  return (runtime?.runtime.wires ?? []).filter(
     (w): w is "anthropic" | "openai" => w === "anthropic" || w === "openai",
   );
-  const engineOnly = !runtime || runtime.runtime.runtime === "ollama";
-  return [...wires, ...(engineOnly ? (["ollama"] as const) : [])];
 }
 
 /** A local runtime's models as candidates: text, with the window it serves. */
@@ -47,9 +43,9 @@ export function createBody(
   const body: ProviderCreate = {
     name: v.name.trim(),
     protocol: v.protocol,
-    base_url: v.local ? (runtime?.base_url ?? (typed || presetById("ollama").baseUrl)) : typed,
+    base_url: v.local ? (runtime?.base_url ?? typed) : typed,
   };
-  if (!v.local && v.protocol !== "ollama") body.secret_value = v.secret;
+  if (!v.local) body.secret_value = v.secret;
   if (v.local && runtime) body.local_runtime = runtime.runtime;
   if (models.length > 0) body.models = models;
   return body;

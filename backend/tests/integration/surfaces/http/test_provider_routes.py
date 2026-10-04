@@ -239,11 +239,10 @@ def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         assert r.json()["protocol"] == "openai"
 
-        # The one rule the wire still carries: an ollama connection holds no
-        # key, so switching a keyed one to it is refused rather than silently
-        # orphaning the secret.
+        # The retired ollama protocol is not a wire a connection can move onto.
         bad = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "ollama"})
         assert bad.status_code == 422, bad.text
+        assert bad.json()["error"]["code"] == "PROVIDER_PROTOCOL_RETIRED"
 
 
 def _store_retired_flag(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -625,14 +624,27 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         assert _route_keys(c)[cc] == (uid, "sk-agnes")
 
 
+def _store_retired_protocol(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A connection file that holds the retired ``ollama`` protocol, keyless as
+    it was written before the protocol stopped being offered."""
+    from coffer.infrastructure.vault.instance import vault_writer
+
+    [path] = (tmp_path / ".coffer" / "vault" / "resources" / "provider").glob("*.json")
+    doc = json.loads(path.read_text())
+    doc["config"]["protocol"] = "ollama"
+    doc["config"]["secret_ref"] = None
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([f"resources/provider/{path.name}"])
+    return path
+
+
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="create an ollama connection without a secret",
+    scenario="refuse to create a connection on the ollama protocol",
 )
-def test_create_ollama_without_secret(tmp_path, monkeypatch):
+def test_creating_an_ollama_connection_is_refused(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59850)
     with _client(app) as c:
-        # ollama has no API key: supply NEITHER secret_value nor secret_ref.
         r = c.post(
             "/api/v1/providers",
             json={
@@ -641,29 +653,53 @@ def test_create_ollama_without_secret(tmp_path, monkeypatch):
                 "base_url": "http://localhost:11434",
             },
         )
-        assert r.status_code == 201, r.text
-        body = r.json()
-        assert body["protocol"] == "ollama"
-        assert body["secret_ref"] is None
-        assert "is_active" not in body  # which agent runs on it is the agent's field
-        # Supplying a secret for ollama is rejected.
-        r2 = c.post(
-            "/api/v1/providers",
-            json={
-                "name": "bad-ollama",
-                "protocol": "ollama",
-                "base_url": "http://localhost:11434",
-                "secret_value": "nope",
-            },
-        )
-        assert r2.status_code == 422, r2.text
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "PROVIDER_PROTOCOL_RETIRED"
+        assert c.get("/api/v1/providers").json()["providers"] == []
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="refuse to move a connection onto the ollama protocol",
+)
+def test_moving_a_connection_onto_ollama_is_refused(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59852)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body())
+        r = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "ollama"})
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "PROVIDER_PROTOCOL_RETIRED"
+        assert c.get(f"/api/v1/providers/{uid}").json()["protocol"] == "anthropic"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a stored ollama connection stays readable and deletable",
+)
+def test_a_stored_ollama_connection_is_listed_and_deleted(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59854)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body(name="local-llama"))
+        _store_retired_protocol(tmp_path)
+
+        [row] = c.get("/api/v1/providers").json()["providers"]
+        assert row["uid"] == uid and row["protocol"] == "ollama"
+        assert row["compatible_agents"] == []
+        assert c.get(f"/api/v1/providers/{uid}").json()["protocol"] == "ollama"
+
+        # Re-sending the stored wire is not a move.
+        same = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "ollama"})
+        assert same.status_code == 200, same.text
+
+        assert c.delete(f"/api/v1/providers/{uid}").status_code == 204
+        assert c.get("/api/v1/providers").json()["providers"] == []
 
 
 @pytest.mark.acceptance(
     spec="provider-switching", scenario="activating an ollama connection writes no native config"
 )
 def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path, monkeypatch):
-    """An ollama connection is internal-only: even scoped to a registered
+    """A stored ollama connection reaches no agent: even scoped to a registered
     Claude Code agent, switching it on writes no native config, never becomes
     the agent's connection, and says so rather than reporting a switch that did
     not happen."""
@@ -671,16 +707,14 @@ def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path,
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
-        uid = _new(
-            c,
-            {"name": "local-llama", "protocol": "ollama", "base_url": "http://localhost:11434"},
-        )
+        uid = _new(c, _anthropic_body(name="local-llama"))
+        _store_retired_protocol(tmp_path)
         scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}})
         assert scoped.status_code == 200, scoped.text
 
         act = _activate(c, uid)
-        assert act.status_code == 409, act.text
-        assert act.json()["error"]["code"] == "PROVIDER_INTERNAL_ONLY"
+        assert act.status_code == 422, act.text
+        assert act.json()["error"]["code"] == "PROVIDER_PROTOCOL_RETIRED"
         assert "local-llama" in act.json()["error"]["message"]
 
         row = c.get(f"/api/v1/providers/{uid}").json()

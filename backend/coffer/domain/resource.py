@@ -323,7 +323,7 @@ class Kind:
     #
     # It exists for a kind whose "every agent" default would be WRONG rather
     # than merely wide: `provider` pre-fills the wire's own projection default
-    # (an ollama connection projects into no agent at all), so a newly created
+    # (a stored ollama connection projects into no agent at all), so a newly created
     # connection behaves exactly as it did when that default lived inside its
     # config. A kind for which "every agent until narrowed" is right — every
     # other one today — supplies nothing.

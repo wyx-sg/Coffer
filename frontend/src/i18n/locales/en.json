@@ -1516,7 +1516,7 @@
     },
     "speechToText": {
       "title": "Speech-to-text",
-      "subtitle": "The model that turns voice messages into text, and how long one call may take."
+      "subtitle": "The model that turns voice messages into text."
     }
   },
   "daemon": {
@@ -1711,7 +1711,6 @@
     "PLUGIN_UNINSTALL_FAILED": "Uninstall failed",
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
-    "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be turned on for an agent",
     "PROVIDER_DOES_NOT_REACH_AGENT": "The connection can't be turned on for this agent — the connection is turned off, or its scope doesn't name the agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "An agent is running on this connection, so its wire format can't change — put that agent back on its built-in login first, then edit the wire, then switch it onto the connection again",
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "Another connection is already Coffer's speech-to-text default — move the default to this connection instead of setting the flag directly",
@@ -1805,7 +1804,8 @@
     "SYNC_VAULT_TARGET_INVALID": "Choose an empty folder on this Mac for the vault.",
     "SYNC_VAULT_TARGET_IN_CLOUD": "That folder is inside iCloud Drive, Dropbox or Syncthing. Choose one outside them.",
     "SYNC_VAULT_TARGET_NOT_EMPTY": "That folder isn’t empty. Choose an empty one.",
-    "GIT_NEEDED": "Coffer needs git before it can open the vault. Install or update git, then press Check again."
+    "GIT_NEEDED": "Coffer needs git before it can open the vault. Install or update git, then press Check again.",
+    "PROVIDER_PROTOCOL_RETIRED": "The ollama protocol is no longer offered — add a local Ollama runtime on its Anthropic or OpenAI wire instead"
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -6225,15 +6225,11 @@
       "protocols": {
         "openai": {
           "title": "OpenAI-compatible",
-          "body": "Codex, chat and Coffer's engine can use it."
+          "body": "Codex and chat can use it."
         },
         "anthropic": {
           "title": "Anthropic-compatible",
-          "body": "Claude Code, chat and Coffer's engine can use it."
-        },
-        "ollama": {
-          "title": "Ollama API",
-          "body": "Coffer's engine only. No agent runs on it."
+          "body": "Claude Code and chat can use it."
         },
         "unknown": {
           "title": "Unknown",

@@ -36,9 +36,10 @@ def _provider_default_scope(config: dict[str, Any]) -> Scope | None:
     agent at all now that a scope holds agent uids
     (ADR identity-is-the-uid-inside-the-file). It does not need to:
 
-    - a keyless (``ollama``) connection starts ``Scope(agents=[])``, dormant,
-      because the framework's own default for an unset scope — every agent —
-      would advertise a reach a connection with no key can never have; and
+    - a stored, retired ``ollama`` connection with no reach record reads
+      ``Scope(agents=[])``, dormant, because the framework's own default for an
+      unset scope — every agent — would advertise a reach a connection with
+      no key can never have; and
     - every other wire starts ``None``, unscoped. That is not a widening of the
       explicit ``[claude_code, codex]`` list it replaces: that list named every
       agent type Coffer supports, which is what "unscoped" means, and unlike

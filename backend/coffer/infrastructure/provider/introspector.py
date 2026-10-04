@@ -3,9 +3,8 @@
 Implements ``application.provider.ports.ProviderIntrospectionPort``. One
 OpenAI-compatible ``AsyncOpenAI`` client (base_url swapped per protocol) powers
 list-models + the chat test call; Anthropic uses its own REST shape. Every
-non-local outbound URL passes the SSRF guard first; the machine-local ``ollama``
-protocol is exempt because its base URL is loopback, which the guard otherwise
-blocks.
+non-local outbound URL passes the SSRF guard first; a loopback URL (a local
+runtime) is exempt because the guard otherwise blocks it.
 """
 
 from __future__ import annotations
@@ -29,7 +28,6 @@ from coffer.infrastructure.net.ssrf_guard import check_url
 PROTOCOL_BASE_URLS: dict[str, str | None] = {
     "openai": None,
     "anthropic": "https://api.anthropic.com",
-    "ollama": "http://localhost:11434/v1",
 }
 
 _ANTHROPIC_VERSION = "2023-06-01"
@@ -85,7 +83,7 @@ class ProviderIntrospector:
     async def _guard(self, provider: str, url: str | None) -> None:
         # Only a URL that really is loopback is exempt (a local runtime). The
         # exemption follows the URL, never the declared protocol: ``provider`` is
-        # whatever the caller sent, and "ollama" must not switch the guard off.
+        # whatever the caller sent.
         if not url or is_loopback_url(url):
             return
         await asyncio.to_thread(check_url, url)

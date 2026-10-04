@@ -53,7 +53,7 @@ def scoped_targets(
     not have. It is dropped rather than guessed at, which narrows the reach and
     never widens it.
 
-    A keyless (ollama) connection returns nothing whatever its scope says: it
+    A stored, retired ollama connection returns nothing whatever its scope says: it
     has no key to write into an agent's config, so it covers no agent even in
     principle. The rule is enforced here rather than in the config, because scope
     lives outside the config and the rule is about projection, not about the
@@ -88,7 +88,7 @@ def scoped_targets(
 
 def reaches(resource: Resource, cfg: ProviderConfig, agent: Resource) -> bool:
     """Whether ``resource`` may serve ``agent`` right now: switched on, not a
-    keyless (ollama) connection, and its scope names the agent (an unscoped
+    retired ollama connection, and its scope names the agent (an unscoped
     connection names every agent)."""
     if not resource.enabled or cfg.protocol is Protocol.OLLAMA:
         return False

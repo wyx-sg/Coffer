@@ -20,11 +20,10 @@ class ProviderSecretSourceInvalid(CofferError):  # noqa: N818
 class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
     """A connection's wire may be corrected, but not while an agent runs on it.
 
-    The wire is not inert: an ``ollama`` connection covers no agent whatever its
-    scope says (``application.provider.targets.scoped_targets``). Moving the
+    The wire is not inert: an anthropic connection moved to another wire
+    changes what Coffer projects into the agent's native config. Moving the
     wire of a connection an agent currently runs on would therefore leave the
-    native config Coffer already wrote standing with nothing left that would
-    ever take it off again.
+    native config Coffer already wrote standing, speaking the old wire.
 
     Refusing is the fix rather than de-projecting silently: the user asked to
     change a field, not to take their agents off a gateway. Maps to 409 — the
@@ -45,21 +44,23 @@ class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
         self.protocol = protocol
 
 
-class ProviderInternalOnly(CofferError):  # noqa: N818
-    """An ``ollama`` connection cannot be switched on for an agent.
+class ProviderProtocolRetired(CofferError):  # noqa: N818
+    """The ``ollama`` protocol is no longer offered.
 
-    It is internal-only: it has no key to project and reaches no agent whatever
-    its scope says (``application.provider.targets.scoped_targets``), so no
-    agent ever runs on it and switching one onto it writes nothing. Refused rather than
-    answered with a switch that did not happen. Maps to 409.
+    Nothing consumes an ``ollama``-protocol connection: it holds no key to
+    project, so no agent runs on it. Creating one, moving a connection onto
+    it, or switching an agent onto a stored one is refused rather than
+    answered with something that does nothing. A local Ollama runtime is
+    added on its ``anthropic`` or ``openai`` wire instead. Maps to 422.
     """
 
-    code = "PROVIDER_INTERNAL_ONLY"
+    code = "PROVIDER_PROTOCOL_RETIRED"
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str | None = None) -> None:
+        who = f"connection {name!r} uses" if name else "the"
         super().__init__(
-            f"connection {name!r} uses the ollama protocol, which only Coffer's internal "
-            f"engine uses — it cannot be switched on for an agent"
+            f"{who} ollama protocol, which is no longer offered — "
+            f"add a local Ollama runtime on its anthropic or openai wire instead"
         )
         self.name = name
 

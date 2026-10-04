@@ -41,7 +41,7 @@ async def test_list_models_resolves_secret_ref() -> None:
 
 async def test_list_models_no_ref_passes_no_key() -> None:
     port = _FakePort(models=["llama3"])
-    await _svc(port).list_models(provider="ollama", base_url=None, secret_ref=None)
+    await _svc(port).list_models(provider="openai", base_url=None, secret_ref=None)
     assert port.seen_key is None
 
 

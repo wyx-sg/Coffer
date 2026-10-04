@@ -1,10 +1,8 @@
 """Correcting a mis-probed wire is allowed; doing it under a live agent is not.
 
 ``protocol`` is mutable on purpose — the probe that guessed the wire can be
-wrong, and the fix must not cost the user their key. But the wire is not inert
-the way the docstrings once claimed: ``targets.reaches`` answers false
-for ``ollama`` BEFORE scope is consulted, so a keyless connection covers no
-agent at all.
+wrong, and the fix must not cost the user their key. But the wire is not inert:
+it decides how the connection is projected into an agent's native config.
 
 So patching the wire of a connection that is currently projected would strand
 that projection: the native config Coffer already wrote stays behind while
@@ -199,14 +197,12 @@ def test_the_wire_moves_again_once_the_agents_are_back_on_their_own_login(tmp_pa
         assert "ANTHROPIC_BASE_URL" not in settings.get("env", {})
 
 
-@pytest.mark.parametrize("wire", ["ollama", "unknown"])
+@pytest.mark.parametrize("wire", ["unknown"])
 def test_the_guard_covers_every_wire_not_just_the_two_that_reach_an_agent(
     tmp_path, monkeypatch, wire
 ):
-    """``ollama`` is the sharpest case — it covers no agent at all, so moving a
-    live connection onto it empties its targets while the file stays — but the
-    rule is the same for every value, including ``unknown``."""
-    app = _app(tmp_path, monkeypatch, 59860 + 10 * ["ollama", "unknown"].index(wire))
+    """The rule is the same for every value, including ``unknown``."""
+    app = _app(tmp_path, monkeypatch, 59860)
     with _client(app) as c:
         _register_claude(c, tmp_path)
         uid = _create(c)

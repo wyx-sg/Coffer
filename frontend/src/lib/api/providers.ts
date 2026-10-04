@@ -53,8 +53,8 @@ export function modelIds(models: ProviderModel[], modality?: Modality): string[]
 /**
  * Chat agent_key → the protocol it speaks (provider-switching projection targets). Shared by
  * the chat ModelPicker and the agent Overview connection picker so both map an
- * agent to its compatible connections the same way. `ollama` is internal-only
- * (never projected to an agent), so it is not a value here.
+ * agent to its compatible connections the same way. The retired `ollama`
+ * protocol is never projected to an agent, so it is not a value here.
  */
 export const WIRE_BY_AGENT: Record<string, Protocol> = {
   claude_code: "anthropic",

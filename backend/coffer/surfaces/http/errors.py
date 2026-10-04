@@ -190,8 +190,8 @@ _STATUS: dict[str, int] = {
     # Not 422: the patch is well-formed, and the same patch succeeds once the
     # connection is no longer projected — a state conflict, not a bad body.
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
-    # An ollama connection is internal-only and never switched on for an agent.
-    "PROVIDER_INTERNAL_ONLY": 409,
+    # The ollama protocol is no longer offered (create, edit, or switch onto one).
+    "PROVIDER_PROTOCOL_RETIRED": 422,
     # The connection is switched off, or the scope does not name the agent.
     "PROVIDER_DOES_NOT_REACH_AGENT": 409,
     # A second speech-to-text default outside the route that moves the flag.

@@ -34,8 +34,8 @@ gateway. Codex speaks only the OpenAI Responses wire; it refuses to load a
 ### Option A — A connection resource, projected into the agent's native file, with the agent recording which connection it runs on (chosen)
 
 A connection is a `kind='provider'` resource whose config is `ProviderConfig`
-(`domain/provider/config.py`): `protocol` (`anthropic`, `openai`, `ollama` or
-`unknown`), `base_url`, an optional `secret_ref`, the curated `models` it offers,
+(`domain/provider/config.py`): `protocol` (`anthropic`, `openai` or
+`unknown`; a stored `ollama` is retired, read and never offered), `base_url`, an optional `secret_ref`, the curated `models` it offers,
 `local_runtime`, and one default flag,
 `transcribe_default`. The protocol is chosen from provider
 presets in the add dialog or set explicitly (`coffer provider add --protocol`). It
@@ -46,8 +46,8 @@ agent runs on is **one field of the agent record**, `AgentConfig.connection_uid`
 
 Which agents a connection may reach is its framework-level `scope`
 ([Per-Agent Resource Scope](per-agent-resource-scope.md)). A credentialed
-connection starts unscoped, reaching every agent; a keyless `ollama` connection
-starts scoped to no agent and never projects (`_provider_default_scope` in
+connection starts unscoped, reaching every agent; a stored, retired `ollama` connection
+reads as scoped to no agent and never projects (`_provider_default_scope` in
 `application/provider/kind.py`). `application/provider/targets.py` resolves a
 scope's agent uids to agent types and intersects them with `enabled`. One pure
 function, `connection_for_agent`, answers which connection an agent is on, and
@@ -205,8 +205,9 @@ Rules that follow:
   and never a raw provider key.
 - A new agent type needs a provider projection in its facet; scope decides reach,
   not the protocol.
-- `ollama` connections are internal-only: they start dormant, switching an agent
-  onto one is refused (`PROVIDER_INTERNAL_ONLY`), and they are never written into
+- The `ollama` protocol is retired: creating or editing a connection onto it is
+  refused (`PROVIDER_PROTOCOL_RETIRED`), a stored one stays readable and
+  deletable, switching an agent onto it is refused, and it is never written into
   an agent's config.
 - Changing a live connection's protocol is refused
   (`PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`) while an agent runs on it.

@@ -209,7 +209,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | 新建连接必须恰好提供密钥值或密钥 ref 中的一个。 | 传 `--secret` 或 `--secret-ref`，不要两个都传。 |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | 有智能体运行在该连接上时，不能更改其协议格式。 | 对运行在它上面的每个智能体用**更改模型**切回它自己的登录，编辑后再重新切换。 |
 | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | 不能把智能体切到它不生效的连接上：连接被停用，或连接的作用范围没有指明该智能体。 | 开启该连接，或把该智能体加入它的作用范围，然后再切换。 |
-| `PROVIDER_INTERNAL_ONLY` | 409 | `ollama` 连接只供 Coffer 自己使用，不能为智能体开启。 | 为智能体改用其他协议的连接。 |
+| `PROVIDER_PROTOCOL_RETIRED` | 422 | 不再提供 `ollama` 协议：不能用它创建连接、把连接改成它，也不能为智能体开启这样的连接。 | 改为用本地 Ollama 运行时的 Anthropic 或 OpenAI 协议添加，并删除旧连接。 |
 | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 在**设置 › 通用 → 语音转文字**里转移这个标记。 |
 
 ## 保险库 {#the-vault}
