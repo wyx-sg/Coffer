@@ -35,7 +35,6 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | 命令组 | 说明 |
 | --- | --- |
 | [`coffer run`](/zh/reference/cli/run) | Run a command with secrets set only in its environment. |
-| [`coffer migrate`](/zh/reference/cli/migrate) | Move this home out of coffer.db into the vault layout (once, daemon stopped). |
 | [`coffer daemon`](/zh/reference/cli/daemon) | Daemon lifecycle |
 | [`coffer config`](/zh/reference/cli/config) | Read and change Coffer's settings (the keys read before the daemon starts) |
 | [`coffer log`](/zh/reference/cli/log) | Read Coffer's records: the audit log, MCP calls and the daemon log |

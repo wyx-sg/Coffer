@@ -42,8 +42,7 @@ be inspected answers `False`, and every caller treats that as "do nothing".
 
 ## `~/.coffer/daemon-config.json` — pre-bind configuration
 
-Settings read **before** `runs.db` and the vault are opened — before the
-one-time upgrade to the vault layout can run — so nothing here can live in
+Settings read **before** `runs.db` and the vault are opened, so nothing here can live in
 either (`infrastructure/daemon/config.py`). Mode `0600`. Written by **merge**,
 never by replacement, so several settings share one file and a key written by a
 newer build survives being touched by an older one.
@@ -111,25 +110,9 @@ re-copied every binary on every start after a reinstall of the same release.
 Written beside `runs.db` before `alembic upgrade head` changes it, with its
 `-wal` and `-shm` companions when they exist. The three newest are kept. A
 start against an already-current schema copies nothing, and an in-memory
-database copies nothing. `runs.db` is the one Alembic lineage (head 0136); its
+database copies nothing. `runs.db` is the one Alembic lineage, starting at the
+baseline revision 0146; its
 path is `~/.coffer/runs.db` unless `COFFER_DB_URL` names another.
-
-## The pre-vault backup set
-
-The one-time upgrade to the vault layout (`coffer migrate`, spec
-vault-storage) keeps what it started from, never opened for writing again:
-
-| Path | What |
-| --- | --- |
-| `~/.coffer/coffer.db.pre-vault` (+`-wal`/`-shm`) | the database before the upgrade touched it |
-| `~/.coffer/pre-vault/knowledge.git` | the knowledge root's own history, after its commits were replayed into the vault |
-| `~/.coffer/pre-vault/knowledge-stamped/` | the knowledge documents as they were before their curation stamps were stripped |
-| `~/.coffer/pre-vault/daemon-config.json` | `daemon-config.json` as it was before the upgrade ran the database's own migrations, which may rewrite it |
-
-`coffer migrate --rollback` restores from this set. The daemon refuses a home
-that holds only `coffer.db` (`VAULT_MIGRATION_REQUIRED`, naming `coffer
-migrate`) and one held by the `~/.coffer/MIGRATION_ROLLED_BACK` marker
-(`VAULT_MIGRATION_ON_HOLD`, naming `coffer migrate --resume`).
 
 ## `~/.coffer/logs/` — the log directory
 

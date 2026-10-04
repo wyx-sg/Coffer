@@ -163,7 +163,7 @@ from the server's `state/mcp-preferences/` document, the times from
 | `error_message`   | `str \| None`                                 | populated when `status != "ok"` |
 | `session_id`      | `str \| None`                                 | per-session correlation         |
 | `agent_uid`       | `str \| None`                                 | the calling agent's uid, when the session names one |
-| `trace_id`        | `str \| None`                                 | the `/mcp` request's trace id; joins the audit rows and daemon log lines the call caused (0137) |
+| `trace_id`        | `str \| None`                                 | the `/mcp` request's trace id; joins the audit rows and daemon log lines the call caused |
 
 One reserved value appears in `resource_uid` and is deliberately not a uid — a
 real uid is a 32-character `uuid4().hex`, so it cannot collide with one
@@ -188,12 +188,6 @@ resource, so the tiering counts leave it out.
 | the last health check | `derived/derived.db` `mcp_server_health` | derived |
 | custom tools' reach overrides | `local/tool-reach.json` | local |
 | the invocation log | `runs.db` `mcp_invocations` | runs |
-
-In the one-time upgrade to the vault layout the rows of
-`mcp_capability_preferences` were split into the switch documents and
-`mcp_capability_seen`, `mcp_server_health` was copied into `derived.db`,
-`mcp_tool_reach` became `local/tool-reach.json`, and revision 0136 dropped the
-three tables.
 
 ### Capability switches — `state/mcp-preferences/<server name>.json`
 
@@ -270,8 +264,8 @@ CREATE TABLE mcp_invocations (
     status           TEXT      NOT NULL,                    -- 'ok' | 'error' | 'timeout' | 'denied'
     error_message    TEXT,
     session_id       TEXT,
-    agent_uid        TEXT,                                  -- the calling agent's uid as its session reported it; NULL when none (0113)
-    trace_id         TEXT                                   -- the /mcp request's trace id; NULL before 0137
+    agent_uid        TEXT,                                  -- the calling agent's uid as its session reported it; NULL when none
+    trace_id         TEXT                                   -- the /mcp request's trace id; NULL when none
 );
 CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp DESC);
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);

@@ -167,7 +167,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
    cd ~/.coffer/bin
    for b in coffer coffer-daemon coffer-mcp-shim; do ln -sfn 0.1.1/$b $b; done
    ```
-3. 如果新构建迁移过历史数据库，先恢复它迁移前留的副本（见下一节），否则旧构建会拒绝打开它。跨越一次性保险库升级的回滚则不同：见[升级现有的 Coffer](/zh/guides/upgrading#roll-it-back)。
+3. 如果新构建迁移过历史数据库，先恢复它迁移前留的副本（见下一节），否则旧构建会拒绝打开它。
 4. 重新启动：`coffer daemon start`。
 
 ## 数据库迁移与自动备份 {#database-migrations-and-automatic-backups}
@@ -180,7 +180,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 coffer daemon stop
 cd ~/.coffer
 mv runs.db runs.db.broken
-cp runs.db.pre-0136 runs.db          # and the -wal / -shm files, if present
+cp runs.db.pre-<revision> runs.db          # and the -wal / -shm files, if present
 ```
 
 然后启动与该 schema 匹配的构建。
@@ -190,12 +190,11 @@ cp runs.db.pre-0136 runs.db          # and the -wal / -shm files, if present
 如果数据库被更新的构建迁移过，或者被一个带有本构建所没有的迁移的开发分支迁移过，守护进程启动时会停下并报：
 
 ```text
-database schema revision '0118' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
+database schema revision '0147' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
 ```
 
 重新安装那个更新的构建，或者恢复该构建迁移前留下的 `runs.db.pre-*` 副本。
 
-如果某个 home 仍把状态保存在 `coffer.db` 里（来自保险库布局之前的 Coffer），守护进程不会迁移它：它会拒绝启动并提示 `coffer migrate`。见[升级现有的 Coffer](/zh/guides/upgrading)。
 
 ## 备份保险库 {#back-up-a-vault}
 

@@ -582,7 +582,7 @@ class ChannelEnv:
 
 
 async def _build_env(tmp_path: Any) -> ChannelEnv:
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'coffer.db'}")
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'runs.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)

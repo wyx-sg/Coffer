@@ -12,11 +12,7 @@ carries are spec vault-storage's ([data-model](../vault-storage/data-model.md)).
 A resource is **a file**, not a row: one JSON document filed by its kind's
 storage class (`FileResourceRepo`, `infrastructure/vault/resource_store.py`).
 Its reach is machine-local JSON beside it, and its audit trail rows in `runs.db` keyed by its uid. There is no
-integer resource id: the uid inside the file is the identity. In the one-time
-upgrade to the vault layout (`coffer migrate`) every `resources` row became a
-resource file and its `enabled`/`scope_json` a record in `local/reach.json`;
-Alembic revision 0136 re-keyed `audit_log` from `resource_id` to
-`resource_uid` and dropped the table.
+integer resource id: the uid inside the file is the identity.
 
 ## Domain entities (`backend/coffer/domain/`)
 
@@ -117,14 +113,14 @@ Plain dataclass.
 | `id`            | `int \| None`    | `runs.db` row id, `None` before insert                 |
 | `timestamp`     | `datetime`       | UTC, default `utcnow()`                                |
 | `event_type`    | `str`            | one of the enumerated `AuditEventType` strings (below) |
-| `resource_uid`  | `str \| None`    | the resource's uid — what makes a trail survive a rename; `None` for an event naming no resource, and for a row whose resource was already deleted when revision 0136 re-keyed the trail to uids |
+| `resource_uid`  | `str \| None`    | the resource's uid — what makes a trail survive a rename; `None` for an event naming no resource |
 | `resource_kind` | `str \| None`    | nullable; the LABEL the resource carried at the time    |
 | `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
 | `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-aggregate-worker"` or `"system:memory-distil-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
 | `details`       | `dict[str, Any]` | JSON-serialisable payload                              |
-| `trace_id`      | `str \| None`    | the correlation id bound when the row was written: the HTTP request's `X-Coffer-Trace`, or the turn's own id for a turn no request started; the key that joins this row to the MCP invocations and daemon log lines of the same request or turn (0137). `None` for a row written with none bound (a boot pass, a periodic worker) and for every row older than 0137 |
-| `conversation_id` | `str \| None`  | the chat conversation, for a row a chat or channel turn wrote (0137) |
-| `turn_id`       | `str \| None`    | the turn of that conversation (0137)                    |
+| `trace_id`      | `str \| None`    | the correlation id bound when the row was written: the HTTP request's `X-Coffer-Trace`, or the turn's own id for a turn no request started; the key that joins this row to the MCP invocations and daemon log lines of the same request or turn. `None` for a row written with none bound (a boot pass, a periodic worker) |
+| `conversation_id` | `str \| None`  | the chat conversation, for a row a chat or channel turn wrote |
+| `turn_id`       | `str \| None`    | the turn of that conversation                    |
 
 ### `AuditEventType` (`domain/audit.py`)
 
@@ -148,7 +144,7 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 The enum is **shared**, which is the point of one audit log: spec mcp-gateway
 contributes `capability_enabled` / `capability_disabled`, spec secret
 contributes `secret_set` / `secret_read` / `secret_deleted` /
-`secret_migrated` / `master_key_relocated`, spec daemon contributes
+`master_key_relocated`, spec daemon contributes
 `token_rotated`, and every other kind adds its own. A kind adding an event adds
 a value here and a migration for the enum, not a table of its own.
 
@@ -257,10 +253,10 @@ CREATE TABLE audit_log (
     resource_name   VARCHAR,
     actor           VARCHAR   NOT NULL,
     details_json    TEXT,                   -- nullable JSON payload
-    resource_uid    VARCHAR,                -- the resource's uid; survives a rename (0136)
-    trace_id        VARCHAR,                -- the request's or turn's correlation id (0137)
-    conversation_id VARCHAR,                -- the turn's conversation, for a row a turn wrote (0137)
-    turn_id         VARCHAR                 -- the turn (0137)
+    resource_uid    VARCHAR,                -- the resource's uid; survives a rename
+    trace_id        VARCHAR,                -- the request's or turn's correlation id
+    conversation_id VARCHAR,                -- the turn's conversation, for a row a turn wrote
+    turn_id         VARCHAR                 -- the turn
 );
 CREATE INDEX idx_audit_resource     ON audit_log(resource_kind, resource_name, timestamp DESC);
 CREATE INDEX idx_audit_time         ON audit_log(timestamp DESC);

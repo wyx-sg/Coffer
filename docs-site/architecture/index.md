@@ -42,7 +42,7 @@ What each box is:
 | --- | --- |
 | Coding agents | Claude Code and Codex, the two agent types Coffer registers. Each reaches Coffer through an MCP server entry Coffer writes into its config, and reads skills Coffer delivers into its skills directory. |
 | `coffer-mcp-shim` | A small stdio-to-HTTP forwarder the agent launches as an MCP server. It finds (or starts) the daemon and relays JSON-RPC to `/mcp`, stamping the agent's identity onto the handshake. |
-| `coffer` CLI | A Typer application with a short command list: the daemon's lifecycle, the one-time migration, the logs, `coffer run`, and the few commands a program or an agent hand-off runs. Each command that reads or writes state is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
+| `coffer` CLI | A Typer application with a short command list: the daemon's lifecycle, the logs, `coffer run`, and the few commands a program or an agent hand-off runs. Each command that reads or writes state is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
 | Web UI | A React single-page app, built to static files that the daemon serves from its own origin. |
 | Desktop shell | A Tauri 2 app that hosts the same built frontend in a native window with a menu bar item. It supplies the page its daemon address and token over IPC, starts the daemon when none is running, and updates itself from a signed release manifest. |
 | HTTP API | FastAPI routes under `/api/v1/*`: the management plane every client uses. |

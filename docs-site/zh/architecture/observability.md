@@ -135,7 +135,7 @@ sequenceDiagram
 
 轮次在创建它的任务时绑定这些 id：一个新的 `turn_id`、对话的 id，以及发起它的那个请求的 trace id——如果是经 websocket 或长轮询到达、背后没有请求的渠道消息，就用轮次自己的 id 作为 trace id。因为 `asyncio` 会把上下文复制进它创建的每个任务，轮次的渲染器以及它启动的其他任何东西都带着同样的 id，中间不用传任何参数。
 
-所以“这个请求还做了什么？”在每种记录上都只是一个过滤条件：`GET /api/v1/audit?trace_id=…`、`GET /api/v1/mcp/invocations?trace_id=…` 和 `GET /api/v1/daemon/logs?trace_id=…`，或者在 `coffer log audit`、`coffer log mcp` 和 `coffer log daemon` 上加 `--trace <id>`。「活动」页的记录抽屉会显示变更和调用的 trace id。早于迁移 0137 的行没有 id，也不会为它们编造一个。
+所以“这个请求还做了什么？”在每种记录上都只是一个过滤条件：`GET /api/v1/audit?trace_id=…`、`GET /api/v1/mcp/invocations?trace_id=…` 和 `GET /api/v1/daemon/logs?trace_id=…`，或者在 `coffer log audit`、`coffer log mcp` 和 `coffer log daemon` 上加 `--trace <id>`。「活动」页的记录抽屉会显示变更和调用的 trace id。
 
 ## 审计日志 {#the-audit-log}
 
@@ -148,7 +148,7 @@ sequenceDiagram
 | `timestamp` | 事件发生的时间（UTC） |
 | `event_type` | 下文词汇表中的一个值 |
 | `actor` | 谁引起的：`cli`、`api`、`ui`、`system`，或其他简短的小写标识符 |
-| `resource_uid` | 资源的 uid；如果事件不涉及资源，或其资源在保险库布局之前就已删除，则为空 |
+| `resource_uid` | 资源的 uid；如果事件不涉及资源，或其资源已被删除，则为空 |
 | `resource_kind`、`resource_name` | 资源**当时**的标签 |
 | `details` | 事件相关字段，已脱敏 |
 | `trace_id` | 请求或轮次的关联 id；写入时没有绑定任何 id 的行（比如启动时的一轮）为空 |

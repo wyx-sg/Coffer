@@ -9,7 +9,7 @@ Coffer 的 Web 界面是你管理保险库里一切的地方：智能体、MCP �
 
 ## Web 界面与命令行各做什么 {#what-the-web-ui-and-the-command-line-each-do}
 
-所有管理操作都在 Web 界面里。命令行只承载确实需要它的：程序要运行它（记忆钩子、智能体的密钥助手）、守护进程停着时也必须能用（`coffer daemon start|stop|restart|status`、`coffer migrate`、`coffer path logs`、`coffer config` 里守护进程自己的端口）、Coffer 交接给智能体的提示词让它运行（`coffer run`、`coffer secret list|set`、`coffer log audit|mcp|daemon`、`coffer mcp test`），或者 Web 界面做不到（`coffer vault problems`，列出保险库拒绝的手工编辑）。其余一切——添加服务器、连接智能体、切换提供商、查看用量——都是这里的一个页面。
+所有管理操作都在 Web 界面里。命令行只承载确实需要它的：程序要运行它（记忆钩子、智能体的密钥助手）、守护进程停着时也必须能用（`coffer daemon start|stop|restart|status`、`coffer path logs`、`coffer config` 里守护进程自己的端口）、Coffer 交接给智能体的提示词让它运行（`coffer run`、`coffer secret list|set`、`coffer log audit|mcp|daemon`、`coffer mcp test`），或者 Web 界面做不到（`coffer vault problems`，列出保险库拒绝的手工编辑）。其余一切——添加服务器、连接智能体、切换提供商、查看用量——都是这里的一个页面。
 
 ## 打开界面 {#open-the-ui}
 

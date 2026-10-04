@@ -74,7 +74,7 @@ const STORAGE: StorageSummary = {
     locations: ["/Users/u/.coffer/chat-media", "/Users/u/.coffer/channel-media"],
     bytes: 224_395_264,
   },
-  history: { path: "/Users/u/.coffer/coffer.db", bytes: 50_541_363 },
+  history: { path: "/Users/u/.coffer/runs.db", bytes: 50_541_363 },
   cache: { bytes: 100_663_296 },
 };
 

@@ -34,7 +34,6 @@ COMMAND_REASONS: dict[str, tuple[Reason, str]] = {
     "daemon stop": (Reason.OFFLINE, "the desktop shell and the upgrade hand-off name it"),
     "daemon restart": (Reason.OFFLINE, "a changed port applies only after a restart"),
     "daemon status": (Reason.OFFLINE, "the offline banner points at it when the daemon is down"),
-    "migrate": (Reason.OFFLINE, "runs with the daemon stopped"),
     "path logs": (
         Reason.OFFLINE,
         "the log files are what is left to read when the daemon will not start",

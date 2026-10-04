@@ -1,0 +1,356 @@
+[
+ [
+  "index",
+  "idx_audit_eventtype",
+  "audit_log",
+  "CREATE INDEX idx_audit_eventtype ON audit_log (event_type, timestamp DESC)"
+ ],
+ [
+  "index",
+  "idx_audit_resource",
+  "audit_log",
+  "CREATE INDEX idx_audit_resource ON audit_log (resource_kind, resource_name, timestamp DESC)"
+ ],
+ [
+  "index",
+  "idx_audit_resource_uid",
+  "audit_log",
+  "CREATE INDEX idx_audit_resource_uid ON audit_log (resource_uid, timestamp)"
+ ],
+ [
+  "index",
+  "idx_audit_time",
+  "audit_log",
+  "CREATE INDEX idx_audit_time ON audit_log (timestamp DESC)"
+ ],
+ [
+  "index",
+  "idx_audit_trace",
+  "audit_log",
+  "CREATE INDEX idx_audit_trace ON audit_log (trace_id)"
+ ],
+ [
+  "index",
+  "idx_channel_outbox_conversation",
+  "channel_outbox",
+  "CREATE INDEX idx_channel_outbox_conversation ON channel_outbox (conversation_id)"
+ ],
+ [
+  "index",
+  "idx_channel_outbox_pending",
+  "channel_outbox",
+  "CREATE INDEX idx_channel_outbox_pending ON channel_outbox (resource_uid, delivered_at)"
+ ],
+ [
+  "index",
+  "idx_channel_replies_chat",
+  "channel_replies",
+  "CREATE INDEX idx_channel_replies_chat ON channel_replies (resource_uid, chat_id, sent_at)"
+ ],
+ [
+  "index",
+  "idx_channel_thread_conv_resource",
+  "channel_thread_conversations",
+  "CREATE INDEX idx_channel_thread_conv_resource ON channel_thread_conversations (resource_uid)"
+ ],
+ [
+  "index",
+  "idx_channel_thread_history_thread",
+  "channel_thread_history",
+  "CREATE INDEX idx_channel_thread_history_thread ON channel_thread_history (resource_uid, chat_id, thread_id)"
+ ],
+ [
+  "index",
+  "idx_chat_messages_conv",
+  "chat_messages",
+  "CREATE INDEX idx_chat_messages_conv ON chat_messages (conversation_id, seq)"
+ ],
+ [
+  "index",
+  "idx_chat_reply_files_message",
+  "chat_reply_files",
+  "CREATE INDEX idx_chat_reply_files_message ON chat_reply_files (message_id, seq)"
+ ],
+ [
+  "index",
+  "idx_conversations_archived",
+  "conversations",
+  "CREATE INDEX idx_conversations_archived ON conversations (archived_at)"
+ ],
+ [
+  "index",
+  "idx_conversations_updated",
+  "conversations",
+  "CREATE INDEX idx_conversations_updated ON conversations (updated_at)"
+ ],
+ [
+  "index",
+  "idx_invocations_agent",
+  "mcp_invocations",
+  "CREATE INDEX idx_invocations_agent ON mcp_invocations (agent_uid, timestamp)"
+ ],
+ [
+  "index",
+  "idx_invocations_resource",
+  "mcp_invocations",
+  "CREATE INDEX idx_invocations_resource ON mcp_invocations (resource_uid, timestamp DESC)"
+ ],
+ [
+  "index",
+  "idx_invocations_session",
+  "mcp_invocations",
+  "CREATE INDEX idx_invocations_session ON mcp_invocations (session_id, timestamp DESC)"
+ ],
+ [
+  "index",
+  "idx_invocations_time",
+  "mcp_invocations",
+  "CREATE INDEX idx_invocations_time ON mcp_invocations (timestamp DESC)"
+ ],
+ [
+  "index",
+  "idx_invocations_trace",
+  "mcp_invocations",
+  "CREATE INDEX idx_invocations_trace ON mcp_invocations (trace_id)"
+ ],
+ [
+  "index",
+  "idx_usage_requests_started",
+  "usage_requests",
+  "CREATE INDEX idx_usage_requests_started ON usage_requests (started_at)"
+ ],
+ [
+  "index",
+  "idx_workflow_approvals_run",
+  "workflow_approvals",
+  "CREATE INDEX idx_workflow_approvals_run ON workflow_approvals (run_id, status)"
+ ],
+ [
+  "index",
+  "idx_workflow_attempts_run",
+  "workflow_node_attempts",
+  "CREATE INDEX idx_workflow_attempts_run ON workflow_node_attempts (run_id)"
+ ],
+ [
+  "index",
+  "idx_workflow_events_run",
+  "workflow_events",
+  "CREATE INDEX idx_workflow_events_run ON workflow_events (run_id, sequence)"
+ ],
+ [
+  "index",
+  "idx_workflow_runs_status",
+  "workflow_runs",
+  "CREATE INDEX idx_workflow_runs_status ON workflow_runs (status)"
+ ],
+ [
+  "index",
+  "idx_workflow_runs_updated",
+  "workflow_runs",
+  "CREATE INDEX idx_workflow_runs_updated ON workflow_runs (updated_at)"
+ ],
+ [
+  "index",
+  "ix_sync_runs_finished_at",
+  "sync_runs",
+  "CREATE INDEX ix_sync_runs_finished_at ON sync_runs (finished_at)"
+ ],
+ [
+  "index",
+  "sqlite_autoindex_attention_ignores_1",
+  "attention_ignores",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_channel_replies_1",
+  "channel_replies",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_channel_thread_conversations_1",
+  "channel_thread_conversations",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_channel_thread_history_1",
+  "channel_thread_history",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_chat_messages_1",
+  "chat_messages",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_chat_messages_2",
+  "chat_messages",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_chat_reply_files_1",
+  "chat_reply_files",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_conversations_1",
+  "conversations",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_usage_daily_1",
+  "usage_daily",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_usage_requests_1",
+  "usage_requests",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_workflow_approvals_1",
+  "workflow_approvals",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_workflow_events_1",
+  "workflow_events",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_workflow_events_2",
+  "workflow_events",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_workflow_node_attempts_1",
+  "workflow_node_attempts",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_workflow_node_attempts_2",
+  "workflow_node_attempts",
+  null
+ ],
+ [
+  "index",
+  "sqlite_autoindex_workflow_runs_1",
+  "workflow_runs",
+  null
+ ],
+ [
+  "table",
+  "attention_ignores",
+  "attention_ignores",
+  "CREATE TABLE attention_ignores ( \"key\" VARCHAR NOT NULL, ignored_at TIMESTAMP NOT NULL, PRIMARY KEY (\"key\") )"
+ ],
+ [
+  "table",
+  "audit_log",
+  "audit_log",
+  "CREATE TABLE \"audit_log\" ( id INTEGER NOT NULL, timestamp TIMESTAMP NOT NULL, event_type VARCHAR NOT NULL, resource_kind VARCHAR, resource_name VARCHAR, actor VARCHAR NOT NULL, details_json TEXT, resource_uid VARCHAR, trace_id VARCHAR, conversation_id VARCHAR, turn_id VARCHAR, PRIMARY KEY (id) )"
+ ],
+ [
+  "table",
+  "channel_outbox",
+  "channel_outbox",
+  "CREATE TABLE \"channel_outbox\" ( id INTEGER NOT NULL, resource_uid VARCHAR NOT NULL, chat_id VARCHAR NOT NULL, thread_id VARCHAR DEFAULT '' NOT NULL, chat_kind VARCHAR NOT NULL, conversation_id VARCHAR NOT NULL, kind VARCHAR NOT NULL, text TEXT NOT NULL, created_at TIMESTAMP NOT NULL, delivered_at TIMESTAMP, PRIMARY KEY (id) )"
+ ],
+ [
+  "table",
+  "channel_replies",
+  "channel_replies",
+  "CREATE TABLE channel_replies ( reply_id VARCHAR NOT NULL, resource_uid VARCHAR NOT NULL, chat_id VARCHAR NOT NULL, thread_id VARCHAR DEFAULT '' NOT NULL, chat_kind VARCHAR NOT NULL, message_ids TEXT NOT NULL, sent_at TIMESTAMP NOT NULL, PRIMARY KEY (reply_id) )"
+ ],
+ [
+  "table",
+  "channel_thread_conversations",
+  "channel_thread_conversations",
+  "CREATE TABLE \"channel_thread_conversations\" ( id INTEGER NOT NULL, resource_uid VARCHAR NOT NULL, chat_id VARCHAR NOT NULL, thread_id VARCHAR DEFAULT '' NOT NULL, active_conversation_id VARCHAR, preferred_agent VARCHAR, updated_at TIMESTAMP NOT NULL, parallel_ordinal INTEGER, parallel_title TEXT, chat_kind VARCHAR, preferred_model VARCHAR, preferred_effort VARCHAR, preferred_cwd TEXT, PRIMARY KEY (id), CONSTRAINT uq_channel_thread_conv_resource_chat_thread UNIQUE (resource_uid, chat_id, thread_id) )"
+ ],
+ [
+  "table",
+  "channel_thread_history",
+  "channel_thread_history",
+  "CREATE TABLE \"channel_thread_history\" ( id INTEGER NOT NULL, resource_uid VARCHAR NOT NULL, chat_id VARCHAR NOT NULL, thread_id VARCHAR DEFAULT '' NOT NULL, conversation_id VARCHAR NOT NULL, chat_kind VARCHAR, opened_at TIMESTAMP NOT NULL, PRIMARY KEY (id), CONSTRAINT uq_channel_thread_history_conversation UNIQUE (conversation_id) )"
+ ],
+ [
+  "table",
+  "chat_messages",
+  "chat_messages",
+  "CREATE TABLE chat_messages ( id VARCHAR NOT NULL, conversation_id VARCHAR NOT NULL, seq INTEGER NOT NULL, role VARCHAR NOT NULL, content TEXT NOT NULL, status VARCHAR DEFAULT 'complete' NOT NULL, model_id VARCHAR, prompt_tokens INTEGER, completion_tokens INTEGER, created_at TIMESTAMP NOT NULL, finished_at TIMESTAMP, PRIMARY KEY (id), CONSTRAINT uq_chat_messages_conv_seq UNIQUE (conversation_id, seq) )"
+ ],
+ [
+  "table",
+  "chat_reply_files",
+  "chat_reply_files",
+  "CREATE TABLE chat_reply_files ( message_id VARCHAR NOT NULL, path VARCHAR NOT NULL, seq INTEGER NOT NULL, added INTEGER NOT NULL, removed INTEGER NOT NULL, diff TEXT, diff_omitted VARCHAR, PRIMARY KEY (message_id, path), FOREIGN KEY(message_id) REFERENCES chat_messages (id) ON DELETE CASCADE )"
+ ],
+ [
+  "table",
+  "conversations",
+  "conversations",
+  "CREATE TABLE \"conversations\" ( id VARCHAR NOT NULL, agent_key VARCHAR NOT NULL, title VARCHAR NOT NULL, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, archived_at TIMESTAMP, agent_config TEXT, channel_uid VARCHAR, peer_chat_id VARCHAR, PRIMARY KEY (id) )"
+ ],
+ [
+  "table",
+  "mcp_invocations",
+  "mcp_invocations",
+  "CREATE TABLE mcp_invocations ( id INTEGER NOT NULL, timestamp TIMESTAMP NOT NULL, resource_uid VARCHAR NOT NULL, capability_type VARCHAR NOT NULL, capability_key VARCHAR NOT NULL, duration_ms INTEGER NOT NULL, status VARCHAR NOT NULL, error_message TEXT, session_id VARCHAR, agent_uid VARCHAR, trace_id VARCHAR, PRIMARY KEY (id) )"
+ ],
+ [
+  "table",
+  "sync_runs",
+  "sync_runs",
+  "CREATE TABLE sync_runs ( id INTEGER NOT NULL, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP NOT NULL, status VARCHAR NOT NULL, join_kind VARCHAR, commit_sha VARCHAR, error TEXT, payload_json TEXT, PRIMARY KEY (id) )"
+ ],
+ [
+  "table",
+  "usage_daily",
+  "usage_daily",
+  "CREATE TABLE usage_daily ( id INTEGER NOT NULL, day VARCHAR NOT NULL, agent_uid VARCHAR NOT NULL, agent_type VARCHAR NOT NULL, connection_uid VARCHAR NOT NULL, model VARCHAR NOT NULL, requests INTEGER NOT NULL, unknown_requests INTEGER NOT NULL, unpriced_requests INTEGER NOT NULL, input_tokens INTEGER NOT NULL, cache_write_5m_tokens INTEGER NOT NULL, cache_write_1h_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, reasoning_tokens INTEGER NOT NULL, web_search_requests INTEGER NOT NULL, cost_usd FLOAT NOT NULL, PRIMARY KEY (id), CONSTRAINT uq_usage_daily_group UNIQUE (day, agent_uid, agent_type, connection_uid, model) )"
+ ],
+ [
+  "table",
+  "usage_requests",
+  "usage_requests",
+  "CREATE TABLE usage_requests ( id INTEGER NOT NULL, source VARCHAR NOT NULL, dedupe_key VARCHAR NOT NULL, attempt_id VARCHAR NOT NULL, started_at TIMESTAMP NOT NULL, agent_uid VARCHAR, agent_type VARCHAR, session_id VARCHAR, request_class VARCHAR, connection_uid VARCHAR, member VARCHAR, wire VARCHAR NOT NULL, endpoint VARCHAR NOT NULL, model VARCHAR, stream BOOLEAN NOT NULL, status INTEGER, outcome VARCHAR NOT NULL, failed_over BOOLEAN NOT NULL, ttft_ms INTEGER, duration_ms INTEGER NOT NULL, usage_known BOOLEAN NOT NULL, input_tokens INTEGER, cache_write_5m_tokens INTEGER, cache_write_1h_tokens INTEGER, cache_read_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, web_search_requests INTEGER, speed VARCHAR, inference_geo VARCHAR, upstream_request_id VARCHAR, cost_usd FLOAT, price_version VARCHAR, unpriced BOOLEAN NOT NULL, PRIMARY KEY (id), CONSTRAINT uq_usage_requests_source_dedupe UNIQUE (source, dedupe_key) )"
+ ],
+ [
+  "table",
+  "workflow_approvals",
+  "workflow_approvals",
+  "CREATE TABLE workflow_approvals ( id VARCHAR NOT NULL, run_id VARCHAR NOT NULL, attempt_id VARCHAR, kind VARCHAR NOT NULL, tool_name VARCHAR, payload JSON NOT NULL, status VARCHAR NOT NULL, decided_by VARCHAR, decided_surface VARCHAR, comment TEXT, expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP NOT NULL, decided_at TIMESTAMP, PRIMARY KEY (id), FOREIGN KEY(run_id) REFERENCES workflow_runs (id) ON DELETE CASCADE, FOREIGN KEY(attempt_id) REFERENCES workflow_node_attempts (id) ON DELETE CASCADE )"
+ ],
+ [
+  "table",
+  "workflow_events",
+  "workflow_events",
+  "CREATE TABLE workflow_events ( id VARCHAR NOT NULL, run_id VARCHAR NOT NULL, sequence INTEGER NOT NULL, event_type VARCHAR NOT NULL, actor JSON NOT NULL, stage_key VARCHAR, node_key VARCHAR, payload JSON DEFAULT '{}' NOT NULL, created_at TIMESTAMP NOT NULL, PRIMARY KEY (id), CONSTRAINT uq_workflow_events_run_sequence UNIQUE (run_id, sequence), FOREIGN KEY(run_id) REFERENCES workflow_runs (id) ON DELETE CASCADE )"
+ ],
+ [
+  "table",
+  "workflow_node_attempts",
+  "workflow_node_attempts",
+  "CREATE TABLE workflow_node_attempts ( id VARCHAR NOT NULL, run_id VARCHAR NOT NULL, stage_key VARCHAR NOT NULL, node_key VARCHAR NOT NULL, attempt INTEGER NOT NULL, status VARCHAR NOT NULL, conversation_id VARCHAR, instructions TEXT, summary TEXT, failure_reason VARCHAR, tokens INTEGER DEFAULT '0' NOT NULL, started_at TIMESTAMP, finished_at TIMESTAMP, agent VARCHAR, model VARCHAR, effort VARCHAR, PRIMARY KEY (id), CONSTRAINT uq_workflow_attempts_run_node_attempt UNIQUE (run_id, node_key, attempt), FOREIGN KEY(run_id) REFERENCES workflow_runs (id) ON DELETE CASCADE )"
+ ],
+ [
+  "table",
+  "workflow_runs",
+  "workflow_runs",
+  "CREATE TABLE workflow_runs ( id VARCHAR NOT NULL, template_ref VARCHAR, template_snapshot JSON NOT NULL, title VARCHAR NOT NULL, workdir VARCHAR NOT NULL, machine_id VARCHAR NOT NULL, status VARCHAR NOT NULL, current_stage_key VARCHAR, current_node_key VARCHAR, version INTEGER DEFAULT '1' NOT NULL, tokens_spent INTEGER DEFAULT '0' NOT NULL, inputs JSON DEFAULT '[]' NOT NULL, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, description TEXT, PRIMARY KEY (id) )"
+ ]
+]

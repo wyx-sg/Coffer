@@ -174,8 +174,8 @@ async def _client_with_audit(tmp_path: Path, *, port: int = 38470):
             binary_path="/test/binary",
         ),
     )
-    # Create an actual coffer.db for the daemon-status probes
-    db_path = monkeypatched_home / ".coffer" / "coffer.db"
+    # Create an actual runs.db for the daemon-status probes
+    db_path = monkeypatched_home / ".coffer" / "runs.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn2 = sqlite3.connect(db_path)
     conn2.execute("CREATE TABLE t (x INTEGER);")

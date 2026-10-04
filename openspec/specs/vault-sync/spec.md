@@ -394,21 +394,6 @@ ways to disagree.
 - **THEN** `null` matches every agent, the list matches exactly its agents, the empty list matches none, and the unknown uid matches nothing without being refused
 - **AND** a scope that carries a machine axis is refused
 
-### Requirement: Remove the machine axis without widening reach
-Removing the axis MUST NOT widen anything. A stored scope that named machines
-was, on this machine, either admitted by that list or dormant because of it;
-the migration MUST resolve each row against the machine id the daemon was
-actually using and write the answer that machine already saw, taking
-`agents: []` — dormant — whenever it cannot tell. Narrowing is visible and one
-click to undo; widening is a resource silently reaching an agent it was kept
-from.
-
-#### Scenario: removing the machine axis narrows rather than widens
-- **GIVEN** stored scopes that named machines — one admitting this machine, one excluding it, and one whose machine list the migration cannot interpret
-- **WHEN** the migration that removes the machine axis runs
-- **THEN** the row that admitted this machine keeps its agents, and the row that excluded it and the uninterpretable row become `agents: []`, dormant
-- **AND** on a vault that cannot name the machine it was using, every machine-scoped row becomes `agents: []`
-
 ### Requirement: Run a round as pull, merge, guard, check out, push
 A round MUST be these steps **in this order**:
 
@@ -1211,12 +1196,6 @@ older layout must upgrade.
 - **WHEN** a round runs
 - **THEN** the round ends `plaintext_found`
 - **AND** the remote keeps its old tip
-
-#### Scenario: two machines upgrade and keep syncing through the replaced remote
-- **GIVEN** two machines that synced through a remote before the upgrade, and the first of them upgraded
-- **WHEN** it joins and replaces the old remote, and the second machine upgrades and joins that remote
-- **THEN** the old history stays in the remote, and the second machine joins as new with nothing lost on either
-- **AND** both machines end with every resource byte-identical and one vault
 
 ### Requirement: Check a remote before it is saved
 A person SHALL be able to ask what a remote holds before saving it — empty, a

@@ -70,7 +70,7 @@ every agent"): the kind is non-toggleable, and it is always enabled.
   submitted material waits until a pass folds it in, and from which each item is
   deleted the moment it has been. It is hidden because it is not knowledge yet —
   no catalogue or count of documents includes it; the collection list reports
-  it separately as `pending_count`. `.history/` and `.raw/` stay gone. It is
+  it separately as `pending_count`. It is
   the one hidden entry a surface shows, read-only: the tree lists a
   collection root's non-empty `.inbox` as a directory and its items as files,
   and the read route reads an item, each marked `inbox: true`. Every other
@@ -318,9 +318,7 @@ whole"; ADR every-vault-write-is-a-validated-commit-naming-its-writer): the
 knowledge history is the vault's history pathspec-limited to `knowledge/`, with
 every path handed back knowledge-root-relative (`KnowledgeHistory`,
 `infrastructure/knowledge/history.py`, a view over the process's one vault
-writer). The history a knowledge root kept in its own `.git` before the vault
-layout was replayed into the vault under `knowledge/` by the one-time upgrade,
-messages, authors and dates kept. The vault's `.git/info/exclude` ignores every
+writer). The vault's `.git/info/exclude` ignores every
 hidden entry under `knowledge/` except `.inbox/`, so a submission is a commit
 and the text a pass consumed stays in history after the inbox file is deleted.
 
@@ -457,115 +455,3 @@ manual trigger consults none of them. A sweep runs at most five passes per
 collection, one item each, and stops a collection's sweep early on `no_model` or
 `failed`. The document is in the vault, so every machine agrees on who the
 owner is.
-
-## What migration 0101 does
-
-*History.* 0101 and 0085 below are Alembic revisions of the pre-vault
-database; they ran against the knowledge root at its old place
-(`~/.coffer/knowledge/`) before the one-time upgrade moved it into the vault.
-
-`20260923_0101_knowledge_one_tree.py`, with the on-disk rewrite frozen beside it
-in `migrations/knowledge_tree_0101.py` (see "Migrate the two-lane corpus into
-the inbox", "Back up the knowledge root before migrating"). It turns 0085's two
-lanes into one tree by **re-distilling everything**: nothing in the old tree is
-renamed into the new one.
-
-- **The backup comes first.** Before a single file moves, the whole knowledge
-  root is copied to a sibling directory, `<root>.pre-0101.bak`, and the path is
-  logged. A second run reuses that backup rather than photographing a tree this
-  pass has already rewritten.
-- **Every Markdown file in both lanes becomes inbox material.** `topics/` first,
-  because those documents are already organised by subject and the first passes
-  lay down a structure; then `sources/`, in the order they were last modified.
-  Each file lands in the collection's `.inbox/` under a flat name that still
-  says where it came from (`topics-account-login-sessions.md`,
-  `sources-q3-review.md`), suffixed on a collision, and its mtime is set to its
-  place in the queue — one second apart, ending now — so the sweep drains it in
-  exactly that order.
-- **What is not Markdown is dropped.** An upload's original bytes lived beside
-  their extracted text in `sources/`; the new layer keeps knowledge, not the
-  documents it arrived in, so those files survive only in the backup.
-- **Both lanes are removed.** `README.md` stays at the collection root.
-
-Nothing in the database changes: the curation settings 0085 seeded — on, owned
-by the machine that migrated — are the ones the sweep that drains the inbox
-reads. `downgrade` changes nothing in the database either and does not put the
-tree back; the backup is the way back, by hand. The pass is idempotent — a
-collection with neither lane is walked past — and a vault with no internal model
-still ends up readable, because the sweep's no-model pass promotes each item to
-a document as it stands.
-
-## What migration 0085 did
-
-*History.* 0085 introduced the `sources/` ÷ `topics/` lanes that 0101 above
-retired; its rewrite is described here because 0101 runs on top of what it left.
-
-`20260917_0085_knowledge_two_lanes.py`, with the on-disk rewrite frozen beside it
-in `migrations/knowledge_tree_0085.py`.
-
-**Order.** The rewrite runs FIRST, before any DDL. It is the only step that
-touches writing the user cannot get back, so running it first means a failure
-anywhere in the revision leaves the database exactly as it was. **And the backup
-comes before the rewrite**: the whole knowledge root is copied to a sibling
-directory named after the revision and the path is logged, before a single file
-moves. An existing backup is kept rather than refreshed — by the time a second
-run happens, refreshing would replace the only pre-migration copy with a tree
-this pass has already rewritten.
-
-The rewrite is not a classification problem. **Everything that exists today is a
-source**: nothing in the old tree was derived, because there was no pass to
-derive it. So every content file moves into `sources/` with its nesting intact,
-and `topics/` is created empty. `.raw/` originals move into `sources/` as
-ordinary visible files beside the Markdown extracted from them, suffixed rather
-than overwritten on a name collision; `.history/` is deleted outright, with the
-reason it existed. `README.md` stays at the collection root. The whole rewrite is
-idempotent — a collection already in the new shape is walked past, so a second
-upgrade neither backs up again nor moves anything.
-
-Then the DDL and the data fixes, each guarded so a database missing a column, a
-table or the row still upgrades:
-
-- `auto_tidy_enabled` / `tidy_owner_machine_id` / `tidy_interval_s` are renamed
-  to `auto_curate_enabled` / `curate_owner_machine_id` / `curate_interval_s`.
-  SQLite cannot rename a column in place, so all three go through one
-  `batch_alter_table` rebuild rather than three.
-- The switch flips **on** and the owner is seeded with this machine, read from
-  `daemon-config.json` directly under `~/.coffer` (see "Keep auto-curation on for
-  migrated vaults"). Without it the upgrade would take the corpus away and give
-  nothing back. The owner is only written when it is currently NULL: a user who
-  already chose a machine chose it for the same corpus.
-- `knowledge_tidied` audit rows are **rewritten** to `knowledge_curated`, not
-  purged. Unlike the events revisions 0069 and 0077 dropped, this one still has a
-  writer — the pass was renamed, not retired — so the history stays readable
-  under the name the code now uses. The value is inlined rather than imported
-  from `AuditEventType`: a migration must mean the same thing forever.
-- The shared `coffer-knowledge` skill Resource, its agent bindings and its
-  master folder all go (see "Migrate the two-lane corpus into the inbox"). At
-  that revision the skill was generated per agent, and a registered shared
-  master left behind would have kept being delivered beside the generated copy —
-  the same layer described twice, one of the descriptions wrong.
-- Revision `0089` finishes that retirement from the other end. The catalogue now
-  rides Coffer's own `coffer-guide` skill, which *is* a registered Resource with
-  a master folder, so what has to go is the per-agent delivery `0085` left in
-  place: the migration sweeps each registered agent's resolved skill directory
-  and removes `skills/coffer-knowledge` when it is a symlink or a directory
-  holding the `SKILL.md`/`README.md` pair that delivery always wrote, and leaves
-  anything else at that name alone (see "Deliver the catalogue through the
-  coffer-guide skill"). Nothing else can clean it up — there was never a binding
-  to reclaim from — and a manual that will never be rewritten again is worse
-  than none.
-
-`downgrade` raises, and **no compatibility shim is left behind anywhere**:
-nothing reads the old column names, the old audit value or the old tree shape
-after this.
-
-### What 0066 left behind
-
-`20260912_0066_knowledge_is_plain_files.py` is the revision 0085 rewrites on top
-of, and its helpers stay frozen in the tree because a migration describes one
-moment in history. It turned `<scope>/{notes,docs}/<ULID>.md` into
-`<collection>/<slug-of-title>.md` — reading `documents.title` before dropping the
-eleven tables that held it — and produced the flat collection with a hidden
-`.raw/` and `.history/` beside it that 0085 splits into lanes. Its own `.raw/`
-handling is not 0085's: the lane it deleted held copies of files that had never
-been converted at all.

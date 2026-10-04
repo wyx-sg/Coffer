@@ -9,7 +9,7 @@ Coffer's web UI is where you manage everything in the vault — agents, MCP serv
 
 ## What the web UI and the command line each do
 
-Every management operation is in the web UI. The command line carries only what needs it: a program runs it (the memory hook, an agent's key helper), it must work when the daemon is down (`coffer daemon start|stop|restart|status`, `coffer migrate`, `coffer path logs`, the daemon's own port in `coffer config`), a Coffer hand-off prompt tells an agent to run it (`coffer run`, `coffer secret list|set`, `coffer log audit|mcp|daemon`, `coffer mcp test`), or the web UI cannot do it (`coffer vault problems`, which lists hand edits the vault refused). Everything else — adding a server, connecting an agent, switching a provider, reading usage — is a page here.
+Every management operation is in the web UI. The command line carries only what needs it: a program runs it (the memory hook, an agent's key helper), it must work when the daemon is down (`coffer daemon start|stop|restart|status`, `coffer path logs`, the daemon's own port in `coffer config`), a Coffer hand-off prompt tells an agent to run it (`coffer run`, `coffer secret list|set`, `coffer log audit|mcp|daemon`, `coffer mcp test`), or the web UI cannot do it (`coffer vault problems`, which lists hand edits the vault refused). Everything else — adding a server, connecting an agent, switching a provider, reading usage — is a page here.
 
 ## Open the UI
 

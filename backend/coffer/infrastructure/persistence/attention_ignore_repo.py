@@ -1,4 +1,4 @@
-"""The attention items ignored on this machine (migration 0134).
+"""The attention items ignored on this machine.
 
 One row per ignored key (``application.attention.attention_key``). The table
 is machine-local like the rest of the database: the vault's sync carries

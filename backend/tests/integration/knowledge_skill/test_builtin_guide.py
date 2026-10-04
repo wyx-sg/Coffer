@@ -20,11 +20,8 @@ from __future__ import annotations
 
 import json
 import pathlib
-import sqlite3
 
 import pytest
-from alembic import command
-from alembic.config import Config as AlembicConfig
 from starlette.testclient import TestClient
 
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
@@ -33,18 +30,6 @@ from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-builtin-guide"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
-
-#: What the retired delivery left in every agent's skills directory.
-_RETIRED = "coffer-knowledge"
-
-_ALEMBIC_INI = (
-    pathlib.Path(__file__).resolve().parents[3]
-    / "coffer"
-    / "infrastructure"
-    / "persistence"
-    / "migrations"
-    / "alembic.ini"
-)
 
 
 @pytest.fixture
@@ -330,68 +315,6 @@ def test_a_changed_catalogue_does_rewrite_the_guide(home) -> None:  # type: igno
     assert second["uid"] == first["uid"]
     assert second["version_hash"] != first["version_hash"]
     assert "Notes an agent wrote" in _master(home).read_text(encoding="utf-8")
-
-
-def _upgrade_from_0088(home: pathlib.Path, config_dir: pathlib.Path) -> None:
-    """Put a vault at the revision before the retirement, with one agent, then
-    run the retirement.
-
-    A migration runs once, against the vault as it stands at that moment — so
-    the only honest way to test this one is to build that moment. Booting the
-    app instead would register the agent AFTER 0089 had already swept, and the
-    test would pass by finding nothing to do.
-    """
-    db = home / "c.db"
-    cfg = AlembicConfig(str(_ALEMBIC_INI))
-    cfg.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{db}")
-    command.upgrade(cfg, "0088")
-    agent_cfg = {"type": "claude_code", "config_dir": str(config_dir)}
-    with sqlite3.connect(db) as conn:
-        conn.execute(
-            "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
-            "VALUES ('agent', 'delivered-to', ?, 1, '2026-01-01', '2026-01-01')",
-            (json.dumps(agent_cfg),),
-        )
-        conn.commit()
-    command.upgrade(cfg, "0089")
-
-
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="migration removes the retired knowledge skill and spares a foreign folder",
-)
-def test_the_retired_knowledge_skill_is_removed_from_every_agent(home) -> None:  # type: ignore[no-untyped-def]
-    """The folder the old delivery left has no binding, so nothing but this
-    migration can reclaim it — and left alone it would keep describing a
-    contract that has moved, never to be rewritten again."""
-    config_dir = home / "agent-cfg"
-    retired = config_dir / "skills" / _RETIRED
-    retired.mkdir(parents=True)
-    (retired / "SKILL.md").write_text("old\n", encoding="utf-8")
-    (retired / "README.md").write_text("# Generated\n", encoding="utf-8")
-
-    _upgrade_from_0088(home, config_dir)
-
-    assert not retired.exists()
-
-
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="migration removes the retired knowledge skill and spares a foreign folder",
-)
-def test_a_foreign_folder_at_the_retired_name_is_left_alone(home) -> None:  # type: ignore[no-untyped-def]
-    """Only what Coffer itself wrote is removed. A skill somebody else put at
-    that name is theirs, and deleting it on the strength of a folder name would
-    be destroying work."""
-    config_dir = home / "agent-cfg"
-    mine = config_dir / "skills" / _RETIRED
-    mine.mkdir(parents=True)
-    (mine / "SKILL.md").write_text("---\nname: coffer-knowledge\ndescription: mine\n---\n")
-
-    _upgrade_from_0088(home, config_dir)
-
-    assert mine.is_dir()
-    assert "mine" in (mine / "SKILL.md").read_text(encoding="utf-8")
 
 
 def test_the_master_folder_carries_no_machine_specific_provenance(home) -> None:  # type: ignore[no-untyped-def]

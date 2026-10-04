@@ -412,18 +412,13 @@ Config-file reads (single files and directory children) MUST return a content fi
 - **AND** the same request with malformed JSON is refused with `unprocessable_entity` (422) and leaves the config file unchanged
 
 ### Requirement: Carry the model binding on the agent record
-The agent record MUST carry the model binding the rest of Coffer reads — `model`, `effort`, `tier_models` (Claude Code only: the model for each of `opus`, `sonnet`, `haiku` and `fable`) — because the model is chosen at the point of USE and an agent is where it is used, not on the connection that serves it. That binding MUST be settable over REST as well as in the web UI: `PATCH /api/v1/agents/{uid}` carries `model` / `effort` / `tier_models`, with an explicit null to unbind `effort` or `tier_models`. A field the request omits is unchanged; `tier_models`, when sent, replaces the whole mapping. Only `effort` and `tier_models` clear on an explicit null; `model` has no null that unbinds it, so an explicit null for it is treated as omitted. A tier other than the four is refused. The binding carries no `fast_model`: Claude Code's background model is its Haiku tier, and the migration that removed the field moved each Claude Code agent's fast model into `tier_models.haiku`. Projecting a binding into the agent's native config is provider-switching's.
+The agent record MUST carry the model binding the rest of Coffer reads — `model`, `effort`, `tier_models` (Claude Code only: the model for each of `opus`, `sonnet`, `haiku` and `fable`) — because the model is chosen at the point of USE and an agent is where it is used, not on the connection that serves it. That binding MUST be settable over REST as well as in the web UI: `PATCH /api/v1/agents/{uid}` carries `model` / `effort` / `tier_models`, with an explicit null to unbind `effort` or `tier_models`. A field the request omits is unchanged; `tier_models`, when sent, replaces the whole mapping. Only `effort` and `tier_models` clear on an explicit null; `model` has no null that unbinds it, so an explicit null for it is treated as omitted. A tier other than the four is refused. The binding carries no `fast_model`: Claude Code's background model is its Haiku tier. Projecting a binding into the agent's native config is provider-switching's.
 
 #### Scenario: bind a model to an agent over REST
 - **GIVEN** a registered agent
 - **WHEN** the user sends `PATCH /api/v1/agents/{uid}` with a `model`, `effort` `high` and `tier_models` `{"haiku": "<model>"}`, then again with `tier_models` null
 - **THEN** the agent record reports the bound `model`, `effort` and `tier_models` after the first edit, and carries no `fast_model`
 - **AND** after the second edit `tier_models` is null while `model` and `effort` are unchanged
-
-#### Scenario: an earlier fast model becomes the Haiku tier
-- **GIVEN** a vault whose Claude Code agent was bound with a `fast_model`
-- **WHEN** the daemon migrates the vault
-- **THEN** the agent's `tier_models.haiku` names that model, unless a Haiku pin was already there, and no agent row carries `fast_model`
 
 ### Requirement: Carry the connection an agent runs on on the agent record
 The agent record MUST carry `connection_uid`: the uid of the provider connection the agent runs on, or none when it runs on its own built-in login. The choice is a field of the agent, so an agent runs on at most one connection by construction and nothing on a connection says which agents use it; agents are filed machine-locally, so the choice never travels in a sync round while the connection itself does. `AgentOut` MUST report it. `PATCH /api/v1/agents/{uid}` MUST NOT set it: the connection is switched through the provider routes (`POST /api/v1/providers/{uid}/activate`, `POST /api/v1/providers/use-builtin/{agent_type}`), because a switch writes the agent's native config together with the field ([provider-switching](../provider-switching/spec.md) "Switch one agent at a time"). A `connection_uid` that names a connection that is missing, switched off or no longer reaches the agent means the agent is treated as on its built-in login (provider-switching "Keep an agent on at most one connection").
@@ -831,8 +826,6 @@ A machine MUST hold at most one agent of each supported type, and that agent's `
 
 Because a type names exactly one agent, every `/api/v1/agents/{uid}/…` route MUST also accept the type — its name (`claude-code`) or its value (`claude_code`) — in place of the uid, and answer exactly as it does for the uid; a type with no agent registered reads as not found.
 
-A database holding several agents of one type from before this rule MUST be collapsed on upgrade to one: the one whose own Coffer MCP entry names its uid, else an enabled one, else the most recently used, else the one on the type's standard directory, else the oldest. Every reach list and channel `default_agent` that named a dropped agent MUST be re-pointed at the kept one — a reach list never widened to every agent by it — the kept agent renamed to its type with its title and description cleared, and each dropped agent reported in the daemon log with its type, name, uid, config directory and the uid kept in its place. Nothing is written into a dropped agent's config directory.
-
 #### Scenario: register a second agent of a registered type
 - **GIVEN** a `codex` agent is registered at `~/.codex`
 - **WHEN** the user registers another `codex` agent, on `~/.codex` or on any other writable directory
@@ -850,12 +843,6 @@ A database holding several agents of one type from before this rule MUST be coll
 - **WHEN** the user submits a new name, then a title, through the kind-agnostic update route
 - **THEN** the name is refused with `NAME_IMMUTABLE` (409) saying the name is the agent's type, and the title is refused as a validation error (422)
 - **AND** registering an agent under any name other than its type's is refused as a validation error
-
-#### Scenario: collapse duplicate agents to one per type on upgrade
-- **GIVEN** a database from before this rule with two `claude_code` agents — one enabled, one disabled but touched more recently — a skill whose reach names both, an MCP server whose reach names only the disabled one, and a channel whose default agent is the disabled one
-- **WHEN** the database is upgraded
-- **THEN** only the enabled agent remains, named `claude-code` with no title or description, and the skill's reach names it once, the MCP server's reach names it, and the channel's default agent is it
-- **AND** the daemon log reports the dropped agent's name, uid and config directory beside the uid kept in its place
 
 ### Requirement: Report every supported type's detection state
 The system MUST serve `GET /api/v1/agents/types`, one row per supported type in manifest order whether or not an agent of it is registered, so a surface can always render one row per type. Each row MUST carry the `type`, its agent's `name`, the `display_name`, the `config_dir` — the registered agent's, or the one registering would use — the type's `standard_config_dir`, the `default_skill_dir`, the detection `state` and `version` of "Detect an agent by its program and its config directory", the registered agent's `uid` (`null` when none), whether it is `addable` now, the product's official `install_url` (kept in the manifest, so a surface can send a person whose machine lacks the program to its install page), and `other_config_dir`: an existing directory the type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment other than `config_dir`, offered as a different config directory to use, never as a second agent. A type not registered is `addable` exactly when its program is installed. The read is derived at request time, stores nothing and audits nothing.

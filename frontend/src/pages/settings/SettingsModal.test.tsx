@@ -40,7 +40,7 @@ beforeEach(() => {
             policies: [],
             vault: { path: "/v", bytes: 0, versions: null },
             local_content: { folder: "/c", locations: [], bytes: 0 },
-            history: { path: "/c/coffer.db", bytes: 0 },
+            history: { path: "/c/runs.db", bytes: 0 },
             cache: { bytes: 0 },
             status: "ready",
             version: "0.0.0",

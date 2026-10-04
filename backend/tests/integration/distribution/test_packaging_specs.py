@@ -311,10 +311,10 @@ def _spec_excludes(spec_name: str) -> set[str]:
 def test_cli_spec_excludes_nothing_the_cli_imports_at_start() -> None:
     """Every package the CLI loads on start must be in the frozen CLI.
 
-    ``coffer.spec`` excluded SQLAlchemy and Alembic as daemon-only after
-    ``coffer migrate`` began importing them at module level, and the frozen
-    ``coffer`` then failed every command, ``--version`` included, with
-    ``ModuleNotFoundError: No module named 'sqlalchemy'``. An exclude wins over
+    ``coffer.spec`` excludes the daemon-only packages (SQLAlchemy, Alembic …);
+    a CLI module that began importing one at module level would make the
+    frozen ``coffer`` fail every command, ``--version`` included, with
+    ``ModuleNotFoundError``. An exclude wins over
     the import graph, and nothing but a real PyInstaller build runs it, so this
     imports the CLI's entry module in a clean interpreter and checks what it
     loaded against the spec's excludes."""
@@ -337,23 +337,6 @@ def test_cli_spec_excludes_nothing_the_cli_imports_at_start() -> None:
         "coffer.spec excludes packages the CLI imports at start, so the frozen "
         f"CLI cannot run at all: {excluded_but_loaded}"
     )
-
-
-def test_cli_spec_ships_the_migration_tree_for_coffer_migrate() -> None:
-    """``coffer migrate`` runs Alembic on ``runs.db`` inside the CLI process,
-    and Alembic reads ``alembic.ini``, ``env.py`` and the revisions from disk,
-    so the CLI binary carries the tree as data the way the daemon does."""
-    tree = _parse_spec(_REPO / "backend" / "coffer.spec")
-    migrations = "coffer/infrastructure/persistence/migrations"
-    pairs = {
-        (node.elts[0].value, node.elts[1].value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Tuple)
-        and len(node.elts) == 2
-        and all(isinstance(e, ast.Constant) for e in node.elts)
-    }
-    assert (migrations, migrations) in pairs
-    assert {"alembic", "sqlalchemy.dialects.sqlite", "aiosqlite"} <= _collect_submodules_args(tree)
 
 
 # ---------------------------------------------------------------------------

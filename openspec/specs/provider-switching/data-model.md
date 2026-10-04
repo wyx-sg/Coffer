@@ -86,9 +86,8 @@ class CuratedModel(BaseModel):     # extra="forbid"
 ```
 
 `Modality` is a `StrEnum` over `text`, `embedding`, `image`, `video`, `audio`.
-`infer_modality(model_id)` holds the single inference rule, used in exactly two
-places — the one-shot migration that converted stored plain-string entries, and
-endpoint introspection, which returns a suggestion the connection editor
+`infer_modality(model_id)` holds the single inference rule, used in one
+place — endpoint introspection, which returns a suggestion the connection editor
 pre-fills. Nothing infers at load time: a stored entry is taken as written.
 
 ### `ResolvedConnection` (`domain/provider/config.py`)
@@ -289,36 +288,7 @@ carries it by merging commits; nothing in this kind serialises or applies it.
 
 A connection is a resource file, `vault/resources/provider/<name>.json`, whose
 `config` is `ProviderConfig`; its reach is `local/reach.json` (spec
-resource-framework). **No tables.** Every shape change this kind needed while
-connections were rows of the pre-vault database was an Alembic data migration,
-one-shot, with no load-time shim; the one-time upgrade to the vault layout
-carried their result into the files:
-
-| Revision | What it did |
-|---|---|
-| `0036` | moved the retired `chat_models` registry into provider resources |
-| `0037` | forced the then-connection-level `wire_api` to `responses` |
-| `0040` | slimmed the connection: `wire_format` → `protocol`, stripped `model` / `fast_model` / `wire_api` |
-| `0051` | stripped the retired agent types from connections' then-`compatible_agents` |
-| `0054` | added the partial unique index behind one global internal default (now the kind's `exclusive_flags`) |
-| `0059` | wrote `models: []` into every existing row |
-| `0064` | converted plain-string curated entries into `{id, modality}` objects |
-| `0065` | pointed the embedding configuration at a connection, before it was removed |
-| `0071` | materialised each row's effective reach into the framework `scope` and stripped `compatible_agents` |
-
-Three more belong to the agent side of this feature: `0060` added a per-agent
-curated set, `0063` took it back off, and `0061` forced the agent binding's
-`wire_api` to `responses` (the field has since been removed).
-
-## Upgrade
-
-The one-time vault upgrade (`infrastructure/vault/migration`) converts the old
-connection flag into the agent field: every enabled, non-`ollama` connection that
-had `is_active = true` becomes `connection_uid` on each agent whose type the
-connection reaches (when two connections claimed the same agent, the first by
-name wins it), then `is_active` is dropped from every provider config and
-`wire_api` from every agent config. No alembic revision, no tolerant loader: a
-vault that has been upgraded carries neither key.
+resource-framework). **No tables.**
 
 ## Audit events
 
@@ -444,7 +414,7 @@ from the stored document when unset.
 cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
 omitted from the stored document while unknown.
 
-### Usage (`usage_requests`, `usage_daily` in `runs.db`; migration 0111)
+### Usage (`usage_requests`, `usage_daily` in `runs.db`)
 
 - `usage_requests` — one row per proxied upstream attempt: every field of
   `UsageRecord` (`domain/usage/records.py`) plus `cost_usd`, `price_version`
@@ -454,5 +424,4 @@ omitted from the stored document while unknown.
   unknown-usage and unpriced counts, token sums per category, estimated cost.
   Grouping columns use `''` for "none". Kept 365 days.
 
-Migration 0140 dropped `quota_snapshots`, the table that held each subscription
-agent's latest official quota window: Coffer no longer shows quota.
+Coffer keeps no subscription quota table and shows no quota.

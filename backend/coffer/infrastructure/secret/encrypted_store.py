@@ -19,9 +19,8 @@ Timestamps. ``updated_at`` is the token's own encryption time, which the
 ciphertext carries in clear (``coffer.domain.vault.fernet_time``), so it is
 right on every machine without a second file to keep in step. ``created_at``
 is when *this machine* first stored the ref, kept in
-``local/secret-boundary/times.json`` (the one-time upgrade carries each
-ref's old creation time there); a ref that arrived from another machine by
-sync has no such moment, so ``created_at`` answers None
+``local/secret-boundary/times.json``; a ref that arrived from another
+machine by sync has no such moment, so ``created_at`` answers None
 for it and the secret boundary never counts it as a value a person here has
 just supplied (spec secret "Hold a secret for a new destination until a
 person approves it"). Listings show the encryption time in its place.
@@ -72,8 +71,8 @@ class EncryptedSecretStore:
     the Secrets page and the secret boundary need.
 
     ``home`` is the user's home (the parent of ``.coffer``); left out, every
-    call resolves it from ``HOME`` so a test or a rehearsal in a throwaway
-    home moves the store with it.
+    call resolves it from ``HOME`` so a test in a throwaway home moves the
+    store with it.
     """
 
     def __init__(self, key: bytes, *, home: Path | None = None) -> None:

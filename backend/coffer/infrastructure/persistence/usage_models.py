@@ -1,4 +1,4 @@
-"""ORM models for usage metering (migration 0111; ADR
+"""ORM models for usage metering (ADR
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
 Two tables:

@@ -9,7 +9,7 @@ Coffer 把状态存在 `~/.coffer/` 下的五个**存储类别**里，每个类�
 
 ## 要解决的问题 {#the-problem-it-solves}
 
-Coffer 的状态过去是按写它的代码碰巧放在哪就存在哪。配置放在一个 SQLite 文件 `coffer.db` 里，旁边是知识和技能的文件树。生效范围、同步指针和聊天历史，和你希望在每台机器上都有的资源放在同一个数据库里。于是同步必须把数据库序列化成文件、再翻译回来，还要为每个不能跟着走的字段记住一条规则。每一条这样的规则都是一个可能出错的地方。
+状态如果不分性质、写它的代码碰巧放在哪就存在哪，就会出一种特定的错。配置放在一个 SQLite 文件里，旁边是知识和技能的文件树，生效范围、同步指针和聊天历史又和你希望在每台机器上都有的资源放在同一个数据库里，同步就必须把数据库序列化成文件、再翻译回来，还要为每个不能跟着走的字段记住一条规则。每一条这样的规则都是一个可能出错的地方。
 
 这些状态有五种不同的性质，各自需要不同的处理：
 
@@ -115,8 +115,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ├── secret/                       machine-local ciphertext (proxy tokens)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote
-├── sync/round.json               a stopped round, a hold, a join's pending choices
-└── migration.json                the record of the one-time upgrade
+└── sync/round.json               a stopped round, a hold, a join's pending choices
 ```
 
 每个文件是一个 JSON 对象，整体读取，在按文件的锁下修改，再原子写回（先写一个同级临时文件，再改名）。缺失的文件读作空。解析不了的文件会被挪到一边，命名为 `<name>.unreadable-<n>`，记日志，并读作空：本地状态可以重新设置，一个因为设置文件而拒绝启动的守护进程，比一个忘了设置的守护进程更糟。
@@ -141,7 +140,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | `attention_ignores` | 这台机器上有人忽略掉的“需要你处理”项，按项键记录，附带忽略时间。待处理列表会把它们排除在条目和计数之外。 |
 
 ::: details 没有代码读取的表
-迁移链还会创建 `workflow_runs`、`workflow_events`、`workflow_node_attempts` 和 `workflow_approvals`。这个构建里没有模块读取它们；它们之所以存在，是因为迁移是一条线性历史，后面的修订建立在创建它们的那些修订之上。
+基线还会创建 `workflow_runs`、`workflow_events`、`workflow_node_attempts` 和 `workflow_approvals`。这个构建里没有模块读取它们；它们之所以存在，是因为基线 schema 包含了它们。
 :::
 
 每个连接都会执行这组 pragma：
@@ -196,15 +195,13 @@ flowchart LR
 
 ## runs.db 的迁移 {#migrations-of-runs-db}
 
-`runs.db` 的 schema 变更是放在持久化包里的 Alembic 修订，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`。当前 head 是 `0138`，它删掉了 `conversations` 上没人使用的 `owner` 列。`0137` 给审计日志加上了关联 id，更早的 `0136` 把旧数据库变成了 `runs.db`：它把历史表改为以 uid 为键，并删掉了所有状态已移到文件里的表。schema 变更永远是一次迁移，从不由模型隐式建表。
+`runs.db` 的 Alembic 历史从一个基线修订 `0146` 开始，它一步创建出完整的 schema。之后的每次 schema 变更都是叠在它上面的一个新修订，放在持久化包里，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`（下一个是 `0147`），并带有可用的 `downgrade()`。schema 变更永远是一个修订，从不由模型隐式建表。
 
 迁移在守护进程的 lifespan 里、在构建任何服务之前运行：
 
 ```mermaid
 flowchart TB
-  A["守护进程启动"] --> H{"家目录里只有 coffer.db，<br/>或是一次回滚过的升级？"}
-  H -- 是 --> Z["拒绝：运行 coffer migrate<br/>（或 --resume）"]
-  H -- 否 --> B["读取 runs.db 的修订"]
+  A["守护进程启动"] --> B["读取 runs.db 的修订"]
   B --> C{"这个构建认识它吗？"}
   C -- 否 --> X["以 DB_SCHEMA_TOO_NEW 失败"]
   C -- 是 --> D{"已在 head？"}
@@ -216,7 +213,6 @@ flowchart TB
 
 - **备份。** 升级之前，运行器把数据库连同它的 `-wal` 和 `-shm` 伴随文件复制为 `runs.db.pre-<revision>`。已有的副本从不被覆盖，只保留最新的三份。要撤销一次有问题的迁移：停止守护进程，把 `runs.db` 挪开，把对应的副本改回原名，再启动上一个构建。
 - **来自更新构建的 schema。** 这个构建不认识的修订会让守护进程在碰任何东西之前以 `DB_SCHEMA_TOO_NEW` 停止，遵循[检测而不是猜测](/zh/architecture/design-principles#detect-never-refuse)的原则。
-- **旧的家目录。** 只有 `coffer.db` 的家目录不会被守护进程迁移。它会以 `VAULT_MIGRATION_REQUIRED` 拒绝启动，并提示 `coffer migrate`，即你自己运行的一次性升级。见[升级已有的 Coffer](/zh/guides/upgrading)。
 
 ## 静态存储的密钥 {#secrets-at-rest}
 
@@ -240,9 +236,9 @@ flowchart TB
 | --- | --- |
 | 领域层的 `vault` 包 | 布局、文档、格式版本、写入者和 trailer。 |
 | 应用层的 `vault` 包 | 校验规则、历史与恢复、问题。 |
-| 基础设施层的 `vault` 包 | `~/.coffer` 下各类别的根目录、仓库、写入器、扫描器、资源和状态存储、生效范围、本地 JSON、一次性升级。 |
+| 基础设施层的 `vault` 包 | `~/.coffer` 下各类别的根目录、仓库、写入器、扫描器、资源和状态存储、生效范围、本地 JSON。 |
 | 基础设施层的 `persistence` 包 | runs.db 引擎、模型和 Alembic 修订；`derived.db`。 |
-| 基础设施层的 `persistence` 包（迁移运行器部分） | 迁移运行器：启动时迁移、备份、“太新”守卫、拒绝旧的家目录；守护进程启动和 `coffer migrate` 都调用它。 |
+| 基础设施层的 `persistence` 包（迁移运行器部分） | 迁移运行器：启动时迁移、备份、“太新”守卫；由守护进程启动时调用。 |
 | 基础设施层的 `secret` 包 | 以文件形式存放的密钥密文。 |
 | 基础设施层的 `daemon` 包 | `daemon-config.json`。 |
 

@@ -3,7 +3,7 @@
 The write lock, the owned paths and the problems list only mean something if
 every writer in the process consults the same instance, so the writer is
 looked up here by the vault root it serves — which follows ``HOME``, so a test
-or a rehearsal in a throwaway home gets its own. The composition root sets the
+in a throwaway home gets its own. The composition root sets the
 validator and the machine id once; every store asks for the writer here.
 """
 

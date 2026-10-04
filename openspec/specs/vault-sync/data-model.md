@@ -18,10 +18,7 @@ piece lives is the design:
 There is no pointer of its own and no retry set: the last commit this machine
 converged at is the vault's own history (and its descriptor's
 `last_converged_commit`), and a round that cannot apply stops whole instead of
-leaving some paths behind. In the one-time upgrade to the vault layout the old
-remote row was carried to `local/sync/remote.json` and Alembic revision 0136
-dropped `sync_remotes`, `sync_convergence_state` and `sync_held_paths` and
-emptied `sync_runs`.
+leaving some paths behind.
 
 ## `local/sync/remote.json`
 
