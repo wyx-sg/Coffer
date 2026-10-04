@@ -4,8 +4,9 @@
 // thread's user messages the channel has not received yet.
 import type { ChannelMirror, ChannelPlatform, ContentBlock, Message } from "@/lib/api/chat";
 
-/** The prefix the channel copy of a web reply carries (backend `FROM_COFFER`). */
-const FROM_COFFER = "(from Coffer) ";
+/** The prefix line the channel copy of a web reply carries — `<owner> · from
+ *  Coffer` and a newline (backend `mirror_target.from_coffer`). */
+const FROM_COFFER = /^[^\n]* · from Coffer\n/;
 
 const PLATFORM_NAMES: Record<ChannelPlatform, string> = {
   seatalk: "SeaTalk",
@@ -27,7 +28,7 @@ export function messageText(blocks: ContentBlock[]): string {
 
 /**
  * The ids of the user messages the channel still owes: each undelivered
- * `reply` (its stored text is the message prefixed with `(from Coffer) `)
+ * `reply` (its stored text is the message under the `<owner> · from Coffer` line)
  * marks the NEWEST not-yet-marked user message with the same text, so a text
  * sent twice with one copy delivered is marked once.
  */
@@ -40,7 +41,7 @@ export function undeliveredMessageIds(
   const owed = new Map<string, number>();
   for (const u of mirror.undelivered) {
     if (u.kind !== "reply") continue;
-    const text = u.text.startsWith(FROM_COFFER) ? u.text.slice(FROM_COFFER.length) : u.text;
+    const text = u.text.replace(FROM_COFFER, "");
     owed.set(text, (owed.get(text) ?? 0) + 1);
   }
   if (owed.size === 0) return ids;

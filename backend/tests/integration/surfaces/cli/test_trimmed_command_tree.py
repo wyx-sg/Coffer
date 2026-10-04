@@ -42,6 +42,7 @@ _EXPECTED = {
     "run",
     "secret list",
     "secret set",
+    "cli list",
     "log audit",
     "log mcp",
     "log daemon",

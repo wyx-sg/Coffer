@@ -242,9 +242,8 @@ preference, which a provider is not.
 can be cited by an MCP server, a model provider, a channel and a skill at once
 ([Resources Cite Secrets by Opaque Reference](credential-references.md)), so filing it under any
 one of those pages leaves the other three blind to it. The page's job is cross-cutting — list
-every secret, show what uses it, find the unused ones, refuse to delete one still cited (spec
-secret "Refuse to delete a secret still in use"), and move plaintext secret files into
-the store — which is what System is for. It is an entry rather than a Settings tab because it
+every secret, show what uses it, find the unused ones, and refuse to delete one still cited (spec
+secret "Refuse to delete a secret still in use") — which is what System is for. It is an entry rather than a Settings tab because it
 holds data the user manages, not a preference; Settings › Security keeps only what is about this
 machine (where the master key lives), so a user never looks for a token among display
 preferences. A secret field in a resource's own dialog stays where it is: a secret is still

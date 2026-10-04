@@ -67,6 +67,12 @@ _TITLE_NOISE_PREFIXES: tuple[str, ...] = (
 # survives.
 _TAG = re.compile(r"<\s*/?[A-Za-z_][\w.:-]*(?:\s[^<>]*)?/?>")
 
+# An attachment placeholder the agent writes into the turn text — Claude Code's
+# ``[Image: source: /path/to/file.png]`` or ``[Image #1]`` — is not something the
+# person typed, so it never reaches a title; a turn of nothing else is no title
+# candidate at all.
+_IMAGE_MARKER = re.compile(r"\[Image(?:\s*#\d+)?(?::[^\]\n]*)?\]", re.IGNORECASE)
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -93,7 +99,7 @@ def _is_real_user_text(text: str) -> bool:
     any turn that is only markup — either whole, or in the one line that would
     have become the title.
     """
-    stripped = text.strip()
+    stripped = _IMAGE_MARKER.sub("", text).strip()
     if not stripped:
         return False
     if stripped.startswith("/"):  # bare slash command, e.g. "/clear"
@@ -105,7 +111,7 @@ def _is_real_user_text(text: str) -> bool:
 
 def _make_title(text: str) -> str:
     """First non-empty line of *text*, scrubbed, collapsed, and truncated."""
-    collapsed = " ".join(scrub_secrets(_first_line(text)).split())
+    collapsed = " ".join(scrub_secrets(_first_line(_IMAGE_MARKER.sub("", text))).split())
     if len(collapsed) > _TITLE_MAX_CHARS:
         return collapsed[: _TITLE_MAX_CHARS - 1].rstrip() + "…"
     return collapsed

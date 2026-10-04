@@ -1,23 +1,14 @@
 // src/lib/hooks/useSecrets.ts — every query and mutation behind the Secrets page (spec secret).
 //
-// The list, storing and deleting a value, the plaintext scan and its import,
-// and the desktop app's presence-gated reveal. Nothing here ever caches a
+// The list, storing and deleting a value, and the desktop app's presence-gated reveal. Nothing here ever caches a
 // value: the listing carries none, and a revealed one lives only in the
 // mutation that fetched it (`gcTime: 0`, reset when the dialog hides it).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 
 import { secretsApi } from "@/lib/api/secret";
-import { translateApiError } from "@/lib/api/errors";
-import {
-  secretScanKey,
-  secretsKey,
-  secretsListKey,
-  pendingApprovalsKey,
-} from "@/lib/api/queryKeys";
+import { secretsKey, secretsListKey, pendingApprovalsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { revealSecret } from "@/lib/tauri";
-import { useToast } from "@/components/ui/toast";
 
 /** Every stored and cited ref with what uses it; read only while `enabled`. */
 export function useSecrets(enabled = true) {
@@ -67,36 +58,6 @@ export function useBulkDeleteSecrets() {
     isPending: bulk.isPending,
     run: (refs: string[]) => bulk.run(refs, (ref) => secretsApi.remove(ref)),
   };
-}
-
-/** The plaintext secrets found in files. Read only while `enabled` (the dialog is open). */
-export function useSecretScan(enabled: boolean) {
-  return useQuery({
-    queryKey: secretScanKey,
-    queryFn: () => secretsApi.scan(),
-    enabled,
-    // A scan reads files that change behind Coffer's back: never serve an old one.
-    staleTime: 0,
-    gcTime: 0,
-  });
-}
-
-/** Move chosen findings into the store; `dryRun` answers what would move and writes nothing. */
-export function useImportSecrets() {
-  const qc = useQueryClient();
-  const refresh = useRefreshSecrets();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: ({ ids, dryRun }: { ids: string[]; dryRun: boolean }) =>
-      secretsApi.importFindings(ids, dryRun),
-    onSuccess: (_out, { dryRun }) => {
-      if (dryRun) return;
-      refresh();
-      qc.removeQueries({ queryKey: secretScanKey });
-    },
-    onError: (e) => toast.error(translateApiError(t, e)),
-  });
 }
 
 /** Reveal one value through the desktop app's presence check. Throws outside it. */

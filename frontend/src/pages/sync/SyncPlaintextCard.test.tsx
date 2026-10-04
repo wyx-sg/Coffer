@@ -1,8 +1,8 @@
 // frontend/src/pages/sync/SyncPlaintextCard.test.tsx
 //
 // A round that found a plaintext secret: the card names each place (never a
-// value), opens the Secrets scan for those files, and pushes anyway only after
-// the confirmation.
+// value), carries the agent hand-off, and pushes anyway only after the
+// confirmation.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -13,9 +13,8 @@ import { syncState, primaryAction } from "./syncPageState";
 import { idleMutation, makeRound, makeStatus } from "./syncTestKit";
 
 vi.mock("@/lib/hooks/useSync", () => ({ usePushAnyway: vi.fn() }));
-vi.mock("@/components/secret/ScanSecretsDialog", () => ({
-  ScanSecretsDialog: ({ open, onlyPaths }: { open: boolean; onlyPaths?: string[] }) =>
-    open ? <div data-testid="scan">{(onlyPaths ?? []).join(",")}</div> : null,
+vi.mock("@/components/handoff/AgentHandoff", () => ({
+  AgentHandoff: ({ prompt }: { prompt: string }) => <button title={prompt}>Ask an agent</button>,
 }));
 vi.mock("./useSyncIgnore", async (orig) => ({
   ...(await orig<typeof import("./useSyncIgnore")>()),
@@ -67,11 +66,12 @@ describe("SyncPlaintextCard", () => {
       expect(places).not.toHaveTextContent("knowledge/old.md");
       expect(within(card).queryByRole("button", { name: /retry/i })).toBeNull();
 
-      // Move into secrets… opens the scan limited to the files the card names.
-      fireEvent.click(within(card).getByRole("button", { name: "Move into secrets…" }));
-      expect(screen.getByTestId("scan")).toHaveTextContent(
-        "knowledge/team/db.md,resources/mcp/x.json",
+      // The hand-off asks an agent to move the values; the card has no scan of its own.
+      expect(within(card).getByRole("button", { name: "Ask an agent" })).toHaveAttribute(
+        "title",
+        "move each value into a Coffer secret",
       );
+      expect(within(card).queryByRole("button", { name: "Move into secrets…" })).toBeNull();
 
       fireEvent.click(within(card).getByRole("button", { name: "Push anyway…" }));
       expect(mutate).not.toHaveBeenCalled();

@@ -17,6 +17,7 @@
 import { test, expect } from "@playwright/test";
 import {
   beforeEachInjectToken,
+  ensureStubCodex,
   readDaemonToken,
   resolveResourceUid,
 } from "./_helpers";
@@ -74,6 +75,9 @@ async function deleteAgentByApi(name: string): Promise<void> {
 test("agent workspace tabs render MCP entries, plugins and the delivered skill", async ({
   page,
 }) => {
+  // The daemon reads this agent's config through a program on its PATH; the
+  // stand-in keeps a real Codex (or none, on CI) out of the run.
+  ensureStubCodex();
   const { token, port } = readDaemonToken();
   // An agent is one per type and named by it.
   const name = "codex";
@@ -112,7 +116,10 @@ test("agent workspace tabs render MCP entries, plugins and the delivered skill",
     });
 
     // Plugins tab — the plugin parsed out of the same config.toml renders.
-    await page.getByRole("tab", { name: /^plugins/i }).click();
+    // Plugins sits in the tab bar's More menu.
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^plugins/i }).click();
+    await expect(page).toHaveURL(/\/agents\/codex\/plugins$/);
     await expect(page.getByText("e2e-plugin", { exact: true })).toBeVisible({
       timeout: 10_000,
     });

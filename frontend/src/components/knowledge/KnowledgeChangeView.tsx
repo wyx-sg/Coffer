@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Undo2 } from "lucide-react";
 
-import { KnowledgeDiff } from "@/components/knowledge/KnowledgeDiff";
+import { DiffLines } from "@/components/change-preview/FileDiff";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeUndoPassDialog } from "@/components/knowledge/KnowledgeUndoPassDialog";
 import { KnowledgeUndoRefusal } from "@/components/knowledge/KnowledgeUndoRefusal";
@@ -220,7 +220,7 @@ export function KnowledgeChangeView({ version, collections }: Props) {
                       ) : null}
                     </span>
                   </div>
-                  {refusal ? null : <KnowledgeDiff rows={parseUnifiedDiff(d.diff)} />}
+                  {refusal ? null : <DiffLines lines={parseUnifiedDiff(d.diff)} />}
                 </section>
               );
             })}

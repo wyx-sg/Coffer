@@ -33,7 +33,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── logs/                         # daemon, proxy, shim and upstream logs
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
 ├── vendor/                       # operator-supplied SeaTalk SDK
-├── secrets/                      # legacy plaintext key files (only if left from an old setup)
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
 
@@ -157,7 +156,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `vendor/` | 你放 SeaTalk WebSocket SDK（`seatalk_oapi_sdk`）的地方。Coffer 只读取它。 | 你 | 否 | 不用 SeaTalk 就可以。 |
-| `secrets/` | 遗留目录：`coffer run --secret` 出现之前技能读取的明文密钥文件。Coffer 从不往这里写。 | 你 | 否 | 其中的密钥进了保险库之后可以。 |
 | `eval-capture.jsonl` | 捕获的 `coffer__search_tools` 调用，仅在设置了 `COFFER_EVAL_CAPTURE` 时存在。 | 守护进程 | 否 | 可以。 |
 
 ## ~/.coffer 之外 {#outside-coffer}

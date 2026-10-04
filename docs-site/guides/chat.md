@@ -139,7 +139,7 @@ If Claude Code is not logged in, the banner says so and tells you to run `claude
 A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Conversations page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
 
 - The title bar shows where the conversation came from, for example **SeaTalk · coffer-dev › thread**; a reply typed here also goes there. When a reply cannot go back to the chat it says **Replies stay in Coffer** with a **?** that says why.
-- The reply is posted in that chat or thread as `(from Coffer) …`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
+- The reply is posted in that chat or thread under a first line `<your name> · from Coffer`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
 - A reply goes only to the chat and thread the conversation belongs to, never anywhere else.
 
 A conversation that lives in a **group's main chat** is never mirrored: the composer says the reply stays in Coffer. A main chat is where the whole room reads, and a reply you typed at your desk, with an answer the room did not ask for, is not something to drop in front of everyone. A direct chat, its parallel threads and a group thread are yours to continue, so they are mirrored.
