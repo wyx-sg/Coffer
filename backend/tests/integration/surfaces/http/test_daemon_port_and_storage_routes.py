@@ -40,6 +40,7 @@ def home(tmp_path, monkeypatch) -> Path:
     (h / ".coffer").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(h))
     monkeypatch.delenv("COFFER_DB_URL", raising=False)
+    monkeypatch.delenv("COFFER_LOG_DIR", raising=False)
     return h
 
 
@@ -184,6 +185,7 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
     _write(coffer / "content" / "channel-media" / "m2", 200)
     _write(coffer / "runs.db", 1000)
     _write(coffer / "runs.db-wal", 24)
+    _write(coffer / "logs" / "daemon.log", 76)
     _write(coffer / "derived" / "memory" / "p1" / "MEMORY.md", 70)
     _write(coffer / "derived" / "cache" / "agent" / "summaries.json", 30)
     async with client:
@@ -199,7 +201,7 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
         str(coffer / "content" / "channel-media"),
         str(coffer / "content" / "chat-media"),
     ]
-    assert body["history"] == {"path": str(coffer / "runs.db"), "bytes": 1024}
+    assert body["history"] == {"path": str(coffer / "runs.db"), "bytes": 1100}
     assert body["cache"] == {"bytes": 100}
 
 
