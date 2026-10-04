@@ -26,7 +26,7 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
 import { filterConversations } from "@/lib/conversations/filters";
-import { readHandoffState } from "@/lib/conversations/handoff";
+import { readDraftAgentState, readHandoffState } from "@/lib/conversations/handoff";
 import {
   defaultDraftAgent,
   readLastWorkingDir,
@@ -89,10 +89,24 @@ export function useChatController() {
   const { pathname, search: locationSearch } = location;
   useEffect(() => {
     const handoff = readHandoffState(handoffState);
-    if (!handoff) return;
-    setDraftConfig({ agentKey: handoff.agentKey, cwd: handoff.cwd, model: null, effort: null });
-    setDraftPrefill({ text: handoff.prompt, attachments: [] });
-    setDraftFromHandoff(true);
+    const draftAgent = handoff ? null : readDraftAgentState(handoffState);
+    if (handoff) {
+      setDraftConfig({ agentKey: handoff.agentKey, cwd: handoff.cwd, model: null, effort: null });
+      setDraftPrefill({ text: handoff.prompt, attachments: [] });
+      setDraftFromHandoff(true);
+    } else if (draftAgent) {
+      // An agent page's New conversation: a fresh draft on that agent, nothing typed.
+      setDraftConfig({
+        agentKey: draftAgent,
+        cwd: readLastWorkingDir(),
+        model: null,
+        effort: null,
+      });
+      setDraftPrefill(null);
+      setDraftFromHandoff(false);
+    } else {
+      return;
+    }
     navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
   }, [handoffState, pathname, locationSearch, navigate]);
 

@@ -156,6 +156,18 @@ describe("useChatController hand-off", () => {
     expect(result.current.draftPrefill).toBeNull();
   });
 
+  test("an agent page's New conversation opens an empty draft on that agent", () => {
+    route = { id: "new" };
+    location = { pathname: "/conversations/new", search: "", state: { draftAgent: "codex" } };
+    const { result } = renderHook(() => useChatController());
+
+    expect(result.current.effectiveDraft.agentKey).toBe("codex");
+    expect(result.current.draftPrefill).toBeNull();
+    expect(result.current.draftFromHandoff).toBe(false);
+    expect(navigate).toHaveBeenCalledWith("/conversations/new", { replace: true, state: null });
+    expect(createConv.mutate).not.toHaveBeenCalled();
+  });
+
   test("a hand-off in the state of any other page is ignored", () => {
     location = {
       pathname: "/conversations",
