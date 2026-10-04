@@ -21,8 +21,10 @@ export interface paths {
          *     a secret nothing references any more shows up as ``unreferenced``. A
          *     standalone ``secret/<name>`` also lists the skills whose files cite its
          *     ``coffer://secret/<name>``. A stored ref whose ciphertext this Mac's key
-         *     cannot open is ``locked``. Presence only — no value is decrypted, so
-         *     nothing is audited.
+         *     cannot open is ``locked``. An agent's model-proxy token
+         *     (``proxy-token/<agent name>``) is not listed: Coffer mints it, the agent
+         *     fetches it, and no person enters, replaces or cites it. Presence only — no
+         *     value is decrypted, so nothing is audited.
          */
         get: operations["list_refs_api_v1_secrets_get"];
         put?: never;
