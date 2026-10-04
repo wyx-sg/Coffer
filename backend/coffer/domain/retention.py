@@ -47,6 +47,11 @@ DEFAULT_ATTACHMENT_RETENTION_DAYS = 30
 #: (Settings > Data > History).
 DEFAULT_SKILL_DATA_RETENTION_DAYS = 30
 
+#: The config backups policy's default window (by backup mtime, under
+#: ``~/.coffer/config-backups``); the newest backup of each file is kept however old.
+#: The user can change it or keep them forever (Settings > Data > History).
+DEFAULT_CONFIG_BACKUPS_RETENTION_DAYS = 30
+
 
 def files_to_prune(
     entries: Sequence[tuple[str, datetime]],

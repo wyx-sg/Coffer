@@ -173,7 +173,7 @@ Every write:
 - addresses a file by its allowlist **key**, never by a path you supply — an unknown key is a 404 with no file access;
 - validates `json` and `toml` content before writing and refuses malformed input with the file untouched;
 - replaces the file atomically (temp file plus rename);
-- keeps the previous content as `<file>.bak`, rotating older copies to `.bak.1` and `.bak.2`;
+- copies the previous content to `~/.coffer/config-backups` (one timestamped file per write, never next to the agent's file); the **Config backups** retention policy deletes old ones after 30 days by default and always keeps each file's newest;
 - edits Codex's `config.toml` with `tomlkit`, so your comments, key order and Codex's own internal tables (`[marketplaces.*]`, `[hooks.state.*]`, `[projects.*]`) survive byte-for-byte;
 - records an audit entry.
 
@@ -215,7 +215,7 @@ Click a direct server's name to open its entry in a dialog. It shows, read-only,
 
 You can do two things with a direct entry:
 
-- **Remove** it from its source file (atomic write, `.bak` kept, audited as `agent_mcp_entry_removed`).
+- **Remove** it from its source file (atomic write, a backup copy kept in Coffer's folder, audited as `agent_mcp_entry_removed`).
 - **Adopt**: Coffer registers the entry as an `mcp_server` resource, checks that it reads back, and only then removes the direct entry. Any failure rolls the new resource back and leaves the agent's file byte-identical. The server is then served to every agent through the gateway.
 
 When the entry's environment or headers carry a non-empty value under a secret-looking key (containing `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, `APIKEY`, `CREDENTIAL` or `AUTHORIZATION`), the Adopt dialog lists each one under **Store as**, preset to **Secret**. Coffer stores the current value in its [encrypted secret store](/guides/secret-store), and the new resource config carries only a reference. A name collision is refused: choose another **Name in Coffer**. For a Claude Code name that appears in both files, the entry you opened is the one adopted. The `coffer` entry itself is never removable or adoptable this way.
@@ -300,7 +300,7 @@ The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents
 - **Codex:** **Model**, with no tiers. It writes `config.toml` and Coffer's own model list file `coffer-model-catalog.json` beside it, so the review shows two changes.
 - **The built-in login** asks for nothing else: the agent picks its own model (`/model`), and Coffer sets it only for a provider you add. Choosing it takes out the keys Coffer wrote.
 
-**Review changes** then opens the exact lines each file will gain or lose, with a note that only those lines change and a `.bak` copy is kept; **Apply** writes them. While the review is computed Coffer also tests the provider with the chosen model; a failed test is shown as a warning and does not stop you. If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival. With the Models [experimental feature](/guides/experimental-features) off, the **Model** section only reads: the agent's own model, with no provider and no **Change…**.
+**Review changes** then opens the exact lines each file will gain or lose, with a note that only those lines change and a backup copy is kept in Coffer's folder; **Apply** writes them. While the review is computed Coffer also tests the provider with the chosen model; a failed test is shown as a warning and does not stop you. If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival. With the Models [experimental feature](/guides/experimental-features) off, the **Model** section only reads: the agent's own model, with no provider and no **Change…**.
 
 ### Native memory and sessions
 

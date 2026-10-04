@@ -1158,7 +1158,7 @@
       "pruneAll": "立即清理过期数据",
       "pruning": "正在清理…",
       "pruneConfirmTitle": "立即清理过期数据？",
-      "pruneConfirmBody": "超过各项保留期的记录、附件和 Skill 临时数据会被永久删除。",
+      "pruneConfirmBody": "超过各项保留期的记录、附件、Skill 临时数据和配置备份会被永久删除。",
       "pruneRow": "已从{{name}}清理 {{rows}} 行",
       "pruneNothing": "没有需要清理的数据",
       "policy": {
@@ -1201,6 +1201,15 @@
           "description": "skill 写在 ~/.coffer/skill-data 下的日志、操作记录和临时文件",
           "shortenTitle": "Skill 临时数据只保留 {{days}} 天？",
           "shortenBody": "下次清理会删除更早的 Skill 临时数据。",
+          "pruneRow": "已从{{name}}清理 {{rows}} 个文件",
+          "unit_one": "个文件",
+          "unit_other": "个文件"
+        },
+        "config_backups": {
+          "name": "配置备份",
+          "description": "Coffer 改写智能体配置文件前留下的副本，存放在 ~/.coffer/config-backups。每个文件最新的一份备份无论多久都会保留。",
+          "shortenTitle": "配置备份只保留 {{days}} 天？",
+          "shortenBody": "下次清理会删除更早的配置备份，但每个文件最新的一份会保留。",
           "pruneRow": "已从{{name}}清理 {{rows}} 个文件",
           "unit_one": "个文件",
           "unit_other": "个文件"
@@ -1920,7 +1929,7 @@
       "uninstallTitle": "卸载 {{name}}？",
       "uninstallBody": {
         "claude": "Claude Code 会运行它自己的 <code>plugin uninstall</code> 命令，移除该插件的条目和缓存。",
-        "codex": "Coffer 会从 <code>config.toml</code> 中移除该插件的条目（保留 .bak 备份），并删除它的缓存。",
+        "codex": "Coffer 会从 <code>config.toml</code> 中移除该插件的条目（在 Coffer 的文件夹里保留一份备份），并删除它的缓存。",
         "skills_one": "它自带的 {{count}} 个技能也会一并移除。",
         "skills_other": "它自带的 {{count}} 个技能也会一并移除。"
       },
@@ -2081,7 +2090,7 @@
       "deleteBodyNoCount": "这会删除 {{path}}。Coffer 没有副本，无法恢复。",
       "adoptDialog": {
         "title": "纳入托管 {{name}}",
-        "description": "Coffer 会把这个文件夹复制进它的技能库，再链接回这里，并保留一份 .bak。",
+        "description": "Coffer 会把这个文件夹复制进它的技能库，再链接回这里，并在 Coffer 的文件夹里保留一份备份。",
         "name": "在 Coffer 中的名称",
         "nameHint": "所有智能体里的文件夹名。纳入托管后不能再改。",
         "nameTaken": "Coffer 里已经有名为 {{name}} 的技能。请换一个名称。",
@@ -2114,8 +2123,8 @@
         "delete": "删除…",
         "adoptTitle_one": "纳入托管 {{count}} 个技能？",
         "adoptTitle_other": "纳入托管 {{count}} 个技能？",
-        "adoptBody_one": "Coffer 会把 {{names}} 复制进自己的库，并把链接放回这里。每个都会保留 .bak，且沿用原文件夹名。Coffer 已有同名技能时，只有该技能失败。",
-        "adoptBody_other": "Coffer 会把 {{names}} 复制进自己的库，并把链接放回这里。每个都会保留 .bak，且沿用原文件夹名。Coffer 已有同名技能时，只有该技能失败。",
+        "adoptBody_one": "Coffer 会把 {{names}} 复制进自己的库，并把链接放回这里。每个都会保留一份备份，且沿用原文件夹名。Coffer 已有同名技能时，只有该技能失败。",
+        "adoptBody_other": "Coffer 会把 {{names}} 复制进自己的库，并把链接放回这里。每个都会保留一份备份，且沿用原文件夹名。Coffer 已有同名技能时，只有该技能失败。",
         "adoptConfirm_one": "纳入托管 {{count}} 个技能",
         "adoptConfirm_other": "纳入托管 {{count}} 个技能",
         "adopting": "正在纳入托管…",
@@ -2172,8 +2181,8 @@
         "remove": "移除…"
       },
       "removeTitle": "从 {{file}} 移除 {{name}}？",
-      "removeBody": "{{agent}} 在下一个会话中将不再有这个服务器。会保留一份 .bak，Coffer 中的内容不会改变。",
-      "removeDuplicateBody": "{{agent}} 仍会通过 Coffer 获得 {{name}}。会保留一份 .bak，Coffer 中的内容不会改变。",
+      "removeBody": "{{agent}} 在下一个会话中将不再有这个服务器。会在 Coffer 的文件夹里保留一份备份，Coffer 中的内容不会改变。",
+      "removeDuplicateBody": "{{agent}} 仍会通过 Coffer 获得 {{name}}。会在 Coffer 的文件夹里保留一份备份，Coffer 中的内容不会改变。",
       "parseError": "无法读取 {{file}}：{{error}}。在文件恢复有效之前，其中的条目只读。",
       "openConfigFiles": "在配置文件中打开",
       "emptyTitle": "{{agent}} 没有自己的 MCP 服务器",
@@ -2185,7 +2194,7 @@
       },
       "adoptDialog": {
         "title": "纳入托管 {{name}}",
-        "description": "Coffer 通过网关提供它，并把该条目从 <file>{{file}}</file> 中移除，这样 {{agent}} 不会拿到两份。会保留一份 .bak。",
+        "description": "Coffer 通过网关提供它，并把该条目从 <file>{{file}}</file> 中移除，这样 {{agent}} 不会拿到两份。会在 Coffer 的文件夹里保留一份备份。",
         "name": "在 Coffer 中的名称",
         "nameHint": "所有智能体看到的名称。",
         "nameConflict": "Coffer 里已经有名为 {{name}} 的服务器。请换一个名称。",
@@ -2212,8 +2221,8 @@
         "remove": "移除…",
         "adoptTitle_one": "纳入托管 {{count}} 个服务器？",
         "adoptTitle_other": "纳入托管 {{count}} 个服务器？",
-        "adoptBody_one": "Coffer 会通过网关提供 {{names}}，并把条目从配置文件中取出，沿用原名称。每个文件都会保留 .bak。Coffer 已有同名服务器时，只有该服务器失败。",
-        "adoptBody_other": "Coffer 会通过网关提供 {{names}}，并把条目从配置文件中取出，沿用原名称。每个文件都会保留 .bak。Coffer 已有同名服务器时，只有该服务器失败。",
+        "adoptBody_one": "Coffer 会通过网关提供 {{names}}，并把条目从配置文件中取出，沿用原名称。每个文件都会保留一份备份。Coffer 已有同名服务器时，只有该服务器失败。",
+        "adoptBody_other": "Coffer 会通过网关提供 {{names}}，并把条目从配置文件中取出，沿用原名称。每个文件都会保留一份备份。Coffer 已有同名服务器时，只有该服务器失败。",
         "secrets_one": "{{count}} 个密钥值将移入 Coffer 的密钥库，配置里保留对它们的引用。",
         "secrets_other": "{{count}} 个密钥值将移入 Coffer 的密钥库，配置里保留对它们的引用。",
         "adoptConfirm_one": "纳入托管 {{count}} 个服务器",
@@ -2223,7 +2232,7 @@
         "adoptPartial": "已纳入托管 {{ok}} / {{total}}",
         "removeTitle_one": "移除 {{count}} 个服务器？",
         "removeTitle_other": "移除 {{count}} 个服务器？",
-        "removeBody": "{{agent}} 下次会话起将不再有这些服务器。每个文件都会保留 .bak，Coffer 里的内容不变。",
+        "removeBody": "{{agent}} 下次会话起将不再有这些服务器。每个文件都会保留一份备份，Coffer 里的内容不变。",
         "removeConfirm_one": "移除 {{count}} 个服务器",
         "removeConfirm_other": "移除 {{count}} 个服务器",
         "removing": "正在移除…",
@@ -2517,8 +2526,8 @@
         "staleTitle": "{{file}} 在磁盘上已变化",
         "staleBody": "它在这份预览生成之后被保存过，所以没有写入任何内容。重新加载后会按当前文件重新预览。",
         "reload": "重新加载预览",
-        "note": "只有所示的行会改变。文件里的其他内容原样保留，并保留一份 .bak 副本。",
-        "noteCatalog": "只有所示的行会改变。模型列表文件是 Coffer 自己的；config.toml 会保留一份 .bak 副本。",
+        "note": "只有所示的行会改变。文件里的其他内容原样保留，并在 Coffer 的文件夹里保留一份备份副本。",
+        "noteCatalog": "只有所示的行会改变。模型列表文件是 Coffer 自己的；config.toml 会在 Coffer 的文件夹里保留一份备份副本。",
         "testFailed": "连接测试失败：{{message}} 你仍可以应用。"
       },
       "provider": {

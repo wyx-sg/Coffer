@@ -225,6 +225,7 @@ COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 | **改动** | `audit_log` | 365 天 | 删除早于窗口的审计条目。 |
 | **MCP 调用** | `mcp_invocations` | 30 天 | 删除网关调用日志行。 |
 | **对话** | `conversations` | 30 天 | 在归档后这么久删除已归档的对话及其消息。 |
+| **配置备份** | `config_backups` | 30 天 | 删除 `~/.coffer/config-backups` 下最后修改时间早于窗口的文件，但每个配置文件最新的一份备份始终保留，以便撤销最近一次写入；清空后的文件夹一并删除。 |
 | **Skill 临时数据** | `skill_data` | 30 天 | 删除 `~/.coffer/skill-data` 下任意位置最后修改时间早于窗口的文件，再删除因此清空的文件夹（`skill-data` 本身不删）。 |
 | **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
 | 仅 REST | `sync_runs` | 90 天 | 删除同步轮次的历史。 |

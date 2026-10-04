@@ -49,7 +49,7 @@ args = ["--agent-uid", "bc0eff325c015d279faab81ce63e50b2"]
 
 :::
 
-对注册在自定义配置目录上的 Claude Code 智能体，条目会写进 `<config_dir>/.claude.json`——也就是 Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时读取的文件。写入是原子的，会保留 `.bak`，并记入审计。写完后重启智能体。
+对注册在自定义配置目录上的 Claude Code 智能体，条目会写进 `<config_dir>/.claude.json`——也就是 Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时读取的文件。写入是原子的，会在 `~/.coffer/config-backups` 里保留一份备份副本，并记入审计。写完后重启智能体。
 
 通过 Coffer 安装比手写条目好，原因有二：路径是绝对的，所以从不继承 shell `PATH` 的图形界面启动的智能体也能用；`--agent-uid` 标识了智能体，所以[按智能体的生效范围](#agent-identity)会生效。shim 路径如何解析，见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)。
 

@@ -158,7 +158,7 @@ def test_a_claude_code_preview_writes_nothing_and_refuses_an_unreached_connectio
         added = "\n".join(r["text"] for r in settings["diff"] if r["kind"] == "add")
         assert "kimi-k3" in added and tier_env_key("haiku") in added
 
-        # Nothing moved: the file, any .bak, and the agent's record.
+        # Nothing moved: the file, any backup, and the agent's record.
         assert (cc_dir / "settings.json").read_text() == original
         assert sorted(p.name for p in cc_dir.iterdir()) == listing
         assert c.get(f"/api/v1/agents/{uid}").json() == agent_before

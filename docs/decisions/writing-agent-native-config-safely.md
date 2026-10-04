@@ -68,9 +68,12 @@ composition root injects into every writer:
 4. **Atomic replace.** The new content goes to a temp file in the same
    directory, is `fsync`ed, and replaces the target with `os.replace`. A crash
    leaves either the old file or the new one, never a truncated one.
-5. **Rotating backups.** Before the replace, the existing file is copied to
-   `<path>.bak`, with older copies shifted to `.bak.1` and `.bak.2`
-   (`BACKUP_COPIES = 3`). Deletes of directory children back up the same way.
+5. **Backups in Coffer's folder.** Before the replace, the existing file is
+   copied to `~/.coffer/config-backups/<file>-<hash>/<UTC time>.<ext>`, a
+   machine-local folder outside the vault; nothing is written next to the
+   agent's file. Every write keeps its own copy, and the `config_backups`
+   retention policy (30 days by default) deletes old ones while always keeping
+   each file's newest. Deletes of directory children back up the same way.
    A copy rather than a move, so the original stays in place until the replace
    succeeds.
 6. **Audit.** Every editor write, MCP install and uninstall, plugin change and
@@ -155,12 +158,12 @@ raw REST editor writes, and absent from the other structural writers.
 
 ## Consequences
 
-- A bad Coffer write is recoverable from `<path>.bak`, and a run of three is
-  recoverable from `.bak.1` and `.bak.2`. A fourth consecutive write drops the
-  oldest copy.
+- A bad Coffer write is recoverable from the newest backup under
+  `~/.coffer/config-backups/`, and a run of them from the older ones until the
+  retention window passes; the newest backup of each file is never deleted.
 - An MCP install, MCP entry change, plugin change or hook install that lands
   between the user's save and the agent's next read can overwrite that save;
-  the prior content survives only in `.bak`. Extending the fingerprint to those
+  the prior content survives only in its backup. Extending the fingerprint to those
   writers means passing the fingerprint of the text each one already reads to
   `write_text_atomic`, as the projector does.
 - Because the config-editor check runs in the service rather than in the store,

@@ -61,7 +61,7 @@ export const STR = {
     arrows: ["MCP", "reads, writes", "pull, push"],
     diagramLabel: "You manage Coffer from the app, the web UI, the CLI or a chat channel. Agents reach Coffer over MCP; Coffer reads and writes the vault, which can sync with a git remote.",
     takeaways: [
-      ["The agent’s files stay in charge.", "Coffer writes only the entries it manages and keeps a", ".bak", "of each file it changes."],
+      ["The agent’s files stay in charge.", "Coffer writes only the entries it manages and keeps a", "backup", "of each file it changes."],
       ["Reach decides who gets what.", "Each server and skill reaches every agent, a chosen few, or none.", "", ""],
       ["No hosted service.", "There is no account. Cloud services appear only as the providers and servers you choose.", "", ""],
     ],
@@ -126,7 +126,7 @@ export const STR = {
     arrows: ["MCP", "读写", "拉取、推送"],
     diagramLabel: "你从 app、Web UI、CLI 或聊天渠道管理 Coffer。智能体通过 MCP 访问 Coffer；Coffer 读写保险库，保险库可以与 git 远端同步。",
     takeaways: [
-      ["智能体自己的文件说了算。", "Coffer 只写它管理的条目，改动的每个文件都留一份", ".bak", "。"],
+      ["智能体自己的文件说了算。", "Coffer 只写它管理的条目，改动的每个文件都留一份", "备份", "。"],
       ["Reach 决定谁拿到什么。", "每个服务器和技能可以给所有智能体、选定的几个，或一个都不给。", "", ""],
       ["没有托管服务。", "没有账号。云服务只会以你选的提供商和服务器出现。", "", ""],
     ],

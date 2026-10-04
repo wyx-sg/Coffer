@@ -1,9 +1,12 @@
 """ConfigFileStore — filesystem adapter for agent config files.
 
 Implements `coffer.application.agent.config_file_service.ConfigFileStorePort`.
-All writes are atomic (temp file + ``os.replace``) and keep the prior content
-as ``<path>.bak`` (rotating to ``.bak.1`` and ``.bak.2``, :data:`BACKUP_COPIES`
-in all) so a bad edit — or a run of them — is always recoverable.
+All writes are atomic (temp file + ``os.replace``) and first copy the prior
+content to Coffer's own folder, ``~/.coffer/config-backups/<file-key>/<UTC
+time>.<ext>``, so a bad edit — or a run of them — is always recoverable. Nothing
+is written next to the agent's file; the ``config_backups`` retention policy
+bounds the folder and always keeps each file's newest backup (spec agent-registry
+"Write config files atomically with a backup and an audit entry").
 
 A write may carry the fingerprint of the content the caller read before
 deciding what to write. The store then refuses (``ConfigFileStale``) when the
@@ -23,15 +26,19 @@ from datetime import UTC, datetime
 
 from coffer.domain.agent.config_files import DirEntryInfo, FileStat
 from coffer.domain.workspace_errors import ConfigFileStale
+from coffer.infrastructure.vault.home import config_backups_dir
 
-#: How many prior versions ``write_text_atomic`` / ``delete_with_backup`` keep:
-#: ``<path>.bak`` is the newest, ``.bak.1`` and ``.bak.2`` older.
-BACKUP_COPIES = 3
+_STAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
 
 
-def _backup_name(path: pathlib.Path, generation: int) -> pathlib.Path:
-    suffix = ".bak" if generation == 0 else f".bak.{generation}"
-    return path.with_name(path.name + suffix)
+def backup_dir_for(path: pathlib.Path) -> pathlib.Path:
+    """The folder holding every backup of ``path``: ``<name>-<12 hex of sha256(abs path)>``.
+
+    Readable when browsing, and unambiguous when two files share a name.
+    """
+    absolute = os.path.abspath(path)
+    digest = hashlib.sha256(absolute.encode()).hexdigest()[:12]
+    return config_backups_dir() / f"{os.path.basename(absolute)}-{digest}"
 
 
 class ConfigFileStore:
@@ -57,17 +64,34 @@ class ConfigFileStore:
             modified_at=datetime.fromtimestamp(st.st_mtime, tz=UTC),
         )
 
-    def _rotate_backups(self, path: pathlib.Path) -> None:
-        """Shift ``.bak`` → ``.bak.1`` → ``.bak.2`` and copy ``path`` to ``.bak``.
+    def _backup(self, path: pathlib.Path) -> pathlib.Path:
+        """Copy ``path`` to a new timestamped file in its backup folder.
 
         A copy, not a move, so the original stays in place until the atomic
-        replace that follows succeeds. The oldest generation falls off.
+        replace that follows succeeds. The folder and files are private (config
+        files hold tokens), and the copy's mtime is the time it was taken, which
+        is what retention measures.
         """
-        for generation in range(BACKUP_COPIES - 1, 0, -1):
-            newer = _backup_name(path, generation - 1)
-            if newer.exists():
-                os.replace(newer, _backup_name(path, generation))
-        shutil.copy2(path, _backup_name(path, 0))
+        folder = backup_dir_for(path)
+        folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+        stamp = datetime.now(tz=UTC).strftime(_STAMP_FORMAT)
+        dest = folder / f"{stamp}{path.suffix}"
+        n = 0
+        while dest.exists():
+            n += 1
+            dest = folder / f"{stamp}-{n}{path.suffix}"
+        shutil.copyfile(path, dest)
+        dest.chmod(0o600)
+        return dest
+
+    def latest_backup(self, path: pathlib.Path) -> pathlib.Path | None:
+        """The newest backup of ``path`` (what an undo restores), or ``None``."""
+        folder = backup_dir_for(pathlib.Path(path))
+        if not folder.is_dir():
+            return None
+        # Names are UTC timestamps, so the greatest name is the newest.
+        names = sorted(p for p in folder.iterdir() if p.is_file())
+        return names[-1] if names else None
 
     def write_text_atomic(
         self, path: pathlib.Path, text: str, *, expected_fingerprint: str | None = None
@@ -87,9 +111,9 @@ class ConfigFileStore:
                 raise ConfigFileStale(str(path))
         path.parent.mkdir(parents=True, exist_ok=True)
         # Back up the prior version (copy, preserving the original until the
-        # replace succeeds) so a bad edit is recoverable from <path>.bak.
+        # replace succeeds) so a bad edit is recoverable from Coffer's folder.
         if path.exists():
-            self._rotate_backups(path)
+            self._backup(path)
         # Write to a temp file in the same directory, then atomically replace.
         fd, tmp_name = tempfile.mkstemp(
             dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
@@ -134,12 +158,12 @@ class ConfigFileStore:
         return out
 
     def delete_with_backup(self, path: pathlib.Path) -> bool:
-        """Copy content to ``<path>.bak`` (rotating older backups), then remove
-        the file. False if absent."""
+        """Copy content to a backup in Coffer's folder, then remove the file.
+        False if absent."""
         if not path.is_file():
             return False
         try:
-            self._rotate_backups(path)
+            self._backup(path)
             path.unlink()
         except FileNotFoundError:
             # Vanished between the check and the copy/unlink — same outcome
@@ -152,7 +176,7 @@ class ConfigFileStore:
 
         No backup: used only for content Coffer itself rendered and can
         regenerate byte-identically (a Coffer-owned package directory) —
-        a ``.bak`` package dir would still be discovered by the agent's
+        a package dir kept beside it would still be discovered by the agent's
         extension scanner, so tidier to leave nothing behind.
         """
         if not path.is_dir():

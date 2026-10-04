@@ -33,7 +33,7 @@ speech-to-text model, the unattended passes and the rule that drops a model when
 applies beyond the daemon's `X-Coffer-Token` gate. It also owns the local model proxy every
 API-key and local connection is reached through — the per-agent proxy tokens, failover between
 connections that serve the same model, and usage metering. Out of scope: hot-switching a running
-Claude Code or Codex process mid-session; restoring native config beyond the `.bak` copies
+Claude Code or Codex process mid-session; restoring native config beyond the backup copies
 projection leaves; anthropic↔openai protocol translation (a connection reaches an agent only
 because the user routed it there, and the endpoint must really speak what that agent sends — the
 proxy relays each wire to an upstream of the same wire); curating an agent's own models; and
@@ -147,7 +147,7 @@ ref spelling the name.
 The system MUST project into the agent's `<config_dir>/settings.json` (`~/.claude/settings.json`
 for the default config directory) through
 [agent-registry](../agent-registry/spec.md)'s config-write machinery — the atomic write with its
-rotated `.bak` ([agent-registry](../agent-registry/spec.md) "Write config files atomically with a backup and an audit entry") and the fingerprint that refuses a write onto content that
+timestamped backup ([agent-registry](../agent-registry/spec.md) "Write config files atomically with a backup and an audit entry") and the fingerprint that refuses a write onto content that
 changed underneath it ([agent-registry](../agent-registry/spec.md) "Reject stale config-file writes by fingerprint") — merging only the managed keys and preserving
 everything else. Coffer MERGES into the user's existing file and never replaces it; a file that does
 not exist is created with only the managed keys, and switching an agent onto a connection MUST NOT touch any key
@@ -196,11 +196,11 @@ own CLI is never silently overwritten.
 #### Scenario: switching preserves unrelated native-config keys and writes a .bak backup
 - **GIVEN** `~/.claude/settings.json` contains keys Coffer does not manage (e.g. `theme`, `mcpServers`),
 - **WHEN** the user switches that agent onto a connection reaching it,
-- **THEN** those keys are preserved byte-for-byte in the updated file, a `.bak` file is written before the update (the previous `.bak` rotating to `.bak.1`, then `.bak.2`; three generations are kept), and only the Coffer-managed keys are changed.
+- **THEN** those keys are preserved byte-for-byte in the updated file, a timestamped copy of the prior file is written under `~/.coffer/config-backups/` before the update, and nothing is written next to it, and only the Coffer-managed keys are changed.
 #### Scenario: projection refuses to overwrite a concurrent edit
 - **GIVEN** `~/.claude/settings.json` that the user saves from their editor after Coffer has read it and before Coffer writes its projection,
 - **WHEN** the projection write runs,
-- **THEN** the write is refused with 409 `CONFIG_FILE_STALE`, the user's edit is left intact on disk, no `.bak` is written, and an audit row `provider_projection_refused` names the connection, the agent type and the file — the caller re-reads and retries.
+- **THEN** the write is refused with 409 `CONFIG_FILE_STALE`, the user's edit is left intact on disk, no backup is written, and an audit row `provider_projection_refused` names the connection, the agent type and the file — the caller re-reads and retries.
 
 ### Requirement: Take projected model keys from the agent's binding
 The model keys MUST come from the AGENT's binding (`AgentConfig.model` and, for Claude
@@ -398,16 +398,16 @@ surface that offers the edit — REST and the connection's form.
 - **AND** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (see "Refuse to move the wire of a live connection")
 
 ### Requirement: Review a model change before writing it
-An agent's model MUST be changed in two calls, so the person sees the lines before they are written. `POST /api/v1/providers/model-switch/preview` takes `{agent_type, connection_uid, model, tier_models}` — `connection_uid` null is the agent's built-in login, which carries no model or tiers — and answers, per file the change would write, the file's path, whether it would be added, modified or removed, the line counts and diff, and a **fingerprint** of what the file held when it was read, plus the agent and the connection it would run on; it writes nothing, not even a `.bak`. It refuses, as "Switch one agent at a time" does, with 409 when the connection or the agent is switched off or the connection does not reach the agent. `POST /api/v1/providers/model-switch/apply` takes the same body with `seen`, each previewed file's path and fingerprint, and does what the switch of "Switch one agent at a time" and "Revert an agent type to its built-in login" does — records the model binding (`model` and `tier_models`) on the agent, then projects it and sets the connection, putting the binding back if the projection fails — so the preview and the write cannot disagree about the lines. When a file named in `seen` was edited on disk after the preview, nothing is written and the answer is 409 `CONFIG_FILE_STALE`.
+An agent's model MUST be changed in two calls, so the person sees the lines before they are written. `POST /api/v1/providers/model-switch/preview` takes `{agent_type, connection_uid, model, tier_models}` — `connection_uid` null is the agent's built-in login, which carries no model or tiers — and answers, per file the change would write, the file's path, whether it would be added, modified or removed, the line counts and diff, and a **fingerprint** of what the file held when it was read, plus the agent and the connection it would run on; it writes nothing, not even a backup. It refuses, as "Switch one agent at a time" does, with 409 when the connection or the agent is switched off or the connection does not reach the agent. `POST /api/v1/providers/model-switch/apply` takes the same body with `seen`, each previewed file's path and fingerprint, and does what the switch of "Switch one agent at a time" and "Revert an agent type to its built-in login" does — records the model binding (`model` and `tier_models`) on the agent, then projects it and sets the connection, putting the binding back if the projection fails — so the preview and the write cannot disagree about the lines. When a file named in `seen` was edited on disk after the preview, nothing is written and the answer is 409 `CONFIG_FILE_STALE`.
 
 The files are the agent's own: for Claude Code, `settings.json` — the top-level `model` and the `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins; for Codex, `config.toml` — `model` and `[model_providers.coffer]` — together with Coffer's own model-list file `coffer-model-catalog.json` beside it, so a Codex change reads as two changes. A model the user has since changed with `/model` no longer equals the agent's binding and is theirs. No reasoning effort is written, so none is previewed.
 
-The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a `.bak` is kept, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider chosen, Coffer tests the connection with the chosen model while the preview is computed; a failed test is shown as a warning and does not stop the apply. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model itself (`/model`) and that Coffer sets it only for a provider the user adds.
+The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a backup copy is kept in Coffer's own folder, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider chosen, Coffer tests the connection with the chosen model while the preview is computed; a failed test is shown as a warning and does not stop the apply. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model itself (`/model`) and that Coffer sets it only for a provider the user adds.
 
 #### Scenario: previewing a model change writes nothing
 - **GIVEN** a Claude Code agent on its built-in login and a connection that reaches it
 - **WHEN** the user previews switching it onto the connection with a model and tier pins
-- **THEN** the answer lists `settings.json` with the diff of the keys it would write and a fingerprint, and no file, `.bak` or agent record has changed
+- **THEN** the answer lists `settings.json` with the diff of the keys it would write and a fingerprint, and no file, backup or agent record has changed
 - **AND** previewing onto a connection that does not reach the agent is refused with 409
 
 #### Scenario: a Codex change previews two files

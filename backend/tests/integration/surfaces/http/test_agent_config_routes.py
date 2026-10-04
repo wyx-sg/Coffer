@@ -16,6 +16,7 @@ import uuid
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -125,11 +126,11 @@ def test_write_config_file_valid(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         assert r.json()["key"] == "settings"
         assert r.json()["exists"] is True
-        # Atomic write landed and a .bak preserves the prior content.
+        # Atomic write landed and a backup in Coffer's folder preserves the prior content.
         assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
-        assert (tmp_path / ".claude" / "settings.json.bak").read_text(
-            encoding="utf-8"
-        ) == '{"theme": "light"}'
+        backup = ConfigFileStore().latest_backup(settings)
+        assert backup is not None and backup.read_text(encoding="utf-8") == '{"theme": "light"}'
+        assert not (tmp_path / ".claude" / "settings.json.bak").exists()
         # Read-back through the API agrees.
         r = c.get(f"/api/v1/agents/{uid}/config-files/settings")
         assert r.json()["content"] == '{"theme": "dark"}'
@@ -147,9 +148,9 @@ def test_write_config_file_malformed_422_file_unchanged(tmp_path, monkeypatch):
         r = c.put(f"/api/v1/agents/{uid}/config-files/settings", json={"content": "{not json"})
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "CONFIG_FILE_FORMAT_INVALID"
-        # File untouched, no .bak written.
+        # File untouched, no backup written.
         assert settings.read_text(encoding="utf-8") == '{"theme": "light"}'
-        assert not (tmp_path / ".claude" / "settings.json.bak").exists()
+        assert ConfigFileStore().latest_backup(settings) is None
 
 
 def test_write_config_file_unknown_key_404(tmp_path, monkeypatch):
@@ -201,11 +202,12 @@ def test_dir_entry_listing_and_child_round_trip(tmp_path, monkeypatch):
         sub = next(i for i in r.json()["items"] if i["key"] == "subagents")
         assert [f["relpath"] for f in sub["files"]] == ["reviewer.md", "team/helper.md"]
 
-        # DELETE -> 204, file removed with a .bak of the prior content.
+        # DELETE -> 204, file removed with a backup of the prior content.
         r = c.request("DELETE", f"/api/v1/agents/{uid}/config-files/subagents/files/reviewer.md")
         assert r.status_code == 204, r.text
         assert not (agents_dir / "reviewer.md").exists()
-        assert (agents_dir / "reviewer.md.bak").read_text(encoding="utf-8") == "# Reviewer\n"
+        backup = ConfigFileStore().latest_backup(agents_dir / "reviewer.md")
+        assert backup is not None and backup.read_text(encoding="utf-8") == "# Reviewer\n"
         r = c.get(f"/api/v1/agents/{uid}/config-files")
         sub = next(i for i in r.json()["items"] if i["key"] == "subagents")
         assert [f["relpath"] for f in sub["files"]] == ["team/helper.md"]

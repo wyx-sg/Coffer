@@ -41,7 +41,7 @@ Coffer never registers an agent on its own; you choose it on the **Agents** page
 
 Open **Agents → claude-code** and click **Connect**. The agent's **Coffer** status on the Agents list changes from **Not connected** to **Connected**.
 
-Connecting adds one entry to `mcpServers` in `~/.claude.json` (and Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
+Connecting adds one entry to `mcpServers` in `~/.claude.json` (and Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a copy of the previous version in `~/.coffer/config-backups`:
 
 ```json
 {

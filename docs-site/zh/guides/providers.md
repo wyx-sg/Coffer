@@ -80,7 +80,7 @@ Coffer 写哪个文件由**智能体**决定，而不是由协议决定。对 `c
 
 运行在提供商上的智能体并不直接调用提供商。它调用的是 Coffer 在 `127.0.0.1:38471` 上的**本地模型中转**，中转把每个请求带上真实的 key 转发给提供商；如果第一个提供商在响应前失败，就切换到另一个提供同一模型的提供商，并记录请求的花费（[用量](/zh/guides/usage)）。中转的工作原理见[本地模型中转](/zh/architecture/model-proxy)。因此落到智能体自己文件里的，是中转的地址和一条打印智能体自己的**本地中转令牌**的命令——从不是提供商的接入地址或 key。
 
-Coffer 只把自己的键合并进智能体的文件，其余一切保持原样。写入走的是和[配置文件编辑器](/zh/guides/agents#edit-config-files)相同的机制：原子写入，保留 `.bak`、`.bak.1` 和 `.bak.2`，如果文件在 Coffer 读取之后变了，就以 `CONFIG_FILE_STALE` 拒绝（审计为 `provider_projection_refused`）。
+Coffer 只把自己的键合并进智能体的文件，其余一切保持原样。写入走的是和[配置文件编辑器](/zh/guides/agents#edit-config-files)相同的机制：原子写入，上一版先复制到 `~/.coffer/config-backups`，如果文件在 Coffer 读取之后变了，就以 `CONFIG_FILE_STALE` 拒绝（审计为 `provider_projection_refused`）。
 
 ### Claude Code — `<config_dir>/settings.json` {#claude-code-—-config-dir-settings-json}
 

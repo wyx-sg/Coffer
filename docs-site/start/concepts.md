@@ -76,7 +76,7 @@ Set scope with `coffer <kind> scope <name> --agents <types>` (an agent is named 
 
 ## Agent
 
-An **agent** is a registered local coding agent: Claude Code (`claude_code`) or Codex (`codex`). A machine has at most one agent of each type, and its name is its type: `claude-code` or `codex`. Registering an agent tells Coffer where its config directory is, by default the type's standard one (`~/.claude`, `~/.codex`). Nothing is registered automatically: the **Agents** page only lists candidates. The agent's own files stay the source of truth. Coffer reads its config, MCP entries, plugins, memory and transcripts when it needs them. It writes only allowlisted entries, atomically and with a `.bak` backup.
+An **agent** is a registered local coding agent: Claude Code (`claude_code`) or Codex (`codex`). A machine has at most one agent of each type, and its name is its type: `claude-code` or `codex`. Registering an agent tells Coffer where its config directory is, by default the type's standard one (`~/.claude`, `~/.codex`). Nothing is registered automatically: the **Agents** page only lists candidates. The agent's own files stay the source of truth. Coffer reads its config, MCP entries, plugins, memory and transcripts when it needs them. It writes only allowlisted entries, atomically and with a backup copy in Coffer's own folder (`~/.coffer/config-backups`).
 
 Guide: [Agents](/guides/agents). Architecture: [Resource framework](/architecture/resource-framework).
 

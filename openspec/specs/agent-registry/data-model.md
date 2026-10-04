@@ -150,7 +150,7 @@ which is spec knowledge's domain):
 
 `~/.codex/auth.json` is deliberately excluded (secret/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and
-protected by the rotated `.bak` backups on every write.
+protected by a timestamped backup under `~/.coffer/config-backups/` on every write.
 
 `validate_content(fmt: ConfigFileFormat, text: str) -> None` raises
 `ConfigFileFormatInvalid` for malformed structured content.
@@ -205,7 +205,7 @@ The MCP config file for each type is itself an allowlisted config file
 connection's `mcp` part writes to it via the atomic-write/backup path
 described under `AgentMcpService`; it can also be edited like any other
 allowlisted config file through `AgentConfigFileService.write_file`. Both paths
-share the same atomic-write + `.bak` machinery.
+share the same atomic-write + backup machinery.
 
 ## Storage
 
@@ -238,7 +238,7 @@ Add to `AuditEventType` (`domain/audit.py`):
 
 | Value                       | When emitted                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `agent_config_file_written` | A config file was saved through Coffer (atomic write + `.bak`); details carry the config-file `key` |
+| `agent_config_file_written` | A config file was saved through Coffer (atomic write + backup); details carry the config-file `key` |
 | `agent_mcp_installed`       | Coffer's MCP server entry was written into an agent's MCP config                                    |
 | `agent_mcp_uninstalled`     | Coffer's MCP server entry was removed from an agent's MCP config                                    |
 
@@ -246,7 +246,7 @@ The workspace amendment adds:
 
 | Value                       | When emitted                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------- |
-| `agent_config_file_deleted`  | A directory-entry child file was deleted (prior content preserved as `.bak`, rotating older generations) |
+| `agent_config_file_deleted`  | A directory-entry child file was deleted (prior content preserved as a backup under `~/.coffer/config-backups/`) |
 | `agent_mcp_entry_removed`    | A direct MCP entry was removed from the agent's own config                      |
 | `agent_mcp_entry_adopted`    | A direct MCP entry was adopted into a registered `mcp_server` resource          |
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
@@ -319,10 +319,10 @@ allowlist via a `ConfigFileStorePort`.
 | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_files(uid) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                         |
 | `read_file(uid, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` (the `path`/`folder_path` pair backs open-in-external-editor / reveal). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
-| `write_file(uid, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read ("Reject stale config-file writes by fingerprint"); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
+| `write_file(uid, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read ("Reject stale config-file writes by fingerprint"); `store.write_text_atomic` (atomic + backup); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
 | `read_child(uid, key, relpath) -> ConfigFileContent`                                             | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                                                                                                                                                             |
 | `write_child(uid, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file`.                                                                                                                                                                                                                                                                             |
-| `delete_child(uid, key, relpath, *, actor) -> None`                                              | Delete one child file, preserving the prior content as `.bak`; records `agent_config_file_deleted`.                                                                                                                                                                                                                                                                                                        |
+| `delete_child(uid, key, relpath, *, actor) -> None`                                              | Delete one child file, preserving the prior content as a backup under `~/.coffer/config-backups/`; records `agent_config_file_deleted`.                                                                                                                                                                                                                                                                                                        |
 
 `ConfigFileContent.fingerprint` is a content fingerprint used for
 optimistic-concurrency writes (see "Reject stale config-file writes by
@@ -336,8 +336,8 @@ through the same store. Reuses `domain/agent/mcp_install.py`.
 | Method                   | Purpose                                                                                                                                                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `status(uid) -> McpInstallStatus`   | Read the agent's MCP config file; return `McpInstallStatus(installed, command)` from `is_installed` / `installed_command`.                                                                                                                       |
-| `install(uid, *, actor) -> McpInstallStatus`   | Resolve the shim path (`COFFER_MCP_SHIM_PATH` → `shutil.which("coffer-mcp-shim")` → interpreter scripts dir → bundled fallback; raise `ShimNotFound` if none). `apply_install` with the agent's uid; atomic write + `.bak`; audit `agent_mcp_installed`. Idempotent. |
-| `uninstall(uid, *, actor) -> McpInstallStatus` | `apply_uninstall`; atomic write + `.bak`; audit `agent_mcp_uninstalled`. No-op when absent (no write, no audit).                                                                                                                    |
+| `install(uid, *, actor) -> McpInstallStatus`   | Resolve the shim path (`COFFER_MCP_SHIM_PATH` → `shutil.which("coffer-mcp-shim")` → interpreter scripts dir → bundled fallback; raise `ShimNotFound` if none). `apply_install` with the agent's uid; atomic write + backup; audit `agent_mcp_installed`. Idempotent. |
+| `uninstall(uid, *, actor) -> McpInstallStatus` | `apply_uninstall`; atomic write + backup; audit `agent_mcp_uninstalled`. No-op when absent (no write, no audit).                                                                                                                    |
 
 `McpInstallStatus` is `(installed: bool, command: str | None)`. A type whose
 descriptor declares no `McpInjectionSpec` raises `McpInstallUnsupported`
@@ -351,7 +351,7 @@ Connects an agent to Coffer, or disconnects it, by installing or removing each
 Coffer in one action", "Report an agent's Coffer connection part by part",
 "Disconnect an agent from Coffer"). A part is a `ConnectionPart` — a key,
 `supports(agent_type)`, and `status` / `install` / `remove` by
-agent uid — and owns its own atomic write, `.bak` and audit event; the service
+agent uid — and owns its own atomic write, backup and audit event; the service
 writes nothing itself and records no audit event of its own.
 
 | Part          | Owner                                         | Applies when                          | Audit events                                            |
@@ -459,8 +459,8 @@ agent's installed plugins without writing anything").
 | Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_entries(uid)`                                                  | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                                                  |
-| `remove_entry(uid, entry, source=None, actor)`                       | Removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any secret refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
-| `adopt(uid, entry, source=None, new_name=None, secrets=None, actor)` | Adoption: secret-looking keys MUST map to secret refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
+| `remove_entry(uid, entry, source=None, actor)`                       | Removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + backup, drop any secret refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
+| `adopt(uid, entry, source=None, new_name=None, secrets=None, actor)` | Adoption: secret-looking keys MUST map to secret refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + backup; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
 
 There is no `set_enabled`: a per-entry enable toggle was removed (see the note
 in spec "List the MCP entries in the agent's own config files") because
@@ -475,7 +475,7 @@ reason to make. Both are exposed as `DELETE
 | Method                                         | Purpose                                                                                                                                                                                                                                  |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_plugins(uid)`                            | Dispatch on `descriptor.plugins.model`; parse plugin + marketplace state from the documented file(s); compute `cache_present`; read best-effort manifest detail from the plugin's install path; collect `parse_errors`. No capability → empty listing. |
-| `set_enabled(uid, plugin_id, enabled, actor)`   | Toggle: write the enabled flag to the capability's `config_key` file (atomic + `.bak`); `PluginToggleUnsupported` (422) when the capability declares `can_toggle=False`; audit `agent_plugin_toggled`. |
+| `set_enabled(uid, plugin_id, enabled, actor)`   | Toggle: write the enabled flag to the capability's `config_key` file (atomic + backup); `PluginToggleUnsupported` (422) when the capability declares `can_toggle=False`; audit `agent_plugin_toggled`. |
 | `uninstall(uid, plugin_id, actor)`              | Uninstall: by `uninstall_strategy` — `CONFIG_EDIT` removes the `config.toml` entry and its cache dir; `CLI` runs the agent's own uninstall command through a `PluginCliRunner` and never hand-writes the internal inventory. `PluginUninstallUnsupported` (422) when unavailable; audit `agent_plugin_uninstalled`. |
 
 The listing writes nothing; the two writes above are the whole of what this
@@ -518,14 +518,17 @@ import infrastructure directly).
 - `read_text(path) -> str | None` — `None` when the file does not exist.
 - `stat(path) -> FileStat | None` — size + mtime, or `None` when absent.
 - `write_text_atomic(path, text) -> None` — temp file + `os.replace`; if the
-  target exists, keep it as `<path>.bak` first, rotating the earlier backups to
-  `.bak.1` and `.bak.2` (three generations, `ConfigFileStore.BACKUP_COPIES`);
-  create parent dirs as needed.
+  target exists, copy it first to a new timestamped file in its own folder under
+  `~/.coffer/config-backups/<name>-<hash>/` (`<UTC time>.<ext>`, one per write,
+  nothing next to the file; the `config_backups` retention policy keeps each
+  file's newest); create parent dirs as needed.
+- `latest_backup(path) -> Path | None` — the newest backup of `path`, what an
+  undo restores.
 - `list_dir(root) -> list[DirEntryInfo] | None` — recursive listing of regular
   `.md` files under `root` (symlinked files skipped, sorted by relpath);
   `None` when `root` is not a directory.
-- `delete_with_backup(path) -> bool` — copy content to `<path>.bak` (rotating
-  older generations as a write does), then remove the file; `False` when
+- `delete_with_backup(path) -> bool` — copy content to a timestamped backup (as a
+  write does), then remove the file; `False` when
   already absent.
 - `remove_tree(path) -> bool` — remove a directory tree with no backup, used
   only for content Coffer rendered itself and can regenerate; `False` when
@@ -584,6 +587,6 @@ The `on_delete` hook is bound to a callable supplied by the skill module (spec s
   files — whichever files the type's child spec allowlists — whether a user
   save or a Coffer connect/disconnect — are addressable **only** by
   allowlisted `key`, never by a caller-supplied path, and each is protected by an
-  atomic write and a `.bak` backup. User saves additionally validate content
+  atomic write and a backup copy in Coffer's folder. User saves additionally validate content
   against the file's format before touching disk. No path outside the resolved
   allowlist entries is ever read or written.

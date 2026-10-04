@@ -1158,7 +1158,7 @@
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
       "pruneConfirmTitle": "Clear expired data now?",
-      "pruneConfirmBody": "Records, attachments and skill working files older than each policy's retention window are deleted permanently.",
+      "pruneConfirmBody": "Records, attachments, skill working files and config backups older than each policy's retention window are deleted permanently.",
       "pruneRow": "Removed {{rows}} rows from {{name}}",
       "pruneNothing": "Nothing to clear",
       "policy": {
@@ -1201,6 +1201,15 @@
           "description": "Logs, journals and temporary files skills write under ~/.coffer/skill-data",
           "shortenTitle": "Keep skill working files for {{days}} days?",
           "shortenBody": "The next prune will delete older skill working files.",
+          "pruneRow": "Removed {{rows}} files from {{name}}",
+          "unit_one": "file",
+          "unit_other": "files"
+        },
+        "config_backups": {
+          "name": "Config backups",
+          "description": "Copies of an agent's config file Coffer makes before rewriting it, kept in ~/.coffer/config-backups. The newest backup of each file is always kept, however old.",
+          "shortenTitle": "Keep config backups for {{days}} days?",
+          "shortenBody": "The next prune will delete older config backups, except the newest of each file.",
           "pruneRow": "Removed {{rows}} files from {{name}}",
           "unit_one": "file",
           "unit_other": "files"
@@ -1920,7 +1929,7 @@
       "uninstallTitle": "Uninstall {{name}}?",
       "uninstallBody": {
         "claude": "Claude Code runs its own <code>plugin uninstall</code> command. The plugin’s entry and its cache are removed.",
-        "codex": "Coffer removes the plugin’s entry from <code>config.toml</code> (a .bak is kept) and deletes its cache.",
+        "codex": "Coffer removes the plugin’s entry from <code>config.toml</code> (a backup copy is kept in Coffer’s folder) and deletes its cache.",
         "skills_one": "Its {{count}} skill goes with it.",
         "skills_other": "Its {{count}} skills go with it."
       },
@@ -2081,7 +2090,7 @@
       "deleteBodyNoCount": "This deletes {{path}}. Coffer has no copy, so it can’t be restored.",
       "adoptDialog": {
         "title": "Adopt {{name}}",
-        "description": "Coffer copies this folder into its library and links it back here. A .bak is kept.",
+        "description": "Coffer copies this folder into its library and links it back here. A backup copy is kept in Coffer’s folder.",
         "name": "Name in Coffer",
         "nameHint": "The folder name in every agent. It can’t change after adopting.",
         "nameTaken": "Coffer already has a skill named {{name}}. Choose another name.",
@@ -2114,8 +2123,8 @@
         "delete": "Delete…",
         "adoptTitle_one": "Adopt {{count}} skill?",
         "adoptTitle_other": "Adopt {{count}} skills?",
-        "adoptBody_one": "Coffer copies {{names}} into its library and links it back here. A .bak is kept, and the skill keeps its folder name.",
-        "adoptBody_other": "Coffer copies {{names}} into its library and links each back here. A .bak is kept for each, and each keeps its folder name. A name Coffer already has fails that skill alone.",
+        "adoptBody_one": "Coffer copies {{names}} into its library and links it back here. A backup copy is kept in Coffer’s folder, and the skill keeps its folder name.",
+        "adoptBody_other": "Coffer copies {{names}} into its library and links each back here. A backup copy is kept for each, and each keeps its folder name. A name Coffer already has fails that skill alone.",
         "adoptConfirm_one": "Adopt {{count}} skill",
         "adoptConfirm_other": "Adopt {{count}} skills",
         "adopting": "Adopting…",
@@ -2172,8 +2181,8 @@
         "remove": "Remove…"
       },
       "removeTitle": "Remove {{name}} from {{file}}?",
-      "removeBody": "{{agent}} loses this server in its next session. A .bak is kept, and nothing in Coffer changes.",
-      "removeDuplicateBody": "{{agent}} keeps getting {{name}} through Coffer. A .bak is kept, and nothing in Coffer changes.",
+      "removeBody": "{{agent}} loses this server in its next session. A backup copy is kept in Coffer’s folder, and nothing in Coffer changes.",
+      "removeDuplicateBody": "{{agent}} keeps getting {{name}} through Coffer. A backup copy is kept in Coffer’s folder, and nothing in Coffer changes.",
       "parseError": "Can’t read {{file}}: {{error}}. Its entries are read-only until the file is valid again.",
       "openConfigFiles": "Open in Config files",
       "emptyTitle": "{{agent}} has no MCP servers of its own",
@@ -2185,7 +2194,7 @@
       },
       "adoptDialog": {
         "title": "Adopt {{name}}",
-        "description": "Coffer serves it through its gateway and takes the entry out of <file>{{file}}</file>, so {{agent}} never gets it twice. A .bak is kept.",
+        "description": "Coffer serves it through its gateway and takes the entry out of <file>{{file}}</file>, so {{agent}} never gets it twice. A backup copy is kept in Coffer’s folder.",
         "name": "Name in Coffer",
         "nameHint": "The name every agent sees it by.",
         "nameConflict": "A server named {{name}} is already in Coffer. Choose another name.",
@@ -2212,8 +2221,8 @@
         "remove": "Remove…",
         "adoptTitle_one": "Adopt {{count}} server?",
         "adoptTitle_other": "Adopt {{count}} servers?",
-        "adoptBody_one": "Coffer serves {{names}} through its gateway and takes the entry out of its config file, under its own name. A .bak is kept.",
-        "adoptBody_other": "Coffer serves {{names}} through its gateway and takes each entry out of its config file, under its own name. A .bak is kept for each file. A name Coffer already has fails that server alone.",
+        "adoptBody_one": "Coffer serves {{names}} through its gateway and takes the entry out of its config file, under its own name. A backup copy is kept in Coffer’s folder.",
+        "adoptBody_other": "Coffer serves {{names}} through its gateway and takes each entry out of its config file, under its own name. A backup copy is kept for each file. A name Coffer already has fails that server alone.",
         "secrets_one": "{{count}} secret value moves into Coffer’s secret store; the config keeps a reference to it.",
         "secrets_other": "{{count}} secret values move into Coffer’s secret store; the config keeps a reference to each.",
         "adoptConfirm_one": "Adopt {{count}} server",
@@ -2223,7 +2232,7 @@
         "adoptPartial": "Adopted {{ok}} of {{total}}",
         "removeTitle_one": "Remove {{count}} server?",
         "removeTitle_other": "Remove {{count}} servers?",
-        "removeBody": "{{agent}} loses these in its next session. A .bak is kept for each file, and nothing in Coffer changes.",
+        "removeBody": "{{agent}} loses these in its next session. A backup copy is kept for each file, and nothing in Coffer changes.",
         "removeConfirm_one": "Remove {{count}} server",
         "removeConfirm_other": "Remove {{count}} servers",
         "removing": "Removing…",
@@ -2517,8 +2526,8 @@
         "staleTitle": "{{file}} changed on disk",
         "staleBody": "It was saved after this preview was made, so nothing was written. Reload to preview against the current file.",
         "reload": "Reload preview",
-        "note": "Only the lines shown change. Everything else in the file is left as it is, and a .bak copy is kept.",
-        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a .bak copy of config.toml is kept.",
+        "note": "Only the lines shown change. Everything else in the file is left as it is, and a backup copy is kept in Coffer’s folder.",
+        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a backup copy of config.toml is kept in Coffer’s folder.",
         "testFailed": "The connection test failed: {{message}} You can still apply."
       },
       "provider": {
