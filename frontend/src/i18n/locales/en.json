@@ -2501,6 +2501,7 @@
     "changeModel": {
       "title": "Change {{name}}’s model",
       "description": "Nothing is written until you review the change. New sessions pick it up.",
+      "restartNotice": "Restart {{agent}} to use this change — sessions already open keep the old setting.",
       "reviewButton": "Review changes",
       "review": {
         "title": "Review changes",
@@ -5943,7 +5944,8 @@
       "outputNote": "includes reasoning",
       "cacheRead": "Cache read",
       "cacheWrite": "Cache write",
-      "cacheWriteNote": "Anthropic only",
+      "cacheWriteHelp": "About cache writes",
+      "cacheWriteTip": "Cache writes are counted only where the provider reports them: Anthropic Messages and OpenAI Responses on GPT-5.6 and later. Other providers report none.",
       "costHelp": "About the cost estimate"
     },
     "chart": {
@@ -5958,11 +5960,13 @@
       "breakdown": "Break down by",
       "by": {
         "model": "By model",
+        "provider": "By provider",
         "agent": "By agent",
         "day": "By day"
       },
       "cols": {
         "model": "Model",
+        "provider": "Provider",
         "agent": "Agent",
         "day": "Day",
         "requests": "Requests",
@@ -5973,11 +5977,13 @@
         "cost": "Cost",
         "second": {
           "model": "Agent",
+          "provider": "Agent",
           "day": "Top agent"
         }
       },
       "unknownModel": "Unknown model",
       "unknownAgent": "Unknown agent",
+      "unknownProvider": "Unknown provider",
       "noPriceTip": "No price is known for this model. Set one on its provider.",
       "partlyPricedTip_one": "{{n}} request has no price and is not in this cost.",
       "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",

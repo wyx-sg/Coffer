@@ -54,12 +54,33 @@ def state(
     *,
     revision: int = 1,
     claude_token: str = CLAUDE_TOKEN,
+    served: list[str] | None = None,
+    fallback: str | None = None,
+    tiers: dict[str, str] | None = None,
 ) -> ProxyState:
     routes = []
     if anthropic is not None:
-        routes.append(ProxyRoute(agent_uid="agent-claude", wire=Wire.ANTHROPIC, member=anthropic))
+        routes.append(
+            ProxyRoute(
+                agent_uid="agent-claude",
+                wire=Wire.ANTHROPIC,
+                member=anthropic,
+                served_models=served or [],
+                fallback_model=fallback,
+                tier_fallbacks=tiers or {},
+            )
+        )
     if openai is not None:
-        routes.append(ProxyRoute(agent_uid="agent-codex", wire=Wire.OPENAI, member=openai))
+        routes.append(
+            ProxyRoute(
+                agent_uid="agent-codex",
+                wire=Wire.OPENAI,
+                member=openai,
+                served_models=served or [],
+                fallback_model=fallback,
+                tier_fallbacks=tiers or {},
+            )
+        )
     return ProxyState(
         revision=revision,
         agents=[

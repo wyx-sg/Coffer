@@ -224,3 +224,115 @@ def test_client_disconnect_closes_the_upstream(proxy: Proxy, upstreams) -> None:
     assert wait_for(lambda: bool(up.requests) and up.requests[0].disconnected.is_set())
     [rec] = proxy.records(1)
     assert rec["outcome"] == "client_cancel" and rec["usage_known"] is False
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="an unserved model is replaced by the projected default and the rewrite is logged",
+)
+def test_unserved_model_is_replaced_and_logged(
+    proxy: Proxy, upstreams, caplog: pytest.LogCaptureFixture
+) -> None:
+    up, server = upstreams()
+    up.script = json_reply(200, {"usage": {"input_tokens": 1, "output_tokens": 2}})
+    proxy.push(
+        state(
+            openai=member(server, "a", auth=UpstreamAuth.BEARER),
+            served=["deepseek-flash", "deepseek-v4-pro"],
+            fallback="deepseek-flash",
+        )
+    )
+    body = b'{ "input":"hi", "model" : "gpt-6-luna" , "reasoning":{"effort":"xhigh"} }'
+    with caplog.at_level("INFO"):
+        r = proxy.client.post(
+            "/openai/v1/responses",
+            content=body,
+            headers={"authorization": f"Bearer {CODEX_TOKEN}"},
+        )
+    assert r.status_code == 200
+    [rec] = up.requests
+    assert rec.body == (
+        b'{ "input":"hi", "model" : "deepseek-flash" , "reasoning":{"effort":"xhigh"} }'
+    )
+    line = next(m for m in caplog.messages if m.startswith("model_proxy.model_replaced"))
+    assert "requested=gpt-6-luna" in line and "used=deepseek-flash" in line
+    assert "agent=agent-codex" in line and "hi" not in line.replace("agent", "")
+    [usage] = proxy.records(1)
+    assert usage["model"] == "deepseek-flash"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a served model is forwarded byte for byte",
+)
+def test_served_model_is_forwarded_untouched(
+    proxy: Proxy, upstreams, caplog: pytest.LogCaptureFixture
+) -> None:
+    up, server = upstreams()
+    proxy.push(
+        state(
+            member(server, "a"),
+            served=["deepseek-flash", "deepseek-v4-pro"],
+            fallback="deepseek-flash",
+        )
+    )
+    body = b'{ "model" : "deepseek-v4-pro" ,"messages":[]}'
+    with caplog.at_level("INFO"):
+        r = proxy.client.post("/anthropic/v1/messages", content=body, headers=claude_headers())
+    assert r.status_code == 200
+    assert up.requests[0].body == body
+    assert not any("model_replaced" in m for m in caplog.messages)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a connection without a curated set is never rewritten",
+)
+def test_connection_without_curated_set_is_never_rewritten(proxy: Proxy, upstreams) -> None:
+    up, server = upstreams()
+    proxy.push(state(member(server, "a"), served=[], fallback="deepseek-flash"))
+    body = b'{"model":"anything-at-all","messages":[]}'
+    r = proxy.client.post(
+        "/anthropic/v1/messages/count_tokens", content=body, headers=claude_headers()
+    )
+    assert r.status_code == 200
+    assert up.requests[0].body == body
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="an unserved Claude model falls back to its tier's model",
+)
+def test_unserved_claude_model_takes_its_tier_model_on_the_anthropic_wire_only(
+    proxy: Proxy, upstreams
+) -> None:
+    up, server = upstreams()
+    tiers = {"haiku": "deepseek-flash", "sonnet": "deepseek-v4-pro"}
+    proxy.push(
+        state(
+            member(server, "a"),
+            member(server, "a", auth=UpstreamAuth.BEARER),
+            served=["deepseek-flash", "deepseek-v4-pro", "deepseek-chat"],
+            fallback="deepseek-chat",
+            tiers=tiers,
+        )
+    )
+    r = proxy.client.post(
+        "/anthropic/v1/messages",
+        content=b'{"model":"claude-haiku-4-5","messages":[]}',
+        headers=claude_headers(),
+    )
+    assert r.status_code == 200
+    assert up.requests[0].body == b'{"model":"deepseek-flash","messages":[]}'
+    # No tier keyword: the default.
+    proxy.client.post(
+        "/anthropic/v1/messages", content=b'{"model":"gpt-6-luna"}', headers=claude_headers()
+    )
+    assert up.requests[1].body == b'{"model":"deepseek-chat"}'
+    # The Codex wire ignores tiers even when the route carries them.
+    proxy.client.post(
+        "/openai/v1/responses",
+        content=b'{"model":"gpt-haiku-x"}',
+        headers={"authorization": f"Bearer {CODEX_TOKEN}"},
+    )
+    assert up.requests[2].body == b'{"model":"deepseek-chat"}'

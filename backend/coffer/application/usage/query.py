@@ -35,6 +35,7 @@ _REQUESTS_LIST = "usage_requests"
 
 class GroupBy(StrEnum):
     MODEL = "model"
+    PROVIDER = "provider"
     AGENT = "agent"
     DAY = "day"
 
@@ -74,8 +75,8 @@ class UsageTotals:
 @dataclass(frozen=True)
 class SummaryRow:
     """One group of a summary. Which identity fields are set depends on the
-    grouping: ``model`` + ``connection_*`` for model, ``agent_*`` for agent,
-    ``day`` for day."""
+    grouping: ``model`` + ``connection_*`` for model, ``connection_*`` for provider,
+    ``agent_*`` for agent, ``day`` for day."""
 
     key: str
     totals: UsageTotals
@@ -151,6 +152,8 @@ def _as_daily(stored: StoredUsage, tz: tzinfo) -> DailyUsage:
 def _group_key(group_by: GroupBy, row: DailyUsage) -> tuple[str | None, ...]:
     if group_by is GroupBy.MODEL:
         return (row.model, row.connection_uid)
+    if group_by is GroupBy.PROVIDER:
+        return (row.connection_uid,)
     if group_by is GroupBy.AGENT:
         return (row.agent_uid, row.agent_type)
     return (row.day,)
@@ -222,7 +225,7 @@ class UsageQueryService:
             replace(self._row(grouping, first, sums), agent_types=_most_first(senders.get(key)))
             for key, (first, sums) in groups.items()
         ]
-        if grouping is GroupBy.MODEL:
+        if grouping in (GroupBy.MODEL, GroupBy.PROVIDER):
             rows = await self._with_connection_names(rows)
         if grouping is GroupBy.DAY:
             rows.sort(key=lambda r: r.key)
@@ -247,6 +250,12 @@ class UsageQueryService:
                 key=f"{first.model or ''}|{first.connection_uid or ''}",
                 totals=sums,
                 model=first.model,
+                connection_uid=first.connection_uid,
+            )
+        if grouping is GroupBy.PROVIDER:
+            return SummaryRow(
+                key=first.connection_uid or "",
+                totals=sums,
                 connection_uid=first.connection_uid,
             )
         if grouping is GroupBy.AGENT:

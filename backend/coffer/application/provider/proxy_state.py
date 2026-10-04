@@ -15,6 +15,7 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
 
+from coffer.application.provider.projector import binding_of
 from coffer.application.provider.proxy_tokens import ProxyTokenService
 from coffer.application.provider.targets import connection_for_agent
 from coffer.domain.agent.config import AgentConfig
@@ -27,7 +28,9 @@ from coffer.domain.model_proxy.state import (
     UpstreamAuth,
     upstream_root,
 )
+from coffer.domain.provider.agent_projection import tier_models_for
 from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.provider.modality import Modality
 from coffer.domain.resource import Resource
 from coffer.domain.usage.records import Wire
 
@@ -45,6 +48,30 @@ def _wire_for(service: ProviderService, agent_type: AgentType) -> Wire | None:
         return Wire(facet.protocols[0])
     except ValueError:
         return None
+
+
+def _model_fallback(
+    cfg: ProviderConfig, agent_cfg: AgentConfig, wire: Wire
+) -> tuple[list[str], str | None, dict[str, str]]:
+    """``(served ids, fallback, tier fallbacks)``: the connection's curated ids,
+    the model an unserved request becomes — the agent's bound model when the
+    connection serves it, else its first curated text model — and, on the
+    Anthropic wire, the model projected for each Claude Code tier. No curated
+    set: nothing."""
+    served = cfg.model_ids()
+    if not served:
+        return [], None, {}
+    fallback: str | None
+    if agent_cfg.model in served:
+        fallback = agent_cfg.model
+    else:
+        fallback = next(iter(cfg.model_ids(Modality.TEXT)), None)
+    tiers: dict[str, str] = {}
+    if wire is Wire.ANTHROPIC:
+        tiers = tier_models_for(
+            binding_of(agent_cfg), cfg.model_ids(Modality.TEXT), local=cfg.is_local
+        )
+    return served, fallback, tiers
 
 
 async def _member(
@@ -101,7 +128,17 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
         member = await _member(service, active, active_cfg, wire)
         if member is None:
             continue
-        routes.append(ProxyRoute(agent_uid=row.uid, wire=wire, member=member))
+        served, fallback, tiers = _model_fallback(active_cfg, cfg, wire)
+        routes.append(
+            ProxyRoute(
+                agent_uid=row.uid,
+                wire=wire,
+                member=member,
+                served_models=served,
+                fallback_model=fallback,
+                tier_fallbacks=tiers,
+            )
+        )
 
     return ProxyState(
         revision=next(_revisions),

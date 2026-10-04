@@ -411,3 +411,34 @@ Rules a future change must respect:
   explains the proxy, the token and what it does not log.
 - If the proxy is down, API-key model calls fail until the daemon restarts it;
   `coffer proxy status` shows what the supervisor sees.
+
+## Amendment — an unserved model becomes the agent's default
+
+The Codex desktop App, under a ChatGPT workspace model policy that prefers the
+policy's model for new threads, starts every thread with that model and ignores
+`model` in `config.toml`. On a Coffer connection each new thread then sends a
+model the upstream does not serve (for example `gpt-6-luna` to a DeepSeek
+endpoint), and the upstream rejects it. The user cannot be asked to pick the
+model by hand for every thread.
+
+The proxy therefore gets one narrow exception to byte-for-byte forwarding: when
+the connection curates a non-empty model set and the request's top-level `model`
+is not in it, the proxy replaces that value with the agent's projected default
+(the agent's bound model when the connection serves it, else the connection's
+first curated text model). Only that value's bytes change. A served model, a
+connection with no curated set, a body that is not JSON and a body without a
+`model` are forwarded untouched. The swap is not hidden: one metadata-only log
+line names the requested and the used model, and usage is recorded under the
+model actually sent. The upstream would have rejected the request anyway, so the
+rewrite only turns a guaranteed failure into the default model; it never changes
+a request the upstream would have accepted.
+
+On the Anthropic wire the default is chosen by tier first. Claude Code sends
+background and sub-agent requests under Claude names (`claude-haiku-4-5`) that
+a gateway-only connection does not serve, and sending all of them to one
+default model loses the cheap/strong split the user pinned. When the requested
+name contains `haiku`, `sonnet`, `opus` or `fable`, the proxy uses the model
+Coffer projected for that tier into Claude Code (the same tier pins that
+become `ANTHROPIC_DEFAULT_*_MODEL`) if the connection serves it, and the plain
+default otherwise. The daemon pushes the tier map with each route; the Codex
+wire has none and keeps the plain default.

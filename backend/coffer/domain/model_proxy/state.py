@@ -58,6 +58,18 @@ class ProxyRoute(BaseModel):
     agent_uid: str
     wire: Wire
     member: ProxyMember
+    #: The model ids the connection curates (empty: the whole catalogue, so no
+    #: request is ever rewritten). A requested model outside this set is replaced
+    #: by ``fallback_model`` (spec provider-switching, "Reach API-key and local
+    #: connections through the local model proxy").
+    served_models: list[str] = Field(default_factory=list)
+    #: The agent's projected default model; None leaves every request untouched.
+    fallback_model: str | None = None
+    #: Anthropic wire only: tier (``haiku``/``sonnet``/``opus``/``fable``) -> the
+    #: model Coffer projected for that tier into Claude Code. An unserved
+    #: request naming a tier is replaced by its tier's model when the connection
+    #: serves it, else by ``fallback_model``. Empty for Codex.
+    tier_fallbacks: dict[str, str] = Field(default_factory=dict)
 
 
 class ProxyAgent(BaseModel):

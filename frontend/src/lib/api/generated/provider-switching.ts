@@ -564,7 +564,7 @@ export interface components {
          * GroupBy
          * @enum {string}
          */
-        GroupBy: "model" | "agent" | "day";
+        GroupBy: "model" | "provider" | "agent" | "day";
         /**
          * HandoffOut
          * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
@@ -2151,7 +2151,7 @@ export interface operations {
                 from?: string | null;
                 /** @description Last local day, inclusive (custom range) */
                 to?: string | null;
-                /** @description model | agent | day */
+                /** @description model | provider | agent | day */
                 group_by?: components["schemas"]["GroupBy"];
                 /** @description Only requests this agent type sent */
                 agent_type?: string | null;

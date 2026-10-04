@@ -110,6 +110,17 @@ const BY_MODEL = summary(
   ALL,
 );
 const BY_DAY = summary("day", [row("2026-09-24", SONNET, { day: "2026-09-24" })], ALL);
+const BY_PROVIDER = summary(
+  "provider",
+  [
+    row("conn-1", SONNET, {
+      connection_uid: "conn-1",
+      connection_name: "Anthropic API",
+      agent_types: ["claude_code"],
+    }),
+  ],
+  ALL,
+);
 const BY_AGENT = summary("agent", [row("a1", ALL, { agent_type: "codex", agent_uid: "a1" })], ALL);
 const EMPTY = (g: string) => summary(g, [], totals());
 
@@ -128,7 +139,12 @@ function install(setup: Setup = {}) {
         if (setup.empty && !(setup.usedBefore && everQuery)) {
           return Promise.resolve({ data: EMPTY(q.group_by) });
         }
-        const byGroup = { model: BY_MODEL, day: BY_DAY, agent: BY_AGENT } as const;
+        const byGroup = {
+          model: BY_MODEL,
+          provider: BY_PROVIDER,
+          day: BY_DAY,
+          agent: BY_AGENT,
+        } as const;
         return Promise.resolve({ data: byGroup[q.group_by as keyof typeof byGroup] });
       }
       default:
@@ -214,6 +230,41 @@ describe("API-key usage", () => {
       expect(screen.queryByRole("button", { name: "Edit prices" })).toBeNull();
     },
   );
+
+  acceptance("provider-switching", "usage by provider", async () => {
+    install();
+    renderTab("/model-providers?tab=usage&by=provider");
+    const table = await screen.findByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "Provider" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Agent" })).toBeInTheDocument();
+    expect(within(table).queryByRole("columnheader", { name: "Model" })).toBeNull();
+    const rows = within(table).getAllByRole("row");
+    expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Claude Code")).toBeInTheDocument();
+    // The tabs run By model, By provider, By agent, By day.
+    const names = screen.getAllByRole("button", { name: /^By / }).map((b) => b.textContent);
+    expect(names).toEqual(["By model", "By provider", "By agent", "By day"]);
+  });
+
+  test("the cache write tile explains where writes are counted instead of a fixed note", async () => {
+    install();
+    renderTab();
+    await screen.findByRole("table");
+    expect(screen.queryByText("Anthropic only")).toBeNull();
+    expect(screen.getByRole("button", { name: "About cache writes" })).toBeInTheDocument();
+  });
+
+  test("a range with no cache writes shows — on the cache write tile", async () => {
+    const { get } = install();
+    const bare = totals({ requests: 5, input_tokens: 1000, output_tokens: 10 });
+    get.mockImplementation(() =>
+      Promise.resolve({ data: summary("model", [row("m1", bare, { model: "gpt-5.5" })], bare) }),
+    );
+    renderTab();
+    await screen.findByRole("table");
+    const label = screen.getByText("Cache write", { selector: "span" });
+    expect(label.parentElement).toHaveTextContent(/—$/);
+  });
 
   acceptance("provider-switching", "Coffer shows no subscription quota", async () => {
     const { get } = install();

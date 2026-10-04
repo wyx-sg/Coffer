@@ -22,7 +22,9 @@ Two wires, two readers, one output shape (:class:`StreamUsage`):
   OpenAI's ``input_tokens`` INCLUDES ``input_tokens_details.cached_tokens``;
   Anthropic's excludes cache reads. The record stores disjoint categories
   (:mod:`coffer.domain.usage.records`), so the cached part is subtracted here,
-  once, and nowhere else.
+  once, and nowhere else. GPT-5.6 and later also report
+  ``input_tokens_details.cache_write_tokens`` (also part of ``input_tokens``);
+  it is subtracted the same way and recorded as a five-minute cache write.
 
 A stream cut before its terminal event has unknown usage: :meth:`usage`
 returns ``None`` and the record says ``usage_known = False`` — recorded,
@@ -111,9 +113,8 @@ class SseParser:
 class StreamUsage:
     """Token counts in the record's disjoint categories.
 
-    ``None`` means the wire does not report that category at all (OpenAI has no
-    cache-write bucket); a category the wire reports but left out of this
-    response is ``0``.
+    ``None`` means the wire does not report that category at all; a category
+    the wire reports but left out of this response is ``0``.
     """
 
     input_tokens: int | None = None
@@ -313,12 +314,19 @@ class ResponsesUsageReader(_Reader):
         details = u.get("input_tokens_details")
         cached = _int(details.get("cached_tokens")) if isinstance(details, dict) else None
         cached = min(cached or 0, total_in)
+        # GPT-5.6 and later also report cache WRITES (charged above input);
+        # like cached tokens they are part of ``input_tokens``. Responses has no
+        # TTL split, so a write counts in the default five-minute bucket.
+        written = _int(details.get("cache_write_tokens")) if isinstance(details, dict) else None
+        written = min(max(written or 0, 0), total_in - cached)
         out_details = u.get("output_tokens_details")
         reasoning = (
             _int(out_details.get("reasoning_tokens")) if isinstance(out_details, dict) else None
         )
         return StreamUsage(
-            input_tokens=total_in - cached,
+            input_tokens=total_in - cached - written,
+            cache_write_5m_tokens=written,
+            cache_write_1h_tokens=0,
             cache_read_tokens=cached,
             output_tokens=_int(u.get("output_tokens")) or 0,
             reasoning_tokens=reasoning or 0,

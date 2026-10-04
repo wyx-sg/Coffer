@@ -1,6 +1,6 @@
-// src/components/usage/BreakdownTable.tsx — the range broken down by model, agent or day, in a bordered table with a Total row.
+// src/components/usage/BreakdownTable.tsx — the range broken down by model, provider, agent or day, in a bordered table with a Total row.
 //
-// By model names the connection that served each model (by name, as the
+// By provider lists the connections that served requests; by model names the connection that served each model (by name, as the
 // summary reports it) and, in "Agent", who used it; by agent lists
 // the agents; by day lists the local days newest first with each day's top
 // agent, the latest week first and the rest behind "Show all".
@@ -58,6 +58,14 @@ export function BreakdownTable({ summary, totalLabel }: Props) {
       if (!row.day) return row.key;
       const day = formatDay(parseDay(row.day), lang, "long");
       return row.day === today ? t("usage.table.today", { day }) : day;
+    }
+    if (group === "provider") {
+      const name = row.connection_name ?? row.connection_uid;
+      return name ? (
+        <span className="truncate text-sm font-medium">{name}</span>
+      ) : (
+        t("usage.table.unknownProvider")
+      );
     }
     return (
       <span className="flex min-w-0 flex-col gap-px">

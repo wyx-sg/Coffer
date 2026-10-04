@@ -223,8 +223,73 @@ def test_responses_cached_and_reasoning_tokens() -> None:
     _feed_bytewise(reader, raw)
     assert reader.first_content_seen and reader.saw_terminal and not reader.saw_error_event
     assert reader.usage() == StreamUsage(
-        input_tokens=200, cache_read_tokens=800, output_tokens=300, reasoning_tokens=120
+        input_tokens=200,
+        cache_write_5m_tokens=0,
+        cache_write_1h_tokens=0,
+        cache_read_tokens=800,
+        output_tokens=300,
+        reasoning_tokens=120,
     )
+
+
+def _with_details(details: dict[str, int], total: int = 1000) -> dict:  # type: ignore[type-arg]
+    return {
+        "type": "response.completed",
+        "response": {
+            "status": "completed",
+            "usage": {
+                "input_tokens": total,
+                "input_tokens_details": details,
+                "output_tokens": 10,
+            },
+        },
+    }
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a Responses cache write is recorded as a cache write",
+)
+def test_responses_cache_writes_are_split_out_of_input() -> None:
+    reader = ResponsesUsageReader()
+    _feed_bytewise(
+        reader,
+        _sse(
+            (
+                "response.completed",
+                _with_details({"cached_tokens": 600, "cache_write_tokens": 250}),
+            )
+        ),
+    )
+    usage = reader.usage()
+    assert usage is not None
+    assert (usage.input_tokens, usage.cache_read_tokens) == (150, 600)
+    assert (usage.cache_write_5m_tokens, usage.cache_write_1h_tokens) == (250, 0)
+
+
+def test_responses_cache_write_is_clamped_to_the_input_total() -> None:
+    reader = ResponsesUsageReader()
+    reader.feed(
+        _sse(
+            ("response.completed", _with_details({"cached_tokens": 900, "cache_write_tokens": 500}))
+        )
+    )
+    usage = reader.usage()
+    assert usage is not None
+    assert (usage.input_tokens, usage.cache_read_tokens, usage.cache_write_5m_tokens) == (
+        0,
+        900,
+        100,
+    )
+
+
+def test_responses_non_streamed_cache_writes() -> None:
+    body = _with_details({"cached_tokens": 0, "cache_write_tokens": 400})["response"]
+    reader = ResponsesUsageReader()
+    reader.read_json(json.dumps(body | {"object": "response"}).encode())
+    usage = reader.usage()
+    assert usage is not None
+    assert (usage.input_tokens, usage.cache_write_5m_tokens) == (600, 400)
 
 
 def test_responses_content_starts_at_the_first_delta() -> None:

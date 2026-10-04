@@ -404,6 +404,8 @@ The files are the agent's own: for Claude Code, `settings.json` — the top-leve
 
 The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a backup copy is kept in Coffer's own folder, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider and a model chosen, Coffer tests that provider with that model by itself once the draft has rested for a moment (`POST /api/v1/models/test-connection` with the connection's protocol, base URL and stored secret ref — the call of Overview › Model › Test; the page never handles a key), cancels a run the draft has moved past, and shows the result as a line under Model: **Testing connection…**, **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** is enabled only when the draft differs from what is applied, names a model, AND the test for exactly this provider and model passed; while it is testing or after a failure it stays off and a line beside it says why. A local runtime connection is tested the same way. The review runs no second test. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model itself (`/model`) and that Coffer sets it only for a provider the user adds.
 
+A change written into an agent's config files is read when that agent starts: Codex (App and CLI) reads `config.toml` at startup, and nothing in Coffer establishes that a running Claude Code re-reads `settings.json`, so both are treated as needing a restart. After a successful **Apply** the web UI MUST show a notice naming the agent by its display name — "Restart <agent> to use this change — sessions already open keep the old setting." — at the moment of the change; sessions already open are not touched.
+
 #### Scenario: previewing a model change writes nothing
 - **GIVEN** a Claude Code agent on its built-in login and a connection that reaches it
 - **WHEN** the user previews switching it onto the connection with a model and tier pins
@@ -437,6 +439,11 @@ The web UI's **Change model** dialog (Overview › Model › Change…, or `?cha
 - **WHEN** the test answers
 - **THEN** the line under Model reads "Connection failed" with the reason and a **Retry** button, Review changes stays off and a hint says why
 - **AND** choosing Retry tests again and, when it passes, turns Review changes on
+
+#### Scenario: applying a model change says the agent must be restarted
+- **GIVEN** the Change model review for a Codex agent with a passed connection test
+- **WHEN** the user applies the change and it succeeds
+- **THEN** a notice reads "Restart Codex to use this change" and says sessions already open keep the old setting
 
 #### Scenario: the built-in login needs no connection test
 - **GIVEN** the Change model dialog for an agent on a connection
@@ -682,7 +689,8 @@ an agent runs on that curates models, none of them `text`, offers none. The per-
 always carries a **Default** option that clears the conversation's model, so the agent runs its
 projected default ([chat](../chat/spec.md) "Offer models from a fixed dropdown that keeps the
 current value"). A model name MUST be passed to the agent verbatim, with no validation against a list of
-Coffer's own: the CLI owns that namespace, so a renamed or added model works the day it ships, and one an
+Coffer's own (the one narrow exception is the local model proxy, which replaces a requested model its connection
+does not curate with the agent's projected default — [Reach API-key and local connections through the local model proxy](#requirement-reach-api-key-and-local-connections-through-the-local-model-proxy)): the CLI owns that namespace, so a renamed or added model works the day it ships, and one an
 account cannot run fails where every other unusable choice fails. A model name is still raw
 passthrough everywhere the CLI accepts one. Coffer offers no reasoning-effort control on any surface: the agent runs at the effort its own configuration names.
 
@@ -812,7 +820,14 @@ connection's endpoint directly, and the proxy MUST relay each request to an upst
 wire — Anthropic Messages (`POST /anthropic/v1/messages`, `/messages/count_tokens`,
 `GET /anthropic/v1/models`) to an Anthropic-shaped endpoint, OpenAI Responses
 (`POST /openai/v1/responses`) to a Responses endpoint — with no protocol translation. The request
-body is forwarded byte for byte; every request header is forwarded except hop-by-hop headers,
+body is forwarded byte for byte, with one exception: when the connection curates a non-empty model set and the
+request's top-level `model` is not in it, the proxy replaces that one value with the agent's projected default
+model (the agent's bound model when the connection serves it, else the connection's first curated text model)
+and changes no other byte — on the Anthropic wire a requested model whose name carries a tier (`haiku`, `sonnet`,
+`opus`, `fable`) instead takes the model projected for that tier into Claude Code when the connection serves it;
+the swap is logged as one metadata-only line naming the requested and the used model,
+and the request is metered under the model sent. A connection with no curated set is never rewritten, nor is a
+body that is not JSON or has no `model`, nor `GET /v1/models`. Every request header is forwarded except hop-by-hop headers,
 `host`, `content-length`, the client's credentials (`authorization`, `x-api-key`, cookies) and
 `accept-encoding`, so `anthropic-*` headers and body fields travel as an open list. The proxy
 injects the connection's key for the upstream (`x-api-key` and `Authorization: Bearer` on the
@@ -827,6 +842,26 @@ how it works is [The local model proxy](../../../docs-site/architecture/model-pr
 - **GIVEN** an agent on a connection whose upstream streams a recorded Messages response with pings and comments
 - **WHEN** the agent sends a streaming request through the proxy
 - **THEN** the agent receives exactly the bytes the upstream sent, in order
+
+#### Scenario: an unserved model is replaced by the projected default and the rewrite is logged
+- **GIVEN** an agent on a connection that curates `deepseek-flash` and `deepseek-v4-pro`, whose projected default is `deepseek-flash`
+- **WHEN** the agent sends a request whose `model` is `gpt-6-luna`
+- **THEN** the upstream receives the same body with only the `model` value changed to `deepseek-flash`, the usage record names `deepseek-flash`, and one log line records the requested and the used model without any body
+
+#### Scenario: an unserved Claude model falls back to its tier's model
+- **GIVEN** a Claude Code agent on a connection that curates `deepseek-flash`, `deepseek-v4-pro` and `deepseek-chat`, projecting `deepseek-flash` for the haiku tier, with default `deepseek-chat`
+- **WHEN** the agent sends a request whose `model` is `claude-haiku-4-5`, and another whose `model` is `gpt-6-luna`
+- **THEN** the upstream receives `deepseek-flash` for the first and `deepseek-chat` for the second, and a Codex agent's request naming a tier keyword still receives the default
+
+#### Scenario: a served model is forwarded byte for byte
+- **GIVEN** an agent on a connection that curates `deepseek-flash` and `deepseek-v4-pro`
+- **WHEN** the agent sends a request whose `model` is `deepseek-v4-pro`
+- **THEN** the upstream receives the body byte for byte and nothing is logged as a rewrite
+
+#### Scenario: a connection without a curated set is never rewritten
+- **GIVEN** an agent on a connection that curates no models
+- **WHEN** the agent sends a request naming any model
+- **THEN** the upstream receives the body byte for byte
 
 #### Scenario: unknown anthropic headers and body fields reach the upstream untouched
 - **GIVEN** a request carrying an `anthropic-beta` value and a body field Coffer has never seen
@@ -993,7 +1028,7 @@ model, the status, the outcome (`completed`, `error_event`, `truncated`, `client
 disjoint categories — uncached input, 5-minute and 1-hour cache writes, cache reads, output (with
 reasoning as a part of output), and web-search requests. On the Anthropic wire the last value of each
 field wins and `message_delta` overrides `message_start`; on the Responses wire the terminal event
-carries them and cached tokens are split out of `input_tokens`; a non-streamed body is read the same
+carries them and cached tokens and cache writes (`input_tokens_details.cached_tokens`, and `cache_write_tokens` on GPT-5.6 and later, recorded as 5-minute writes) are split out of `input_tokens`; a non-streamed body is read the same
 way. A stream cut before its terminal event MUST be recorded with usage unknown — never dropped and
 never guessed. The proxy opens no database: it spools records to `~/.coffer/proxy-usage/`, and the
 daemon ingests completed files into its database with `source = "proxy"` and a de-duplication key
@@ -1006,6 +1041,11 @@ completion or a secret. How the proxy reads the stream is
 - **GIVEN** an agent's Responses request whose stream reports 1000 input tokens of which 600 cached, and 90 output tokens of which 40 reasoning
 - **WHEN** the proxy relays it
 - **THEN** the record carries 400 uncached input, 600 cache-read and 90 output tokens with 40 reasoning, the agent, the connection, the upstream's request id as its de-duplication key and the outcome `completed`
+
+#### Scenario: a Responses cache write is recorded as a cache write
+- **GIVEN** a Responses request on GPT-5.6 or later whose usage reports 1000 input tokens of which 600 cached and 250 written to the cache
+- **WHEN** its usage is read, streamed or not
+- **THEN** the record carries 150 uncached input, 600 cache-read and 250 5-minute cache-write tokens; a response without `cache_write_tokens` carries none
 
 #### Scenario: the final message_delta overrides message_start
 - **GIVEN** an Anthropic stream whose `message_delta` restates larger input and cache totals than its `message_start`
@@ -1095,7 +1135,7 @@ Coffer and are not metered.
 - **AND** on the Usage tab the dash's tooltip says no price is known for it and that a price is set on its provider, and the Cost tile says "1 model unpriced" once, as a link to that provider's Models section; no other place repeats the count
 
 ### Requirement: Report usage by model, agent or day over a range
-`GET /api/v1/usage/summary`, taking the range (`today`, `24h`, `7d`, `30d`, `month` or `custom` with a first and last day), the grouping (`model`, `agent` or `day`) and the filters as query parameters,
+`GET /api/v1/usage/summary`, taking the range (`today`, `24h`, `7d`, `30d`, `month` or `custom` with a first and last day), the grouping (`model`, `provider`, `agent` or `day`) and the filters as query parameters,
 MUST report, for the range in the machine's local days (today; the last 24 hours up to now, summed from the per-request rows because the window cuts through a local day; the last 7 or 30 days including today;
 this calendar month; or an inclusive custom range), one row per model (with the connection that
 served it, by uid and name), per agent or per day: requests, the token totals per category, the
@@ -1109,6 +1149,11 @@ pages through the per-request detail, newest first. The web UI shows the summary
 - **GIVEN** usage of two models over two connections
 - **WHEN** the summary is grouped by model
 - **THEN** each row names its model and the connection's uid and name, with its requests, tokens and estimated cost
+
+#### Scenario: usage by provider
+- **GIVEN** usage of two models over two connections
+- **WHEN** the summary is grouped by provider
+- **THEN** it returns one row per connection, with the connection's uid and name, its requests, tokens, estimated cost and the agent types that used it, the highest cost first
 
 #### Scenario: usage by agent and by day
 - **GIVEN** usage by two agents on two days
@@ -1193,8 +1238,8 @@ date-only time range (Today, Last 7 days, Last 30 days, This month, or a custom 
 note on which prices costed the range, with the request count under it and, when a model in the
 range has no known price, "N model(s) unpriced" as a link to that model on its provider
 (`/model-providers?provider=<uid>&model=<id>`) — the one place the count appears — then Input,
-Output, Cache read and Cache write; a Cost per day chart in the data colour with today lighter; a
-segmented By model · By agent · By day over a bordered table whose second column is headed Agent,
+Output, Cache read and Cache write (a dash when no cache write was reported, its "?" saying writes are counted only where the provider reports them: Anthropic Messages and OpenAI Responses on GPT-5.6 and later); a Cost per day chart in the data colour with today lighter; a
+segmented By model · By provider · By agent · By day over a bordered table whose second column is headed Agent (By provider's first column is the provider),
 with a Total row and, by day, the latest seven days then "Showing 7 of N · Show all". The range,
 the filters and the breakdown are in the address. A cost no price covers reads `—`, with the reason
 on hover. Before any API-key request has ever been metered the tab is one whole-page empty state —

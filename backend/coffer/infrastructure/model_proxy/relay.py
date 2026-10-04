@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Any
 
 import httpx
 from starlette.types import Receive, Send
 
-from coffer.domain.usage.records import Outcome
+from coffer.domain.usage.records import Outcome, Wire
 from coffer.infrastructure.model_proxy import wire as w
 from coffer.infrastructure.model_proxy.attempt import (
     Attempt,
@@ -81,6 +82,7 @@ class Relay:
             await cancel_quietly(watcher)
 
     async def _serve(self, req: RelayRequest, down: Downstream) -> None:
+        req = self._with_served_model(req)
         model, stream = w.request_meta(req.body)
         session_id = next((v for n in w.SESSION_HEADERS if (v := w.header(req.headers, n))), None)
         attempt = Attempt(
@@ -95,6 +97,31 @@ class Relay:
             return
         message = "Coffer's model proxy could not reach the upstream for this connection."
         await down.respond(502, _JSON, w.error_body(req.wire, message))
+
+    def _with_served_model(self, req: RelayRequest) -> RelayRequest:
+        """The one edit to a request: an unserved ``model`` becomes its tier's model
+        (Anthropic wire) or the agent's projected default, and the swap is
+        logged (metadata only). Usage is recorded under the model actually
+        sent, because the attempt reads it from the body this returns."""
+        route = req.route
+        if req.method == "GET" or route.fallback_model is None:
+            return req
+        tiers = route.tier_fallbacks if route.wire is Wire.ANTHROPIC else None
+        swapped = w.replace_unserved_model(
+            req.body, route.served_models, route.fallback_model, tiers
+        )
+        if swapped is None:
+            return req
+        body, requested, used = swapped
+        _logger.info(
+            "model_proxy.model_replaced requested=%s used=%s agent=%s connection=%s endpoint=%s",
+            requested,
+            used,
+            req.agent.agent_uid,
+            route.member.connection_uid,
+            req.endpoint,
+        )
+        return replace(req, body=body)
 
     # --- the attempt -----------------------------------------------------------
 

@@ -20,7 +20,7 @@ included, minus a short deny list:
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -132,6 +132,93 @@ def request_meta(body: bytes) -> tuple[str | None, bool]:
     return (model if isinstance(model, str) else None), payload.get("stream") is True
 
 
+def pick_replacement(
+    requested: str,
+    served: Iterable[str],
+    fallback: str | None,
+    tier_fallbacks: Mapping[str, str] | None = None,
+) -> str | None:
+    """The model an unserved ``requested`` becomes, or None to leave it alone.
+
+    A requested name carrying a tier keyword (case-insensitive) takes that
+    tier's model when the connection serves it; anything else — or a tier model
+    that is not served — takes ``fallback``."""
+    served_ids = set(served)
+    if not served_ids or not fallback or requested in served_ids:
+        return None
+    name = requested.lower()
+    for tier, model in (tier_fallbacks or {}).items():
+        if tier in name and model in served_ids:
+            return model
+    return fallback
+
+
+def replace_unserved_model(
+    body: bytes,
+    served: Iterable[str],
+    fallback: str | None,
+    tier_fallbacks: Mapping[str, str] | None = None,
+) -> tuple[bytes, str, str] | None:
+    """The body with its top-level ``model`` swapped for the replacement
+    :func:`pick_replacement` chooses, plus the model it asked for and the one
+    used — or None when nothing is to change.
+
+    The one place the proxy edits a request. It fires only when ``served`` is
+    non-empty, ``fallback`` is known, and the body is a JSON object whose
+    ``model`` is a string outside ``served``. Only that value's bytes are
+    replaced; every other byte is kept. Never raises.
+    """
+    served_ids = set(served)
+    if not served_ids or not fallback:
+        return None
+    try:
+        text = body.decode("utf-8")
+        span = _model_span(text)
+    except (ValueError, IndexError):
+        return None
+    if span is None:
+        return None
+    start, end, requested = span
+    used = pick_replacement(requested, served_ids, fallback, tier_fallbacks)
+    if used is None:
+        return None
+    return (text[:start] + json.dumps(used) + text[end:]).encode("utf-8"), requested, used
+
+
+def _model_span(text: str) -> tuple[int, int, str] | None:
+    """``(start, end, value)`` of the last top-level ``"model": "<str>"`` pair."""
+    decoder = json.JSONDecoder()
+    ws = " \t\r\n"
+
+    def skip(pos: int) -> int:
+        while pos < len(text) and text[pos] in ws:
+            pos += 1
+        return pos
+
+    pos = skip(0)
+    if pos >= len(text) or text[pos] != "{":
+        return None
+    pos = skip(pos + 1)
+    found: tuple[int, int, str] | None = None
+    if pos < len(text) and text[pos] == "}":
+        return None
+    while True:
+        key, pos = decoder.raw_decode(text, pos)
+        pos = skip(pos)
+        if not isinstance(key, str) or text[pos] != ":":
+            return None
+        pos = skip(pos + 1)
+        value, end = decoder.raw_decode(text, pos)
+        if key == "model":
+            found = (pos, end, value) if isinstance(value, str) else None
+        pos = skip(end)
+        if text[pos] == "}":
+            return found
+        if text[pos] != ",":
+            return None
+        pos = skip(pos + 1)
+
+
 def new_reader(wire: Wire) -> UsageReader:
     return AnthropicUsageReader() if wire is Wire.ANTHROPIC else ResponsesUsageReader()
 
@@ -155,6 +242,8 @@ __all__ = [
     "header",
     "is_loopback_member",
     "new_reader",
+    "pick_replacement",
+    "replace_unserved_model",
     "request_meta",
     "upstream_request_headers",
     "upstream_url",
