@@ -252,8 +252,8 @@ export const replyFileDiffKey = (conversationId: string, messageId: string, path
 export const messagesKey = (conversationId: string) => ["messages", conversationId] as const;
 
 // --- secrets — the secret boundary's approvals -------------------------
-
 export const secretsKey = ["secrets"] as const;
+export const secretScanKey = [...secretsKey, "scan"] as const;
 /** The approvals still waiting for a present human. */
 export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;

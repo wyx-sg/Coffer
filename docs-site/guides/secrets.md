@@ -1,11 +1,11 @@
 ---
 title: Secrets
-description: How Coffer keeps secrets from the agents it serves — plaintext only in the desktop app, approval before a secret goes somewhere new — and how to use the Secrets page, store standalone secrets, run commands with them through coffer run, answer approvals, list what uses a secret, and back up the master key.
+description: How Coffer keeps secrets from the agents it serves — plaintext only in the desktop app, approval before a secret goes somewhere new — and how to use the Secrets page, store standalone secrets, run commands with them through coffer run, answer approvals, list what uses a secret, move plaintext keys into the store, and back up the master key.
 ---
 
 # Secrets
 
-Coffer holds secrets for your agents, and your agents run as you. This page explains the line Coffer draws between the two, and how to work with it day to day: storing a secret that belongs to no resource, running a command with it, answering the approvals Coffer asks for, finding what uses a secret, and backing up the master key.
+Coffer holds secrets for your agents, and your agents run as you. This page explains the line Coffer draws between the two, and how to work with it day to day: storing a secret that belongs to no resource, running a command with it, answering the approvals Coffer asks for, finding what uses a secret, moving plaintext keys into the store, and backing up the master key.
 
 For storing, citing, rotating and deleting a resource's secrets — an MCP server's token, a provider key — see [Secret store](/guides/secret-store). The threat model behind all of this is on [Security model](/architecture/security).
 
@@ -49,11 +49,18 @@ Each row's **⋯** menu:
 | **Copy reference (…)** | Copies what a file or config cites, shown in the item: `coffer://secret/<name>` for a standalone secret, the ref otherwise. |
 | **Delete…** | For a secret nothing uses, asks once, saying when it was last used, and deletes it — on this Mac and, if encrypted secrets sync, on your other Macs at their next round. For one in use, it deletes nothing: the dialog lists each thing that still uses it, with **Open** to go there, and the row stays. |
 
+**Find plaintext keys** looks for credentials written in plain text in what Coffer manages: the files of your skills (an assignment whose name says password, secret, token or key, or a well-known token shape such as `ghp_…` or `sk-…`), and each registered MCP server's environment variables and HTTP headers, custom tools' headers included. A reference, a `$VAR` or `${VAR}`, or a placeholder such as `<your-token>` is left alone. The dialog lists what it found under Skills and MCP servers — the skill's file and line or the server's `env`/`header` key, and what each becomes — never the value, with everything ticked. Untick what should stay, then **Review N changes**: Coffer works out the move without writing anything and lists the secrets it would add and the files and servers it would change. **Apply N changes** moves them:
+
+- a skill's value becomes a standalone secret, and its file cites `coffer://secret/<name>` in its place (see [Run a command with a secret](#run-a-command-with-a-secret) for using it from a script). A name that already holds a different value is skipped with the file untouched. A file Coffer cannot rewrite keeps its value: the value is stored all the same, the dialog names the file and offers **Try again**.
+- a server's value becomes a secret of that server's own, cited from the server's config under the same variable or header name; the server gets the same value as before, with no approval to answer.
+
+Each move is recorded in [Activity](/guides/activity) as **Imported secrets**, without the value. A scan that finds nothing says how many files and servers it read.
+
 **Add secret** adds a new standalone secret: a name (letters, digits, `.`, `_` and `-`, at most 64, fixed once added) and a value, which is never shown back. A name that already exists is caught before anything is sent, with a link to replace that secret's value instead. The dialog shows the reference to cite. The secret is stored as soon as you add it, with nothing to approve.
 
 To use a stored secret in a command, see [Run a command with a secret](#run-a-command-with-a-secret).
 
-While any change waits for approval, a banner at the top says how many ("1 change waiting for approval") and what approving takes here (Touch ID or your login password in the desktop app; in a browser, the desktop app), with **Review** to reopen the approvals dialog. Overview carries the same item, and its **Review** opens the same dialog. A banner's **×** ignores it, on this page and on Overview alike: the page then says "… — ignored on Overview. Show it again", and the item returns by itself when the situation changes. With no secrets at all, the page offers **Add secret**.
+While any change waits for approval, a banner at the top says how many ("1 change waiting for approval") and what approving takes here (Touch ID or your login password in the desktop app; in a browser, the desktop app), with **Review** to reopen the approvals dialog. Overview carries the same item, and its **Review** opens the same dialog. A banner's **×** ignores it, on this page and on Overview alike: the page then says "… — ignored on Overview. Show it again", and the item returns by itself when the situation changes. With no secrets at all, the page offers **Add secret** and **Find plaintext keys**.
 
 ## Standalone secrets
 

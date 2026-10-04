@@ -219,6 +219,7 @@
     "secret_approval_rejected",
     "secret_approval_requested",
     "secret_deleted",
+    "secret_imported",
     "secret_protection_enabled",
     "secret_resolved",
     "secret_revealed",
