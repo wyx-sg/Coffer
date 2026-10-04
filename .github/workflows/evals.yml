@@ -16,7 +16,7 @@ on:
       - "backend/uv.lock"
       - ".github/workflows/evals.yml"
   pull_request:
-    branches: [main, feature/rearch]
+    branches: [main]
     paths: *eval_paths
 
 concurrency:
