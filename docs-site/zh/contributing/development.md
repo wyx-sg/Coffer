@@ -121,7 +121,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright 测试套件：`web/`（浏览器）、`mcp/`（MCP 客户端到 shim 再到守护进程）和 `visual/`（截图基线，`make verify-visual`） |
 | [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | 工具搜索和工具路由的评测框架，含数据集和基线 |
 | [`openspec/`](https://github.com/wyx-sg/Coffer/tree/main/openspec) | 产品契约：`specs/`（当前）、`changes/`（进行中和已归档） |
-| [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `decisions/`（决策记录）、`research/` 和 `skill-library/`。原则和架构在本站的[架构](/zh/architecture/)部分 |
+| [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `decisions/`（决策记录）和 `research/`。原则和架构在本站的[架构](/zh/architecture/)部分 |
 | `docs-site/` | 本 VitePress 站点 |
 | [`scripts/`](https://github.com/wyx-sg/Coffer/tree/main/scripts) | 仓库门禁（`check_*.py`、`audit_acceptance.py`）和构建脚本 |
 | `.agents/` | 给贡献者和智能体的约定文件 |
