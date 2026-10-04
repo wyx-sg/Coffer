@@ -71,7 +71,7 @@ This prevents the hidden cost of "we'll open-source it later" — retrofitting l
 
 ### IV. AI-Native
 
-Everyone who uses Coffer already works with a coding agent, so Coffer treats an agent as the way environment-dependent work gets done. When a task depends on the person's machine and has no single right procedure — installing a program, setting up a tool or an outside account, diagnosing and fixing the environment — the product hands it to an agent. It builds a prompt that states the facts (what is missing, why it is needed, the constraints) and offers it two ways: copied, for the person's own agent, or opened as a new conversation with an agent Coffer manages, pre-filled and sent only when the person presses Send. The product does not hard-code one package manager's install commands, run installers, or walk the person through long manual step lists. Work the person could do in the UI but may not want to — resolving a sync conflict, merging a skill's upstream update with local edits — also offers the hand-off beside the manual controls, so the person chooses whether to look at it themselves. The prompt is built by the daemon, so the CLI and the UI offer the same words.
+Everyone who uses Coffer already works with a coding agent, so Coffer treats an agent as the way environment-dependent work gets done. When a task depends on the person's machine and has no single right procedure — installing a program, setting up a tool or an outside account, diagnosing and fixing the environment — the product hands it to an agent. It builds a prompt that states the facts (what is missing, why it is needed, the constraints) and offers it two ways: started as a new session of the person's default agent in their preferred terminal, with the prompt sent as its first message — pressing the hand-off button is the consent — or copied, for any agent the person chooses. The product does not hard-code one package manager's install commands, run installers, or walk the person through long manual step lists. Work the person could do in the UI but may not want to — resolving a sync conflict, merging a skill's upstream update with local edits — also offers the hand-off beside the manual controls, so the person chooses whether to look at it themselves. The prompt is built by the daemon, so the CLI and the UI offer the same words.
 
 Two cases stay outside the hand-off:
 
@@ -80,7 +80,9 @@ Two cases stay outside the hand-off:
 
 A prompt never asks an agent to handle a credential; where a login is needed, it tells the agent to leave the login to the person.
 
-This holds because a hard-coded procedure is right for one kind of machine and wrong for the rest, and it goes stale as tools change, while an agent reads the machine it is on. A hand-off also keeps the person in control: nothing runs until they send it.
+This holds because a hard-coded procedure is right for one kind of machine and wrong for the rest, and it goes stale as tools change, while an agent reads the machine it is on.
+
+The hand-off starts the agent in the person's terminal rather than in a conversation Coffer runs, for three reasons. Neither agent's command line can open a session with a prompt typed in but not sent — `claude [prompt]` and `codex [PROMPT]` both send it as they start — so pressing the button is where the person says yes. In their own terminal the agent runs under its own permission mode, the one the person set up and watches, which is safer than an agent Coffer drives with full permissions. And the person stays in control there: the prompt is the session's first message, in plain view, and Esc or Ctrl-C stops the agent at any moment.
 
 ## Technology & architectural constraints
 
