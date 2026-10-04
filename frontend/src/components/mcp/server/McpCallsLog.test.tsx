@@ -13,7 +13,7 @@ vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
 }));
-// Activity's MCP calls tab, mounted by the acceptance test below, follows the
+// Activity's Tool calls tab, mounted by the acceptance test below, follows the
 // daemon's change feed; no stream is opened here.
 vi.mock("@/lib/events/eventStream", () => ({
   followDaemonEvents: () => new Promise<void>(() => {}),
@@ -92,7 +92,7 @@ acceptance(
     expect(screen.getByRole("button", { name: "View server log" })).toBeInTheDocument();
     scoped.unmount();
 
-    // Activity's MCP calls tab reads the same log unscoped: every server's
+    // Activity's Tool calls tab reads the same log unscoped: every server's
     // calls from the cross-server route, each row naming its server.
     get.mockClear();
     render(
@@ -104,7 +104,7 @@ acceptance(
         </TooltipProvider>,
       ),
     );
-    // Activity's MCP calls table mutes the server part of `server.tool` in its own span.
+    // Activity's Tool calls table mutes the server part of `server.tool` in its own span.
     const fsReadFile = (_: string, el: Element | null) =>
       el?.hasAttribute("data-call-target") === true && el.textContent === "fs.read_file";
     await waitFor(() => expect(screen.getAllByText(fsReadFile).length).toBeGreaterThan(0));

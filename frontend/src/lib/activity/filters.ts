@@ -98,7 +98,7 @@ export interface ActivityFilters {
    * categories. Empty is any.
    */
   kinds: string[];
-  /** An MCP call's outcome (MCP calls tab). */
+  /** An MCP call's outcome (Tool calls tab). */
   status: StatusFilter;
   /** Daemon log severity floor; "" is every level (Daemon log tab). */
   level: "" | "info" | "warning" | "error";

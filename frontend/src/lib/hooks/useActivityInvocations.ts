@@ -4,7 +4,7 @@
 // row naming the server it went to. Kept beside — not inside —
 // useMcpInvocations because the two answer different questions: that hook is
 // "what did THIS server do", this one is "what did the gateway do", and the
-// Activity page's MCP calls tab needs the second without inheriting the
+// Activity page's Tool calls tab needs the second without inheriting the
 // first's 30s poll.
 import { useQuery } from "@tanstack/react-query";
 import { fetchCallPage } from "@/lib/api/activity";

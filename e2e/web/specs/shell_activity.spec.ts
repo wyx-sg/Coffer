@@ -74,7 +74,7 @@ test(
       for (const tab of [
         /Everything/i,
         /Changes/i,
-        /MCP calls/i,
+        /Tool calls/i,
         /Daemon log/i,
       ]) {
         await expect(page.getByRole("tab", { name: tab })).toBeVisible();

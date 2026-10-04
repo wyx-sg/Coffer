@@ -1,6 +1,6 @@
 // src/lib/hooks/useActivityFeed.ts — the visible Activity tab's records: the logs it reads, merged, filtered, held and counted.
 //
-// A tab reads one log (Changes, MCP calls, Daemon log) or all three
+// A tab reads one log (Changes, Tool calls, Daemon log) or all three
 // (Everything). Each log is a `useActivitySource`; this hook decides each
 // one's server-side filters from the tab's, merges what they loaded
 // newest-first, applies the client-side half of the filters, and answers the

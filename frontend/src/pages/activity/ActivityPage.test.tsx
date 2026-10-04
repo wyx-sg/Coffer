@@ -192,7 +192,7 @@ const tab = (name: RegExp) => screen.getByRole("tab", { name });
 // Radix activates a tab on mousedown, not on click.
 const openTab = (name: RegExp) => fireEvent.mouseDown(tab(name));
 const drawer = () => screen.findByRole("dialog");
-/** The filter row's pill by its name ("By", "Kind: MCP calls"). */
+/** The filter row's pill by its name ("By", "Kind: Tool calls"). */
 const pill = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
 const headers = () =>
   screen
@@ -246,7 +246,7 @@ describe("ActivityPage", () => {
     render(wrap(<ActivityPage />));
     await screen.findByText("Added filesystem");
     expect(tab(/^Changes/)).toHaveTextContent(/^Changes$/);
-    expect(tab(/^MCP calls/)).toHaveTextContent(/^MCP calls$/);
+    expect(tab(/^Tool calls/)).toHaveTextContent(/^Tool calls$/);
     expect(tab(/^Everything/)).toHaveTextContent(/^Everything$/);
     // The change feed is not open in a test: the dot says so in words.
     expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
@@ -270,7 +270,7 @@ describe("ActivityPage", () => {
       ),
     );
     expect(tab(/daemon log/i)).toHaveAttribute("data-state", "active");
-    openTab(/mcp calls/i);
+    openTab(/tool calls/i);
     await waitFor(() => expect(search).toBe("?tab=mcp"));
     openTab(/everything/i);
     await waitFor(() => expect(search).toBe(""));
@@ -362,7 +362,7 @@ describe("ActivityPage", () => {
     );
   });
 
-  test("on MCP calls the By pill lists agents only", async () => {
+  test("on Tool calls the By pill lists agents only", async () => {
     mockApi({ invocations: [INVOCATION] });
     render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
     await screen.findByText(target("github.search_issues"));
@@ -441,7 +441,7 @@ acceptance("web-ui", "activity gives each record its own tab", async () => {
   ]);
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
-  openTab(/mcp calls/i);
+  openTab(/tool calls/i);
   expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
   expect(headers()).toEqual(["Time", "Agent", "Server · tool", "Took", "Status"]);
   expect(screen.queryByText("u-github")).not.toBeInTheDocument();
@@ -548,9 +548,9 @@ acceptance("web-ui", "a daemon log row opens in place", async () => {
   ).not.toBeInTheDocument();
   fireEvent.click(row);
 
-  // "Show the MCP call" lands on the MCP calls tab, looking for that call.
-  fireEvent.click(screen.getByRole("button", { name: "Show the MCP call" }));
-  await waitFor(() => expect(tab(/mcp calls/i)).toHaveAttribute("data-state", "active"));
+  // "Show the tool call" lands on the Tool calls tab, looking for that call.
+  fireEvent.click(screen.getByRole("button", { name: "Show the tool call" }));
+  await waitFor(() => expect(tab(/tool calls/i)).toHaveAttribute("data-state", "active"));
   expect(search("Tool, server or session")).toHaveValue("github.search_issues");
   expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
 });
@@ -662,16 +662,16 @@ acceptance("web-ui", "a failing record shows its error inside its own tab", asyn
   render(wrap(<ActivityPage />));
 
   // Everything says which record is missing and still shows the other two.
-  expect(await screen.findByText("MCP calls couldn't be loaded")).toBeInTheDocument();
+  expect(await screen.findByText("Tool calls couldn't be loaded")).toBeInTheDocument();
   expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(screen.getByText("auto_sync_failed")).toBeInTheDocument();
   // The failed record's tab carries a warning icon.
   expect(
-    within(tab(/^MCP calls/)).getByRole("img", { name: "Couldn't be loaded" }),
+    within(tab(/^Tool calls/)).getByRole("img", { name: "Couldn't be loaded" }),
   ).toBeInTheDocument();
   expect(within(tab(/^Changes/)).queryByRole("img")).not.toBeInTheDocument();
 
-  openTab(/mcp calls/i);
+  openTab(/tool calls/i);
   expect(await screen.findByText("Not found.")).toBeInTheDocument();
 
   openTab(/^Changes/);
@@ -687,7 +687,7 @@ acceptance("web-ui", "a failed log is one banner that retries only that log", as
   });
   render(wrap(<ActivityPage />));
   const note = await screen.findByRole("status");
-  expect(note).toHaveTextContent("MCP calls couldn't be loaded");
+  expect(note).toHaveTextContent("Tool calls couldn't be loaded");
   expect(note).toHaveTextContent("Changes and daemon records below are complete.");
   expect(within(note).queryByRole("button", { name: /close|dismiss|ignore/i })).toBeNull();
   const reads = (path: string) => get.mock.calls.filter((c: unknown[]) => c[0] === path).length;
@@ -724,7 +724,7 @@ acceptance("web-ui", "each activity tab reads its owner's route", async () => {
   // The tab shows the audit log's rows and nothing else.
   expect(screen.queryByText(target("github.search_issues"))).not.toBeInTheDocument();
 
-  openTab(/mcp calls/i);
+  openTab(/tool calls/i);
   expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
   expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
 
@@ -830,7 +830,7 @@ test("a new record the filters exclude is neither inserted nor counted", async (
   expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
 });
 
-test("the status control leads the MCP calls filter row", async () => {
+test("the status control leads the Tool calls filter row", async () => {
   mockApi({
     invocations: [
       { ...INVOCATION, id: 1, status: "error", error_message: "boom" },
@@ -869,7 +869,7 @@ test("Failed means error, timeout and denied", async () => {
   expect(screen.queryByText(/calls · /)).not.toBeInTheDocument();
 });
 
-test("MCP calls sorts by Took, right-aligned, with the day heading gone while sorted", async () => {
+test("Tool calls sorts by Took, right-aligned, with the day heading gone while sorted", async () => {
   mockApi({
     invocations: [
       { ...INVOCATION, id: 8, duration_ms: 5 },
@@ -900,13 +900,13 @@ test("the Kind pill on Everything has three flat values and no counts", async ()
 
   fireEvent.click(pill("Kind"));
   expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
-    "MCP calls",
+    "Tool calls",
     "Changes",
     "Daemon records",
   ]);
-  fireEvent.click(screen.getByRole("option", { name: "MCP calls" }));
+  fireEvent.click(screen.getByRole("option", { name: "Tool calls" }));
   fireEvent.click(screen.getByRole("option", { name: "Changes" }));
-  expect(pill("Kind")).toHaveTextContent(/Kind:\s*MCP calls, Changes/);
+  expect(pill("Kind")).toHaveTextContent(/Kind:\s*Tool calls, Changes/);
   await waitFor(() => expect(screen.queryByText("auto_sync_failed")).not.toBeInTheDocument());
   expect(screen.getByText("Added filesystem")).toBeInTheDocument();
   expect(screen.getByText(target("github.search_issues"))).toBeInTheDocument();
@@ -962,12 +962,12 @@ acceptance("web-ui", "the box ends with what is shown and what is kept", async (
   const { unmount } = render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   expect(await screen.findByRole("button", { name: "Load 50 more" })).toBeInTheDocument();
   expect(screen.getByText(/Showing 1 of 201 · next 50 from before \d\d:\d\d/)).toBeInTheDocument();
-  expect(screen.queryByText(/MCP calls are kept/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Tool calls are kept/)).not.toBeInTheDocument();
   unmount();
   mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   expect(await screen.findByText(/That's everything kept\./)).toBeInTheDocument();
-  expect(await screen.findByText(/MCP calls are kept 30 days/)).toBeInTheDocument();
+  expect(await screen.findByText(/Tool calls are kept 30 days/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Settings › Data" })).toHaveAttribute(
     "href",
     "/settings/data",

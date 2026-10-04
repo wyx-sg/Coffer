@@ -1,9 +1,9 @@
 // src/components/activity/ActivityFilterBar.tsx — the filter row of the visible Activity tab (Foundations 0.2.06).
 //
 // Position never changes, only which controls a tab affords (design 6.2.04–10):
-// Everything — search, time range, By, Kind (MCP calls / Changes / Daemon
+// Everything — search, time range, By, Kind (Tool calls / Changes / Daemon
 // records); Changes — search, time range, By, Kind (the eleven kinds of
-// change); MCP calls — status segmented (All / OK / Failed), search, time
+// change); Tool calls — status segmented (All / OK / Failed), search, time
 // range, By (agents only); Daemon log — level segmented (All / Info /
 // Warnings / Errors), search, time range, Logger. There is no server filter:
 // the search matches a server's name. "Clear filters" sits at the far right

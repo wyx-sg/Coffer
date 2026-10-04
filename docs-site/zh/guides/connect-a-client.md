@@ -158,7 +158,7 @@ Coffer 自己的工具从网关获得会话身份。客户端在调用它时放�
 
 3. **在客户端里列出工具。** 在 Claude Code 里，`/mcp` 命令会显示 `coffer` 服务器及其工具。你应该能看到 Coffer 自己的 `coffer__…` 工具，以及以 `<server>__<tool>` 形式出现的上游工具。上游工具很多时，只列出预算内的一部分；其余仍可调用，`coffer__search_tools` 能找到它们（见 [MCP 服务器](/zh/guides/mcp-servers#many-tools-tiering-and-tool-search)）。
 
-4. **发起一次调用，并在日志里找到它。** 打开 **活动 → MCP 调用**：调用会带着服务器、工具、耗时和状态出现。`coffer log mcp --limit 5` 打印同样的行。
+4. **发起一次调用，并在日志里找到它。** 打开 **活动 → 工具调用**：调用会带着服务器、工具、耗时和状态出现。`coffer log mcp --limit 5` 打印同样的行。
 
 ## 故障排查 {#troubleshooting}
 

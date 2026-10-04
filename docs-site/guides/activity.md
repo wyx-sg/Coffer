@@ -12,18 +12,18 @@ Coffer keeps three records of itself: an audit log of what changed in the vault,
 | Record | Answers | Stored in | Where to read it |
 | --- | --- | --- | --- |
 | Audit log | What changed, and who changed it? | `audit_log` table in `runs.db` | **Activity → Changes**, `coffer log audit` |
-| MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → MCP calls**, `coffer log mcp` |
+| MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → Tool calls**, `coffer log mcp` |
 | Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon log**, `coffer log daemon`, `coffer path logs` |
 
 All three stay on the machine that wrote them. [Vault sync](/guides/vault-sync) never publishes them, and Coffer sends them nowhere.
 
 ## The Activity page
 
-Open **Activity** in the sidebar. The header carries a **Live** mark (a dot and the word; **Reconnecting…** while the daemon's change feed is closed, which means new records are not streaming in) and an **Export** menu. Four tabs follow, without counts: **Everything**, the default, **Changes**, **MCP calls** and **Daemon log**. A tab whose log could not be read shows a warning icon.
+Open **Activity** in the sidebar. The header carries a **Live** mark (a dot and the word; **Reconnecting…** while the daemon's change feed is closed, which means new records are not streaming in) and an **Export** menu. Four tabs follow, without counts: **Everything**, the default, **Changes**, **Tool calls** and **Daemon log**. A tab whose log could not be read shows a warning icon.
 
-- **Everything** — changes, MCP calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
+- **Everything** — changes, tool calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
 - **Changes** — the audit log: **Time**, **Event** (the change as a sentence, such as "Stored a secret") and **By** (who made it).
-- **MCP calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**. A server's own **Invocations** tab reads the same log for that one server.
+- **Tool calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**. A server's own **Invocations** tab reads the same log for that one server.
 - **Daemon log** — the tail of `daemon.log`: **Time**, **Level**, **Logger** and **Message**. Open it when Coffer itself misbehaves rather than something it proxied. The line above the rows names the file, says "newest first" and "following" while the feed is open, and **Open in Finder** reveals the file.
 
 Rows are grouped under a heading for their day ("Today · Sep 29"), and there is no summary line above them. The active tab is part of the URL (`/activity?tab=mcp`, `/activity?tab=daemon`; Everything is `/activity`).
@@ -32,22 +32,22 @@ Rows are grouped under a heading for their day ("Today · Sep 29"), and there is
 
 - Everything: **By** and **Kind**.
 - Changes: **By** and **Kind**.
-- MCP calls: a segmented **All / OK / Failed** first (Failed is an error, a timeout or a denial), then **By**.
+- Tool calls: a segmented **All / OK / Failed** first (Failed is an error, a timeout or a denial), then **By**.
 - Daemon log: a segmented **All / Info / Warnings / Errors** level first, then **Logger**.
 
 The time range offers **Last hour**, **Last 24 h**, **Last 7 days**, **Last 30 days** or a custom range picked on a calendar (optional times, an end of "now", at most 90 days back). A tab opens on the last hour, the Daemon log on the last 24 hours, until you pick a range.
 
-**By** takes several values at once, and a record is shown when it matches any of them. It lists your agents, then, under "Not an agent", you (the web UI or the Coffer app), the command line, Coffer itself and sync; on MCP calls it lists agents only. **Kind** on Everything is three values: **MCP calls**, **Changes** and **Daemon records**. On Changes it lists the eleven kinds of change: a kind of resource, or secrets, sync, settings and CLIs for a change that names no resource. The filters, the search and the range are all kept in the address (`q`, `range`, `by`, `kind`, `status`, `level`, `logger`), so a link such as `/activity?tab=mcp&q=github` opens already searching, and **View in Activity** on another page uses it. Moving to another tab keeps the search, the range and **By**, and drops the filters only the old tab had.
+**By** takes several values at once, and a record is shown when it matches any of them. It lists your agents, then, under "Not an agent", you (the web UI or the Coffer app), the command line, Coffer itself and sync; on Tool calls it lists agents only. **Kind** on Everything is three values: **Tool calls**, **Changes** and **Daemon records**. On Changes it lists the eleven kinds of change: a kind of resource, or secrets, sync, settings and CLIs for a change that names no resource. The filters, the search and the range are all kept in the address (`q`, `range`, `by`, `kind`, `status`, `level`, `logger`), so a link such as `/activity?tab=mcp&q=github` opens already searching, and **View in Activity** on another page uses it. Moving to another tab keeps the search, the range and **By**, and drops the filters only the old tab had.
 
-**Details.** Select a row on Everything, Changes or MCP calls to open it in a drawer 640 pixels wide beside the page; **Esc**, a click outside or the ✕ closes it, and **↑** and **↓** step to the previous or next record. A failed call leads with its error and how its server has been doing (since when it has been failing and how many errors it had in the last 24 hours); a change says who made it and what it touched, then shows the configuration before and after as a diff (secret values are never recorded). Below come the facts, the records written within five minutes of it, and the raw record, folded until you ask for it. A call shows its metadata only: its arguments and results are never stored. The footer holds the next step: **Open** the resource, beside **Copy details**.
+**Details.** Select a row on Everything, Changes or Tool calls to open it in a drawer 640 pixels wide beside the page; **Esc**, a click outside or the ✕ closes it, and **↑** and **↓** step to the previous or next record. A failed call leads with its error and how its server has been doing (since when it has been failing and how many errors it had in the last 24 hours); a change says who made it and what it touched, then shows the configuration before and after as a diff (secret values are never recorded). Below come the facts, the records written within five minutes of it, and the raw record, folded until you ask for it. A call shows its metadata only: its arguments and results are never stored. The footer holds the next step: **Open** the resource, beside **Copy details**.
 
-On the **Daemon log** a row opens in place instead, under its own line, with its traceback, **Copy record** and, when the record names a server and a tool, **Show the MCP call**, which switches to MCP calls searching for that call.
+On the **Daemon log** a row opens in place instead, under its own line, with its traceback, **Copy record** and, when the record names a server and a tool, **Show the tool call**, which switches to Tool calls searching for that call.
 
 **Handing a failure to an agent.** Only a failure that depends on this machine offers **Ask an agent ▾**: a call whose server never answered, in its drawer, and an opened daemon error about an external service or the environment. A denied call, an error the server itself returned and a Coffer-internal error offer no hand-off; such a daemon error offers **Copy record** alone.
 
 **New records arrive on their own.** While you are at the top of the list with nothing open, new records appear at the top as they are written. Once you scroll down or open a record the list holds still, and an **↑ N new** button counts what is waiting; choose it, or scroll back to the top, to bring them in. There is no pause or refresh button. A tab whose log fails to load shows one warning banner with the error and **Retry** for that log only; the other records keep working, and on Everything the banner says which records below are complete.
 
-**Older records.** Each tab loads records a page at a time. The last row of the box says "Showing 30 of 1,204" and offers **Load 50 more**; once everything kept is shown it says so, with how long MCP calls and changes are kept and a link to **Settings › Data**.
+**Older records.** Each tab loads records a page at a time. The last row of the box says "Showing 30 of 1,204" and offers **Load 50 more**; once everything kept is shown it says so, with how long tool calls and changes are kept and a link to **Settings › Data**.
 
 **First run.** With nothing recorded at all there is nothing to filter, so the page hides the filter row and **Export** and says "Changes you make in Coffer and the tools agents call through it show up here." with **Connect an agent** and **Add an MCP server**. An empty time range while older records exist is not the first run: the filters stay.
 
@@ -171,7 +171,7 @@ A background worker prunes on daemon start and every six hours after. Each recor
 
 Set each window in **Settings → Data → History**.
 
-A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **MCP calls** (`mcp_invocations`) and **Conversations** (`conversations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
+A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **Tool calls** (`mcp_invocations`) and **Conversations** (`conversations`); the other policies keep the defaults above. Shortening a window asks for confirmation first, because the next prune deletes the older rows, and the confirmation counts them; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
 
 The daemon log is a file, not a table, so it has no policy: `daemon.log` rotates at 10 MB and keeps three rotations. Per-process shim logs and rolled-aside upstream logs in `~/.coffer/logs/` are deleted after seven days.
 

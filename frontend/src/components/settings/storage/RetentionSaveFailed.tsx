@@ -17,7 +17,7 @@ export function RetentionSaveFailed({
   const { t } = useTranslation();
   const policies = useRetentionPolicies();
   if (!update.isError) return null;
-  // "MCP calls are still kept for 30 days." — what the refused save left in place.
+  // "Tool calls are still kept for 30 days." — what the refused save left in place.
   const failedPolicy = policies.data?.policies.find(
     (p) => p.table_name === update.variables?.tableName,
   );

@@ -1,7 +1,7 @@
 // src/components/settings/storage/HistoryBlock.tsx — Settings › Data's History block (canvas 1.4.11, 1.4.12).
 //
 // Spec web-ui "Group the Data tab by what kind of data it is": the retention
-// of each record kind — changes, MCP calls, conversations, skill working
+// of each record kind — changes, tool calls, conversations, skill working
 // files and config backups — Keep forever or a number of days, cleaned up nightly, with Clear expired now (which also
 // clears expired attachments, a row of Local content). Every row auto-saves; a
 // shortening asks first (RetentionPolicySection); a failed save is announced

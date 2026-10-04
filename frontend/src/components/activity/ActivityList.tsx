@@ -5,7 +5,7 @@
 // design 6.2.01); the box's last row is the page's footer (load older, or the
 // retention note). Selecting a row (click, Enter or Space) opens it in the
 // drawer; on the Daemon log a row expands in place instead, under its own line
-// (design 6.2.08). Only MCP calls' Took sorts, over the rows loaded; while a
+// (design 6.2.08). Only Tool calls' Took sorts, over the rows loaded; while a
 // sort is on the day headings go, since the order no longer follows the days.
 import type { KeyboardEvent, ReactNode } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
