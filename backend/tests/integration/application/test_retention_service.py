@@ -312,14 +312,16 @@ async def test_full_prune_runs_the_attachment_sweeps_with_the_stored_window(tmp_
         registry=service._registry,
         repo=service._repo,
         audit=service._audit,
-        file_policy=FilePolicy(
-            name="attachments",
-            display_name="Attachments",
-            description="files",
-            default_retention_days=30,
-            sweeps=(_broken, _two),
-            count=lambda now, days: (10, 4),
-        ),
+        file_policies=[
+            FilePolicy(
+                name="attachments",
+                display_name="Attachments",
+                description="files",
+                default_retention_days=30,
+                sweeps=(_broken, _two),
+                count=lambda now, days: (10, 4),
+            )
+        ],
     )
     await service.initialize_defaults()
 

@@ -151,6 +151,15 @@ developer uses for a job. Coffer installs nothing itself: a missing or
 logged-out tool is one to set up as that prompt says, or to raise with the
 developer.
 
+## Where a skill's scripts keep their files
+
+A skill's scripts write the logs, operation journals and temp files they
+generate under `~/.coffer/skill-data/<skill-name>/`; `coffer path skill-data`
+prints the directory. Never write them inside the skill's own folder (that is
+the synced vault) and never elsewhere in `~/.coffer`. Coffer deletes files
+there after the Skill working files retention window (30 days by default,
+set in Settings › Data), so durable data does not belong there.
+
 ## When Coffer itself misbehaves
 
 Coffer keeps three records of what it did: its audit log (what changed), its

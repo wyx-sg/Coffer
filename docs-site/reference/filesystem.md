@@ -21,6 +21,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── runs.db                       # history (SQLite, WAL mode)
 ├── runs.db-wal, runs.db-shm      # SQLite write-ahead log and shared memory
 ├── runs.db.pre-<revision>        # copy taken before a schema migration (newest 3 kept)
+├── skill-data/                   # logs, journals and temp files skill scripts write, one folder per skill: never synced, pruned by retention
 ├── derived/                      # rebuilt from the rest: always safe to delete
 ├── master.key                    # secret master key (when stored as a file)
 ├── machine-id                    # fallback machine id (only if the host gives none)
@@ -138,6 +139,12 @@ See [Daemon and processes](/architecture/daemon) and [Running the daemon](/guide
 | `bin/coffer`, `bin/coffer-daemon`, `bin/coffer-mcp-shim` | Relative symlinks into the current version directory, flipped atomically on upgrade. Agents' MCP entries, the login service and your `PATH` use these stable names. | installer, daemon | No | No: agents' MCP entries point at `bin/coffer-mcp-shim`. |
 
 To undo an upgrade by hand, point the symlinks back at the previous version directory. A frozen daemon deploys its sibling binaries here on start; a source install uses the console scripts `pip` put on `PATH` instead. See [Distribution and releases](/architecture/distribution).
+
+### Skill working files
+
+| Path | Purpose | Owner | Syncs | Safe to delete |
+| --- | --- | --- | --- | --- |
+| `skill-data/<skill-name>/` | Where a skill's scripts keep the logs, operation journals and temporary files they generate. It sits outside the vault, so none of it syncs, and `coffer path skill-data` prints the directory. Files whose last-modified time is older than the **Skill working files** retention window (30 days by default) are deleted, folders left empty with them. | skills' scripts; daemon prunes | No | Yes. Anything a skill needs for good does not belong here. |
 
 ### Logs
 

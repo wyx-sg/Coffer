@@ -38,6 +38,10 @@ COMMAND_REASONS: dict[str, tuple[Reason, str]] = {
         Reason.OFFLINE,
         "the log files are what is left to read when the daemon will not start",
     ),
+    "path skill-data": (
+        Reason.PROGRAM,
+        "a skill's scripts run it to find where their logs, journals and temp files go",
+    ),
     "config list": (Reason.OFFLINE, "only the keys read before the daemon binds (its port)"),
     "config get": (Reason.OFFLINE, "only the keys read before the daemon binds (its port)"),
     "config set": (Reason.OFFLINE, "the port must be changeable when the daemon cannot start"),

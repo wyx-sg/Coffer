@@ -67,6 +67,15 @@ def derived_root(home: Path | None = None) -> Path:
     return coffer_home(home) / "derived"
 
 
+def skill_data_dir(home: Path | None = None) -> Path:
+    """Where a skill's scripts keep their logs, journals and temp files.
+
+    ``skill-data/<skill-name>/``, outside the vault so it never syncs, and
+    pruned by the ``skill_data`` retention policy (the runs class).
+    """
+    return coffer_home(home) / "skill-data"
+
+
 def runs_db_path(home: Path | None = None) -> Path:
     """The history database: audit, invocations, conversations, rounds, usage."""
     return coffer_home(home) / "runs.db"

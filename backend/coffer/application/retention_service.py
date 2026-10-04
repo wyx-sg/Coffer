@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -42,20 +43,20 @@ class RetentionService:
         repo: RetentionRepo,
         audit: AuditService,
         *,
-        file_policy: FilePolicy | None = None,
+        file_policies: Sequence[FilePolicy] = (),
     ) -> None:
         self._registry = registry
         self._repo = repo
         self._audit = audit
-        # The attachments policy: the media dirs are not DB tables, so they ride
-        # the same cadence as a file policy declared at the composition root (spec
-        # resource-framework "Retain attachments on an adjustable policy"). None in
-        # tests that only exercise table prune.
-        self._file_policy = file_policy
+        # The file policies (attachments, skill working files): their directories
+        # are not DB tables, so they ride the same cadence as file policies declared
+        # at the composition root (spec resource-framework "Retain attachments on an
+        # adjustable policy" and "Retain skill working files on an adjustable
+        # policy"). Empty in tests that only exercise table prune.
+        self._file_policies = {fp.name: fp for fp in file_policies}
 
     def _file_policy_named(self, name: str) -> FilePolicy | None:
-        fp = self._file_policy
-        return fp if fp is not None and fp.name == name else None
+        return self._file_policies.get(name)
 
     async def initialize_defaults(self) -> None:
         """Seed missing retention rows from registry defaults.
@@ -66,9 +67,9 @@ class RetentionService:
         for table in self._registry.policies():
             if not await self._repo.exists(table.name):
                 await self._repo.upsert(table.name, table.default_retention_days)
-        fp = self._file_policy
-        if fp is not None and not await self._repo.exists(fp.name):
-            await self._repo.upsert(fp.name, fp.default_retention_days)
+        for fp in self._file_policies.values():
+            if not await self._repo.exists(fp.name):
+                await self._repo.upsert(fp.name, fp.default_retention_days)
 
     async def list_policies(self) -> list[RetentionPolicyView]:
         result: list[RetentionPolicyView] = []
@@ -88,12 +89,11 @@ class RetentionService:
                     last_pruned_rows=policy.last_pruned_rows,
                 )
             )
-        fp = self._file_policy
-        if fp is not None:
+        for fp in self._file_policies.values():
             try:
                 policy = await self._repo.get(fp.name)
             except UnknownPrunableTable:
-                return result
+                continue
             result.append(
                 RetentionPolicyView(
                     name=fp.name,
@@ -128,7 +128,7 @@ class RetentionService:
         self, table_name: str, days: int, *, now: datetime | None = None
     ) -> tuple[int, int]:
         """``(rows kept now, rows a window of ``days`` would delete)`` for one policy's own table
-        (files, for the attachments policy).
+        (files, for a file policy).
 
         What the Settings Data tab asks before a shortening is confirmed; nothing is
         deleted. A follower has no window of its own, so it has no preview.
@@ -158,11 +158,10 @@ class RetentionService:
     ) -> dict[str, int]:
         """Run prune on one or all registered tables. Returns {table: rows_deleted}."""
         clock_now = now or datetime.now(tz=UTC)
-        fp = self._file_policy
-        if table_name is not None and self._file_policy_named(table_name) is not None:
-            # A single-policy request for the attachments policy sweeps only it.
-            assert fp is not None
-            return {fp.name: await self._sweep_files(fp, clock_now)}
+        named = self._file_policy_named(table_name) if table_name is not None else None
+        if named is not None:
+            # A single-policy request for a file policy sweeps only it.
+            return {named.name: await self._sweep_files(named, clock_now)}
         if table_name is not None:
             target = self._registry.get(table_name)
             # Pruning a policy prunes the tables that follow it, too.
@@ -197,15 +196,16 @@ class RetentionService:
                 # "last pruned" count to the leader's own table.
                 await self._repo.touch_pruned(table.name, affected)
             result[table.name] = affected
-        if table_name is None and fp is not None:
-            result[fp.name] = await self._sweep_files(fp, clock_now)
+        if table_name is None:
+            for fp in self._file_policies.values():
+                result[fp.name] = await self._sweep_files(fp, clock_now)
         return result
 
     async def _sweep_files(self, fp: FilePolicy, now: datetime) -> int:
-        """Run the attachments sweeps with the stored window; 0 when kept forever.
+        """Run a file policy's sweeps with the stored window; 0 when kept forever.
 
         A failure in one sweep is logged and swallowed so a media-dir problem
-        never breaks the DB prune or the other dir's sweep.
+        never breaks the DB prune or another policy's sweep.
         """
         policy = await self._repo.get(fp.name)
         if policy.retention_days is None:
