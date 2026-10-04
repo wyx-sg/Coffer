@@ -41,7 +41,6 @@ const AGENT: AgentOut = {
   config_dir: "/Users/me/.claude",
   display_name: "Claude Code",
   model: null,
-  effort: null,
   tier_models: null,
   version: null,
   state: "installed_active",

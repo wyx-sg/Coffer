@@ -36,7 +36,6 @@ const AGENT: AgentOut = {
   config_dir: "/home/u/.claude",
   display_name: "Claude Code",
   model: null,
-  effort: null,
   tier_models: null,
   version: null,
   install_handoff: null,
