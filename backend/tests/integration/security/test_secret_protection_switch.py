@@ -22,7 +22,17 @@ _URL = "/api/v1/settings/secret-boundary"
 
 @pytest.fixture
 def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[BoundaryDaemon]:
-    db = prepare_home(tmp_path, monkeypatch)
+    # A signed build: nothing stored, the build's default (on) in force.
+    db = prepare_home(tmp_path, monkeypatch, approvals=False)
+    with running_daemon(tmp_path, db) as d:
+        d.boundary.default_on = True
+        yield d
+
+
+@pytest.fixture
+def unsigned(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[BoundaryDaemon]:
+    # A development build as it really starts: no stored setting, default off.
+    db = prepare_home(tmp_path, monkeypatch, approvals=False)
     with running_daemon(tmp_path, db) as d:
         yield d
 
@@ -43,9 +53,46 @@ def _attention_kinds(d: BoundaryDaemon) -> list[str]:
     return [i["reason_code"] for i in r.json()["items"] if i["kind"] == "secret"]
 
 
-def test_the_protection_is_on_by_default(daemon: BoundaryDaemon) -> None:
-    assert _state(daemon) == {"require_approval": True, "pending_approval_id": None}
+@pytest.mark.acceptance(spec="secret", scenario="a signed build starts with the protection on")
+def test_the_protection_is_on_by_default_in_a_signed_build(daemon: BoundaryDaemon) -> None:
+    assert _state(daemon) == {
+        "require_approval": True,
+        "pending_approval_id": None,
+        "default_on": True,
+    }
     assert _attention_kinds(daemon) == []
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="an unsigned build starts with the protection off and says nothing"
+)
+def test_an_unsigned_build_starts_with_it_off_and_does_not_nag(unsigned: BoundaryDaemon) -> None:
+    d = unsigned
+    assert _state(d) == {
+        "require_approval": False,
+        "pending_approval_id": None,
+        "default_on": False,
+    }
+    assert _attention_kinds(d) == []
+    d.store("gh/token", "ghp_unsigned_value_1")
+    d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
+    second = d.register_stdio("second", "other.sh", {"TOKEN": "gh/token"})
+    assert d.pending(destination_uid=second["uid"]) == []
+    assert d.resolve_for(second) == {"TOKEN": "ghp_unsigned_value_1"}
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a stored setting wins over the build's default")
+def test_a_stored_choice_wins_over_the_build_default(unsigned: BoundaryDaemon) -> None:
+    d = unsigned
+    assert d.client.put(_URL, json={"require_approval": True}).status_code == 200
+    assert _state(d)["require_approval"] is True
+    d.store("gh/token", "ghp_unsigned_value_2")
+    d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
+    second = d.register_stdio("second", "other.sh", {"TOKEN": "gh/token"})
+    assert len(d.pending(destination_uid=second["uid"])) == 1
+    # Turning it off again is the same approval a signed build takes.
+    r = d.client.put(_URL, json={"require_approval": False})
+    assert r.status_code == 202, r.text
 
 
 def test_turning_it_off_waits_and_changes_nothing_until_a_grant_applies_it(
@@ -54,7 +101,11 @@ def test_turning_it_off_waits_and_changes_nothing_until_a_grant_applies_it(
     d = daemon
     approval_id = _turn_off(d)
 
-    assert _state(d) == {"require_approval": True, "pending_approval_id": approval_id}
+    assert _state(d) == {
+        "require_approval": True,
+        "pending_approval_id": approval_id,
+        "default_on": True,
+    }
     # Asking again does not stack a second approval.
     assert _turn_off(d) == approval_id
 
@@ -69,7 +120,11 @@ def test_turning_it_off_waits_and_changes_nothing_until_a_grant_applies_it(
     assert _state(d)["require_approval"] is True
 
     d.approve(approval_id)
-    assert _state(d) == {"require_approval": False, "pending_approval_id": None}
+    assert _state(d) == {
+        "require_approval": False,
+        "pending_approval_id": None,
+        "default_on": True,
+    }
     approved = [
         e for e in d.audit("secret_approval_approved") if e["details"]["op"] == "disable_protection"
     ]

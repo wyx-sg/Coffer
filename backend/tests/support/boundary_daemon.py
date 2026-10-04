@@ -23,6 +23,7 @@ import coffer.surfaces.cli._client as _cli_client
 from coffer.application.secret.presence import derive_grant_key, sign_grant
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
 from coffer.infrastructure.vault.home import local_root
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
@@ -131,12 +132,20 @@ def running_daemon(home: pathlib.Path, db: pathlib.Path) -> Iterator[BoundaryDae
         set_server_requirements(None)
 
 
-def prepare_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
+def prepare_home(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, *, approvals: bool = True
+) -> pathlib.Path:
     install_in_memory_keyring(monkeypatch)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59940")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59949")
+    # A test daemon is an unsigned build, whose approvals default off; most of
+    # these tests are about a build where they are on (spec secret "Default the
+    # approval protection by the build"), so the person's choice is stored. Pass
+    # ``approvals=False`` to leave the build's own default in force.
+    if approvals:
+        FileBoundaryStore(tmp_path).set_setting("require_approval", "true")
     return tmp_path / "c.db"
 
 

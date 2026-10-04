@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ApprovalsOffNote } from "@/components/secret/ApprovalsOffNote";
 import { PendingApprovalsEntry } from "@/components/secret/PendingApprovalsEntry";
 import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -73,6 +74,7 @@ export function SecretBoundaryCard() {
         />
       </SettingRow>
       <div className="pt-1 empty:hidden">
+        <ApprovalsOffNote />
         <PendingApprovalsEntry />
       </div>
       <ConfirmDialog

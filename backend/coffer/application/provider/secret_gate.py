@@ -35,7 +35,11 @@ class ProviderSecretBoundary(Protocol):
 
 
 def provider_destination(uid: str, name: str, cfg: ProviderConfig) -> SecretDestination:
-    return SecretDestination(kind=KIND, uid=uid, target=f"model api {cfg.base_url}", label=name)
+    # The protocol decides which header carries the key (``Authorization`` or
+    # ``x-api-key``), so it is part of what a person approves (spec secret "Fix a
+    # secret's placement by its destination's definition").
+    target = f"model api {cfg.base_url} as {cfg.protocol.value}"
+    return SecretDestination(kind=KIND, uid=uid, target=target, label=name)
 
 
 async def require_key(service: ProviderService, uid: str, name: str, cfg: ProviderConfig) -> None:

@@ -91,13 +91,17 @@ class ProviderIntrospector:
         await asyncio.to_thread(check_url, url)
 
     def _openai_client(self, base_url: str | None, api_key: str | None):  # type: ignore[no-untyped-def]
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
         return AsyncOpenAI(
             api_key=api_key or "not-needed",
             base_url=base_url,
             timeout=_TIMEOUT,
             max_retries=0,
+            # A redirect would carry the key to another host, past the SSRF guard
+            # that only saw this one (spec secret "Send a secret only to the
+            # origin it was approved for").
+            http_client=DefaultAsyncHttpxClient(follow_redirects=False),
         )
 
     async def list_models(

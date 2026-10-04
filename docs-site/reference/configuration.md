@@ -236,7 +236,7 @@ Both chat policies act on the `conversations` table. A policy can be set to **Ke
 | Setting | Default | Effect |
 | --- | --- | --- |
 | **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. |
-| Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target. When off, a new destination is approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
+| Approval for new secret destinations (`secrets.require_approval`) | on in a signed release, off in a development build | When on, a secret waits for approval in the desktop app before it goes to a new destination or target. When off, a new destination is approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
 
 ## Related
 

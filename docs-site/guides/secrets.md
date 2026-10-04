@@ -177,7 +177,7 @@ An agent that hits exit `9` should tell you what it registered and that it waits
 
 ### Switching the protection off
 
-`secrets.require_approval` is on by default. Turning it on takes effect at once. Turning it off waits for an approval in the desktop app, and while it is off every new destination is approved without asking. Nothing else — no environment variable, file or flag — switches it off. The switch is the **Approvals** section of **Settings › Security**; a browser shows it as **Turn off in the Coffer desktop app**.
+`secrets.require_approval` defaults by the build: **on** in a signed release, **off** in a development build, whose master key any program running as you can read, so approvals there would stop only accidents (Settings and this page say so in one line). A setting you store wins in either. Turning it on takes effect at once. Turning it off waits for an approval in the desktop app, and while it is off every new destination is approved without asking. Nothing else — no environment variable, file or flag — switches it off. The switch is the **Approvals** section of **Settings › Security**; a browser shows it as **Turn off in the Coffer desktop app**.
 
 ## List your secrets
 

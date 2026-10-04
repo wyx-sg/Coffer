@@ -69,10 +69,17 @@ class SecretBoundary:
         values: SealedValueStorePort,
         *,
         clock: Callable[[], datetime] = _now,
+        default_on: bool = True,
     ) -> None:
         self._store = store
         self._values = values
         self._clock = clock
+        #: What the switch is when nobody has set it: the build decides (spec
+        #: secret "Default the approval protection by the build"). A signed
+        #: release protects its master key, so approvals mean something and are
+        #: on; an unsigned build cannot, so they are off until a person turns
+        #: them on.
+        self.default_on = default_on
 
     def _stamp(self) -> str:
         return self._now().isoformat()
@@ -84,7 +91,16 @@ class SecretBoundary:
     # --- the switch ---------------------------------------------------------
 
     def protections_on(self) -> bool:
-        return self._store.get_setting(REQUIRE_APPROVAL_KEY) != "false"
+        """An explicitly stored setting wins; otherwise the build's default."""
+        stored = self._store.get_setting(REQUIRE_APPROVAL_KEY)
+        if stored is None:
+            return self.default_on
+        return stored != "false"
+
+    def off_by_choice(self) -> bool:
+        """Off although this build defaults on: a person turned it off, which is
+        what the Overview tells them is still the case."""
+        return self.default_on and not self.protections_on()
 
     def enable_protections(self) -> bool:
         """Turning the protection ON needs nobody: it only narrows. Answers

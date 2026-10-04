@@ -529,6 +529,10 @@ any secret a person has not approved for that target
 until a person approves it"). The refused attempt surfaces as
 `SECRET_BINDING_PENDING` with "waiting for approval in the Coffer app", and the
 server is reachable as soon as the approval is applied, with no restart.
+An HTTP upstream's connection MUST NOT carry its secret headers to another
+origin: it follows a redirect only within the endpoint's own origin
+([secret](../secret/spec.md) "Send a secret only to the origin it was approved
+for").
 
 #### Scenario: a server whose secret is not approved is not spawned with it
 - **GIVEN** a registered stdio server citing a secret that is approved for a different command line
@@ -726,7 +730,10 @@ name ([secret](../secret/spec.md) "Hold a secret for a new
 destination until a person approves it"): no call and no Test carries the
 secret until a person approves it for that base URL, a call before then fails
 with `SECRET_BINDING_PENDING`, and changing the base URL or the header asks
-again. The group MUST report each secret header's state as `present`, `missing`
+again, and so does moving the same secret to another header
+("Fix a secret's placement by its destination's definition"). A group's request
+MUST NOT follow a redirect, and no argument hole in a tool's path, query,
+headers or body MAY be filled from a stored secret. The group MUST report each secret header's state as `present`, `missing`
 or `pending_approval` and, as a whole, the worst of them (`none` with no secret
 header), with the ids of the approvals it waits on and the names of the secrets
 concerned.

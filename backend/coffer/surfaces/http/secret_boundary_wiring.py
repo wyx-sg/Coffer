@@ -156,7 +156,13 @@ def init_secret_boundary(
     # would act on this home with them.
     _ON_APPROVED.clear()
     _OTHER_SOURCES.clear()
-    boundary = SecretBoundary(FileBoundaryStore(home), store)
+    # A build that keeps its master key in the signed access group protects it, so
+    # approvals default on; any other build cannot, and they default off (spec
+    # secret "Default the approval protection by the build"). The same fact that
+    # chooses the master key's storage (:func:`make_master_key_manager`).
+    boundary = SecretBoundary(
+        FileBoundaryStore(home), store, default_on=keychain_access_group() is not None
+    )
     # Every path that deletes a ref (the route, a resource's release, a failed
     # registration's rollback) forgets its approved destinations.
     store.on_removed(boundary.forget)
