@@ -48,7 +48,7 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed — see [CLIs](/guides/clis). |
 | Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/vault/knowledge/`: one tree beside a reader and editor, each collection's Inbox, every document's History and Recent changes. See [Knowledge](/guides/knowledge). |
 | Context | **Memory** | `/memory` | What your agents learned, read from their own memory and distilled into one memory per subject: deliveries at session start over the last 7 days, and the partitions. A partition's page has **Memories** and **Delivered** tabs. See [Memory](/guides/memory). |
-| System | **Secrets** | `/secrets` | Every stored secret with what uses it: add, replace, delete, add the values that are missing on this Mac, answer approvals, find plaintext keys in files and move them into the vault. See [Secrets](/guides/secrets). |
+| System | **Secrets** | `/secrets` | Every stored secret with what uses it: add, replace, delete, add the values that are missing on this Mac, answer approvals. See [Secrets](/guides/secrets). |
 | System | **Activity** | `/activity` | What changed, what agents called and what the daemon logged: **Everything** merged into one stream, then **Changes**, **MCP calls** and **Daemon log**. See [Activity and audit](/guides/activity). |
 | System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Status**, **Machines** and **Remote** tabs, with **Resolve conflicts** (`/sync/conflicts`) and **Review held deletions** (`/sync/deletions`) views. See [Vault sync](/guides/vault-sync). |
 

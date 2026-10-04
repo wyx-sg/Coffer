@@ -2264,9 +2264,6 @@ The page MUST carry:
   [secret](../secret/spec.md) "Approve several bindings in one confirmation").
   A rejection shows a toast; the page keeps no list of refused changes and has
   no "Ask again".
-- **Find plaintext keys** — the entry point that moves plaintext secret files
-  into the store (spec [secret](../secret/spec.md) "Move plaintext secret files
-  into the store").
 
 Each banner has an × that ignores it exactly as Ignore does on Overview, where
 the same two situations are listed (spec [secret](../secret/spec.md) "List
@@ -2276,8 +2273,7 @@ banner returns when the set changes. The help icon beside the title is gone: how
 to run a command with a secret is in the documentation, not on the page.
 
 This requirement fixes the page's place and its parts. What the store enumerates,
-how each operation behaves, and the steps of finding plaintext keys are the
-secret capability's, specified with it.
+and how each operation behaves are the secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold

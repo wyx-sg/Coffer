@@ -90,53 +90,6 @@ def test_the_list_says_when_each_secret_was_created_and_last_used(d: BoundaryDae
 
 
 @pytest.mark.acceptance(
-    spec="secret", scenario="a file that cannot be rewritten keeps its key and says so"
-)
-def test_a_file_that_cannot_be_rewritten_keeps_its_key_and_says_so(d: BoundaryDaemon) -> None:
-    secrets = d.home / ".coffer" / "secrets"
-    secrets.mkdir(parents=True, exist_ok=True)
-    env = secrets / "aws.env"
-    env.write_text("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY\n")
-    before = env.read_text()
-    secrets.chmod(0o500)
-    try:
-        r = d.client.post("/api/v1/secrets/import", json={})
-        assert r.status_code == 200, r.text
-        out = r.json()
-        assert out["moved"] == []
-        [skipped] = out["skipped"]
-        assert skipped["stored"] is True and skipped["name"] == "aws.AWS_SECRET_ACCESS_KEY"
-        assert "couldn't be rewritten" in skipped["reason"]
-        assert env.read_text() == before
-        assert d.value("secret/aws.AWS_SECRET_ACCESS_KEY") is not None
-        assert [e["details"]["name"] for e in d.audit("secret_imported")] == [
-            "aws.AWS_SECRET_ACCESS_KEY"
-        ]
-    finally:
-        secrets.chmod(0o700)
-
-    again = d.client.post("/api/v1/secrets/import", json={"ids": [skipped["id"]]})
-    assert again.status_code == 200, again.text
-    assert [m["name"] for m in again.json()["moved"]] == ["aws.AWS_SECRET_ACCESS_KEY"]
-    assert "coffer://secret/aws.AWS_SECRET_ACCESS_KEY" in env.read_text()
-
-
-@pytest.mark.acceptance(
-    spec="secret", scenario="a scan that finds nothing says how many files it read"
-)
-def test_a_scan_that_finds_nothing_says_how_many_files_it_read(d: BoundaryDaemon) -> None:
-    secrets = d.home / ".coffer" / "secrets"
-    secrets.mkdir(parents=True, exist_ok=True)
-    (secrets / "empty.env").write_text("# nothing here\n")
-
-    r = d.client.post("/api/v1/secrets/scan")
-
-    assert r.status_code == 200, r.text
-    assert r.json()["findings"] == []
-    assert r.json()["files_checked"] >= 1
-
-
-@pytest.mark.acceptance(
     spec="secret", scenario="a dot-only segment is refused rather than answered with a server error"
 )
 def test_a_dot_only_ref_segment_is_refused_not_answered_with_a_500(d: BoundaryDaemon) -> None:

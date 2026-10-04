@@ -52,6 +52,12 @@ anything. A `features` object a person already holds is kept as it is.
 - **WHEN** the daemon starts and the features and the daemon status are read
 - **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
 
+#### Scenario: a gate that still names a feature that left the registry fails loudly
+- **GIVEN** a feature whose entry was deleted from the registry, a stored setting for it beside another stored key, and a tool tagged with it
+- **WHEN** the features are read, the deleted feature's state is asked for and the tagged tool is registered
+- **THEN** its routes and kind are no longer gated, its stored setting is logged and not listed, and the other key is kept
+- **AND** asking for the deleted feature's state raises `FeatureUnknown` and registering the tagged tool raises `FeatureUnknown`, so a gate left behind is caught rather than silently open
+
 ### Requirement: Decide a feature's state per machine
 A feature's state MUST be decided in this order: a pin in `COFFER_FEATURES`,
 then the machine's own setting in `~/.coffer/daemon-config.json`, then the

@@ -167,7 +167,7 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 ## What never gets logged
 
 - Secret values never appear in plaintext in the vault, in `runs.db`, in log files, in the audit log, or in the MCP invocation log.
-- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
+- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `master_key_exported`, `secret_resolved` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".
 - An HTTP upstream's connection errors are reported by exception type only, so a URL or header carrying a secret is not echoed into a message.

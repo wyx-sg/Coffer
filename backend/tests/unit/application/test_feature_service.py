@@ -10,8 +10,15 @@ import asyncio
 
 import pytest
 
+from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.features import FeatureService, FeatureState
-from coffer.domain.features import ExperimentalFeature, FeaturePinned, FeatureUnknown
+from coffer.domain.features import (
+    ExperimentalFeature,
+    FeaturePinned,
+    FeatureUnknown,
+    feature_for_kind,
+    feature_for_path,
+)
 from tests.support.features import replace_registry
 
 _A, _B, _C = "fake_a", "fake_b", "fake_c"
@@ -104,6 +111,44 @@ def test_unregistered_keys_in_settings_and_pins_are_ignored(
     with pytest.raises(FeatureUnknown):
         svc.is_enabled("workflow")
     assert "workflow" in caplog.text  # ignored, but not silently
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="a gate that still names a feature that left the registry fails loudly",
+)
+def test_a_gate_still_naming_a_feature_that_left_the_registry_fails_loudly(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def handler(_args: dict[str, object]) -> dict[str, object]:
+        return {}
+
+    gone = ExperimentalFeature(key="gone", route_prefixes=("/api/v1/gone",), kinds=("gone_kind",))
+    replace_registry(monkeypatch, gone, ExperimentalFeature(key=_A, route_prefixes=()))
+    assert feature_for_path("/api/v1/gone/x") == "gone"
+    assert feature_for_kind("gone_kind") == "gone"
+
+    # The feature leaves: its entry is deleted, and nothing else changes.
+    replace_registry(monkeypatch, ExperimentalFeature(key=_A, route_prefixes=()))
+    caplog.set_level("WARNING")
+    svc = FeatureService(settings=_FakeSettings({"gone": True, _A: True}))
+
+    # Its routes and kind are no longer gated, and its stored setting is
+    # ignored (logged, never listed) while the other key is kept.
+    assert feature_for_path("/api/v1/gone/x") is None
+    assert feature_for_kind("gone_kind") is None
+    assert [s.key for s in svc.list()] == [_A]
+    assert svc.is_enabled(_A) is True
+    assert "gone" in caplog.text
+
+    # A gate that still names it is not silently open: asking for its state
+    # raises, and a tool tagged with it cannot be registered.
+    with pytest.raises(FeatureUnknown):
+        svc.is_enabled("gone")
+    with pytest.raises(FeatureUnknown):
+        BuiltinToolRegistry().register(
+            BuiltinTool(name="t", description="x", input_schema={}, handler=handler, feature="gone")
+        )
 
 
 async def test_a_pinned_feature_cannot_be_switched_and_nothing_is_written() -> None:

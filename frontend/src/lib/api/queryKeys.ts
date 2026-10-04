@@ -252,7 +252,6 @@ export const secretsKey = ["secrets"] as const;
 export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
 export const secretsListKey = ["secrets", "list"] as const;
-export const secretScanKey = ["secrets", "scan"] as const;
 
 // --- settings — daemon-side settings the Settings pages edit ---------------
 
