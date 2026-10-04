@@ -142,6 +142,9 @@ def test_conversation_crud_roundtrip() -> None:
 
 
 @pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
+@pytest.mark.acceptance(
+    spec="chat", scenario="the conversation list narrows by source and agent on the server"
+)
 def test_the_conversation_list_pages_by_cursor() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)

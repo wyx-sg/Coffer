@@ -105,7 +105,7 @@ describe("Conversations selection", () => {
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
   });
 
-  test("Select all reads the pages not loaded yet and ticks them too", async () => {
+  acceptance("chat", "Select all ticks every conversation the view holds", async () => {
     const more = makeConversation({
       id: "e",
       title: "Conv e",
