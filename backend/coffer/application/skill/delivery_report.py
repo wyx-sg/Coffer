@@ -24,7 +24,7 @@ class AgentDelivery:
 def delivery_for(
     skill: Resource, agents: list[Resource], report: PassReport | None
 ) -> list[AgentDelivery]:
-    """One row per enabled agent the skill's reach grants, plus any agent a
+    """One row per agent the skill's reach grants, plus any agent a
     failed or blocked write names. An agent the pass had nothing to do for is ok."""
     problems: dict[str, str] = {}
     for r in report.results if report else ():
@@ -35,7 +35,7 @@ def delivery_for(
         state = observed.params.get("state") if observed is not None else None
         problems[agent_uid] = r.error or (str(state) if state else "not written")
     by_uid = {a.uid: a for a in agents}
-    wanted = [a for a in agents if a.enabled and skill.enabled and is_active(skill.scope, a.uid)]
+    wanted = [a for a in agents if skill.enabled and is_active(skill.scope, a.uid)]
     uids = list(dict.fromkeys([a.uid for a in wanted] + list(problems)))
     return [
         AgentDelivery(

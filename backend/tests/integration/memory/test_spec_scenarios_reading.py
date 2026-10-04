@@ -50,24 +50,17 @@ def _all_raw() -> list:  # type: ignore[type-arg]
     return [e for p in store.list_partitions() for e in list_raw_entries(p)]
 
 
-# --- Read only registered and enabled agents' memory -------------------------
+# --- Read only registered agents' memory -------------------------
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="read nothing from a disabled or unregistered agent"
-)
-async def test_only_the_enabled_registered_agents_memory_is_read(tmp_path: pathlib.Path) -> None:
+@pytest.mark.acceptance(spec="memory", scenario="read nothing from an unregistered agent")
+async def test_only_the_registered_agents_memory_is_read(tmp_path: pathlib.Path) -> None:
     repository = init_repository(tmp_path / "home" / "dev" / "coffer")
     enabled_dir = claude_code_config(
         tmp_path / "enabled-claude",
         repository,
-        {"enabled-fact.md": _cc_file("enabled-fact", "from the enabled agent", "project", "E")},
-    )
-    disabled_dir = claude_code_config(
-        tmp_path / "disabled-claude",
-        repository,
-        {"disabled-fact.md": _cc_file("disabled-fact", "from the disabled one", "project", "D")},
+        {"enabled-fact.md": _cc_file("enabled-fact", "from the registered agent", "project", "E")},
     )
     unregistered_dir = claude_code_config(
         tmp_path / "stray-claude",
@@ -77,7 +70,6 @@ async def test_only_the_enabled_registered_agents_memory_is_read(tmp_path: pathl
 
     resources = FakeResources()
     resources.add_agent("enabled-cc", "claude_code", str(enabled_dir))
-    resources.add_agent("disabled-cc", "claude_code", str(disabled_dir), enabled=False)
 
     result = await _service(resources).aggregate()
 
@@ -88,7 +80,6 @@ async def test_only_the_enabled_registered_agents_memory_is_read(tmp_path: pathl
     assert {e.entry.title for e in entries} == {"enabled-fact"}
     native = {e.native_path for e in entries}
     assert all(p.startswith(str(enabled_dir)) for p in native)
-    assert not any(p.startswith(str(disabled_dir)) for p in native)
     assert not any(p.startswith(str(unregistered_dir)) for p in native)
 
 

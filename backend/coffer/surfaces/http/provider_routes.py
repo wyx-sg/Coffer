@@ -337,7 +337,7 @@ async def activate_provider(
 ) -> ActivateOut:
     """Switch one agent onto this connection: project it into that agent's
     native config and record it on the agent. Nothing else changes (409
-    ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+    ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection is off or the
     scope does not name the agent)."""
     result = await svc.activate(uid, body.agent_type, actor=actor)
     return ActivateOut(

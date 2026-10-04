@@ -1,6 +1,6 @@
 // src/components/agents/skills/AdoptSkillDialog.tsx — adopt an unmanaged skill folder into Coffer (boards 2.1.21–2.1.23, 480).
 //
-// Spec skill-manager "Adopt an unmanaged skill". Three fields: the name it gets
+// Spec skill-manager "Adopt an unmanaged skill into the master store". Three fields: the name it gets
 // in Coffer (checked inline against the library — a taken name says so and
 // links to Coffer's skill), where it comes from (read-only, with the files that
 // move), and its reach (every agent unless narrowed). Errors stay inside the

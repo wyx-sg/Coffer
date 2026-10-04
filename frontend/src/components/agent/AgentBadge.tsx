@@ -2,8 +2,8 @@
 //
 // Every agent sits on the same `bg-chip` tile so colour outside the mark stays
 // reserved for state: a connected agent is plain, and only a problem adds a
-// mark — a warning corner dot (not connected), a dashed empty tile (not
-// installed) or a faded neutral fill (disabled). The name is never hidden: a
+// mark — a warning corner dot (not connected) or a dashed empty tile (not
+// installed). The name is never hidden: a
 // badge without a visible name carries it, with its state, in the aria-label
 // and the tooltip (Foundations-AgentBadge, spec web-ui "Show an agent by its
 // official mark").
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { AgentMark } from "./AgentMark";
 import { agentMarkKind } from "./agentMarkKind";
 
-export type AgentBadgeState = "connected" | "not-connected" | "not-installed" | "disabled";
+export type AgentBadgeState = "connected" | "not-connected" | "not-installed";
 type AgentBadgeSize = "sm" | "md" | "lg";
 
 interface AgentBadgeProps {
@@ -60,9 +60,7 @@ export function AgentBadge({
     : label;
 
   const tile = (
-    <span
-      className={cn("relative inline-flex shrink-0", state === "disabled" && "opacity-disabled")}
-    >
+    <span className="relative inline-flex shrink-0">
       <span
         data-agent-mark={agentMarkKind(type)}
         className={cn(
@@ -70,9 +68,7 @@ export function AgentBadge({
           geo.tile,
           state === "not-installed"
             ? "border-dashed border-text-subtle bg-transparent"
-            : state === "disabled"
-              ? "border-transparent bg-neutral-soft"
-              : "border-transparent bg-chip",
+            : "border-transparent bg-chip",
         )}
       >
         <AgentMark type={type} markSize={geo.mark} blossomSize={geo.blossom} />

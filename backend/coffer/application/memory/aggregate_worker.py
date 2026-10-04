@@ -93,7 +93,7 @@ class AggregateWorker:
             await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:
-        """One aggregation pass over every registered, enabled agent, or
+        """One aggregation pass over every registered agent, or
         nothing at all when the operator has switched this pass off."""
         if not await self._is_enabled():
             return

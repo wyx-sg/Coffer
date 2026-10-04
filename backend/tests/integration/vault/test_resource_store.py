@@ -328,6 +328,22 @@ async def test_scope_is_reach_and_a_record_less_resource_gets_the_kind_default()
     assert again.enabled is True and again.scope == Scope(agents=["agent-1"])
 
 
+async def test_a_stale_off_record_for_a_kind_with_no_switch_reads_as_on() -> None:
+    kinds = _kinds()
+    kinds["widget"] = Kind(
+        name="widget", display_name="Widget", config_schema=WidgetConfig, toggleable=False
+    )
+    svc, _repo = _service(kinds)
+    r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
+    reach_file = local_root() / "reach.json"
+    reach_file.write_text(
+        json.dumps({r.uid: {"enabled": False, "agents": None, "projects": None}}),
+        encoding="utf-8",
+    )
+    assert (await svc.get(r.uid)).enabled is True
+    assert [x.uid for x in await svc.list(kind="widget", enabled=True)] == [r.uid]
+
+
 @pytest.mark.acceptance(spec="vault-storage", scenario="moving a resource file keeps the resource")
 async def test_a_file_moved_by_hand_is_the_same_resource_with_its_reach() -> None:
     svc, _repo = _service(_kinds())

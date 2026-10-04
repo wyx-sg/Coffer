@@ -97,7 +97,7 @@ Each supported agent has one reader, and every reader follows the same two-step 
 - **List the sources**: list the agent's memory files and hash each one, without parsing it.
 - **Read a source**: parse one file into raw entries: title, description, type, verbatim body, anchor, project root, and optional search terms.
 
-Splitting the two steps is what lets aggregation skip an unchanged file before paying to parse it. Coffer reads only agents that are **registered and enabled**, at paths derived from each agent's own config directory (`config_dir` below).
+Splitting the two steps is what lets aggregation skip an unchanged file before paying to parse it. Coffer reads only agents that are **registered**, at paths derived from each agent's own config directory (`config_dir` below).
 
 | | Claude Code | Codex |
 | --- | --- | --- |
@@ -117,11 +117,11 @@ A reader that cannot parse a file reports it as unreadable, with the file's path
 
 ## The aggregation pass
 
-The pass itself is a pure function over plain values and the derived tree. The memory service wraps it with the resource parts: it lists the enabled agents and the existing partition rows, registers the new partitions, and records one `memory_aggregated` audit event.
+The pass itself is a pure function over plain values and the derived tree. The memory service wraps it with the resource parts: it lists the registered agents and the existing partition rows, registers the new partitions, and records one `memory_aggregated` audit event.
 
 ```mermaid
 flowchart TD
-  A["List sources per enabled agent"] --> B{"Digest unchanged and entries still on disk?"}
+  A["List sources per registered agent"] --> B{"Digest unchanged and entries still on disk?"}
   B -- yes --> S["Skip: count as skipped"]
   B -- no --> R["The reader parses the source"]
   R -- raises --> F["Record failure; keep old entries; do not save digest"]

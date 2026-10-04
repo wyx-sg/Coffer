@@ -43,12 +43,10 @@ def scoped_targets(
 ) -> list[AgentType]:
     """The agent types ``resource`` is CONFIGURED to cover, in ``AgentType`` order.
 
-    ``agents`` is the agent registry — every ``agent`` resource row, not only
-    the enabled ones. Whether an agent is switched off is the projector's
-    business at write time; leaving a disabled agent's type out of the reach
-    here would hide it from the management surface and, worse, from
-    ``activate``'s ``skipped`` list, which exists to tell the user that a type
-    they scoped the connection to received nothing.
+    ``agents`` is the agent registry — every ``agent`` resource row.
+    Leaving an agent's type out of the reach here would hide it from the
+    management surface and, worse, from ``activate``'s ``skipped`` list, which
+    exists to tell the user that a type they scoped the connection to received nothing.
 
     A uid in the scope that matches no registered agent contributes no type —
     the scope layer's own rule for a reference to an agent this machine does
@@ -92,8 +90,7 @@ def scoped_targets(
 def reaches(resource: Resource, cfg: ProviderConfig, agent: Resource) -> bool:
     """Whether ``resource`` may serve ``agent`` right now: switched on, not a
     keyless (ollama) connection, and its scope names the agent (an unscoped
-    connection names every agent). The agent's own ``enabled`` switch is its
-    caller's concern."""
+    connection names every agent)."""
     if not resource.enabled or cfg.protocol is Protocol.OLLAMA:
         return False
     return is_active(resource.scope, agent.uid)

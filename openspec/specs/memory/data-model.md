@@ -203,7 +203,7 @@ rather than a cosmetic one.
 ## What is read, and from where
 
 Reading is confined to the memory paths of **registered and enabled** agents'
-own `config_dir`s ("Read only registered and enabled agents' memory", "Confine
+own `config_dir`s ("Read only registered agents' memory", "Confine
 reads to registered agents' memory paths"), and is strictly read-only ("Never
 write an agent's native memory"). Two readers, written as two readers
 ("Reintroduce no retired mechanism"):

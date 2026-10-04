@@ -84,8 +84,8 @@ per-agent reach on every resource"). Creating is not one of them: a kind registe
 seam (see "Keep creation a per-kind seam"). A request a kind does not support MUST be refused rather
 than ignored (see "Keep creation a per-kind seam" and "Carry a per-agent reach on every resource").
 
-A kind MAY declare that its resources cannot be disabled — `knowledge` and `memory` do.
-Every resource of such a kind MUST be enabled, and enabling or disabling one through the
+A kind MAY declare that its resources cannot be disabled — `knowledge`, `memory` and `agent` do.
+Every resource of such a kind MUST read as enabled, whatever its stored reach holds (a resource disabled before its kind became non-toggleable reads enabled from then on), and enabling or disabling one through the
 kind-agnostic surface MUST be refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing
 nothing. The resource read carries the kind's answer as `toggleable`, so a surface can
 leave the switch out rather than offer one that is refused.
@@ -106,10 +106,11 @@ unregistered kind MUST be refused rather than bringing one into being.
 - **AND** the first kind's disable changes it through the kind-agnostic route and is audited
 
 #### Scenario: a non-toggleable kind refuses to be disabled
-- **GIVEN** a `knowledge` collection and a `memory` partition
+- **GIVEN** a `knowledge` collection, a `memory` partition and an `agent`
 - **WHEN** each is disabled through `/api/v1/resources` and read back
-- **THEN** both requests are refused with 409 `RESOURCE_NOT_TOGGLEABLE`
-- **AND** both still read back enabled, with `toggleable` false
+- **THEN** all three requests are refused with 409 `RESOURCE_NOT_TOGGLEABLE`
+- **AND** all three still read back enabled, with `toggleable` false
+- **AND** an agent whose stored reach says off, left from before the kind was non-toggleable, reads back enabled
 
 ### Requirement: Validate every registration and persist nothing on failure
 The system MUST validate every registration against its kind's schema and the kind's own

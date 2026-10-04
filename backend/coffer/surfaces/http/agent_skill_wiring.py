@@ -189,7 +189,7 @@ def wire_agent_and_skill_kinds(
     # auto-registration): AutoDetectService reports installed-but-unregistered
     # agents as candidates the user confirms on the Agents page.
     #
-    # Registering an agent, moving its config dir, switching it and editing a
+    # Registering an agent, moving its config dir and editing a
     # skill's ``enabled`` / ``scope`` each change what some agent should hold
     # (spec skill-manager "Reconcile deliveries from state on every pass"):
     # each asks for the same pass, which judges every agent at once.
@@ -302,12 +302,7 @@ def wire_agent_and_skill_kinds(
         # implementation would race the row delete and find nothing to clean.
         await skill_svc.cleanup_bindings_for_agent(agent)
 
-    agent_kind = make_agent_kind(
-        on_delete=_agent_on_delete,
-        # Disabling an agent reclaims its delivered skills; enabling it puts
-        # back whatever the skills' own ``enabled`` + ``scope`` grant.
-        on_enabled_changed=_skill_delivery_changed,
-    )
+    agent_kind = make_agent_kind(on_delete=_agent_on_delete)
     skill_sources = wire_skill_sources(skill_svc)
 
     async def _skill_on_delete(skill: Resource) -> None:

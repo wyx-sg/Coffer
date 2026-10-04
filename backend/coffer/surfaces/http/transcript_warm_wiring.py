@@ -40,9 +40,8 @@ def start_transcript_warm_worker(
     """
 
     async def _list_targets() -> list[AgentTarget]:
-        # Registered agents, enabled or not: the Conversations tab reads an
-        # agent's own past sessions, which a disabled agent still has. Listing
-        # resources is a read — it emits no audit event, which is what spec
+        # Registered agents: the Conversations tab reads an agent's own
+        # past sessions. Listing resources is a read — it emits no audit event, which is what spec
         # agent-registry "Audit every agent lifecycle event" requires of anything
         # behind a workspace listing.
         targets: list[AgentTarget] = []

@@ -31,7 +31,7 @@ If no managed agent is available, a new conversation shows **No agent connected*
 
 1. Open **Conversations** in the sidebar (under **Run**). The page opens on the list of conversations; there is no welcome or suggestions page.
 2. Choose **New conversation** beside the page title. The draft opens at `/conversations/new`: **New conversation** in the title bar and one line in the middle saying which agent will run in which folder.
-3. Pick what you need in the reply box's toolbar: the folder beside the paperclip (see [Working directory](#working-directory)), and on the right the **agent** (only agents that are installed, connected on the Agents page and turned on are offered), the model and the reasoning effort.
+3. Pick what you need in the reply box's toolbar: the folder beside the paperclip (see [Working directory](#working-directory)), and on the right the **agent** (only agents that are installed, and connected on the Agents page are offered), the model and the reasoning effort.
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
 
 A conversation can also start from **Ask an agent** elsewhere in the app — on a command the [CLIs](/guides/clis) page says is missing, for example. The same draft opens, and its message box already holds the prompt Coffer wrote for that job, with a line under the box saying **Nothing is sent until you press Send**. Read it, edit it if you like, and press **Enter**.
@@ -248,7 +248,7 @@ Events are named `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_d
 
 ## Troubleshooting
 
-**The agent is listed as unavailable.** Either its CLI is not on your `PATH` (your login shell's `PATH` merged with the daemon's own), or no agent of that type is registered and turned on. Install the CLI, then choose **Connect** on the Agents page, or turn the agent on. Chat runs only agents Coffer manages.
+**The agent is listed as unavailable.** Either its CLI is not on your `PATH` (your login shell's `PATH` merged with the daemon's own), or no agent of that type is registered. Install the CLI, then choose **Connect** on the Agents page. Chat runs only agents Coffer manages.
 
 **Every turn fails with `stream_ended`.** The agent process is exiting mid-turn. Check that the agent works in a terminal, then look at **Activity → Daemon** for the underlying error.
 

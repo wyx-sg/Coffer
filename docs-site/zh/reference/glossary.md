@@ -27,7 +27,7 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 ### 聚合任务（Aggregate pass） {#aggregate-pass}
 
-一种[维护任务](#upkeep-pass)，把每个已启用智能体的[原生记忆](#native-memory)读进 Coffer 的记忆，成为[原始条目](#raw-entry)。Coffer 从不写回智能体自己的记忆。见[记忆](/zh/architecture/memory#the-aggregation-pass)。
+一种[维护任务](#upkeep-pass)，把每个已注册智能体的[原生记忆](#native-memory)读进 Coffer 的记忆，成为[原始条目](#raw-entry)。Coffer 从不写回智能体自己的记忆。见[记忆](/zh/architecture/memory#the-aggregation-pass)。
 
 ### 审批（Approval） {#approval}
 

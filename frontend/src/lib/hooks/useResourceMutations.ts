@@ -30,9 +30,9 @@ function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): voi
   }
 }
 
-/** Mutation keys, so a row can show that its own enable / disable is running. */
-export const ENABLE_KEY = ["resource", "enable"] as const;
-export const DISABLE_KEY = ["resource", "disable"] as const;
+/** Mutation keys, so an enable / disable in flight can be told apart. */
+const ENABLE_KEY = ["resource", "enable"] as const;
+const DISABLE_KEY = ["resource", "disable"] as const;
 
 export function useEnableResource() {
   const qc = useQueryClient();

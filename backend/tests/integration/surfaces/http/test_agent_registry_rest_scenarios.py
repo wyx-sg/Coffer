@@ -152,23 +152,6 @@ def test_bind_a_model_to_an_agent_over_rest(home: pathlib.Path) -> None:
         assert (second.json()["model"], second.json()["effort"]) == ("opus", "high")
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="switch an agent off and on over REST")
-def test_switch_an_agent_off_and_on_over_rest(home: pathlib.Path) -> None:
-    (home / ".codex").mkdir()
-    with _client() as c:
-        uid = _register(c, "codex")
-        assert c.get(f"/api/v1/resources/{uid}").json()["enabled"] is True
-
-        assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
-        assert c.get(f"/api/v1/resources/{uid}").json()["enabled"] is False
-        assert c.post(f"/api/v1/resources/{uid}/enable").status_code == 200
-        assert c.get(f"/api/v1/resources/{uid}").json()["enabled"] is True
-
-        events = _audit_types(c, uid)
-        assert events.index("resource_disabled") != events.index("resource_enabled")
-        assert events.count("resource_disabled") == events.count("resource_enabled") == 1
-
-
 # --- Coffer connection --------------------------------------------------------
 
 

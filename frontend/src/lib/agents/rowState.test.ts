@@ -18,9 +18,8 @@ describe("agentRowState", () => {
     expect(agentRowState({ state: "missing", uid: "u" }, "connected")).toBe("not_found");
   });
 
-  test("an added agent reads its switch, then its connection", () => {
+  test("an added agent reads its connection", () => {
     const row = { state: "installed_active" as const, uid: "u" };
-    expect(agentRowState(row, "connected", false)).toBe("disabled");
     expect(agentRowState(row, undefined)).toBe("checking");
     expect(agentRowState(row, "connected")).toBe("connected");
     expect(agentRowState(row, "partial")).toBe("needs_repair");

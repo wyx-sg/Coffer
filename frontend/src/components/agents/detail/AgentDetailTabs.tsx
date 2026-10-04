@@ -76,7 +76,6 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const { open } = rowActions;
   const overviewActions = {
     onConnection: (kind: "connect" | "disconnect") => open.change(kind),
-    onEnable: open.enable,
     onChangeConfigDir: open.configDir,
     busy: !!rowActions.pending,
   };

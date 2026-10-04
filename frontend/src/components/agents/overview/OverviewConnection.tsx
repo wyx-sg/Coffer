@@ -164,13 +164,6 @@ function ConnectionFix({
     );
   }
   if (state === "connected") return null;
-  if (state === "disabled") {
-    return (
-      <Button size="sm" loading={actions.busy} onClick={actions.onEnable}>
-        {t(`${K}.action.enable`)}
-      </Button>
-    );
-  }
   return (
     <Button size="sm" loading={actions.busy} onClick={() => actions.onConnection("connect")}>
       {state === "needs_repair" ? <Wrench aria-hidden /> : null}

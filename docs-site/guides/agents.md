@@ -59,7 +59,6 @@ For each type Coffer looks at its standard directory and, when the daemon's envi
 | **Not connected** | installed, and Coffer has not connected it — a newly found agent and one you disconnected read the same | **Connect** |
 | **Connected** | Coffer's entry and hook are in the agent | none |
 | **Needs repair** | part of the connection is missing | **Repair** |
-| **Off** | switched off in Coffer | **Turn on** |
 | **Config left behind** | a directory with no program on `PATH` | none; **Copy prompt** (the reinstall hand-off) heads the row's **⋯** menu |
 | **Not installed** | neither | none; **Copy prompt** (the install hand-off) heads the row's **⋯** menu |
 
@@ -81,12 +80,12 @@ Before accepting the directory, Coffer creates `<config_dir>/skills`, then check
 
 When Coffer itself starts an agent registered on a directory other than the standard one — a [chat](/guides/chat) or [channel](/guides/channels) turn, a model-list probe, a plugin uninstall — it sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` to that directory, so the agent reads the skills, MCP entry and settings Coffer put there.
 
-### Edit, turn off and disconnect
+### Edit and disconnect
 
-The **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, **Disconnect…** (while any part is installed) and **Turn off** — or **Turn on**, which for an agent that is off is the button instead. There is no **Remove**: the list always holds a row for both supported agents, and disconnecting or turning an agent off is how you stop Coffer touching it.
+The **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect…** (while any part is installed). There is no **Remove**: the list always holds a row for both supported agents, and disconnecting is how you take Coffer's entry and hook out of one.
 
 - **Edit** changes the config directory or the [model binding](#models). The name is the type and cannot change. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`.
-- **Turn off** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again (**Turn on**) restores what the skills grant. A turned-off agent reads **Off** and its mark is faded.
+- **Disconnect…** removes Coffer's gateway entry and memory hook from the agent and leaves everything else in its files as it was (see [Connect an agent to Coffer](#connect-an-agent-to-coffer)). The agent stays registered, so the skills [reach](/guides/skills) grants it keep being delivered.
 
 ## Connect an agent to Coffer
 
@@ -99,7 +98,7 @@ Connecting writes everything Coffer needs into the agent's own config, in one ac
 
 Disconnecting removes both, and only Coffer's own entries; everything else in those files stays as it was.
 
-**Web UI:** the Overview tab's **Connection** section shows each part — the MCP entry and the memory hook, with the file each lives in and whether it is current — and carries the one fix the agent's state calls for at the section's title: **Connect** when it is not connected, **Repair** when it needs repair, **Turn on** when it is off, and **Check again** while Codex has not approved Coffer's hook. A connected agent has no button there; **Disconnect…** is in the ⋯ menu. The page header never changes into a fix button: it holds the agent's mark, its name, one status pill (**Connected**, **Not connected**, **Needs repair**, **Hook not approved**, **Off** or **Config left behind**), **New conversation** and the ⋯ menu. On the **Agents** list the row carries the same state and the same action. Every connect, repair and disconnect opens the same **Review changes** preview first: a repair lists only the missing parts, a disconnect only the lines it removes. If a write fails partway, the preview says which change failed, keeps the ones that applied, and offers to retry only the failed one.
+**Web UI:** the Overview tab's **Connection** section shows each part — the MCP entry and the memory hook, with the file each lives in and whether it is current — and carries the one fix the agent's state calls for at the section's title: **Connect** when it is not connected, **Repair** when it needs repair, and **Check again** while Codex has not approved Coffer's hook. A connected agent has no button there; **Disconnect…** is in the ⋯ menu. The page header never changes into a fix button: it holds the agent's mark, its name, one status pill (**Connected**, **Not connected**, **Needs repair**, **Hook not approved** or **Config left behind**), **New conversation** and the ⋯ menu. On the **Agents** list the row carries the same state and the same action. Every connect, repair and disconnect opens the same **Review changes** preview first: a repair lists only the missing parts, a disconnect only the lines it removes. If a write fails partway, the preview says which change failed, keeps the ones that applied, and offers to retry only the failed one.
 
 Restart the agent (or reload its MCP servers) after connecting so it starts the shim.
 

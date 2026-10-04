@@ -70,10 +70,8 @@ class TurnRetrieval:
 
     async def _agent_uid(self, agent_key: str) -> str | None:
         """The agent a fire is audited against: of the registered agents of this
-        type, an enabled one — a disabled agent is not the one answering."""
+        type, the first."""
         for row in await self._agents.list():
-            if not row.enabled:
-                continue
             try:
                 cfg = AgentConfig.model_validate(row.config)
             except ValueError:

@@ -99,7 +99,7 @@ class _Store(Protocol):
 
 @dataclass(frozen=True)
 class _Seen:
-    """One enabled agent, its file, and both sides of the comparison."""
+    """One agent, its file, and both sides of the comparison."""
 
     agent: Resource
     agent_type: AgentType
@@ -147,7 +147,7 @@ class ProviderProjectionTarget:
 
     # --- reading ---------------------------------------------------------------
 
-    async def _enabled_agents(self) -> list[tuple[Resource, AgentConfig]]:
+    async def _agents_with_config(self) -> list[tuple[Resource, AgentConfig]]:
         out: list[tuple[Resource, AgentConfig]] = []
         for row in await self._agents.list():
             try:
@@ -158,13 +158,13 @@ class ProviderProjectionTarget:
         return out
 
     async def _scan(self) -> _Scan:
-        rows = await self._enabled_agents()
+        rows = await self._agents_with_config()
         connections = await self._providers.list()
         by_uid = {r.uid: r for r in connections}
         scan = _Scan({})
         for row, cfg in rows:
             facet = self._projector.projection_for(cfg.type)
-            if not row.enabled or facet is None:
+            if facet is None:
                 continue
             if not cfg.resolved_config_dir().is_dir():
                 # A stale row whose config dir vanished is not resurrected by

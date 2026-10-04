@@ -195,7 +195,7 @@ _STATUS: dict[str, int] = {
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
     # An ollama connection is internal-only and never switched on for an agent.
     "PROVIDER_INTERNAL_ONLY": 409,
-    # The connection or the agent is switched off, or the scope does not name the agent.
+    # The connection is switched off, or the scope does not name the agent.
     "PROVIDER_DOES_NOT_REACH_AGENT": 409,
     # A second internal-engine default outside the route that moves the flag.
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": 409,

@@ -24,14 +24,12 @@
     "state": {
       "connected": "Connected",
       "not-connected": "Not connected to Coffer",
-      "not-installed": "Not installed",
-      "disabled": "Off"
+      "not-installed": "Not installed"
     },
     "stateInline": {
       "connected": "connected",
       "not-connected": "not connected to Coffer",
-      "not-installed": "not installed",
-      "disabled": "off"
+      "not-installed": "not installed"
     }
   },
   "changePreview": {
@@ -1708,7 +1706,7 @@
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "Another connection is already Coffer's internal-engine default — move the default to this connection instead of setting the flag directly",
     "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be turned on for an agent",
-    "PROVIDER_DOES_NOT_REACH_AGENT": "The connection can't be turned on for this agent — the connection or the agent is turned off, or the connection's scope doesn't name the agent",
+    "PROVIDER_DOES_NOT_REACH_AGENT": "The connection can't be turned on for this agent — the connection is turned off, or its scope doesn't name the agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "An agent is running on this connection, so its wire format can't change — put that agent back on its built-in login first, then edit the wire, then switch it onto the connection again",
     "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "Another connection is already Coffer's speech-to-text default — move the default to this connection instead of setting the flag directly",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
@@ -2166,7 +2164,6 @@
       "not_installed": "Not installed",
       "config_left_behind": "Config left behind",
       "not_found": "Not found",
-      "disabled": "Off",
       "connected": "Connected",
       "needs_repair": "Needs repair",
       "not_connected": "Not connected",
@@ -2199,13 +2196,11 @@
           "mcpMissing": "The <code>coffer</code> entry is missing from <code>{{mcpFile}}</code>, so {{name}} can’t reach Coffer’s tools.",
           "hookStale": "The memory hook runs a command this Coffer no longer accepts, so sessions start without memory.",
           "hookMissing": "The memory hook is missing from <code>{{hookFile}}</code>, so sessions start without memory.",
-          "hookUntrusted": "{{name}} runs only hooks you approve. Approve Coffer’s hook in {{name}}’s /hooks, then check again.",
-          "disabled": "Coffer serves {{name}} nothing while it’s off. Its entry and hook stay in place."
+          "hookUntrusted": "{{name}} runs only hooks you approve. Approve Coffer’s hook in {{name}}’s /hooks, then check again."
         },
         "action": {
           "connect": "Connect",
           "repair": "Repair",
-          "enable": "Turn on",
           "checkAgain": "Check again"
         },
         "part": {
@@ -2221,7 +2216,6 @@
           "stale": "Out of date",
           "missing": "Missing",
           "notSet": "Not set",
-          "idle": "Idle",
           "untrusted": "Not approved"
         }
       },
@@ -2244,7 +2238,6 @@
           "memory": "Memory",
           "config": "Config files"
         },
-        "disabledLine": "None while off · {{count}} would reach it",
         "toReview": "{{count}} to review",
         "mcp": {
           "line": "{{coffer}} through Coffer · {{own}} in {{file}}",
@@ -2502,7 +2495,6 @@
         "hookStale": "Memory hook is out of date",
         "hookMissing": "Memory hook not written",
         "gone": "{{dir}} and its program are gone",
-        "disabled": "Off in Coffer",
         "notOnThisMac": "Not on this Mac",
         "keptNotOnPath": "{{dir}} kept · {{program}} not on PATH"
       }
@@ -2510,9 +2502,7 @@
     "pending": {
       "adding": "Adding…",
       "connecting": "Connecting…",
-      "disconnecting": "Disconnecting…",
-      "enabling": "Turning on…",
-      "disabling": "Turning off…"
+      "disconnecting": "Disconnecting…"
     },
     "rowMenu": {
       "label": "More actions for {{name}}",
@@ -2522,9 +2512,7 @@
       "copyUid": "Copy uid",
       "connect": "Connect",
       "repair": "Repair",
-      "disconnect": "Disconnect…",
-      "enable": "Turn on",
-      "disable": "Turn off"
+      "disconnect": "Disconnect…"
     },
     "change": {
       "title": "Review changes",
@@ -2693,7 +2681,6 @@
       "reason": {
         "skillOff": "The skill is off.",
         "outsideReach": "Not ticked.",
-        "agentOff": "The agent is off.",
         "agentMissing": "The agent is not installed on this machine.",
         "pending": "No copy recorded yet. Check again to look at the agent’s folder."
       },

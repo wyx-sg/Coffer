@@ -1,6 +1,6 @@
 """The aggregation pass: the agents' own words, filed by repository.
 
-This is the **input** half of the layer. It reads each registered, enabled
+This is the **input** half of the layer. It reads each registered
 agent's native memory through that agent's reader, decides which partition
 each entry belongs to, and writes the entry **verbatim** under that
 partition's hidden ``.raw/``. It writes nothing else — no note, no index, no
@@ -89,7 +89,7 @@ class AggregationResult:
 
 @dataclass(frozen=True)
 class AgentSource:
-    """A registered, enabled agent Resource, reduced to what aggregation
+    """A registered agent Resource, reduced to what aggregation
     needs: its own resource name (an ``Origin.agent``), which reader applies
     to it, and the directory to hand that reader.
 
@@ -193,7 +193,7 @@ def _prune_vanished_sources(
     would stay under ``.raw/``, keep a note alive and keep being delivered for good
     (see "Retire a note whose raw entries are all gone"). Only an agent whose directory
     is there and listed cleanly is judged: a missing directory lists nothing and says
-    nothing about its sources, and an unlisted agent (disabled, unregistered) keeps what
+    nothing about its sources, and an unlisted agent (unregistered) keeps what
     it contributed.
     """
     if not listed and not pathlib.Path(agent_source.config_dir).is_dir():

@@ -191,7 +191,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | 没有这个 id 的对话。 | 刷新对话列表。 |
 | `UNKNOWN_AGENT` | 400 | 对话所用的智能体没有注册智能体提供方。 | 从 `GET /api/v1/agent-providers` 中选择一个智能体。 |
-| `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的已启用智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加或启用该智能体。 |
+| `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加该智能体。 |
 | `MESSAGE_NOT_FOUND` | 404 | 重发时指定的用户消息不属于该对话，或查询某条回复改动的文件时指定的助手回复不属于该对话。 | 刷新对话；重试那里显示的消息。 |
 | `REPLY_FILE_NOT_FOUND` | 404 | 请求某个改动文件的 diff 时，该回复没有记录这个路径。 | 重新打开该回复的改动文件，从列表里选一个。 |
 | `QUESTION_CLOSED` | 409 | 对智能体所提问题的回答来晚了：该问题已被回答（先到的回答生效）、已取消，或其任务已结束。没有任何改动。 | 刷新对话；卡片会显示已采用的回答。 |
@@ -212,7 +212,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | 新建连接必须恰好提供密钥值或密钥 ref 中的一个。 | 传 `--secret` 或 `--secret-ref`，不要两个都传。 |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | 有智能体运行在该连接上时，不能更改其协议格式。 | 对运行在它上面的每个智能体用**更改模型**切回它自己的登录，编辑后再重新切换。 |
-| `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | 不能把智能体切到它不生效的连接上：连接或智能体被停用，或连接的作用范围没有指明该智能体。 | 开启该连接，或把该智能体加入它的作用范围，然后再切换。 |
+| `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | 不能把智能体切到它不生效的连接上：连接被停用，或连接的作用范围没有指明该智能体。 | 开启该连接，或把该智能体加入它的作用范围，然后再切换。 |
 | `PROVIDER_INTERNAL_ONLY` | 409 | `ollama` 连接只供 Coffer 内部引擎使用，不能为智能体开启。 | 改为把它作为内部引擎的默认连接。 |
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | 已有另一个连接是内部引擎的默认连接。 | 在**设置 › 通用 → Coffer 自用模型**里转移这个标记。 |
 | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 在**设置 › 通用 → Coffer 自用模型**（**语音转文字**）里转移这个标记。 |

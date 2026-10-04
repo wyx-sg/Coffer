@@ -147,8 +147,8 @@ it chooses for.
 How it works: `/dir <any path>` (or a `/cwd <name>` over a list of named
 workspaces) opens a fresh conversation wherever the owner points it, or a
 channel carries no directory control at all and every turn runs in the
-Coffer-managed workspace `~/.coffer/content/workspace` (spec chat "Ship Claude
-Code and Codex subprocess providers on the type's one agent").
+Coffer-managed workspace `~/.coffer/content/workspace` (spec chat "Run Claude Code
+and Codex as subprocess providers on the type's one agent").
 
 Pros: no control at all is the smallest surface; a free path needs no
 configuration.

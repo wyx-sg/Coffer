@@ -166,10 +166,7 @@ async def build_skill_graph(
         on_config_dir_changed=_agent_changed if hooks else None,
         reconcile_skill_delivery=_agent_changed if hooks else None,
     )
-    kinds["agent"] = make_agent_kind(
-        on_delete=skills.cleanup_bindings_for_agent,
-        on_enabled_changed=_changed if hooks else None,
-    )
+    kinds["agent"] = make_agent_kind(on_delete=skills.cleanup_bindings_for_agent)
     kinds["skill"] = make_skill_kind(
         skills.cleanup_bindings_for_skill,
         on_scope_changed=_changed if hooks else None,
