@@ -10,6 +10,11 @@
 // stored but whose file or server could not be rewritten. A scan that finds
 // nothing says how many files and servers it read. Widths follow the step: scanning or nothing found 480, a result 640, the
 // findings and the review 1060 so the dialog does not jump between them.
+//
+// Given `only` — vault-relative file paths, from the Sync page's "Move into
+// secrets…" (spec vault-sync "Refuse to push a plaintext secret") — it lists
+// the findings in those files alone, and when none of them is a file it can
+// move a value out of, it says so instead of "No plaintext keys found".
 import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +40,14 @@ import { planOf, type ImportPlan } from "./scanPlan";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Vault-relative paths (`skills/<name>/…`) to list findings in; omitted, every finding. */
+  only?: readonly string[];
+}
+
+/** Whether a finding sits in one of `only`'s files. A skill finding's path is
+ *  absolute, under the vault's `skills/`; `only` is relative to the vault. */
+function inFiles(path: string | null, only: readonly string[]): boolean {
+  return path !== null && only.some((p) => path === p || path.endsWith(`/${p}`));
 }
 
 type Step =
@@ -52,7 +65,7 @@ function Title({ children }: { children: string }) {
   );
 }
 
-export function ScanSecretsDialog({ open, onOpenChange }: Props) {
+export function ScanSecretsDialog({ open, onOpenChange, only }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const scan = useSecretScan(open);
@@ -68,7 +81,8 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
     reset();
   }, [open, reset]);
 
-  const findings = scan.data?.findings ?? [];
+  const all = scan.data?.findings ?? [];
+  const findings = only ? all.filter((f) => inFiles(f.path, only)) : all;
   // Every finding starts ticked, once the scan is in.
   const chosen = ticked ?? new Set(findings.map((f) => f.id));
   const close = () => onOpenChange(false);
@@ -156,6 +170,16 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
         </DialogFooter>
       </>
     );
+  } else if (findings.length === 0 && only) {
+    body = (
+      <>
+        <Title>{t("secrets.scan.noneHereTitle")}</Title>
+        <p className="text-sm text-text-muted">{t("secrets.scan.noneHereBody")}</p>
+        <DialogFooter>
+          <Button onClick={close}>{t("common.done")}</Button>
+        </DialogFooter>
+      </>
+    );
   } else if (findings.length === 0) {
     body = (
       <>
@@ -177,7 +201,7 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
     width = "max-w-[1060px]";
     body = (
       <ScanFindingsStep
-        scan={scan.data}
+        scan={scan.data && { ...scan.data, findings }}
         ticked={chosen}
         onToggle={toggle}
         onToggleAll={(all) => setTicked(new Set(all ? findings.map((f) => f.id) : []))}

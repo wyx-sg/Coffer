@@ -63,14 +63,14 @@ const SCAN: SecretScan = {
 
 const onOpenChange = vi.fn();
 
-function renderDialog() {
+function renderDialog(only?: readonly string[]) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <ScanSecretsDialog open onOpenChange={onOpenChange} />
+        <ScanSecretsDialog open onOpenChange={onOpenChange} only={only} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -221,5 +221,32 @@ describe("ScanSecretsDialog", () => {
     expect(table).toHaveClass("table-fixed");
     expect(table.parentElement).toHaveClass("overflow-auto", "min-w-0");
     expect(dialog).toHaveClass("grid-cols-[minmax(0,1fr)]");
+  });
+
+  acceptance(
+    "vault-sync",
+    "the Sync page names each place and offers Move into secrets and push anyway",
+    async () => {
+      // From the Sync page: only the flagged files' findings, vault-relative.
+      api.importFindings.mockImplementation(async (ids, dryRun) => ({
+        dry_run: dryRun,
+        moved: movedOf(ids),
+        skipped: [],
+      }));
+      renderDialog(["skills/release-notes/scripts/publish.sh", "knowledge/team/db.md"]);
+      const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+      expect(dialog).toHaveTextContent("1 found in 1 place");
+      expect(within(dialog).getByText("release-notes/scripts/publish.sh:12")).toBeInTheDocument();
+      expect(within(dialog).queryByText("env WEATHER_API_KEY")).toBeNull();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Review 1 change" }));
+      await screen.findByRole("dialog", { name: "Review changes" });
+      expect(api.importFindings).toHaveBeenCalledWith(["f1"], true);
+    },
+  );
+
+  test("flagged files with nothing Coffer can move say so", async () => {
+    renderDialog(["knowledge/team/db.md"]);
+    const dialog = await screen.findByRole("dialog", { name: "Nothing here Coffer can move" });
+    expect(dialog).toHaveTextContent("Coffer moves values out of skill files");
   });
 });

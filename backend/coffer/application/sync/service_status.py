@@ -87,8 +87,6 @@ class StatusMixin:
     _git_available: Callable[[], bool]
     _host_label: Callable[[], str]
 
-    def plaintext_handoff(self, last: RoundRecord) -> str | None: ...
-
     # --- the status ---------------------------------------------------------------
 
     async def status(self) -> SyncStatus:
@@ -178,9 +176,7 @@ class StatusMixin:
             return None
         found = _problem(last, remote)
         if found is not None and found.kind == "plaintext_found":
-            return dataclasses.replace(
-                found, handoff=self.plaintext_handoff(last), plaintext=last.plaintext
-            )
+            return dataclasses.replace(found, plaintext=last.plaintext)
         return found
 
     def _waiting(self, remote: SyncRemote, head: str) -> tuple[WaitingCommit, ...]:

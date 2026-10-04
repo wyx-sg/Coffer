@@ -13,10 +13,11 @@ Coffer can decide:
 * **a remote that refuses the round.** A rejected push, a sign-in the remote
   refused, or a remote that cannot be reached are fixed on the remote's side
   or on this machine's network, never by Coffer.
-* **a plaintext secret in what the round would push.** Moving each value into
-  a Coffer secret and pointing the file at it depends on the file (a
-  resource's field, a skill's script), so the agent does it, without ever
-  printing the value (spec vault-sync "Refuse to push a plaintext secret").
+
+A plaintext secret in what the round would push is never handed to an agent:
+the prompt would send it to the file that holds the value. The person moves it
+into secrets on the Sync page (spec vault-sync "Refuse to push a plaintext
+secret").
 
 What a prompt never carries: a secret's value, a push token, a URL's user
 name or password, or the contents of a ``secret/*.enc`` file. An encrypted
@@ -31,7 +32,6 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
 from coffer.domain.handoff import Handoff, render_handoff
-from coffer.domain.sync.plaintext import PlaintextFinding
 from coffer.domain.sync.stops import ConflictFile, ConflictReason
 from coffer.domain.vault.layout import SECRET
 
@@ -250,56 +250,6 @@ def remote_failure_handoff(
     )
 
 
-# --- a plaintext secret in what the round would push ----------------------------------------
-
-
-def plaintext_handoff(*, vault: str, findings: Sequence[PlaintextFinding]) -> str | None:
-    """The prompt to move each plaintext value the round found into a Coffer
-    secret, or ``None`` when no file still holds one. Names the file, the line
-    and the key; never the value."""
-    current = [f for f in findings if f.current]
-    if not current:
-        return None
-    facts = [f"The vault (a git repository Coffer commits to): {vault}"]
-    for f in current[:_MAX_FILES]:
-        what = "a value shaped like a token" if f.key == "token" else f"the value of {f.key}"
-        facts.append(f"{f.path}, line {f.line}: {what}.")
-    more = len(current) - _MAX_FILES
-    if more > 0:
-        facts.append(f"And {more} more; the Sync page lists every one.")
-    facts += [
-        "`coffer secret set <name>` stores the value it reads on stdin as the secret <name>; "
-        "a file then refers to it as coffer://secret/<name>, and `coffer run --secret "
-        "ENV=<name> -- <command>` hands it to one command in the variable ENV.",
-        "`coffer secret list` lists the secret names Coffer already holds, never their values.",
-    ]
-    return render_handoff(
-        Handoff(
-            task=(
-                "Coffer did not push my vault to its sync remote: "
-                + ("a file holds" if len(current) == 1 else f"{len(current)} places hold")
-                + " what looks like a plaintext secret. Move each value into a Coffer secret "
-                "and point the file at it, without ever showing the value."
-            ),
-            facts=tuple(facts),
-            steps=(
-                "Never print, echo, log, paste or repeat a value, and do not quote the line it "
-                "is on. To store one, pipe it straight from the file into `coffer secret set "
-                "<name>` (for example with a one-line script that writes only that value to "
-                "the command's stdin), choosing a short lowercase name for it.",
-                "Then replace the value in the file with coffer://secret/<name>. Where a "
-                "skill's command needs the value itself, run that command through `coffer run "
-                "--secret ENV=<name> -- …` instead.",
-                "If a value is an example or a test value and not a real secret, leave it and "
-                "tell me: I choose Push anyway in Coffer.",
-                "Run no git command in the vault; Coffer commits your edits itself and does not "
-                "publish the old value from its history. When every place is done, tell me and "
-                "I press Retry in Coffer.",
-            ),
-        )
-    )
-
-
 __all__ = [
     "MERGEABLE_REASONS",
     "MergeFile",
@@ -307,7 +257,6 @@ __all__ = [
     "conflict_merge_handoff",
     "display_remote",
     "is_secret_file",
-    "plaintext_handoff",
     "remote_failure_handoff",
     "scrub_git_text",
 ]

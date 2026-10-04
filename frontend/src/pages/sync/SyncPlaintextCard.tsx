@@ -4,23 +4,25 @@
 // secret (spec vault-sync "Refuse to push a plaintext secret"). The card names
 // each place — file, line, and the key the value is assigned to, never the
 // value — each opening to its masked lines so the person can judge it (spec
-// vault-sync "Show a plaintext finding in its file") — and offers the way out:
-// the agent hand-off that moves each value into a secret, and one more way out
-// the detection needs, because it can be wrong: "Push anyway…", confirmed first
-// and audited.
+// vault-sync "Show a plaintext finding in its file") — and offers two ways out:
+// "Move into secrets…", the Secrets page's move scoped to the flagged files,
+// after which the person syncs again; and "Push anyway…", which the detection
+// needs because it can be wrong, confirmed first and audited. There is no
+// agent hand-off: a secret is never handed to an agent.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeySquare, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
 import type { SyncProblem } from "@/lib/api/sync";
 import { usePushAnyway } from "@/lib/hooks/useSync";
 import { SyncBannerCard } from "./SyncBanner";
 import { PlaintextPlace } from "./SyncPlaintextPlace";
-import { Actions, Body, Handoff } from "./SyncProblemParts";
+import { Actions, Body } from "./SyncProblemParts";
 
-/** How many places the card lists; the hand-off prompt carries the rest. */
+/** How many places the card lists; the rest are counted. */
 const MAX_PLACES = 8;
 
 interface Props {
@@ -47,6 +49,7 @@ function Places({ places }: { places: NonNullable<SyncProblem["plaintext"]> }) {
 export function SyncPlaintextCard({ problem, onIgnore }: Props) {
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
+  const [moving, setMoving] = useState(false);
   const push = usePushAnyway();
   const places = (problem.plaintext ?? []).filter((f) => f.current);
   const files = [...new Set(places.map((f) => f.path))];
@@ -61,12 +64,15 @@ export function SyncPlaintextCard({ problem, onIgnore }: Props) {
       <Body>{t("sync.problem.plaintext_found.body")}</Body>
       <Places places={places} />
       <Actions>
-        <Handoff problem={problem} />
+        <Button type="button" variant="outline" size="sm" onClick={() => setMoving(true)}>
+          {t("sync.problem.plaintext_found.moveIntoSecrets")}
+        </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(true)}>
           <Upload aria-hidden />
           {t("sync.problem.plaintext_found.pushAnyway")}
         </Button>
       </Actions>
+      <ScanSecretsDialog open={moving} onOpenChange={setMoving} only={files} />
       <ConfirmDialog
         open={confirming}
         onOpenChange={(next) => {
