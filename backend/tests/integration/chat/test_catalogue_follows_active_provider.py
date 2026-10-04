@@ -316,8 +316,7 @@ async def test_a_connection_curating_no_text_model_offers_no_chat_model(env: _En
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["models"] == []
-    # The channel ``/model`` card's model and effort steps read the same answer.
+    # The channel ``/model`` card's model card reads the same answer.
     assert await env.catalogue.suggest("claude_code") == []
-    assert await env.catalogue.efforts("claude_code", None) == []
     # The login's own catalogue is still the full truth, just not offered.
     assert [m.id for m in await env.catalogue.catalogue("claude_code")] == _CLI_MODELS

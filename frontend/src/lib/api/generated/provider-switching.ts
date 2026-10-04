@@ -759,8 +759,8 @@ export interface components {
          * ModelSwitchIn
          * @description What the agent page's Change model dialog asks for.
          *
-         *     ``connection_uid`` ``null`` is the agent's own built-in login: no model,
-         *     effort or tiers are written, and Coffer removes only the keys it wrote.
+         *     ``connection_uid`` ``null`` is the agent's own built-in login: no model
+         *     or tiers are written, and Coffer removes only the keys it wrote.
          *     ``seen`` is sent only to apply: each previewed file's path with the
          *     fingerprint the preview read, so a file edited since is refused.
          */
@@ -768,8 +768,6 @@ export interface components {
             agent_type: components["schemas"]["AgentType"];
             /** Connection Uid */
             connection_uid?: string | null;
-            /** Effort */
-            effort?: string | null;
             /** Model */
             model?: string | null;
             /** Seen */
@@ -911,10 +909,6 @@ export interface components {
         ProviderModel: {
             /** Context Window */
             context_window?: number | null;
-            /** Default Effort */
-            default_effort?: string | null;
-            /** Effort Levels */
-            effort_levels?: string[] | null;
             /** Id */
             id: string;
             /** @default text */

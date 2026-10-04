@@ -2,7 +2,7 @@
 //
 // The `internal_default` provider carries "Coffer · background model", the
 // `transcribe_default` one "Coffer · speech to text" (spec provider-switching
-// "Offer every connection operation on REST and the web"). Each flag sits on
+// "Offer every connection operation over REST and in the web UI"). Each flag sits on
 // one provider with no fallback, so the library must answer "which one does
 // Coffer use?" without a trip to Settings. In the narrow list pane the badge
 // is a small chip beside the agent marks; its name is its accessible label and

@@ -41,7 +41,7 @@ interface Props {
   onRestored?: () => void;
   /** The input's placeholder — "Message Claude Code…", "Reply…", "…it queues". */
   placeholder?: string;
-  /** Compact controls (agent, model, effort) shown in the footer, left of Send. */
+  /** Compact controls (agent, model) shown in the footer, left of Send. */
   controls?: ReactNode;
   /** The working folder of an open conversation, read-only, beside the paperclip (null: Coffer's workspace). */
   cwd?: string | null;

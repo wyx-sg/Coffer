@@ -36,7 +36,7 @@ update, and its Bot API offers bots no history read at all.
 
 **Identity.** `channel_thread_conversations` holds one row per
 `(resource_id, chat_id, thread_id)`: the active conversation and the thread's
-sticky settings (agent, model, effort, working directory —
+sticky settings (agent, model, working directory —
 [Channel Switches](channel-switches-structural-vs-parametric.md)). A DM or group main timeline is `thread_id = ""`; each
 thread is its own row. On SeaTalk a thread's id is its root message's id, so an
 @mention in the group main timeline roots a new thread at itself and the reply
@@ -193,7 +193,7 @@ Rules a future change must respect:
 - Token cost grows with thread length per turn; the page cap is the only
   bound.
 - A quiet chat does not carry a stale session: the first message after the
-  idle period starts clean with the same agent, model, effort and directory.
+  idle period starts clean with the same agent, model and directory.
 - Enforced by: the `channel_thread_conversations` table
   (`infrastructure/channel/thread_persistence.py`) and
   `application/channel/conversation_ops.py`;

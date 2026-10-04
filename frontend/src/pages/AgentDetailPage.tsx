@@ -1,4 +1,4 @@
-// src/pages/AgentDetailPage.tsx — one agent, at /agents/<type>[/<tab>] (spec agent-registry, "Expose every agent operation through REST and the Agents page").
+// src/pages/AgentDetailPage.tsx — one agent, at /agents/<type>[/<tab>] (spec agent-registry, "Expose every agent operation over REST and on the Agents page").
 //
 // The header (the agent's mark and name, its Coffer state, the action that
 // state calls for and the ⋯ menu) over nine tabs addressed by path. The page is

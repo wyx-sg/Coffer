@@ -112,7 +112,7 @@ Messages you send while a turn is running wait in the conversation's queue and r
 
 ### When a chat has been quiet
 
-A conversation that nobody has touched for a day is rarely the one you mean to continue. When your next message reaches a chat whose conversation has been idle longer than the channel's idle period (24 hours by default), Coffer opens a new conversation instead of continuing the old one, and says so in one line before the answer: `🆕 Started a new conversation after 24 h idle.` The old conversation stays in the conversation list, untouched. The chat's agent, model, effort and directory carry over, as they do after `/new`. The rule applies to each conversation a channel keeps: the direct chat's, and each group thread's or parallel thread's own.
+A conversation that nobody has touched for a day is rarely the one you mean to continue. When your next message reaches a chat whose conversation has been idle longer than the channel's idle period (24 hours by default), Coffer opens a new conversation instead of continuing the old one, and says so in one line before the answer: `🆕 Started a new conversation after 24 h idle.` The old conversation stays in the conversation list, untouched. The chat's agent, model and directory carry over, as they do after `/new`. The rule applies to each conversation a channel keeps: the direct chat's, and each group thread's or parallel thread's own.
 
 Set the period on the channel's **Settings** tab under **Conversations** (**Start a new conversation after**, in hours; 0 never starts a new one).
 
@@ -134,7 +134,7 @@ Nine words are Coffer's commands. Everything else you type — including other t
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
 | `/stop` | Interrupt the running turn and pause the queue. |
-| `/model [name] [level]` | Show or set the model and the reasoning effort. |
+| `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.application.channel.selection_cards import effort_card, model_card
+from coffer.application.channel.selection_cards import model_card
 from coffer.domain.channel.commands import (
     COMMAND_ROSTER,
     command_name,
@@ -54,7 +54,7 @@ def test_help_text_lists_every_command_with_its_arguments() -> None:
     rendered = help_text()
     for command in COMMAND_ROSTER:
         assert f"/{command.name}" in rendered
-    assert rendered.startswith("/new [agent] · /stop · /model [name] [level] · ")
+    assert rendered.startswith("/new [agent] · /stop · /model [name] · ")
     assert rendered.splitlines()[-1] == "Anything else is a message to the agent."
 
 
@@ -124,11 +124,3 @@ def test_menu_descriptions_fit_the_platform_limit() -> None:
 def test_the_current_model_is_marked_selected_on_its_card() -> None:
     card = model_card(current="opus", picks=["opus", "sonnet"])
     assert [b.value for b in card.buttons if b.selected] == ["model:opus"]
-
-
-def test_the_current_effort_is_marked_selected_on_its_card() -> None:
-    card = effort_card(current="xhigh", levels=["low", "high", "xhigh"])
-    assert [b.value for b in card.buttons if b.selected] == ["effort:xhigh"]
-    # With none pinned the agent's own default is in effect, and nothing is
-    # ticked — a card must not claim a choice the conversation has not made.
-    assert [b.value for b in effort_card(current=None, levels=["low"]).buttons if b.selected] == []

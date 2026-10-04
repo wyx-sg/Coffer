@@ -29,7 +29,6 @@ from fastapi.testclient import TestClient
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.resource import Resource
-from coffer.infrastructure.agent.claude_effort import claude_effort_levels
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -175,13 +174,6 @@ def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) ->
             "id": "claude-fable-5-1[1m]",
             "label": "Fable",
             "description": "Fable 5.1 · Most capable",
-            # Claude Code's reasoning levels come from the SDK that will run the
-            # turn, not from a list written down here — asserted against that
-            # same source so an SDK release adding a level is not a test failure.
-            "efforts": list(claude_effort_levels()),
-            # None on purpose: the SDK exposes no machine-readable default, and
-            # a picker naming the wrong one is worse than one naming none.
-            "default_effort": None,
         }
     ]
 
@@ -244,7 +236,7 @@ def test_the_catalogue_is_never_narrowed_by_anything_on_the_agent(
 # ---------------------------------------------------------------------------
 # One list, everywhere.
 #
-# This route is what the web Chat page's model and effort pickers read; a
+# This route is what the web Chat page's model picker reads; a
 # channel's `/model` card reads `offered()` in-process. They must answer the
 # same question, and they did not: the route served `catalogue()` — the agent's
 # own login — so with a connection active the page offered models the endpoint
@@ -301,22 +293,6 @@ def test_an_active_curated_connection_replaces_the_agents_own_catalogue(
         "the agent's own model survived an active connection — that id does not "
         "exist on the endpoint the turns now go to"
     )
-
-
-def test_an_id_the_agent_also_knows_keeps_its_reasoning_levels(tmp_path: pathlib.Path) -> None:
-    """Levels are not the endpoint's to answer — they are a setting on the
-    agent's own runtime, and the turn still goes through that runtime. So a
-    curated id the agent also reports keeps its effort menu; the effort picker
-    beside the model must not empty the moment a connection goes active."""
-    agents = _claude_agent_with_own_model(tmp_path)
-
-    set_active_token(_TOKEN)
-    with TestClient(_build_app(agents, curated=["claude-fable-5-1[1m]", "gw/unknown"])) as client:
-        resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
-
-    by_id = {m["id"]: m for m in resp.json()["models"]}
-    assert by_id["claude-fable-5-1[1m]"]["efforts"] == list(claude_effort_levels()), by_id
-    assert by_id["gw/unknown"]["efforts"] == [], "an id the agent never heard of reports no levels"
 
 
 @pytest.mark.acceptance(

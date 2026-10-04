@@ -753,15 +753,15 @@ rejected.
 
 ### Requirement: Open an archived conversation read-only
 An archived conversation MUST open **read-only**: its history reads normally,
-the composer and the model/effort controls are disabled, and a restore
+the composer and the model control is disabled, and a restore
 control is offered in their place. Archived is a state the owner leaves
 deliberately, not a thread that silently accepts a turn and unarchives itself.
 
 #### Scenario: an archived conversation opens read-only
 - **GIVEN** an archived conversation,
 - **WHEN** it is opened on the Conversations page,
-- **THEN** its history reads normally, the composer and the model/effort
-  controls are disabled, and a restore control is offered.
+- **THEN** its history reads normally, the composer and the model
+  control is disabled, and a restore control is offered.
 
 ### Requirement: Send fire-and-return and stream output over one subscription
 Sending from the page MUST be **fire-and-return**: `POST .../messages` accepts
@@ -956,39 +956,6 @@ stays in the composer, so the banner shows the reason with no Retry.
 - **THEN** the response is 410 `ATTACHMENT_EXPIRED` naming the file
 - **AND** no user message is persisted and nothing is queued
 
-### Requirement: Let the owner set agent, model and reasoning level
-The page MUST let the owner choose the agent a conversation runs on, on the
-draft surface — once the conversation exists its agent is fixed and shown as a
-label, because its upstream session and working directory belong to that one
-agent (see "Record the agent on each conversation"). The page MUST let the owner
-read and set the conversation's model and how hard that model thinks over
-`GET|PATCH .../agent-config`, persisting both while
-preserving the conversation's working directory and upstream session id, and
-reverting to the agent's own default when either is cleared; a body that
-mentions one leaves the other where it was.
-
-The reasoning level is a SECOND control beside the model picker, not a variant
-of it: the agents take it as their own field rather than as part of the model
-name, and it renders only when the chosen model reports levels — nothing to
-choose between means no control at all, not a disabled or empty one. Both
-controls MUST be offered on the **draft** surface as well as in an open
-conversation, because the first turn is the one a user most wants to pitch, and
-by the time the conversation exists that turn is already running.
-
-A missing Coffer LLM connection MUST NOT block the page: with none configured
-the draft surface still accepts a message and the turn runs on the agent's own
-built-in model and login, because a Coffer connection is an optional override,
-not a prerequisite ([provider-switching](../provider-switching/spec.md), and
-[Provider Connections Projected Into Agent Config](../../../docs/decisions/provider-connections-projected-into-agent-config.md)).
-
-#### Scenario: chat runs on the built-in model when no connection
-- **GIVEN** a running daemon with no Coffer LLM connection configured for the
-  agent,
-- **WHEN** the Conversations page is opened,
-- **THEN** the draft surface is available with no blocking empty state, and a
-  sent turn runs on the agent's own built-in model and login — a Coffer
-  connection is an optional override, not a prerequisite.
-
 ### Requirement: Create the conversation on the first send
 The draft is not a conversation row. **New conversation** opens a blank draft surface,
 and the **first send** is what creates the conversation — so a user who opens
@@ -999,8 +966,8 @@ connected", names Claude Code and Codex, and offers one **Open Agents** link to 
 Agents page, where connecting an agent is Coffer's own action; it carries no install
 prompt and no install command (handing an install to an assistant belongs to the
 Agents page). The draft's title bar says "New conversation", and with an agent its
-centre says which agent will run in which folder; the folder picker, agent, model
-and effort sit in the reply box's toolbar, and a draft opened from Ask an agent
+centre says which agent will run in which folder; the folder picker, agent and model
+sit in the reply box's toolbar, and a draft opened from Ask an agent
 says under the box that nothing is sent until Send. The folder picker lists Coffer's
 workspace and the folders recent conversations started in, then one row for any
 other folder: a field to type or paste a path whose one button reads **Choose…**
@@ -1569,3 +1536,32 @@ proxy.
 - **WHEN** a turn runs on each
 - **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment intact
 - **AND** a turn on an agent whose `config_dir` is its type's standard location starts its process with the environment untouched
+
+### Requirement: Let the owner set agent and model
+The page MUST let the owner choose the agent a conversation runs on, on the
+draft surface — once the conversation exists its agent is fixed and shown as a
+label, because its upstream session and working directory belong to that one
+agent (see "Record the agent on each conversation"). The page MUST let the owner
+read and set the conversation's model over
+`GET|PATCH .../agent-config`, persisting it while
+preserving the conversation's working directory and upstream session id, and
+reverting to the agent's own default when it is cleared. The model picker MUST
+be offered on the **draft** surface as well as in an open
+conversation, because the first turn is the one a user most wants to pitch, and
+by the time the conversation exists that turn is already running. The page
+offers no reasoning-effort control: the agent runs at the effort its own
+configuration names.
+
+A missing Coffer LLM connection MUST NOT block the page: with none configured
+the draft surface still accepts a message and the turn runs on the agent's own
+built-in model and login, because a Coffer connection is an optional override,
+not a prerequisite ([provider-switching](../provider-switching/spec.md), and
+[Provider Connections Projected Into Agent Config](../../../docs/decisions/provider-connections-projected-into-agent-config.md)).
+
+#### Scenario: chat runs on the built-in model when no connection
+- **GIVEN** a running daemon with no Coffer LLM connection configured for the
+  agent,
+- **WHEN** the Conversations page is opened,
+- **THEN** the draft surface is available with no blocking empty state, and a
+  sent turn runs on the agent's own built-in model and login — a Coffer
+  connection is an optional override, not a prerequisite.

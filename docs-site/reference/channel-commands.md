@@ -13,7 +13,7 @@ The table lists the nine words. How each reads, where it works and the cards it 
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
 | `/stop` | Interrupt the running turn and pause the queue. “⏹ Stopping…” is edited into “⏹ Stopped after 12s.” where the platform can edit a message, and followed by a second message where it cannot. A question waiting on you is cancelled and its card reads “⏹ Stopped”. |
-| `/model [name] [level]` | Show or set the model and the reasoning effort. |
+| `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
@@ -65,20 +65,19 @@ A word that is one slip away from a command — `/stpo`, `/stat`, `/threads` —
 
 ## Settings stick to the chat
 
-Each chat, and each thread in it, remembers four settings: the agent, the model, the reasoning effort and the working directory. Every fresh conversation opened there — by `/new`, by `/dir`, or because the old conversation was deleted — starts with them.
+Each chat, and each thread in it, remembers three settings: the agent, the model and the working directory. Every fresh conversation opened there — by `/new`, by `/dir`, or because the old conversation was deleted — starts with them.
 
 This is why `/new` is safe to use often: it clears the context, not your choices. What a chat has not set falls back to its group's defaults (in a group thread), then to the channel's default agent and configuration.
 
-- `/new <agent>` switches the agent and remembers it. A model and effort chosen for the previous agent do not follow it, because one agent's model means nothing to another; the directory does follow.
+- `/new <agent>` switches the agent and remembers it. A model chosen for the previous agent does not follow it, because one agent's model means nothing to another; the directory does follow.
 - An existing conversation cannot change its agent or directory — an agent session is tied to both — so switching either opens a fresh conversation. The old one stays one `/resume` away.
-- The model and effort are re-read on every turn, so `/model` applies to the next turn of the same conversation.
+- The model is re-read on every turn, so `/model` applies to the next turn of the same conversation.
 
-## Model and effort
+## Model
 
 - `/model <name>` sets the model. A name the agent's catalogue does not list is passed to the agent's CLI as is, so you can use a model the picker does not show; a name the agent cannot run comes back as the CLI's own error on the next turn.
-- `/model <level>` sets only the effort. The levels are `minimal`, `low`, `medium`, `high`, `xhigh` and `max`; no model is named after one.
-- `/model <name> <level>` sets both, and `/model default` clears both, returning to the agent's own defaults.
-- Bare `/model` shows the model and effort in effect. On a platform with buttons it is a two-step card: tap a model (“Step 1 of 2”), and when that model has reasoning levels the same card turns into the level choice (“step 2 of 2”). The answer is one line, “Model: Claude Sonnet 5.5 · effort Medium — from your next message”.
+- Whatever word follows `/model` is a model name, `high` or `max` included; the only reserved word is `default`. `/model default` clears the model, returning to the agent's own default. Coffer has no reasoning-effort setting.
+- Bare `/model` shows the model in effect. On a platform with buttons it is a card: tap a model. The answer is one line, “Model: Claude Sonnet 5.5 — from your next message”.
 
 ## Working directory
 
@@ -102,7 +101,7 @@ Only conversations this chat opened are offered — never one from the web page 
 
 ## Status and help cards
 
-`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model, the effort and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
+`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
 
 In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /del · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /del · /help`.
 
@@ -129,7 +128,7 @@ The English descriptions are:
 | --- | --- |
 | `/new` | Start a fresh conversation [agent] |
 | `/stop` | Stop what’s running |
-| `/model` | Pick model, then effort |
+| `/model` | Pick a model |
 | `/dir` | Pick the working directory |
 | `/status` | What is running, threads |
 | `/resume` | Go back to a conversation |

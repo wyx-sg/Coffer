@@ -1,13 +1,13 @@
 """`/new [agent]` — a fresh conversation on the chat's settings (spec channels
 "Answer the conversation commands from any paired chat", "Switch the agent with
-/new" and "Keep a chat's settings across its conversations").
+/new" and "Keep a chat's agent, model and directory across its conversations").
 
-``/new`` keeps the thread's sticky agent, model, effort and directory — the
+``/new`` keeps the thread's sticky agent, model and directory — the
 conversation opener applies them. ``/new <agent>`` switches the agent first,
 named the way a person sees it (display name or resource-style name, see
 ``command_text.resolve_agent``) and only among the agents the channel's scope
 admits (spec channels "Limit the agents a channel may drive to its scope").
-Switching the agent drops the sticky model and effort — a model of one agent
+Switching the agent drops the sticky model — a model of one agent
 is not a model of another — and keeps the directory. The answer is one line —
 agent · model · directory — as a card with Agent, Model and Dir buttons; the
 Agent button opens the agent card, whose tap does what `/new <agent>` does.
@@ -69,9 +69,9 @@ async def apply_agent(ctx: CommandContext, key: str) -> None:
     it — what `/new <agent>` does, shared with the agent card's tap."""
     current = (await ctx.settings()).agent
     changed = key != current
-    # A model/effort of one agent means nothing to another; the directory
+    # A model of one agent means nothing to another; the directory
     # is the agent's workplace and follows regardless.
-    cleared = {"model": None, "effort": None} if changed else {}
+    cleared = {"model": None} if changed else {}
     await ctx.commands._threads.set_preferences(
         ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, agent=key, **cleared
     )

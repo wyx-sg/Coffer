@@ -12,7 +12,7 @@ settings without clobbering them"):
 - ``apiKeyHelper`` — a command Coffer names; the key is fetched on demand,
   never written.
 - ``env.ANTHROPIC_BASE_URL`` — where the agent sends its requests.
-- the top-level ``model`` and ``effortLevel`` — NOT ``env.ANTHROPIC_MODEL``,
+- the top-level ``model`` — NOT ``env.ANTHROPIC_MODEL``,
   which outranks ``model`` and would undo the user's own ``/model`` choice at
   every launch.
 - ``env.ANTHROPIC_DEFAULT_<TIER>_MODEL`` for each pinned tier — the Haiku pin
@@ -139,7 +139,6 @@ def apply_anthropic_settings(
     base_url: str,
     api_key_helper: str,
     model: str | None = None,
-    effort: str | None = None,
     tier_models: Mapping[str, str] | None = None,
     picker_models: Sequence[str] = (),
     replace_builtin_picker: bool = False,
@@ -148,8 +147,8 @@ def apply_anthropic_settings(
 ) -> str:
     """Return new ``settings.json`` text with Coffer's keys.
 
-    ``model`` / ``effort`` ``None`` leave the user's own top-level keys as they
-    are (the agent runs on whatever it was set to); a tier missing from
+    ``model`` ``None`` leaves the user's own top-level key as it
+    is (the agent runs on whatever it was set to); a tier missing from
     ``tier_models`` is unpinned. ``api_key_helper`` is REQUIRED and has no
     default: a caller must name what the helper resolves.
     """
@@ -162,8 +161,6 @@ def apply_anthropic_settings(
     env[_BASE_URL] = base_url
     if model:
         data["model"] = model
-    if effort:
-        data["effortLevel"] = effort
     pins = dict(tier_models or {})
     for tier in CLAUDE_TIERS:
         if pins.get(tier):
@@ -186,9 +183,7 @@ def apply_anthropic_settings(
     return _dump(data)
 
 
-def remove_anthropic_settings(
-    text: str, *, managed_model: str | None = None, managed_effort: str | None = None
-) -> str:
+def remove_anthropic_settings(text: str, *, managed_model: str | None = None) -> str:
     """Inverse of :func:`apply_anthropic_settings` — strip every key Coffer
     wrote so Claude Code falls back to its OWN login ("use built-in").
 
@@ -197,10 +192,9 @@ def remove_anthropic_settings(
     loopback ``NO_PROXY`` tail) go only while that helper was there — with a
     helper the user wrote or none at all they are the user's own and stay;
     ``modelPicker`` only when every option carries :data:`PICKER_MARKER`, and
-    the top-level ``model`` / ``effortLevel`` only while they still hold what
-    Coffer projected (``managed_model`` / ``managed_effort``, the agent's
-    binding): a model or effort the user has since picked with ``/model`` or
-    ``/effort`` is theirs and stays. Unrelated keys are preserved.
+    the top-level ``model`` only while it still holds what Coffer projected
+    (``managed_model``, the agent's binding): a model the user has since picked
+    with ``/model`` is theirs and stays. Unrelated keys are preserved.
     """
     raw = json.loads(text) if text.strip() else {}
     if not isinstance(raw, dict):
@@ -215,8 +209,6 @@ def remove_anthropic_settings(
         data.pop("modelPicker", None)
     if managed_model is not None and data.get("model") == managed_model:
         data.pop("model", None)
-    if managed_effort is not None and data.get("effortLevel") == managed_effort:
-        data.pop("effortLevel", None)
     env = data.get("env")
     if owned and isinstance(env, dict):
         for key in (_BASE_URL, _DISABLE_BETAS, _MAX_CONTEXT):

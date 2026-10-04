@@ -322,15 +322,13 @@ class AgentService:
         *,
         uid: str,
         model: str | None = None,
-        effort: str | None = None,
-        clear_effort: bool = False,
         tier_models: dict[str, str] | None = None,
         clear_tiers: bool = False,
         actor: str = "api",
     ) -> Resource:
         """Persist this agent's per-agent model binding (spec agent-registry
         "Carry the model binding on the agent record"). ``None`` fields are left
-        unchanged; ``clear_effort`` / ``clear_tiers`` explicitly unbind. A
+        unchanged; ``clear_tiers`` explicitly unbinds. A
         ``tier_models`` given replaces the whole mapping — the Model tab sends
         every tier at once, and a partial merge could keep a tier the user
         reset. The new binding reaches the agent's native config through the
@@ -341,10 +339,6 @@ class AgentService:
         overrides: dict[str, object] = {}
         if model is not None:
             overrides["model"] = model
-        if clear_effort:
-            overrides["effort"] = None
-        elif effort is not None:
-            overrides["effort"] = effort
         if clear_tiers:
             overrides["tier_models"] = None
         elif tier_models is not None:

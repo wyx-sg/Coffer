@@ -175,7 +175,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | 文件 | Coffer 写入什么 | 何时写入 |
 | --- | --- | --- |
 | `~/.claude.json`（非默认目录时在配置目录内） | `mcpServers.coffer`：`{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}`，shim 路径为绝对路径。 | 把智能体连接到 Coffer 时。见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)。 |
-| `settings.json` | `apiKeyHelper` 设为 `<absolute path to coffer> proxy token --agent-uid <agent uid>`（例如 `/Users/you/.coffer/bin/coffer …`；只有找不到 CLI 时才用裸的 `coffer`），它会打印该智能体的本地代理令牌；`env.ANTHROPIC_BASE_URL` 设为模型代理的 `http://127.0.0.1:<proxy port>/anthropic`；把 `127.0.0.1,localhost` 追加到 `env.NO_PROXY`；以及模型相关的键（`model`、`effortLevel`、`env.ANTHROPIC_DEFAULT_<TIER>_MODEL`、`modelPicker`）。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。见[模型提供商](/zh/guides/providers)。 |
+| `settings.json` | `apiKeyHelper` 设为 `<absolute path to coffer> proxy token --agent-uid <agent uid>`（例如 `/Users/you/.coffer/bin/coffer …`；只有找不到 CLI 时才用裸的 `coffer`），它会打印该智能体的本地代理令牌；`env.ANTHROPIC_BASE_URL` 设为模型代理的 `http://127.0.0.1:<proxy port>/anthropic`；把 `127.0.0.1,localhost` 追加到 `env.NO_PROXY`；以及模型相关的键（`model`、`env.ANTHROPIC_DEFAULT_<TIER>_MODEL`、`modelPicker`）。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。见[模型提供商](/zh/guides/providers)。 |
 | `settings.json` | 两个 Hook 条目，命令以 `: coffer-memory;` 开头，并以完整路径运行 `coffer` CLI：`coffer memory hook --agent-uid <uid> --cwd "$PWD"`。分别是 `hooks.SessionStart`（matcher `startup\|resume\|clear\|compact`，超时 10 秒）和 `hooks.UserPromptSubmit`（超时 5 秒）。 | 把智能体连接到 Coffer。见[记忆](/zh/guides/memory#install-the-hook)。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接（不支持符号链接时为副本）。 | 向智能体投递技能时。见[技能](/zh/guides/skills)。 |
 

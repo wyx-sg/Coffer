@@ -58,10 +58,7 @@ export type ConversationPatch = Schemas["ConversationPatch"];
 /**
  * A conversation's agent config (managed agents). `model` is the agent's own
  * per-conversation model, free-text and passed through to its CLI (the
- * coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs). `effort`
- * is the reasoning level that model is run at, which the agents that have one
- * carry beside the model rather than inside its name; null for an agent (or a
- * model) that has no such setting. `session_id` is provider-internal and not
+ * coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs). `session_id` is provider-internal and not
  * surfaced.
  */
 export type AgentConfigOut = Schemas["AgentConfigOut"];
@@ -170,14 +167,6 @@ export const chatApi = {
       getApiClient().PATCH("/chat/conversations/{id}/agent-config", {
         ...conv(id),
         body: { model },
-      }),
-    ),
-
-  setAgentEffort: (id: string, effort: string | null): Promise<AgentConfigOut> =>
-    unwrap(
-      getApiClient().PATCH("/chat/conversations/{id}/agent-config", {
-        ...conv(id),
-        body: { effort },
       }),
     ),
 

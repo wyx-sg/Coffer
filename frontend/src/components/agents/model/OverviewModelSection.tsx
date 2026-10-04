@@ -1,6 +1,6 @@
 // src/components/agents/model/OverviewModelSection.tsx — Overview › Model (boards 2.1.08–2.1.12, 2.1.16).
 //
-// Provider · Model · Effort · Route, with a Test beside a route through Coffer's
+// Provider · Default model · Route, with a Test beside a route through Coffer's
 // proxy. "Change…" opens the Change model dialog; `?change-model=1` opens it on
 // arrival (Model providers' "Used by" links there) and is dropped when it
 // closes. With the Models feature off the section is read-only: no Provider
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
-import { useAgentDefaultModel, useAgentModels } from "@/lib/hooks/useAgentModels";
+import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useModelPairTest } from "@/lib/hooks/useModelTest";
@@ -26,10 +26,6 @@ import { ChangeModelDialog } from "./ChangeModelDialog";
 
 const K = "agents.overviewTab.model";
 const PARAM = "change-model";
-
-function capitalize(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
 
 export function OverviewModelSection({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -54,9 +50,6 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
   const onConnection = !!agent.connection_uid && active !== null;
   const nativeModel = useAgentDefaultModel(onConnection ? "" : agent.type).data ?? null;
   const model = agent.model ?? nativeModel;
-  const catalogue = useAgentModels(agent.type).data;
-  const effort =
-    agent.effort ?? (model ? catalogue?.find((m) => m.id === model)?.default_effort : null) ?? null;
   const test = useModelPairTest(active, model ?? "");
 
   return (
@@ -80,7 +73,6 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
         <InfoRow label={t(`${K}.model`)} mono={!!model}>
           {model ?? t(`${K}.auto`)}
         </InfoRow>
-        <InfoRow label={t(`${K}.effort`)}>{effort ? capitalize(effort) : t(`${K}.auto`)}</InfoRow>
         <InfoRow
           label={t(`${K}.route`)}
           trailing={

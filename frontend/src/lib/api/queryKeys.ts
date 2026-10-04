@@ -236,7 +236,7 @@ export const conversationHeadKey = (archived: boolean, q: string, narrow: ListNa
 export const paletteConversationsKey = (q: string) =>
   ["conversations", "lists", "palette", { q }] as const;
 export const conversationKey = (id: string) => ["conversations", id] as const;
-/** A conversation's managed-agent config (model, effort). A CHILD of the
+/** A conversation's managed-agent config (model). A CHILD of the
  *  conversation, so removing `conversationKey(id)` drops it too. */
 export const agentConfigKey = (conversationId: string) =>
   ["conversations", conversationId, "agentConfig"] as const;

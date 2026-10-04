@@ -238,7 +238,7 @@ class ChannelCommands:
         ``chat_kind``/``thread_id`` route the confirmation back into a group tap's
         own group/thread, not a DM (see "Route group selection-card taps back to
         the group"). ``card_message_id`` is the card that was tapped: the message
-        a page turn, a refresh or the model card's effort step rewrites."""
+        a page turn or a refresh rewrites."""
         ctx = CommandContext(
             commands=self,
             binding=binding,

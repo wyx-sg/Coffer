@@ -1,14 +1,12 @@
 // src/components/agents/model/ModelFormFields.tsx — the fields of the Change model dialog (boards 2.1.16, 2.1.17, 2.1.19, 2.1.65).
 //
 // Which fields show follows the agent and the provider: the built-in login is a
-// provider and one line (it sets no model, effort or tiers); a provider adds
-// Model, Effort (only the levels the chosen model reports) and, for Claude Code, Model per
-// tier. Codex has one model per session, so no tiers.
+// provider and one line (it sets no model or tiers); a provider adds
+// Model and, for Claude Code, Model per tier. Codex has one model per session, so no tiers.
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { Label } from "@/components/ui/label";
-import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -23,8 +21,6 @@ import { displayName } from "@/lib/resourceTitle";
 
 const K = "agents.changeModel";
 const HINT = "text-xs text-text-subtle";
-const DEFAULT_LEVEL = "__default__";
-const KNOWN_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
 function Field({
   label,
@@ -124,46 +120,10 @@ export function ModelFormFields({
             </Select>
           </Field>
 
-          <EffortField agentType={agentType} draft={c} />
-
           {c.showTiers ? <TierFields draft={c} /> : null}
         </>
       )}
     </>
-  );
-}
-
-function EffortField({ agentType, draft: c }: { agentType: AgentType; draft: ConnectionDraft }) {
-  const { t } = useTranslation();
-  const label = t(`${K}.effort.label`);
-  if (c.effortLevels.length === 0) {
-    return (
-      <Field label={label}>
-        <span className="text-sm text-text-muted">
-          — {t(c.draftModel ? `${K}.effort.none` : `${K}.effort.choose`)}
-        </span>
-      </Field>
-    );
-  }
-  const options = [DEFAULT_LEVEL, ...c.effortLevels].map((level) => ({
-    value: level,
-    label:
-      level === DEFAULT_LEVEL
-        ? t(`${K}.effort.default`)
-        : KNOWN_LEVELS.includes(level)
-          ? t(`${K}.effort.levels.${level}`)
-          : level,
-  }));
-  return (
-    <Field label={label}>
-      <Segmented
-        label={label}
-        value={c.draftEffort ?? DEFAULT_LEVEL}
-        options={options}
-        onChange={(v) => c.pickEffort(v === DEFAULT_LEVEL ? null : v)}
-      />
-      <span className={HINT}>{t(`${K}.effort.hint.${agentType}`)}</span>
-    </Field>
   );
 }
 

@@ -1,5 +1,5 @@
 """Per-channel agent routing from chat (spec channels "Switch the agent with /new"
-and "Keep a chat's settings across its conversations")."""
+and "Keep a chat's agent, model and directory across its conversations")."""
 
 from __future__ import annotations
 
@@ -68,18 +68,14 @@ async def test_switching_the_agent_drops_the_model_but_keeps_the_directory(
 ) -> None:
     env.add_agent("codex")
     resource, _adapter = await env.paired_channel()
-    await env.processor.on_message(inbound("tg", "owner", "/model opus high"))
+    await env.processor.on_message(inbound("tg", "owner", "/model opus"))
     await env.threads.set_preferences(resource.uid, "owner", "", cwd="/src/app")
 
     await env.processor.on_message(inbound("tg", "owner", "/new codex"))
 
     row = await env.threads.get(resource.uid, "owner", "")
     assert row is not None
-    assert (row.preferred_agent, row.preferred_model, row.preferred_effort) == (
-        "codex",
-        None,
-        None,
-    )
+    assert (row.preferred_agent, row.preferred_model) == ("codex", None)
     assert row.preferred_cwd == "/src/app"
 
 

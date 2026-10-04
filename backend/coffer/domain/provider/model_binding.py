@@ -1,7 +1,7 @@
 """What a projection is built from besides the connection: the agent's model
 binding and the curated models' recorded facts (spec provider-switching "Take
-projected model keys from the agent's binding", "Record a context window and
-effort levels with each curated model"). Pure values."""
+projected model keys from the agent's binding", "Record a context window with
+each curated model"). Pure values."""
 
 from __future__ import annotations
 
@@ -15,10 +15,9 @@ AUTO_COMPACT_SHARE = 0.9
 
 @dataclass(frozen=True)
 class ModelBinding:
-    """The agent's own choice: model, effort and (Claude Code) the tier pins."""
+    """The agent's own choice: model and (Claude Code) the tier pins."""
 
     model: str | None = None
-    effort: str | None = None
     tier_models: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -28,8 +27,6 @@ class ProjectedModel:
 
     id: str
     context_window: int | None = None
-    effort_levels: tuple[str, ...] = ()
-    default_effort: str | None = None
 
     @property
     def auto_compact_limit(self) -> int | None:

@@ -38,7 +38,6 @@ def _switch(body: ModelSwitchIn) -> model_switch.ModelSwitch:
         agent_type=body.agent_type,
         connection_uid=body.connection_uid,
         model=body.model,
-        effort=body.effort,
         tier_models=body.tier_models,
     )
 

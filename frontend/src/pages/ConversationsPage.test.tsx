@@ -74,8 +74,6 @@ vi.mock("@/lib/hooks/useAgentModels", () => ({
         id: "claude-opus-4-8",
         label: "",
         description: "",
-        efforts: [],
-        default_effort: null,
       },
     ],
   }),

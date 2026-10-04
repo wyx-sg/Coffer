@@ -60,9 +60,8 @@ class ChannelThreadConversationModel(Base):
     parallel_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     # "direct" / "group": which send path reaches the thread.
     chat_kind: Mapped[str | None] = mapped_column(String, nullable=True)
-    # The thread's sticky model, effort and working directory.
+    # The thread's sticky model and working directory.
     preferred_model: Mapped[str | None] = mapped_column(String, nullable=True)
-    preferred_effort: Mapped[str | None] = mapped_column(String, nullable=True)
     preferred_cwd: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -112,7 +111,6 @@ def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConve
         parallel_title=row.parallel_title,
         chat_kind=row.chat_kind,
         preferred_model=row.preferred_model,
-        preferred_effort=row.preferred_effort,
         preferred_cwd=row.preferred_cwd,
     )
 
@@ -157,13 +155,11 @@ class ChannelThreadConversationRepo:
         *,
         agent: str | None = KEEP,
         model: str | None = KEEP,
-        effort: str | None = KEEP,
         cwd: str | None = KEEP,
     ) -> None:
         fields = {
             "preferred_agent": agent,
             "preferred_model": model,
-            "preferred_effort": effort,
             "preferred_cwd": cwd,
         }
         await self._upsert(

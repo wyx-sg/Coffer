@@ -259,3 +259,22 @@ def test_ollama_may_curate_models() -> None:
         models=[{"id": "qwen3:8b"}],
     )
     assert c.model_ids() == ["qwen3:8b"]
+
+
+def test_a_curated_model_drops_the_retired_effort_keys() -> None:
+    # Migration for the removal of reasoning effort: a stored entry may still
+    # carry the keys, and the file loses them on its next write.
+    c = ProviderConfig.model_validate(
+        {
+            "protocol": "openai",
+            "base_url": "https://x",
+            "secret_ref": "provider/acme/key",
+            "models": [
+                {"id": "m-1", "effort_levels": ["low", "high"], "default_effort": "low"},
+            ],
+        }
+    )
+    [model] = c.models
+    assert model.id == "m-1"
+    assert "effort_levels" not in model.model_dump()
+    assert "default_effort" not in model.model_dump()

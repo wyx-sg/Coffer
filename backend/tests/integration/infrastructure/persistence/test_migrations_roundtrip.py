@@ -32,7 +32,7 @@ from alembic.script import ScriptDirectory
 BASELINE_REVISION = "0146"
 #: The newest revision in the tree. Equal to the baseline until a revision is
 #: stacked on it; bump it with each new revision.
-HEAD_REVISION = "0146"
+HEAD_REVISION = "0147"
 
 _ALEMBIC_INI = (
     pathlib.Path(__file__).resolve().parents[4]
@@ -132,3 +132,32 @@ def test_migration_roundtrip_is_reversible_and_idempotent(tmp_path, monkeypatch)
     command.upgrade(cfg, "head")
     assert _schema(db_path) == at_head
     assert _alembic_version(db_path) == HEAD_REVISION
+
+
+def test_0147_drops_the_effort_column_and_the_stored_effort_key(tmp_path, monkeypatch):
+    db_path = tmp_path / "effort.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0146")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO conversations (id, agent_key, title, created_at, updated_at, agent_config)"
+            " VALUES ('c1', 'claude_code', 't', '2026-10-05 00:00:00', '2026-10-05 00:00:00',"
+            ' \'{"cwd": "/tmp", "model": "opus", "effort": "high"}\')'
+        )
+        conn.execute(
+            "INSERT INTO conversations (id, agent_key, title, created_at, updated_at)"
+            " VALUES ('c2', 'claude_code', 't', '2026-10-05 00:00:00', '2026-10-05 00:00:00')"
+        )
+
+    command.upgrade(cfg, "head")
+
+    with sqlite3.connect(db_path) as conn:
+        columns = [r[1] for r in conn.execute("PRAGMA table_info(channel_thread_conversations)")]
+        assert "preferred_effort" not in columns
+        stored = conn.execute("SELECT agent_config FROM conversations WHERE id='c1'").fetchone()[0]
+        assert json.loads(stored) == {"cwd": "/tmp", "model": "opus"}
+        assert (
+            conn.execute("SELECT agent_config FROM conversations WHERE id='c2'").fetchone()[0]
+            is None
+        )

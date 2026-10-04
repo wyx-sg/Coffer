@@ -1770,8 +1770,8 @@ components:
       description: |-
         What the agent page's Change model dialog asks for.
 
-        ``connection_uid`` ``null`` is the agent's own built-in login: no model,
-        effort or tiers are written, and Coffer removes only the keys it wrote.
+        ``connection_uid`` ``null`` is the agent's own built-in login: no model
+        or tiers are written, and Coffer removes only the keys it wrote.
         ``seen`` is sent only to apply: each previewed file's path with the
         fingerprint the preview read, so a file edited since is refused.
       properties:
@@ -1782,11 +1782,6 @@ components:
           - type: string
           - type: 'null'
           title: Connection Uid
-        effort:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Effort
         model:
           anyOf:
           - type: string
@@ -2045,18 +2040,6 @@ components:
             type: integer
           - type: 'null'
           title: Context Window
-        default_effort:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Default Effort
-        effort_levels:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-          title: Effort Levels
         id:
           maxLength: 200
           minLength: 1

@@ -36,13 +36,12 @@ def test_codex_preview_lists_both_files_and_writes_nothing(tmp_path, monkeypatch
         _register_agent(c, agent_type="codex", config_dir=cx_dir)
         openai = _new(
             c,
-            _openai_body(models=[{"id": "gpt-x", "effort_levels": ["low", "high"]}]),
+            _openai_body(models=[{"id": "gpt-x"}]),
         )
         body = {
             "agent_type": "codex",
             "connection_uid": openai,
             "model": "gpt-x",
-            "effort": "high",
         }
         out = c.post(PREVIEW, json=body)
         assert out.status_code == 200, out.text
@@ -62,7 +61,7 @@ def test_codex_preview_lists_both_files_and_writes_nothing(tmp_path, monkeypatch
         applied = c.post(APPLY, json=body | {"seen": seen})
         assert applied.status_code == 200, applied.text
     doc = tomllib.loads((cx_dir / "config.toml").read_text())
-    assert doc["model"] == "gpt-x" and doc["model_reasoning_effort"] == "high"
+    assert doc["model"] == "gpt-x" and "model_reasoning_effort" not in doc
     assert (cx_dir / "coffer-model-catalog.json").exists()
 
 
@@ -148,7 +147,6 @@ def test_a_claude_code_preview_writes_nothing_and_refuses_an_unreached_connectio
             "agent_type": "claude_code",
             "connection_uid": anthropic,
             "model": "kimi-k3",
-            "effort": "high",
             "tier_models": _TIERS,
         }
         agent_before = c.get(f"/api/v1/agents/{uid}").json()

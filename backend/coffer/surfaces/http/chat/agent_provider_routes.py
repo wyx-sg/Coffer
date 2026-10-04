@@ -47,11 +47,6 @@ class AgentModelOut(BaseModel):
     id: str
     label: str
     description: str = ""
-    #: The reasoning-effort levels this model runs at, in the agent's own order;
-    #: empty for an agent that takes no such setting.
-    efforts: list[str] = []
-    #: The level the agent itself would use when none is chosen.
-    default_effort: str | None = None
 
 
 class AgentModelsOut(BaseModel):
@@ -107,10 +102,7 @@ async def list_agent_models(
 
     On the agent's own built-in login this is whatever the agent itself reports:
     Claude Code's tier aliases, each labelled with the model it resolves to
-    today; Codex's versioned ids, each carrying the reasoning-effort levels it
-    can run at. An effort is not part of a model NAME — Codex takes it as its
-    own field on a turn — so it rides beside the id instead of multiplying the
-    list.
+    today; Codex's versioned ids.
 
     With a Coffer connection ACTIVE for this agent, its curated ids are the list
     instead, in the user's own order: the turns go to that endpoint and not to
@@ -118,10 +110,7 @@ async def list_agent_models(
     offer ids the endpoint rejects. A connection that curates nothing falls back
     to the agent's catalogue — Coffer knows where the turns go, not what that
     endpoint serves, and this read never asks over the network (spec
-    provider-switching "Serve one model list to every surface"). Reasoning
-    levels survive the narrowing, because
-    a level is a setting on the agent's own runtime rather than the endpoint's
-    to answer.
+    provider-switching "Serve one model list to every surface").
 
     This is the same answer a channel's ``/model`` card gets, from the same
     function. It did not use to be: this route served the agent's whole
@@ -139,8 +128,6 @@ async def list_agent_models(
                 id=m.id,
                 label=m.label,
                 description=m.description,
-                efforts=list(m.efforts),
-                default_effort=m.default_effort,
             )
             for m in models
         ],

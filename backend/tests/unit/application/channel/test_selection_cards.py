@@ -1,5 +1,5 @@
 """The selection cards' pure rendering rules (spec channels "Switch the model
-and reasoning effort from chat", "Offer choices and actions as owner-gated
+from chat", "Offer choices and actions as owner-gated
 cards").
 
 The model card is built from the agent's whole model catalogue — 29 entries for
@@ -23,7 +23,6 @@ from coffer.application.channel.selection_cards import (
     PAGE_SIZE,
     SelectionCard,
     dir_card,
-    effort_card,
     is_page_turn,
     model_card,
     parse_page_turn,
@@ -133,7 +132,7 @@ class TestPaging:
         # (Angle brackets are safe on SeaTalk; live-probed.)
         card = model_card(current=None, picks=[f"m{i}" for i in range(29)])
 
-        assert "/model <name> <level>" in card.text
+        assert "/model <name>" in card.text
 
     def test_the_resume_card_pages_by_the_same_rule(self):
         # Pagination is not a model special case: the rule lives in one place.
@@ -219,19 +218,6 @@ def test_a_model_set_by_name_that_is_not_in_the_catalogue_gets_no_false_locator(
     assert card.pages > 1
     assert "Current: sonnet" in card.text
     assert "is on page" not in card.text
-
-
-class TestTheEffortStep:
-    def test_the_levels_are_the_whole_card(self):
-        card = effort_card(current="high", levels=["low", "high"], model="Opus")
-
-        assert _values(card) == ["effort:low", "effort:high"]
-        assert "Opus · step 2 of 2 — tap an effort level:" in card.text
-
-    def test_nothing_is_ticked_when_nothing_is_pinned(self):
-        card = effort_card(current=None, levels=["low"])
-
-        assert [b for b in card.buttons if b.selected] == []
 
 
 class TestTheCommandCard:

@@ -15,11 +15,7 @@
 // be preserved.
 //
 // One question, one answer: "what can this agent be put on". Nothing narrows
-// it, so there is no per-agent selection endpoint to call here. An entry also
-// carries its reasoning-effort levels beside its id, because an effort is a
-// setting ON a model rather than part of its name, and only the agent knows
-// which of its models take one.
-//
+// it, so there is no per-agent selection endpoint to call here.//
 // The wire types are aliases of the agent-registry contract's schemas.
 // Transport via the typed client (.agents/frontend.md §4).
 

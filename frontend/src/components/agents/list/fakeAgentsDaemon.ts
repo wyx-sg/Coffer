@@ -128,7 +128,7 @@ export function fakeCallFor(d: FakeDaemon) {
     if (catalogue) {
       const ids = d.catalogue[decodeURIComponent(catalogue[1])] ?? [];
       return {
-        models: ids.map((id) => ({ id, name: id, efforts: [] })),
+        models: ids.map((id) => ({ id, name: id })),
         default_model: d.nativeDefaults[decodeURIComponent(catalogue[1])] ?? null,
       };
     }

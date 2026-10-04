@@ -5,7 +5,7 @@ description: Talk to Claude Code or Codex from Coffer's web Conversations page, 
 
 # Conversations
 
-The **Conversations** page (formerly Chat) is where you talk to a managed agent — Claude Code or Codex — from Coffer's web UI. This guide covers starting a conversation, choosing the model and reasoning effort, what a turn looks like while it streams, stopping and queueing, and how the page relates to the agent's own sessions and to your [channels](/guides/channels).
+The **Conversations** page (formerly Chat) is where you talk to a managed agent — Claude Code or Codex — from Coffer's web UI. This guide covers starting a conversation, choosing the model, what a turn looks like while it streams, stopping and queueing, and how the page relates to the agent's own sessions and to your [channels](/guides/channels).
 
 ## What Conversations is for
 
@@ -31,7 +31,7 @@ If no managed agent is available, a new conversation shows **No agent connected*
 
 1. Open **Conversations** in the sidebar (under **Run**). The page opens on the list of conversations; there is no welcome or suggestions page.
 2. Choose **New conversation** beside the page title. The draft opens at `/conversations/new`: **New conversation** in the title bar and one line in the middle saying which agent will run in which folder.
-3. Pick what you need in the reply box's toolbar: the folder beside the paperclip (see [Working directory](#working-directory)), and on the right the **agent** (only agents that are installed, and connected on the Agents page are offered), the model and the reasoning effort.
+3. Pick what you need in the reply box's toolbar: the folder beside the paperclip (see [Working directory](#working-directory)), and on the right the **agent** (only agents that are installed, and connected on the Agents page are offered), and the model.
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
 
 A conversation can also start from **Ask an agent** elsewhere in the app — on a command the [CLIs](/guides/clis) page says is missing, for example. The same draft opens, and its message box already holds the prompt Coffer wrote for that job, with a line under the box saying **Nothing is sent until you press Send**. Read it, edit it if you like, and press **Enter**.
@@ -50,19 +50,16 @@ A conversation's agent and working directory are fixed when it is created, becau
 The agent runs with full permissions, so it can read and write outside its working directory too; the working directory is where it starts and where its session lives.
 :::
 
-## Choose the model and reasoning effort
+## Choose the model
 
-Two controls sit beside the agent on the right of the reply box's toolbar, both on the draft and in an open conversation (the effort reads like **High effort**). A new conversation starts from the agent's own settings (its **Model** tab), and you switch them here.
+The model control sits beside the agent on the right of the reply box's toolbar, both on the draft and in an open conversation. A new conversation starts from the agent's own settings (its **Model** tab), and you switch it here. Coffer has no reasoning-effort control: the agent runs at the effort its own configuration names.
 
-| Control | Label | What it offers |
-| --- | --- | --- |
-| Model | **Agent model** | **Default** first, then the models the platform offers for this agent, then the conversation's current value if it is not already listed. |
-| Reasoning effort | **Reasoning effort** | **Agent default**, then the levels the chosen model reports. The control is hidden for a model that reports no levels. |
+The **Agent model** picker offers **Default** first, then the models the platform offers for this agent, then the conversation's current value if it is not already listed.
 
 The model list is the agent's own catalogue, read from the installed CLI. If the agent runs on a [model provider](/guides/providers), the list is that provider's curated text models instead. The picker is a fixed dropdown and accepts no free text.
 
 - **Default** clears the model, so the agent runs whatever its own configuration says.
-- A change applies from the next turn. Model and effort are re-read every turn; the agent and working directory are not.
+- A change applies from the next turn. The model is re-read every turn; the agent and working directory are not.
 - Every turn carries a short note telling the agent which model Coffer put it on, so asking the agent "which model are you?" gives the right answer.
 
 Once a conversation exists, its agent is shown by its mark and name, as plain text, and cannot be changed. To talk to a different agent, start a new conversation.
@@ -207,7 +204,7 @@ Opening a conversation puts the list beside it, with the same filters and a **Se
 | **Restore** | Returns an archived conversation to the active list. |
 | **Delete…** | Asks first (**Delete “title”?**), then removes Coffer's copy of the conversation and its messages and cancels a turn running in it. The agent's own session files are left alone; archive a conversation to keep it. |
 
-An archived conversation opens read-only: its history reads normally, the composer and the model and effort controls are disabled, and **Restore to continue** is offered in their place.
+An archived conversation opens read-only: its history reads normally, the composer and the model control are disabled, and **Restore to continue** is offered in their place.
 
 ### Retention
 

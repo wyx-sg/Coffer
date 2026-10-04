@@ -178,7 +178,6 @@ already running".
 | `parallel_title`         | TEXT NULL                                    | that thread's title; its mark `🧵#N title` is built from the two                                              |
 | `chat_kind`              | TEXT NULL                                    | `direct` / `group` — which send path reaches the thread; NULL until a message there records it                |
 | `preferred_model`        | TEXT NULL                                    | the thread's sticky model (`/model`); rides only while the sticky agent is the one in effect                  |
-| `preferred_effort`       | TEXT NULL                                    | the thread's sticky reasoning effort                                                                         |
 | `preferred_cwd`          | TEXT NULL                                    | the thread's sticky working directory (`/dir`), one of the channel's `directories` or beneath one             |
 
 Constraints: `UNIQUE (resource_uid, chat_id, thread_id)`; index on `resource_uid`.
@@ -205,8 +204,8 @@ nullable too.
 
 A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
 group's defaults from its main chat"): a group thread with no setting of its own
-opens with the group row's, except that a model and effort chosen for another
-agent are not inherited.
+opens with the group row's, except that a model chosen for another
+agent is not inherited.
 
 ### `channel_thread_history`
 

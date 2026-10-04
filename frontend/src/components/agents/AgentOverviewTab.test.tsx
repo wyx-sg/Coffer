@@ -32,7 +32,6 @@ const AGENT: AgentOut = {
   config_dir: `${HOME}/.claude`,
   display_name: "Claude Code",
   model: "claude-opus-5-5",
-  effort: "high",
   tier_models: null,
   version: "2.1.281",
   install_handoff: null,
@@ -287,11 +286,11 @@ describe("AgentOverviewTab — tiles, model, details", () => {
     },
   );
 
-  test("the Model section reads provider, model, effort and route, and Change… opens the dialog", async () => {
+  test("the Model section reads provider, model and route, and Change… opens the dialog", async () => {
     renderTab();
     expect(await screen.findByText("Built-in login (Anthropic account)")).toBeInTheDocument();
     expect(screen.getByText("claude-opus-5-5")).toBeInTheDocument();
-    expect(screen.getByText("High")).toBeInTheDocument();
+    expect(screen.queryByText("Effort")).toBeNull();
     expect(screen.getByText("Straight to Anthropic, not through Coffer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Change…" }));
     expect(await screen.findByText("Change Claude Code’s model")).toBeInTheDocument();
@@ -305,9 +304,8 @@ describe("AgentOverviewTab — tiles, model, details", () => {
       try {
         renderTab();
         expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument();
-        // The model and effort stay; the provider line, the link to the Model
+        // The model stays; the provider line, the link to the Model
         // tab and any notice about the switched-off feature do not.
-        expect(screen.getByText("High")).toBeInTheDocument();
         expect(screen.queryByText("Provider")).toBeNull();
         expect(screen.queryByText(/Built-in login/)).toBeNull();
         expect(screen.queryByRole("button", { name: "Change…" })).toBeNull();
@@ -318,9 +316,9 @@ describe("AgentOverviewTab — tiles, model, details", () => {
     },
   );
 
-  test("a null effort reads Built-in default", async () => {
-    renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
-    expect(await screen.findByText("Effort")).toBeInTheDocument();
+  test("a null model reads Built-in default", async () => {
+    renderTab({ agent: { type: "codex", model: null }, typeRow: { type: "codex" } });
+    expect(await screen.findByText("Default model")).toBeInTheDocument();
     expect(screen.getAllByText("Built-in default").length).toBeGreaterThan(0);
   });
 

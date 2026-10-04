@@ -1,7 +1,7 @@
 # Agent Registry — Claude Code
 
 ## Purpose
-This child of [`agent-registry`](../spec.md) says how the `claude_code` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write, the shape of the MCP entry Coffer installs, where its plugin inventory and enabled state live, how its model catalogue and reasoning levels are read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.claude/`, its allowlist, its injection spec, a `PluginCapability` whose uninstall strategy is CLI delegation, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
+This child of [`agent-registry`](../spec.md) says how the `claude_code` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write, the shape of the MCP entry Coffer installs, where its plugin inventory and enabled state live, how its model catalogue is read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.claude/`, its allowlist, its injection spec, a `PluginCapability` whose uninstall strategy is CLI delegation, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
 
 "Claude Code" is the product: its CLI and its IDE/desktop form together, because they read one shared config directory. The separate **Claude Desktop** chat app has its own config directory and is not this type. Claude Code keeps its plugin inventory in files it owns and its enabled state in a file the user owns; Coffer reads the first, writes only the second, and hands an uninstall to Claude Code's own CLI. `.claude.json` sits beside the default config directory (`~/.claude.json`) and inside a custom one (`<config_dir>/.claude.json`, where Claude Code keeps it when run with `CLAUDE_CONFIG_DIR`); only its `mcpServers` map is a write target, and the rest of that file is the agent's own state, read where needed and never written.
 
@@ -125,15 +125,6 @@ The native-config source of [agent-registry](../spec.md) "Contribute models from
 - **WHEN** the native-config source is read for that directory
 - **THEN** the options returned are the ones in `<config_dir>/.claude.json`
 - **AND** none of `~/.claude.json`'s options are returned
-
-### Requirement: Read effort levels from the installed Claude Agent SDK
-The runtime source of [agent-registry](../spec.md) "Read reasoning-effort levels from the agent runtime" for this type MUST be the installed Claude Agent SDK's own `EffortLevel` alias, read once and applied to every catalogue entry — the levels are a property of the runtime, not of a model, and `ClaudeAgentOptions.effort` renders as the CLI's own effort flag. An SDK that declares none — or an environment without the SDK installed alongside the daemon — yields an empty tuple and the controls hide themselves. No default level MAY be reported ([agent-registry](../spec.md) "Report no default effort the runtime does not publish"): `ClaudeAgentOptions.effort` defaults to `None`, meaning "whatever the CLI decides", and the CLI does not say what that is.
-
-#### Scenario: apply the SDK's effort levels to every alias without a default
-- **GIVEN** the installed Claude Agent SDK declares its `EffortLevel` levels
-- **WHEN** the Claude Code catalogue is read
-- **THEN** every entry carries exactly those levels
-- **AND** no entry reports a `default_effort`
 
 ### Requirement: Scan Claude Code's per-project memory stores
 The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own native memory stores read-only" for this type MUST be per project at `<config_dir>/projects/<slug>/memory/` — one row per project that has a `memory/` directory. The `project` label and `path` MUST be the REAL project directory, recovered from that project's session-transcript `cwd`; the slug encoding is lossy (`/`, `.` and `_` all collapse to `-`), so decoding the slug is a last-resort fallback — used, for example, when a project's transcripts are gone but its memory directory remains — and never the preferred source.

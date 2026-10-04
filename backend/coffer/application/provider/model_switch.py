@@ -1,7 +1,7 @@
 """Review, then apply, a change of one agent's model (spec provider-switching).
 
 The agent page's "Change model" dialog asks for a connection (or the built-in
-login), a model, an effort level and Claude Code's tier pins. Nothing is written
+login), a model and Claude Code's tier pins. Nothing is written
 until the user has seen the files that change: :func:`preview` computes them without
 touching disk and hands back, per file, what it holds now and what it would hold, with a
 fingerprint of what was read. :func:`apply` refuses (``ConfigFileStale``, a 409)
@@ -45,8 +45,6 @@ class BindingWriter(Protocol):
         *,
         uid: str,
         model: str | None = None,
-        effort: str | None = None,
-        clear_effort: bool = False,
         tier_models: dict[str, str] | None = None,
         clear_tiers: bool = False,
         actor: str = "api",
@@ -56,12 +54,11 @@ class BindingWriter(Protocol):
 @dataclass(frozen=True)
 class ModelSwitch:
     """What the dialog asks for. ``connection_uid`` ``None`` is the agent's own
-    built-in login, which carries no model, effort or tiers."""
+    built-in login, which carries no model or tiers."""
 
     agent_type: AgentType
     connection_uid: str | None = None
     model: str | None = None
-    effort: str | None = None
     tier_models: Mapping[str, str] | None = None
 
 
@@ -79,7 +76,6 @@ def _with_binding(agent: Resource, switch: ModelSwitch) -> Resource:
     cfg = AgentConfig.model_validate(agent.config)
     overrides: dict[str, object] = {
         "model": switch.model,
-        "effort": switch.effort,
         "tier_models": dict(switch.tier_models) if switch.tier_models else None,
     }
     new = AgentConfig.model_validate(cfg.model_dump() | overrides)
@@ -155,8 +151,6 @@ async def _activate(
     await agents.set_model_binding(
         uid=agent.uid,
         model=switch.model,
-        effort=switch.effort,
-        clear_effort=switch.effort is None,
         tier_models=dict(switch.tier_models) if switch.tier_models else None,
         clear_tiers=not switch.tier_models,
         actor=actor,
@@ -167,8 +161,6 @@ async def _activate(
         await agents.set_model_binding(
             uid=agent.uid,
             model=before.model,
-            effort=before.effort,
-            clear_effort=before.effort is None,
             tier_models=before.tier_models,
             clear_tiers=not before.tier_models,
             actor=actor,

@@ -31,7 +31,7 @@ async def test_status_shows_names_not_ids_with_action_buttons(env: ChannelEnv, t
     )
     resource, adapter = await _card_channel(env)
     await env.processor.on_message(inbound("tg", "owner", "/new claude-code"))
-    await env.processor.on_message(inbound("tg", "owner", "/model claude-opus-4-8 high"))
+    await env.processor.on_message(inbound("tg", "owner", "/model claude-opus-4-8"))
     conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
     await env.chat.rename_conversation(conversation_id, new_title="deploy check")
@@ -42,7 +42,7 @@ async def test_status_shows_names_not_ids_with_action_buttons(env: ChannelEnv, t
     assert adapter.card_titles[-1] == "Status"
     assert text.splitlines() == [
         "deploy check",
-        "Claude_Code · Opus 4.8 · High · Default directory",
+        "Claude_Code · Opus 4.8 · Default directory",
         "Idle",
     ]
     assert conversation_id not in text

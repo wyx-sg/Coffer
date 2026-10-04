@@ -196,16 +196,9 @@ async def test_an_unregistered_agent_is_still_offered_what_its_cli_reports() -> 
     assert await svc.suggest("claude_code") == [m.id for m in _THREE]
 
 
-# --- the reasoning levels beside the id ---------------------------------------
-#
-# The id answers "which model"; the levels answer "how hard does it think". The
-# two travel together everywhere, and the second is the half that used to get
-# dropped on the way to a picker.
+# --- an active connection narrows the ids ------------------------------------
 
-_WITH_LEVELS = [
-    AgentModel("gpt-5-codex", efforts=("low", "medium", "high", "xhigh")),
-    AgentModel("gpt-5", efforts=("low", "high")),
-]
+_KNOWN = [AgentModel("gpt-5-codex", label="GPT-5 Codex"), AgentModel("gpt-5", label="GPT-5")]
 
 
 class _FakeConnection:
@@ -218,54 +211,20 @@ class _FakeConnection:
         return None if self._ids is None else list(self._ids)
 
 
-async def test_the_levels_come_from_the_chosen_models_own_entry() -> None:
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents([]), discovery=_FakeDiscovery(list(_WITH_LEVELS))
-    )
-
-    assert await svc.efforts("codex", "gpt-5") == ["low", "high"]
-
-
-async def test_with_no_model_pinned_the_head_of_the_catalogue_stands_in() -> None:
-    """The agent then runs a default it never names to us, and the head of its
-    own order is what it reaches for — the same rule the web picker applies."""
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents([]), discovery=_FakeDiscovery(list(_WITH_LEVELS))
-    )
-
-    assert await svc.efforts("codex", None) == ["low", "medium", "high", "xhigh"]
-
-
-async def test_a_model_the_agent_never_reported_has_no_levels() -> None:
-    """Typed by name, newer than the installed catalogue, or an endpoint's own
-    id — nothing is invented for it, so the surface offers no control."""
-    svc = AgentModelCatalogueService(
-        agents=_FakeAgents([]), discovery=_FakeDiscovery(list(_WITH_LEVELS))
-    )
-
-    assert await svc.efforts("codex", "gpt-9-unreleased") == []
-
-
-async def test_an_active_connection_keeps_the_levels_of_ids_the_agent_knows() -> None:
-    """The ids are the connection's, but the LEVEL is a setting on the agent's
-    own runtime — the turn still goes through it — so an id the agent also
-    reports keeps its menu instead of silently emptying the picker."""
+async def test_an_active_connection_offers_its_own_ids_unlabelled() -> None:
+    """The ids are the connection's, and the id is the user's own text: only the
+    endpoint could describe it, so no label rides along."""
     svc = AgentModelCatalogueService(
         agents=_FakeAgents([]),
-        discovery=_FakeDiscovery(list(_WITH_LEVELS)),
+        discovery=_FakeDiscovery(list(_KNOWN)),
         provider_models=_FakeConnection(["gpt-5", "some-endpoint-only-id"]),
     )
 
     offered = await svc.offered("codex")
 
     assert [m.id for m in offered] == ["gpt-5", "some-endpoint-only-id"]
-    assert offered[0].efforts == ("low", "high")
-    # The endpoint's own id is still described by nobody — no label, no levels.
-    assert offered[1] == AgentModel(id="some-endpoint-only-id")
-    # And the label of the known one is not the agent's either: the id is the
-    # user's own text and only the endpoint could describe it.
     assert offered[0].label == ""
-    assert await svc.efforts("codex", "gpt-5") == ["low", "high"]
+    assert offered[1] == AgentModel(id="some-endpoint-only-id")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a model card button shows the model's name")

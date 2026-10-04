@@ -24,7 +24,6 @@ from dataclasses import dataclass
 __all__ = [
     "COMMAND_ROSTER",
     "DM_ONLY_NOTICE",
-    "EFFORT_LEVELS",
     "HIDDEN_ALIASES",
     "ChannelCommand",
     "command_name",
@@ -73,9 +72,9 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
     ChannelCommand("stop", "", "Stop what\u2019s running", "停止正在运行的任务"),
     ChannelCommand(
         "model",
-        "[name] [level]",
-        "Pick model, then effort",
-        "先选模型、再选推理强度",
+        "[name]",
+        "Pick a model",
+        "选择模型",
         dm_only=True,
     ),
     ChannelCommand(
@@ -124,10 +123,6 @@ DM_ONLY_NOTICE = "This command works in a private chat with me. / 此命令请�
 #: Typed forms that run a roster command but are never listed: ``/start`` is
 #: what Telegram's start button and pairing link send.
 HIDDEN_ALIASES: dict[str, str] = {"start": "help"}
-
-#: The closed vocabulary ``/model <level>`` recognises as an effort level rather
-#: than a model name — no model id either agent ships is one of these words.
-EFFORT_LEVELS: frozenset[str] = frozenset({"minimal", "low", "medium", "high", "xhigh", "max"})
 
 _HEAD = re.compile(r"^/([A-Za-z0-9_]+)$")
 

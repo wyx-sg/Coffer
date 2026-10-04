@@ -22,7 +22,6 @@ const AGENT: AgentOut = {
   config_dir: "/Users/me/.claude",
   display_name: "Claude Code",
   model: "m1",
-  effort: null,
   tier_models: { opus: "m1", sonnet: "m1", haiku: "m1" },
   version: null,
   install_handoff: null,
@@ -45,7 +44,10 @@ const PROVIDER = {
   description: null,
   local_runtime: null,
   compatible_agents: ["claude_code"],
-  models: [{ id: "m1", modality: "text", effort_levels: ["low", "high"] }],
+  models: [
+    { id: "m1", modality: "text" },
+    { id: "m2", modality: "text" },
+  ],
   created_at: "",
   updated_at: "",
 } as unknown as Provider;
@@ -63,7 +65,7 @@ const PREVIEW = {
       fingerprint: "fp1",
       diff: [
         { kind: "hunk", text: "@@ -1,1 +1,2 @@" },
-        { kind: "add", text: '"effortLevel": "high"', new_no: 2 },
+        { kind: "add", text: '"model": "m2"', new_no: 2 },
       ],
     },
   ],
@@ -97,8 +99,10 @@ function renderDialog(agent: AgentOut = AGENT) {
   render(<ChangeModelDialog agent={agent} open onOpenChange={() => {}} />, { wrapper: Wrapper });
 }
 
-async function reviewHigh() {
-  fireEvent.click(await screen.findByRole("button", { name: "High" }));
+async function reviewChange() {
+  const model = await screen.findByRole("combobox", { name: "Default model" });
+  fireEvent.keyDown(model, { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "m2" }));
   fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
   expect((await screen.findAllByText("~/.claude/settings.json")).length).toBeGreaterThan(0);
 }
@@ -108,13 +112,12 @@ describe("ChangeModelDialog", () => {
     renderDialog();
     expect(await screen.findByText("Change Claude Code’s model")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Review changes" })).toBeDisabled();
-    await reviewHigh();
+    await reviewChange();
     const preview = call.mock.calls.find(([p]) => p === "/providers/model-switch/preview");
     expect((preview?.[1] as { body: unknown }).body).toMatchObject({
       agent_type: "claude_code",
       connection_uid: "u-gw",
-      model: "m1",
-      effort: "high",
+      model: "m2",
     });
     fireEvent.click(await screen.findByRole("button", { name: "Apply 1 change" }));
     await waitFor(() =>
@@ -132,7 +135,7 @@ describe("ChangeModelDialog", () => {
     async () => {
       applyError = Object.assign(new ApiError("CONFIG_FILE_STALE", "stale"), { status: 409 });
       renderDialog();
-      await reviewHigh();
+      await reviewChange();
       fireEvent.click(await screen.findByRole("button", { name: "Apply 1 change" }));
       expect(await screen.findByText("settings.json changed on disk")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Reload preview" })).toBeInTheDocument();
@@ -141,13 +144,13 @@ describe("ChangeModelDialog", () => {
 
   acceptance(
     "provider-switching",
-    "the Change model dialog shows only provider, model, effort and tiers",
+    "the Change model dialog shows only provider, model and tiers",
     async () => {
-      // Claude Code on a non-Claude connection: provider, model, effort and the tiers.
+      // Claude Code on a non-Claude connection: provider, model and the tiers.
       renderDialog();
       const dialog = await screen.findByRole("dialog");
-      await screen.findByRole("button", { name: "High" });
-      for (const label of ["Provider", "Default model", "Effort", "Model per tier"]) {
+      await within(dialog).findByText("Default model");
+      for (const label of ["Provider", "Default model", "Model per tier"]) {
         expect(within(dialog).getByText(label)).toBeInTheDocument();
       }
       expect(
@@ -156,12 +159,11 @@ describe("ChangeModelDialog", () => {
     },
   );
 
-  test("Codex on a model with no effort levels shows provider and model, no effort", async () => {
+  test("Codex shows provider and model, no tiers", async () => {
     const codexProvider = {
       ...PROVIDER,
       protocol: "openai",
       compatible_agents: ["codex"],
-      models: [{ id: "m1", modality: "text", effort_levels: [] }],
     } as unknown as Provider;
     call.mockImplementation(async (path: string, opts) => {
       if (path === "/providers") return { providers: [codexProvider] };
@@ -172,7 +174,6 @@ describe("ChangeModelDialog", () => {
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Provider")).toBeInTheDocument();
     expect(within(dialog).getByText("Default model")).toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: "High" })).toBeNull();
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
   });
 
@@ -182,9 +183,8 @@ describe("ChangeModelDialog", () => {
     const trigger = await within(dialog).findByRole("combobox", { name: /provider/i });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.click(await screen.findByRole("option", { name: /built-in login/i }));
-    await waitFor(() => expect(within(dialog).queryByText("Effort")).toBeNull());
-    expect(within(dialog).queryByText("Default model")).toBeNull();
+    await waitFor(() => expect(within(dialog).queryByText("Default model")).toBeNull());
     expect(within(dialog).queryByText("Model per tier")).toBeNull();
-    expect(within(dialog).getByText(/picks its model and effort itself/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/picks its model itself/)).toBeInTheDocument();
   });
 });

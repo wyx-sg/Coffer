@@ -1,6 +1,6 @@
 """Pure text transforms that project a connection into Codex's ``config.toml``,
 and the content of the Coffer-owned model catalogue beside it (spec
-provider-switching "Project into Codex config without clobbering it").
+provider-switching "Project into Codex config without overwriting it").
 
 Codex gets top-level ``model`` + ``model_provider = "coffer"`` and a
 ``[model_providers.coffer]`` table. Codex authenticates to that provider with
@@ -11,9 +11,8 @@ terminal needs nothing exported, and no key rides its environment.
 
 When the connection curates a model set, ``model_catalog_json`` points at a
 Coffer-owned catalogue whose entries carry each model's context window, a 90%
-auto-compact limit and its effort levels; ``model_reasoning_effort`` is written
-only when the chosen model has levels (without them Codex sends no reasoning
-effort whatever the key says).
+auto-compact limit; its reasoning levels stay empty, so Codex sends no
+reasoning effort of its own accord.
 """
 
 from __future__ import annotations
@@ -44,7 +43,6 @@ CODEX_MODEL_CATALOG_KEY = "model_catalog_json"
 #: How much of a TOOL RESULT Codex keeps before truncating it — Codex's own
 #: built-in value, a harness bound rather than an endpoint property.
 CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
-_EFFORT_KEY = "model_reasoning_effort"
 
 
 @dataclass(frozen=True)
@@ -71,13 +69,9 @@ def _entry(index: int, model: ProjectedModel) -> dict[str, object]:
         "visibility": "list",
         # Curated for an API endpoint, so API-usable by construction.
         "supported_in_api": True,
-        # Levels the connection records for the model (spec provider-switching
-        # "Record a context window and effort levels with each curated model");
-        # none means Codex sends no ``reasoning`` field at all, which is the
-        # right answer for a model nobody said takes one.
-        "supported_reasoning_levels": [
-            {"effort": level, "description": level} for level in model.effort_levels
-        ],
+        # Codex's parser requires the field; empty means Codex sends no
+        # ``reasoning`` field at all.
+        "supported_reasoning_levels": [],
         # Unsupported => never sent: values Coffer cannot derive claim the least.
         "supports_reasoning_summaries": False,
         "support_verbosity": False,
@@ -89,8 +83,6 @@ def _entry(index: int, model: ProjectedModel) -> dict[str, object]:
         # not author another product's system prompt.
         "base_instructions": "",
     }
-    if model.effort_levels:
-        entry["default_reasoning_level"] = model.default_effort or model.effort_levels[0]
     if model.context_window is not None:
         # Without a window Codex falls back to 272k and a smaller endpoint
         # overflows before Codex ever compacts; an unknown one is left out
@@ -137,14 +129,12 @@ def apply_codex_provider(
     model: str | None,
     display_name: str,
     auth: CodexAuthCommand,
-    effort: str | None = None,
     provider_id: str = CODEX_PROVIDER_ID,
     catalog_path: pathlib.Path | None = None,
 ) -> str:
     """Return new ``config.toml`` text with Coffer's provider block.
 
-    The block authenticates through ``auth``. ``effort`` is written only by a
-    caller that knows the model has levels. ``catalog_path`` ``None``: no
+    The block authenticates through ``auth``. ``catalog_path`` ``None``: no
     curated set, and a catalogue pointer Coffer wrote earlier is dropped.
     """
     doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
@@ -153,8 +143,6 @@ def apply_codex_provider(
     else:
         doc.pop("model", None)
     doc["model_provider"] = provider_id
-    if effort:
-        doc[_EFFORT_KEY] = effort
     if catalog_path is None:
         _pop_managed_catalog(doc)
     else:
@@ -180,13 +168,10 @@ def apply_codex_provider(
 
 
 @functools.lru_cache(maxsize=32)
-def remove_codex_provider(
-    text: str, *, provider_id: str = CODEX_PROVIDER_ID, managed_effort: str | None = None
-) -> str:
+def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) -> str:
     """Inverse of :func:`apply_codex_provider` — so Codex falls back to its OWN
     provider and models ("use built-in"). The provider table always goes;
-    ``model_provider``, ``model`` and a ``model_reasoning_effort`` equal to
-    ``managed_effort`` go only while ``model_provider`` points at Coffer (a
+    ``model_provider`` and ``model`` go only while ``model_provider`` points at Coffer (a
     user-selected provider is left untouched); a Coffer-owned catalogue pointer
     goes too."""
     if not text.strip():
@@ -201,8 +186,6 @@ def remove_codex_provider(
     if doc.get("model_provider") == provider_id:
         doc.pop("model_provider", None)
         doc.pop("model", None)
-        if managed_effort is not None and doc.get(_EFFORT_KEY) == managed_effort:
-            doc.pop(_EFFORT_KEY, None)
     return tomlkit.dumps(doc)
 
 

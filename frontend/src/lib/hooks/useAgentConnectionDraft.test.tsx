@@ -2,8 +2,7 @@
 //
 // The Change model dialog's draft, driven through the hook with a real query
 // cache and only `call` (the network) faked: what makes a draft dirty and
-// reviewable, the request it builds, where Effort's levels come from, the
-// Coffer's tier prefill.
+// reviewable, the request it builds, and Coffer's tier prefill.
 import type { PropsWithChildren } from "react";
 import { beforeEach, describe, expect, test } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -24,7 +23,6 @@ const AGENT: AgentOut = {
   config_dir: "/home/me/.claude",
   display_name: "Claude Code",
   model: null,
-  effort: null,
   tier_models: null,
   version: null,
   install_handoff: null,
@@ -101,28 +99,15 @@ describe("useAgentConnectionDraft", () => {
     });
   });
 
-  test("Claude Code sends model, effort and every tier; the built-in login sends none", async () => {
-    const { result } = await setup(
-      AGENT,
-      [conn("gw", { models: text("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5") })],
-      [
-        {
-          id: "claude-opus-5-5",
-          label: "Opus",
-          description: "",
-          efforts: ["low", "high"],
-          default_effort: null,
-        },
-      ],
-    );
+  test("Claude Code sends model and every tier; the built-in login sends none", async () => {
+    const { result } = await setup(AGENT, [
+      conn("gw", { models: text("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5") }),
+    ]);
     act(() => result.current.pickConnection("u-gw"));
-    expect(result.current.effortLevels).toEqual(["low", "high"]);
-    act(() => result.current.pickEffort("high"));
     expect(result.current.request).toEqual({
       agent_type: "claude_code",
       connection_uid: "u-gw",
       model: "claude-opus-5-5",
-      effort: "high",
       tier_models: {
         opus: "claude-opus-5-5",
         sonnet: "claude-sonnet-5-5",
@@ -133,38 +118,21 @@ describe("useAgentConnectionDraft", () => {
     expect(result.current.request).toMatchObject({
       connection_uid: null,
       model: null,
-      effort: null,
       tier_models: null,
     });
   });
 
-  test("Codex has no tiers, and sends effort only when the model reports levels", async () => {
-    const codex: AgentOut = { ...AGENT, uid: "a-codex", type: "codex", effort: "high" };
+  test("Codex has no tiers", async () => {
+    const codex: AgentOut = { ...AGENT, uid: "a-codex", type: "codex" };
     const { result } = await setup(codex, [
       conn("oa", { protocol: "openai", models: text("gpt-5") }),
     ]);
     expect(result.current.showTiers).toBe(false);
     act(() => result.current.pickConnection("u-oa"));
-    expect(result.current.effortLevels).toEqual([]);
     expect(result.current.request).toMatchObject({
       model: "gpt-5",
-      effort: null,
       tier_models: null,
     });
-  });
-
-  test("the connection's recorded levels win over the agent's catalogue", async () => {
-    const { result } = await setup(
-      AGENT,
-      [
-        conn("gw", {
-          models: [{ id: "gpt-x", modality: "text", effort_levels: ["low", "medium"] }],
-        }),
-      ],
-      [{ id: "gpt-x", label: "", description: "", efforts: ["high"], default_effort: null }],
-    );
-    act(() => result.current.pickConnection("u-gw"));
-    expect(result.current.effortLevels).toEqual(["low", "medium"]);
   });
 
   test("a local runtime pins every tier to the Model; an edited tier can be changed", async () => {
@@ -196,13 +164,11 @@ describe("useAgentConnectionDraft", () => {
     const agent: AgentOut = {
       ...AGENT,
       model: "m1",
-      effort: "low",
       tier_models: { opus: "m1", sonnet: "m1", haiku: "m1" },
       connection_uid: "u-gw",
     };
     const { result } = await setup(agent, [conn("gw", { models: text("m1", "m2") })]);
     expect(result.current.draftConn).toBe("u-gw");
-    expect(result.current.draftEffort).toBe("low");
     expect(result.current.dirty).toBe(false);
     act(() => result.current.pickModel("m2"));
     expect(result.current.dirty).toBe(true);

@@ -66,7 +66,9 @@ _MAX_MODEL_ID_LEN = 200
 
 
 #: Curated-model facts that are omitted from the document while unknown.
-_OPTIONAL_FACTS = ("context_window", "effort_levels", "default_effort", "price")
+_RETIRED_EFFORT_KEYS = ("effort_levels", "default_effort")
+
+_OPTIONAL_FACTS = ("context_window", "price")
 
 
 class CuratedPrice(BaseModel):
@@ -100,21 +102,25 @@ class CuratedModel(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_effort(cls, data: Any) -> Any:
+        """Migration for the removal of reasoning effort: a stored model entry
+        may still carry ``effort_levels`` / ``default_effort``; drop them (the
+        file loses the keys on its next write)."""
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k not in _RETIRED_EFFORT_KEYS}
+        return data
+
     id: str
     modality: Modality = Modality.TEXT
     #: The context window the endpoint serves this model with, in tokens —
     #: read from the endpoint where it reports one (a local runtime's served
     #: window); the person never chooses it. ``None`` is unknown, and an
     #: unknown window is left out of what Coffer writes rather than guessed
-    #: (spec provider-switching "Record a context window and effort levels with
-    #: each curated model").
+    #: (spec provider-switching "Record a context window with each curated
+    #: model").
     context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
-    #: The reasoning-effort levels the model accepts, in order; the last is
-    #: not implied to be the default. ``None``/empty: the model takes no
-    #: effort, so Codex is sent none and the Model tab hides Effort.
-    effort_levels: list[str] | None = None
-    #: The level used when the agent's binding names none.
-    default_effort: str | None = None
     #: This connection's own price for the model; ``None``: resolved elsewhere.
     price: CuratedPrice | None = None
 
@@ -280,14 +286,7 @@ class ProviderConfig(BaseModel):
                 raise ValueError("model id must not be empty")
             if len(model) > _MAX_MODEL_ID_LEN:
                 raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            levels = [lv.strip() for lv in (entry.effort_levels or []) if lv and lv.strip()]
-            default = entry.default_effort if entry.default_effort in levels else None
-            cleaned.setdefault(
-                model,
-                entry.model_copy(
-                    update={"id": model, "effort_levels": levels or None, "default_effort": default}
-                ),
-            )
+            cleaned.setdefault(model, entry.model_copy(update={"id": model}))
         return list(cleaned.values())
 
     @model_validator(mode="after")

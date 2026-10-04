@@ -270,8 +270,8 @@ It also shows when the hook last fired, from the [audit log](/guides/activity). 
 
 The model catalogue answers "which models can this agent be put on". Coffer reads it back from the installed agent every time, so a newly released model appears without a Coffer release:
 
-- **Claude Code:** the model aliases embedded in the `claude` binary (for example `opus`, `sonnet`, `haiku`), plus `additionalModelOptionsCache` from `.claude.json`. Reasoning-effort levels come from the installed Claude Agent SDK; no default level is reported, because the runtime does not publish one.
-- **Codex:** the `model/list` RPC of Codex's app server (run with `CODEX_HOME` set to the agent's directory), plus the models named in `config.toml`. Each model carries its own effort levels and default.
+- **Claude Code:** the model aliases embedded in the `claude` binary (for example `opus`, `sonnet`, `haiku`), plus `additionalModelOptionsCache` from `.claude.json`.
+- **Codex:** the `model/list` RPC of Codex's app server (run with `CODEX_HOME` set to the agent's directory), plus the models named in `config.toml`.
 
 Each source fails on its own: an unauthenticated Codex or a changed binary layout costs only that source's models.
 
@@ -287,7 +287,7 @@ The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents
 
 1. **Connection** — the two parts of the [connection](#connect-an-agent-to-coffer) and the one button the state calls for.
 2. **What this agent can use** — six tiles, three by two: **MCP servers**, **Skills**, **Config files**, **Plugins**, **Hooks** and **Memory**. Each shows its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; the whole tile opens its tab.
-3. **Model** — **Provider**, **Model**, **Effort** and **Route** (through Coffer's proxy, with **Test**, or direct), and **Change…**.
+3. **Model** — **Provider**, **Model** and **Route** (through Coffer's proxy, with **Test**, or direct), and **Change…**.
 4. **Details** — **Version**, **Config directory**, **UID** and **Registered**. An agent's name is its type, so there is no name or title to edit.
 
 **Rotate proxy token** is in the header's **⋯** menu, offered only while the agent runs through Coffer's proxy.
@@ -296,11 +296,11 @@ The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents
 
 **Change…** under **Model** opens one small form for both agents. Pick a **Provider** — the agent's built-in login or an enabled provider that reaches it (see [Model providers](/guides/providers)) — then:
 
-- **Claude Code:** **Model**, **Effort** (the levels that model reports; the field is left out when it reports none) and **Model per tier** — Opus, Sonnet, Haiku, and Fable when the provider lists one — prefilled with suggestions. It writes the agent's `settings.json`.
-- **Codex:** **Model** and **Effort** (again only when the model reports levels), with no tiers. It writes `config.toml` and Coffer's own model list file `coffer-model-catalog.json` beside it, so the review shows two changes.
-- **The built-in login** asks for nothing else: the agent picks its own model and effort (`/model`, `/effort`), and Coffer sets them only for a provider you add. Choosing it takes out the keys Coffer wrote.
+- **Claude Code:** **Model** and **Model per tier** — Opus, Sonnet, Haiku, and Fable when the provider lists one — prefilled with suggestions. It writes the agent's `settings.json`.
+- **Codex:** **Model**, with no tiers. It writes `config.toml` and Coffer's own model list file `coffer-model-catalog.json` beside it, so the review shows two changes.
+- **The built-in login** asks for nothing else: the agent picks its own model (`/model`), and Coffer sets it only for a provider you add. Choosing it takes out the keys Coffer wrote.
 
-**Review changes** then opens the exact lines each file will gain or lose, with a note that only those lines change and a `.bak` copy is kept; **Apply** writes them. While the review is computed Coffer also tests the provider with the chosen model; a failed test is shown as a warning and does not stop you. If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival. With the Models [experimental feature](/guides/experimental-features) off, the **Model** section only reads: the agent's own model and effort, with no provider and no **Change…**.
+**Review changes** then opens the exact lines each file will gain or lose, with a note that only those lines change and a `.bak` copy is kept; **Apply** writes them. While the review is computed Coffer also tests the provider with the chosen model; a failed test is shown as a warning and does not stop you. If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival. With the Models [experimental feature](/guides/experimental-features) off, the **Model** section only reads: the agent's own model, with no provider and no **Change…**.
 
 ### Native memory and sessions
 

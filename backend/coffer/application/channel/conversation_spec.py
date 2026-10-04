@@ -4,9 +4,9 @@
 The agent and the working directory are structural: fixed when a conversation
 is created (a conversation cannot be re-keyed, and an agent session is tied to
 its directory), so switching either opens a fresh conversation built from this
-spec. The model and effort stay parametric — ``/model`` re-points the SAME
-conversation — and are also remembered on the thread, so a fresh conversation
-opens on them too.
+spec. The model stays parametric — ``/model`` re-points the SAME
+conversation — and is also remembered on the thread, so a fresh conversation
+opens on it too.
 
 Pure functions — no I/O.
 """
@@ -34,7 +34,6 @@ def resolve_conversation_spec(
     preferred_agent: str | None,
     agent_scope: Scope | None = None,
     preferred_model: str | None = None,
-    preferred_effort: str | None = None,
     preferred_cwd: str | None = None,
 ) -> ConversationSpec:
     """Combine the peer's sticky agent preference with the channel defaults.
@@ -54,16 +53,13 @@ def resolve_conversation_spec(
     else:
         agent_key = default_agent
     config: dict[str, Any] = dict(default_agent_config) if default_agent_config else {}
-    # The thread's sticky settings (spec channels "Keep a chat's settings across
-    # its conversations") override the channel's defaults. A model or effort
-    # chosen for one agent means nothing to another, so they ride only while the
+    # The thread's sticky settings (spec channels "Keep a chat's agent, model and
+    # directory across its conversations") override the channel's defaults. A model
+    # chosen for one agent means nothing to another, so it rides only while the
     # sticky agent is the one in effect; the directory is the agent's workplace
     # and rides regardless.
-    if agent_key == preferred_agent:
-        if preferred_model:
-            config["model"] = preferred_model
-        if preferred_effort:
-            config["effort"] = preferred_effort
+    if agent_key == preferred_agent and preferred_model:
+        config["model"] = preferred_model
     if preferred_cwd:
         config["cwd"] = preferred_cwd
     return ConversationSpec(agent_key=agent_key, agent_config=config or None)

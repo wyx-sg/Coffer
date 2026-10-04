@@ -2358,7 +2358,6 @@
         "change": "更改…",
         "provider": "提供商",
         "model": "默认模型",
-        "effort": "推理强度",
         "route": "路径",
         "test": "测试",
         "auto": "内置默认",
@@ -2494,10 +2493,9 @@
           "builtin": "把 {{agent}} 切换到内置登录"
         },
         "summary": {
-          "provider": "经由 Coffer 的中转把请求发到 {{provider}}，并用 {{model}}{{effort}} 回答。不写入提供商密钥。",
-          "atEffort": "，推理强度 {{effort}}",
-          "catalog": "Coffer 还会重写它的模型列表，让 {{agent}} 知道这个模型的上下文窗口和档位。",
-          "builtin": "回到 {{agent}} 自己的登录。Coffer 只移除它写入的键；你自己设置的模型或推理强度会保留。"
+          "provider": "经由 Coffer 的中转把请求发到 {{provider}}，并用 {{model}} 回答。不写入提供商密钥。",
+          "catalog": "Coffer 还会重写它的模型列表，让 {{agent}} 知道这个模型的上下文窗口。",
+          "builtin": "回到 {{agent}} 自己的登录。Coffer 只移除它写入的键；你自己设置的模型会保留。"
         },
         "staleTitle": "{{file}} 在磁盘上已变化",
         "staleBody": "它在这份预览生成之后被保存过，所以没有写入任何内容。重新加载后会按当前文件重新预览。",
@@ -2515,30 +2513,12 @@
         }
       },
       "builtinNote": {
-        "claude_code": "使用自己的登录时，{{agent}} 自行选择模型和推理强度（<code>/model</code>、<code>/effort</code>）。只有你添加的提供商，Coffer 才会设置它们。",
-        "codex": "使用自己的登录时，{{agent}} 自行选择模型和推理强度（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它们。"
+        "claude_code": "使用自己的登录时，{{agent}} 自行选择模型（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它。",
+        "codex": "使用自己的登录时，{{agent}} 自行选择模型（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它。"
       },
       "model": {
         "label": "默认模型",
         "placeholder": "选择模型"
-      },
-      "effort": {
-        "label": "推理强度",
-        "default": "默认",
-        "none": "智能体的模型目录里没有这个模型，不知道它有哪些档位，所以不设推理强度，按提供商的默认走。",
-        "choose": "选择模型后可查看它的档位。",
-        "levels": {
-          "minimal": "最低",
-          "low": "低",
-          "medium": "中",
-          "high": "高",
-          "xhigh": "超高",
-          "max": "最高"
-        },
-        "hint": {
-          "claude_code": "这个模型上报的档位。",
-          "codex": "这个模型上报的档位。Codex 每个会话只有一个模型，没有分档。"
-        }
       },
       "tiers": {
         "label": "各档位的模型",
@@ -3685,12 +3665,6 @@
       "label": "智能体模型",
       "placeholder": "模型（可选）",
       "inheritNoModel": "默认"
-    },
-    "effortPicker": {
-      "label": "推理强度",
-      "placeholder": "强度（可选）",
-      "inheritNoEffort": "智能体默认",
-      "shown": "{{effort}} 推理强度"
     },
     "draft": {
       "line": "与 {{agent}} 在 <mono>{{dir}}</mono> 中的新对话——发送一条消息即可开始。",
@@ -6328,7 +6302,7 @@
       "confirm": "删除 {{name}}？此操作无法撤销。",
       "confirmWithSecret": "删除 {{name}}？它的密钥 {{ref}} 也会从这台 Mac 上删除。此操作无法撤销。",
       "agentTitle": "{{agent}} 回到自己的登录",
-      "agentBody": "Coffer 会从 {{path}} 中移除它的模型、思考强度和提供商配置",
+      "agentBody": "Coffer 会从 {{path}} 中移除它的模型和提供商配置",
       "agentBodyNoFile": "Coffer 会清除它与这个提供商的连接",
       "engineTitle": "Coffer 引擎暂停",
       "engineBody": "直到你在「设置 › 通用」中选了别的模型",

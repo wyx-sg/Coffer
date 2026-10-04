@@ -70,7 +70,7 @@ async def test_a_command_is_matched_whatever_its_case(env: ChannelEnv) -> None:
 
     await env.send(inbound("tg", "owner", "/Model high"))
 
-    assert adapter.texts() == ["Model: Default model · effort High — from your next message"]
+    assert adapter.texts() == ["Model: high — from your next message"]
 
 
 async def test_a_did_you_mean_in_a_group_is_private(env: ChannelEnv) -> None:

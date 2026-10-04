@@ -1,6 +1,6 @@
 """The agent sent with ``/new`` in a SeaTalk group's main chat becomes the group's
-default (spec channels "Set a group's defaults from its main chat" and "Keep a
-chat's settings across its conversations"); the direct-chat commands only answer
+default (spec channels "Set a group's defaults from its main chat" and "Keep a chat's agent, model
+and directory across its conversations"); the direct-chat commands only answer
 where they work.
 
 A main-chat @mention roots a new thread at itself, so the message carries

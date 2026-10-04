@@ -12,7 +12,7 @@ import { contentBlock } from "@/lib/chat/contentBlock";
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listReplyFiles: vi.fn().mockResolvedValue([]),
-    getAgentConfig: vi.fn().mockResolvedValue({ model: null, effort: null, cwd: null }),
+    getAgentConfig: vi.fn().mockResolvedValue({ model: null, cwd: null }),
   },
 }));
 

@@ -148,7 +148,7 @@ export interface paths {
         };
         /**
          * Get Agent Config
-         * @description Read a conversation's agent config (cwd, model, effort). 404 if not found.
+         * @description Read a conversation's agent config (cwd, model). 404 if not found.
          *
          *     ``session_id`` is provider-internal and deliberately not surfaced.
          */
@@ -160,15 +160,14 @@ export interface paths {
         head?: never;
         /**
          * Set Agent Config
-         * @description Set a managed agent's own model and effort for a conversation (ADR
+         * @description Set a managed agent's own model for a conversation (ADR
          *     coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
          *
          *     Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
-         *     ``session_id`` are preserved, and a body that mentions only one of the two
-         *     leaves the other where it was. An empty/whitespace ``model`` clears the
+         *     ``session_id`` are preserved, and a body that does not mention ``model``
+         *     leaves it where it was. An empty/whitespace ``model`` clears the
          *     override (the conversation then inherits the active provider profile's
-         *     projected default); an empty/whitespace ``effort`` clears it (the agent then
-         *     runs at whatever its own config says).
+         *     projected default).
          */
         patch: operations["set_agent_config_api_v1_chat_conversations__id__agent_config_patch"];
         trace?: never;
@@ -462,8 +461,6 @@ export interface components {
         AgentConfigOut: {
             /** Cwd */
             cwd: string | null;
-            /** Effort */
-            effort: string | null;
             /** Model */
             model: string | null;
         };
@@ -471,17 +468,14 @@ export interface components {
          * AgentConfigPatch
          * @description Body for PATCH /conversations/{id}/agent-config.
          *
-         *     Sets the managed agent's own model (free-text, passed through to its CLI)
-         *     and how hard it should think. An empty or null ``model`` clears the override
-         *     so the conversation inherits the active provider profile's projected
-         *     default; an empty or null ``effort`` clears it so the agent keeps whatever
-         *     its own config says. Each field is written only when the body mentions it,
-         *     so setting one leaves the other alone; ``cwd`` / ``session_id`` are
-         *     preserved (ADR coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
+         *     Sets the managed agent's own model (free-text, passed through to its CLI).
+         *     An empty or null ``model`` clears the override so the conversation inherits
+         *     the active provider profile's projected default. The field is written only
+         *     when the body mentions it; ``cwd`` / ``session_id`` are
+         *     preserved (ADR coffer-model-is-an-internal-engine → ADR
+         *     model-catalogue-read-from-the-agent).
          */
         AgentConfigPatch: {
-            /** Effort */
-            effort?: string | null;
             /** Model */
             model?: string | null;
         };

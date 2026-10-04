@@ -85,3 +85,16 @@ def test_dump_carries_no_delivery_policy() -> None:
     dumped = AgentConfig(type=AgentType.CODEX).model_dump()
     assert "follow_all_skills" not in dumped
     assert "skill_exclusions" not in dumped
+
+
+def test_a_retired_effort_key_is_dropped_on_read():
+    # Migration for the removal of reasoning effort: a stored config may still
+    # carry the key, and the file loses it on its next write.
+    cfg = AgentConfig.model_validate({"type": "claude_code", "model": "opus", "effort": "high"})
+    assert cfg.model == "opus"
+    assert "effort" not in cfg.model_dump()
+
+
+def test_other_unknown_keys_are_still_refused():
+    with pytest.raises(ValidationError):
+        AgentConfig.model_validate({"type": "claude_code", "shade": "x"})

@@ -17,10 +17,7 @@ export interface paths {
          *
          *     On the agent's own built-in login this is whatever the agent itself reports:
          *     Claude Code's tier aliases, each labelled with the model it resolves to
-         *     today; Codex's versioned ids, each carrying the reasoning-effort levels it
-         *     can run at. An effort is not part of a model NAME — Codex takes it as its
-         *     own field on a turn — so it rides beside the id instead of multiplying the
-         *     list.
+         *     today; Codex's versioned ids.
          *
          *     With a Coffer connection ACTIVE for this agent, its curated ids are the list
          *     instead, in the user's own order: the turns go to that endpoint and not to
@@ -28,10 +25,7 @@ export interface paths {
          *     offer ids the endpoint rejects. A connection that curates nothing falls back
          *     to the agent's catalogue — Coffer knows where the turns go, not what that
          *     endpoint serves, and this read never asks over the network (spec
-         *     provider-switching "Serve one model list to every surface"). Reasoning
-         *     levels survive the narrowing, because
-         *     a level is a setting on the agent's own runtime rather than the endpoint's
-         *     to answer.
+         *     provider-switching "Serve one model list to every surface").
          *
          *     This is the same answer a channel's ``/model`` card gets, from the same
          *     function. It did not use to be: this route served the agent's whole
@@ -630,18 +624,11 @@ export interface components {
         };
         /** AgentModelOut */
         AgentModelOut: {
-            /** Default Effort */
-            default_effort: string | null;
             /**
              * Description
              * @default
              */
             description: string;
-            /**
-             * Efforts
-             * @default []
-             */
-            efforts: string[];
             /** Id */
             id: string;
             /** Label */
@@ -667,8 +654,6 @@ export interface components {
             created_at: string;
             /** Display Name */
             display_name: string;
-            /** Effort */
-            effort: string | null;
             install_handoff: components["schemas"]["HandoffOut"] | null;
             /** Model */
             model: string | null;
@@ -694,8 +679,6 @@ export interface components {
         AgentPatch: {
             /** Config Dir */
             config_dir?: string | null;
-            /** Effort */
-            effort?: string | null;
             /** Model */
             model?: string | null;
             /** Tier Models */

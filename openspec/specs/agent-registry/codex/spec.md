@@ -1,7 +1,7 @@
 # Agent Registry — Codex
 
 ## Purpose
-This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue and reasoning levels are read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and secret exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
+This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue is read back, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and secret exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
 
 "Codex" is the product: its CLI and its IDE form together, because they read one shared config directory. `config.toml` is the single file behind most of this type's facets — MCP entries, plugins, marketplaces, configured models — so one parse failure degrades all of them at once to the parent's parse-error state. Codex keeps its plugin entries and marketplaces in that same file, with each plugin's content in a cache directory; Coffer toggles one documented field and, on uninstall, removes the entry and the cache together.
 
@@ -92,15 +92,6 @@ The catalogue sources of [agent-registry](../spec.md) "Read the model catalogue 
 - **WHEN** the Codex catalogue sources are read for it
 - **THEN** the `model/list` app-server is started with `CODEX_HOME` set to that `config_dir`, the rest of the daemon's environment intact
 - **AND** a probe for the default `~/.codex` starts with the environment untouched, and neither directory's answer is served for the other
-
-### Requirement: Carry each Codex model's own effort levels and default
-The runtime source of [agent-registry](../spec.md) "Read reasoning-effort levels from the agent runtime" for this type MUST be per model: `model/list` reports `supportedReasoningEfforts` and a `defaultReasoningEffort` per entry, so each catalogue entry carries its own levels and its own default. The default is kept only when it is one of the levels that entry offers.
-
-#### Scenario: drop a default effort the model does not offer
-- **GIVEN** a `model/list` answer with two models, the first reporting levels `low` and `high` with default `low`, the second reporting only `medium` with a default of `xhigh`
-- **WHEN** the Codex catalogue is read
-- **THEN** each entry carries its own reported levels
-- **AND** the first keeps `low` as its default while the second reports no default
 
 ### Requirement: Scan Codex's global task-grouped memory
 The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own native memory stores read-only" for this type MUST be a single GLOBAL task-grouped document at `<config_dir>/memories/MEMORY.md`, where each `# Task Group` block carries an `applies_to: cwd=…` line routing it to one or more project working directories. The scan MUST parse it into one row per distinct routed cwd, with `path` and `project` that cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store repeated on every row. An absent document yields an empty list, and a Task Group with no `applies_to: cwd=` line routes to no project and produces no row.

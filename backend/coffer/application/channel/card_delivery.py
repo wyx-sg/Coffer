@@ -1,6 +1,6 @@
 """A card's life in the chat after it is sent: route a tap, keep it honest.
 
-Why the tap half exists: a card offers choices (``model:``, ``effort:``,
+Why the tap half exists: a card offers choices (``model:``,
 ``dir:``, ``resume:``, ``agent:``) and actions (``cmd:<name>``, which runs
 exactly what typing ``/<name>`` would). Each tap is owner-gated by the
 processor and routed here to the same function the typed command calls (spec
@@ -10,8 +10,7 @@ Why the rewrite half exists: tapping a card used to post a confirmation and
 leave the card itself untouched — still showing the old choice ticked and still
 offering the option the user had just taken. SeaTalk's Update Message and
 Telegram's ``editMessageText`` both let the card be rewritten in place, so it
-is; the model card's tap goes further and rewrites the card into its effort
-step (spec channels "Switch the model and reasoning effort from chat").
+is (spec channels "Switch the model from chat").
 
 Why the page half exists: the same rewrite turns a bounded card into a browsable
 one. A Prev/Next tap re-renders the SAME message at another window of the same
@@ -33,7 +32,6 @@ from coffer.application.channel.dir_switch import apply_dir, current_dir_card
 from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.resume_switch import apply_resume, current_resume_card
 from coffer.application.channel.selection_cards import (
-    KEEP_EFFORT,
     SelectionCard,
     is_page_turn,
     parse_page_turn,
@@ -55,8 +53,8 @@ _logger = logging.getLogger(__name__)
 
 #: The command that summons a fresh card of each kind.
 #: The choice kinds that belong to the direct-chat commands.
-_DM_ONLY_CHOICES = frozenset({"model", "effort", "dir", "resume"})
-_COMMAND_FOR = {"effort": "model", "agent": "new"}
+_DM_ONLY_CHOICES = frozenset({"model", "dir", "resume"})
+_COMMAND_FOR = {"agent": "new"}
 
 
 async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
@@ -104,15 +102,7 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
             return
         await new_conversation.apply_agent(ctx, value)
     elif kind == "model":
-        await model_switch.apply_model(ctx, value, announce=False)
-        if await model_switch.after_model_tap(ctx):
-            return
-        await model_switch.say_model(ctx)
-    elif kind == "effort" and value == KEEP_EFFORT:
-        await model_switch.say_model(ctx)
-        kind = "model"
-    elif kind == "effort":
-        await model_switch.apply_effort(ctx, value)
+        await model_switch.apply_model(ctx, value)
     elif kind == "dir":
         directories = ctx.binding.directories
         if value == "default":
@@ -235,8 +225,6 @@ async def _current_card(
     """
     if kind == "model":
         return await model_switch.current_model_card(ctx, page=page)
-    if kind == "effort":
-        return await model_switch.current_effort_card(ctx, page=page)
     if kind == "dir":
         return await current_dir_card(ctx, page=page)
     if kind == "agent":

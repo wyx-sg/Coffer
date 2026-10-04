@@ -24,7 +24,7 @@ export function useModelSwitchReview(
   const apply = useMutation({
     mutationFn: (b: ModelSwitchIn) => modelSwitchApi.apply(b),
     onSuccess: () => {
-      // The agent's record names its connection, model and effort; its
+      // The agent's record names its connection and model; its
       // catalogue and proxy route follow the connection.
       void qc.invalidateQueries({ queryKey: providersKey });
       void qc.invalidateQueries({ queryKey: agentsKey });

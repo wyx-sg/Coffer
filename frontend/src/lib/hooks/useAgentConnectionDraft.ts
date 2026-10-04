@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useAgentConnectionDraft.ts — the draft behind the agent's Change model dialog
-// (spec provider-switching "Offer every connection operation on REST and the web").
+// (spec provider-switching "Offer every connection operation over REST and in the web UI").
 //
-// Picking a provider, model, effort or tier is a DRAFT: nothing is written
+// Picking a provider, model or tier is a DRAFT: nothing is written
 // until the user has reviewed the change (`useModelSwitch`). The hook holds the
 // draft, derives what the form offers, and builds the request the review and
 // the apply both send.
@@ -10,17 +10,14 @@
 // catalogue and is never introspected; an empty set means "no restriction" and
 // the endpoint is introspected. Both are narrowed to modality `text` (spec
 // provider-switching "Offer only text models to chat pickers"), and the staged
-// model is seeded first so it never vanishes from the list. Effort levels come
-// from what the connection records for the chosen model, else from the agent's
-// own catalogue entry for that id. The built-in login writes nothing: no
-// model, effort or tiers, so the dialog shows only the provider.
+// model is seeded first so it never vanishes from the list. The built-in login writes nothing: no
+// model or tiers, so the dialog shows only the provider.
 import { useEffect, useMemo, useState } from "react";
 
 import type { AgentOut } from "@/lib/api/agents";
 import type { ModelSwitchIn } from "@/lib/api/modelSwitch";
 import { modelIds, WIRE_BY_AGENT } from "@/lib/api/providers";
 import { activeProviderFor } from "@/lib/providers/usedBy";
-import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { useProviders } from "@/lib/hooks/useProviders";
 import {
@@ -38,7 +35,6 @@ export { BUILTIN, type Tier } from "@/lib/agents/connectionDraft";
 export function useAgentConnectionDraft(agent: AgentOut) {
   const wire = WIRE_BY_AGENT[agent.type];
   const providers = useProviders();
-  const catalogue = useAgentModels(agent.type);
   const list = useListProviderModels();
   const hasTiers = wire === "anthropic";
 
@@ -58,13 +54,11 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   // APPLIED state. Tracked by uid: a renamed connection must stay selected.
   const appliedConn = active?.uid ?? BUILTIN;
   const appliedModel = active === null ? "" : (agent.model ?? "");
-  const appliedEffort = agent.effort ?? null;
   const appliedTiers: TierModels = hasTiers ? ((agent.tier_models ?? {}) as TierModels) : {};
   const appliedTiersJson = tiersKey(appliedTiers);
 
   const [draftConn, setDraftConn] = useState(appliedConn);
   const [draftModel, setDraftModel] = useState(appliedModel);
-  const [draftEffort, setDraftEffort] = useState<string | null>(appliedEffort);
   const [draftTiers, setDraftTiers] = useState<TierModels>(appliedTiers);
   const [fetched, setFetched] = useState<string[]>([]);
 
@@ -74,7 +68,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     if (!loaded) return;
     setDraftConn(appliedConn);
     setDraftModel(appliedModel);
-    setDraftEffort(appliedEffort);
     setDraftTiers(appliedTiers);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the applied state arrives
   }, [loaded]);
@@ -92,12 +85,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     for (const m of [draftModel, ...source]) if (m && !out.includes(m)) out.push(m);
     return out;
   }, [draftModel, fetched, draftConnObj, restricted]);
-
-  const entries = catalogue.data ?? [];
-  const curatedEntry = (draftConnObj?.models ?? []).find((m) => m.id === draftModel);
-  const effortLevels = draftIsBuiltin
-    ? []
-    : (curatedEntry?.effort_levels ?? entries.find((m) => m.id === draftModel)?.efforts ?? []);
 
   const showTiers = hasTiers && !draftIsBuiltin;
   const tiers = tiersFor(models);
@@ -118,10 +105,9 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     );
   };
 
-  // Staging a model resets its effort and tier prefill.
+  // Staging a model resets its tier prefill.
   const stageModel = (m: string, pool: string[], onLocal: boolean) => {
     setDraftModel(m);
-    setDraftEffort(null);
     setDraftTiers(hasTiers ? suggestTiers(pool, m, onLocal) : {});
   };
 
@@ -152,7 +138,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   const dirty =
     draftConn !== appliedConn ||
     draftModel !== appliedModel ||
-    (!draftIsBuiltin && draftEffort !== appliedEffort) ||
     (showTiers && tiersKey(draftTiers) !== appliedTiersJson);
   // A model is needed on a provider; Review is for something to change.
   const canReview = dirty && (draftIsBuiltin || !!draftModel);
@@ -162,7 +147,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     agent_type: agent.type,
     connection_uid: draftIsBuiltin ? null : draftConn,
     model: draftIsBuiltin ? null : draftModel,
-    effort: draftIsBuiltin || effortLevels.length === 0 ? null : draftEffort,
     tier_models: showTiers ? (draftTiers as Record<string, string>) : null,
   };
 
@@ -175,8 +159,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     draftModel,
     models,
     local,
-    effortLevels,
-    draftEffort,
     showTiers,
     tiers,
     draftTiers,
@@ -188,7 +170,6 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     introspect,
     pickConnection,
     pickModel: (m: string) => stageModel(m, models, local),
-    pickEffort: setDraftEffort,
     pickTier: (tier: Tier, m: string) => setDraftTiers((cur) => ({ ...cur, [tier]: m })),
   };
 }

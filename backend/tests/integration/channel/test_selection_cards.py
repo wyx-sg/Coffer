@@ -161,7 +161,7 @@ async def test_a_long_catalogue_becomes_a_paged_card(env: ChannelEnv) -> None:
     assert len(buttons) <= MAX_CARD_BUTTONS
     assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:0", "page:model:1"]
     assert "Page 1/" in text
-    assert "/model <name> <level>" in text  # a model you can name is still one message away
+    assert "/model <name>" in text  # a model you can name is still one message away
 
 
 # -- a card the platform refuses degrades to text, never to silence -------------

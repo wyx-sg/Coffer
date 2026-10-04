@@ -191,7 +191,7 @@ the section is read-only, with no Provider row and no Change….
 #### Scenario: a page omits the section that belongs to a switched-off feature
 - **GIVEN** `models` off
 - **WHEN** the user opens an agent's Overview and Settings → Coffer's model
-- **THEN** the Model section shows the agent's own model and effort read-only, with no Provider row and no Change…, and Coffer's model shows nothing that depends on `models`
+- **THEN** the Model section shows the agent's own model read-only, with no Provider row and no Change…, and Coffer's model shows nothing that depends on `models`
 - **AND** neither shows a notice about it, and `?change-model=1` opens no dialog
 
 ### Requirement: Keep what a switched-off feature holds

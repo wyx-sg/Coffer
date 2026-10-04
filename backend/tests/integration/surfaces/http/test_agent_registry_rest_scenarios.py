@@ -138,18 +138,19 @@ def test_bind_a_model_to_an_agent_over_rest(home: pathlib.Path) -> None:
 
         first = c.patch(
             f"/api/v1/agents/{uid}",
-            json={"model": "opus", "effort": "high", "tier_models": {"haiku": "claude-haiku-x"}},
+            json={"model": "opus", "tier_models": {"haiku": "claude-haiku-x"}},
         )
         assert first.status_code == 200, first.text
         body = first.json()
-        assert (body["model"], body["effort"]) == ("opus", "high")
+        assert body["model"] == "opus"
+        assert "effort" not in body
         assert body["tier_models"] == {"haiku": "claude-haiku-x"}
         assert "fast_model" not in body
 
         second = c.patch(f"/api/v1/agents/{uid}", json={"tier_models": None})
         assert second.status_code == 200, second.text
         assert second.json()["tier_models"] is None
-        assert (second.json()["model"], second.json()["effort"]) == ("opus", "high")
+        assert second.json()["model"] == "opus"
 
 
 # --- Coffer connection --------------------------------------------------------
@@ -386,18 +387,13 @@ class _Discovery:
         if agent_key != "codex":
             return []
         return [
-            AgentModel(
-                id="gpt-big",
-                label="GPT Big",
-                efforts=("low", "medium", "high"),
-                default_effort="medium",
-            ),
+            AgentModel(id="gpt-big", label="GPT Big"),
             AgentModel(id="gpt-small", label="GPT Small"),
         ]
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="list an agent's models with their efforts")
-def test_list_an_agents_models_with_their_efforts() -> None:
+@pytest.mark.acceptance(spec="agent-registry", scenario="list an agent's models")
+def test_list_an_agents_models() -> None:
     registry = AgentProviderRegistry()
     registry.register(FakeAgentProvider(None, agent_key="codex"), display_name="Codex")
     catalogue = AgentModelCatalogueService(agents=_NoAgents(), discovery=_Discovery())
@@ -414,10 +410,8 @@ def test_list_an_agents_models_with_their_efforts() -> None:
     assert r.status_code == 200, r.text
     big, small = r.json()["models"]
     assert (big["id"], big["label"]) == ("gpt-big", "GPT Big")
-    assert big["efforts"] == ["low", "medium", "high"]
-    assert big["default_effort"] == "medium"
-    assert small["efforts"] == []
-    assert small["default_effort"] is None
+    assert "efforts" not in big and "default_effort" not in big
+    assert small["id"] == "gpt-small"
     assert unknown.status_code == 404, unknown.text
 
 
