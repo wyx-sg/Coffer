@@ -48,6 +48,8 @@ beforeEach(() => {
             started_at: "2026-01-01T00:00:00Z",
             features: { knowledge: false, memory: false, sync: false, models: false },
             totals: { input_tokens: 0, output_tokens: 0 },
+            // GET /secrets — the Overview's secrets tile reads it.
+            refs: [],
           },
           error: undefined,
         }),

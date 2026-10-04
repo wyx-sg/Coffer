@@ -47,6 +47,8 @@ function mockApi() {
         features: {},
         // GET /usage/summary — the Overview's usage tile reads it.
         totals: { input_tokens: 0, output_tokens: 0 },
+        // GET /secrets — the Overview's secrets tile reads it.
+        refs: [],
       },
       error: undefined,
     }),
