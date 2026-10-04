@@ -28,6 +28,9 @@ _TOKEN_SHAPES = re.compile(
     r"\b(?P<value>(?:ghp|gho|ghu|ghs)_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|"
     r"sk-[A-Za-z0-9_-]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b"
 )
+#: An unquoted value holding call, index or list punctuation is code
+#: (``token = m.group(0)``, ``password=password,``), never a literal secret.
+_CODE = re.compile(r"[()\[\],;]")
 _PLACEHOLDER = re.compile(r"(?i)^(x{3,}|\*{3,}|<.*>|your[-_].*|changeme|example.*|placeholder.*)$")
 _SKILL_SUFFIXES = {".md", ".sh", ".py", ".env", ".json", ".yaml", ".yml", ".toml", ".txt"}
 _MAX_BYTES = 1_000_000
@@ -51,6 +54,8 @@ def _line_hits(raw: str) -> list[tuple[str, str, int, int]]:
     for m in _ASSIGNMENT.finditer(raw):
         key, value = m.group("key"), m.group("value")
         if not _SECRET_KEY.search(key) or not _usable(value):
+            continue
+        if not m.group("q") and _CODE.search(value):
             continue
         span = (m.start("value"), m.end("value"))
         seen.append(span)
