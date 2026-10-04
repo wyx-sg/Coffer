@@ -216,7 +216,7 @@ give the status each code is actually sent with.
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while an agent runs on it. | Switch each agent running on it back to its own login with **Change model**, edit, then switch again. |
 | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | A connection cannot be switched on for an agent it does not reach: the connection is switched off, or the connection's scope does not name the agent. | Switch the connection on, or add the agent to its scope, then switch again. |
-| `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's own use only and cannot be switched on for an agent. | Use a connection with another protocol for the agent. |
+| `PROVIDER_PROTOCOL_RETIRED` | 422 | The `ollama` protocol is no longer offered: a connection cannot be created on it, edited onto it, or switched on for an agent. | Add a local Ollama runtime on its Anthropic or OpenAI wire instead, and delete the old connection. |
 | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | Another connection is already the speech-to-text default. | Move the flag in **Settings › General → Speech to text**. |
 
 ## The vault

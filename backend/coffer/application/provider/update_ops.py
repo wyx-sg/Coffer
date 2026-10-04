@@ -5,20 +5,15 @@ and nothing about the connection moves it. ``protocol`` is NOT immutable:
 an endpoint that turns out to speak a different wire than the probe guessed is
 corrected in place rather than deleted and re-entered, key and all.
 
-But the wire is not inert, and saying "nothing keys off it" (as this module and
-``ProviderPatch`` both used to) was wrong: ``targets.reaches`` answers
-false for ``Protocol.OLLAMA`` BEFORE the resource's scope is consulted, so the
-wire decides whether a connection can serve any agent at all.
+But the wire is not inert: it decides how Coffer projects the connection into
+an agent's native config. So a wire change is REFUSED while an agent runs on the
+connection. Allowing it would leave the native file Coffer already wrote
+speaking the old wire, and de-projecting silently would be worse than refusing:
+the user asked to edit a field, not to take their agents off a gateway. A
+connection no agent runs on is unaffected — no projection exists to strand.
 
-Which is why a wire change is REFUSED while an agent runs on the connection.
-Allowing it would strand the projection: a live anthropic connection moved to
-``ollama`` reaches no agent any more while the ``~/.claude/settings.json`` it
-already wrote stays behind, and nothing left would ever de-project it (a revert
-to the built-in login is keyed by agent). De-projecting silently would be worse
-than refusing: the user asked to edit a field, not to take their agents off a
-gateway. A connection no agent runs on is unaffected — no projection exists to
-strand. The re-validate below still enforces the other rule the wire carries: an
-ollama connection holds no key.
+The ``ollama`` protocol is retired: moving a connection onto it is refused
+(``ProviderProtocolRetired``); a stored one keeps its value and stays editable.
 
 "An agent runs on it" is read from the agents' own records
 (``AgentConfig.connection_uid``), never from the patch: the switch is
@@ -42,6 +37,7 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.errors import (
     ProviderProtocolLockedWhileActive,
+    ProviderProtocolRetired,
     ProviderSecretSourceInvalid,
 )
 from coffer.domain.resource import Resource
@@ -77,6 +73,10 @@ async def update(
     """Apply a partial update; see the module docstring for what may move."""
     current = await service.get(uid)
     config = dict(current.config)
+    # Re-sending the stored wire is not a move, so a connection that already
+    # holds the retired value can still be edited.
+    if protocol is Protocol.OLLAMA and config.get("protocol") != protocol.value:
+        raise ProviderProtocolRetired()
     if protocol is not None and protocol.value != config.get("protocol"):
         # Refused, not de-projected — see the module docstring. Re-sending the
         # wire the connection already has is not a change, so a client that

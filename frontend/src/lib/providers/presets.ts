@@ -55,7 +55,7 @@ export const PRESETS: readonly Preset[] = [
   {
     id: "ollama",
     label: "Ollama",
-    protocol: "ollama",
+    protocol: "openai",
     baseUrl: "http://localhost:11434",
     local: true,
     runtime: "ollama",
@@ -94,7 +94,8 @@ export function vendorOf(baseUrl: string): PresetId {
   return hit ? hit.id : "custom";
 }
 
-/** One display label per protocol, shared by every surface that names a wire. */
+/** One display label per protocol, shared by every surface that names a wire
+ *  (`ollama` is retired: it labels a stored connection and is never offered). */
 export const PROTOCOL_LABEL_KEY: Record<Protocol, string> = {
   anthropic: "providers.protocols.anthropic",
   openai: "providers.protocols.openai",
@@ -105,8 +106,9 @@ export const PROTOCOL_LABEL_KEY: Record<Protocol, string> = {
 /** The protocols a Custom endpoint picks from, in picker order. */
 export const CUSTOM_PROTOCOLS: readonly Protocol[] = ["openai", "anthropic"] as const;
 
-/** The protocols a provider's Edit dialog may correct it to. */
-export const EDITABLE_PROTOCOLS: readonly Protocol[] = ["openai", "anthropic", "ollama"] as const;
+/** The protocols a provider's Edit dialog may correct it to. A stored retired
+ *  `ollama` value is still shown, by the dialog, but never offered. */
+export const EDITABLE_PROTOCOLS: readonly Protocol[] = ["openai", "anthropic"] as const;
 
 /** True for a loopback address — the only place a local runtime may live. */
 export function isLoopbackUrl(url: string): boolean {

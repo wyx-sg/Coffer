@@ -43,7 +43,7 @@ from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig, ResolvedConnection
-from coffer.domain.provider.errors import ProviderSecretSourceInvalid
+from coffer.domain.provider.errors import ProviderProtocolRetired, ProviderSecretSourceInvalid
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretMissing
@@ -157,11 +157,10 @@ class ProviderService:
         Otherwise, for anthropic/openai/unknown supply EXACTLY one
         of ``secret_value`` (stored to the vault at a freshly minted opaque ref
         — see :meth:`_mint_ref`) or ``secret_ref`` (reuse an existing vault
-        entry). An ``ollama``
-        connection has no key — supply neither. WHICH agents the connection
-        projects into is its per-agent scope, started off by the kind (dormant
-        for a keyless wire, unscoped otherwise) and edited afterwards through
-        the framework's scope surface. The model lives apart from
+        entry). The ``ollama`` protocol is no longer offered and is refused.
+        WHICH agents the connection projects into is its per-agent scope,
+        started off by the kind (unscoped) and edited afterwards through the
+        framework's scope surface. The model lives apart from
         the connection (spec provider-switching "Take projected model keys from
         the agent's binding") and is chosen at the point of use;
         ``models`` only curates WHICH of the endpoint's models that choice is
@@ -169,10 +168,8 @@ class ProviderService:
         ref: str | None
         minted = False
         if protocol is Protocol.OLLAMA:
-            if secret_value is not None or secret_ref is not None:
-                raise ProviderSecretSourceInvalid()
-            ref = None
-        elif local_runtime is not None and secret_value is None and secret_ref is None:
+            raise ProviderProtocolRetired()
+        if local_runtime is not None and secret_value is None and secret_ref is None:
             ref = None
         else:
             if (secret_value is None) == (secret_ref is None):

@@ -30,7 +30,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import Protocol, ProviderConfig
-from coffer.domain.provider.errors import ProviderDoesNotReachAgent, ProviderInternalOnly
+from coffer.domain.provider.errors import ProviderDoesNotReachAgent, ProviderProtocolRetired
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
@@ -56,10 +56,10 @@ async def activate_checks(
     agent_type: AgentType,
 ) -> None:
     """Refuse a switch that cannot take effect, before anything is touched."""
-    # ollama is internal-only: it reaches no agent and switching one onto it
+    # A stored ollama connection reaches no agent and switching one onto it
     # writes nothing.
     if cfg.protocol is Protocol.OLLAMA:
-        raise ProviderInternalOnly(resource.name)
+        raise ProviderProtocolRetired(resource.name)
     if not resource.enabled:
         raise ProviderDoesNotReachAgent(
             resource.name, agent_type.value, "the connection is switched off"
@@ -77,8 +77,6 @@ async def activate(
     project it into that agent's native config."""
     resource = await service.get(uid)
     cfg = service._cfg(resource)
-    if cfg.protocol is Protocol.OLLAMA:
-        raise ProviderInternalOnly(resource.name)
     agent = agent_of_type(await service._agents.list(), agent_type)
     if agent is None:
         raise ResourceNotFound(agent_type.default_name())

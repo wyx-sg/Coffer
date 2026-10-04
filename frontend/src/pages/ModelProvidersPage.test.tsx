@@ -388,12 +388,9 @@ describe("ModelProvidersPage", () => {
     expect(dialog.getByText(/Nothing was saved/)).toBeInTheDocument();
   });
 
-  acceptance("provider-switching", "create an ollama connection without a secret", async () => {
+  acceptance("provider-switching", "create a keyless local runtime connection", async () => {
     serve([]);
     api.detectLocal.mockResolvedValue({ found: [] });
-    api.create.mockResolvedValue(
-      makeProvider({ name: "local-llm", protocol: "ollama", secret_ref: null }),
-    );
     renderAt();
     const dialog = await openAdd();
 
@@ -401,26 +398,17 @@ describe("ModelProvidersPage", () => {
     // The local path is keyless: no API key field at all.
     expect(dialog.queryByLabelText("API key")).toBeNull();
     await waitFor(() => expect(api.detectLocal).toHaveBeenCalledWith(null));
-    // Nothing answered: no Name yet, and Next waits for an address.
+    // Nothing answered: no Name, no protocol to pick, and Next waits for a runtime even
+    // with an address typed — an Ollama connection is only ever made from a detected runtime.
     expect(await dialog.findByText("Nothing answered on the default ports")).toBeInTheDocument();
     expect(dialog.queryByLabelText("Name")).toBeNull();
-    expect(dialog.getByRole("button", { name: "Next: Models" })).toBeDisabled();
     fireEvent.change(dialog.getByLabelText("Base URL"), {
       target: { value: "http://localhost:11434" },
     });
-    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "local-llm" } });
-    fireEvent.click(dialog.getByRole("button", { name: "Next: Models" }));
-    fireEvent.click(await dialog.findByRole("button", { name: "Add provider" }));
-
-    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
-    const body = api.create.mock.calls[0][0];
-    expect(body).toMatchObject({
-      name: "local-llm",
-      protocol: "ollama",
-      base_url: "http://localhost:11434",
-    });
-    expect(body.secret_value).toBeUndefined();
-    expect(body.secret_ref).toBeUndefined();
+    expect(dialog.queryByLabelText("Name")).toBeNull();
+    expect(dialog.getByRole("button", { name: "Next: Models" })).toBeDisabled();
+    expect(dialog.queryByText("Ollama API")).toBeNull();
+    expect(api.create).not.toHaveBeenCalled();
   });
 
   test("a detected runtime is recorded with its tool-capable models and their windows", async () => {

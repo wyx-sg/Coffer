@@ -65,12 +65,11 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
   const found = detect.data?.found ?? [];
   const runtime = found[chosen] ?? null;
   const localProtocols = localProtocolsOf(runtime);
-  const typedUrl = form.watch("baseUrl").trim();
   const vendorRuntime = presetById(presetId).runtime;
   // Name once a runtime is chosen (or an address typed); the address only when nothing answered.
-  const showName = local && (runtime !== null || typedUrl !== "");
+  const showName = local && runtime !== null;
   const showUrl = local && !detect.isFetching && detect.data !== undefined && found.length === 0;
-  const nothingToAdd = local && runtime === null && typedUrl === "";
+  const nothingToAdd = local && runtime === null;
 
   // Start on the runtime the vendor stands for, else the first that answered.
   useEffect(() => {
@@ -124,7 +123,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
 
-  // The chosen runtime sets the wire: the first an agent can use, else Ollama's own.
+  // The chosen runtime sets the wire: the first an agent can use.
   const protocol = form.watch("protocol");
   const runtimeKey = runtime ? `${runtime.runtime.runtime}@${runtime.base_url}` : "";
   useEffect(() => {
@@ -140,7 +139,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
   const probe = (v: EndpointValues) => ({
     provider: v.protocol,
     base_url: v.baseUrl.trim(),
-    secret_value: v.protocol === "ollama" ? null : v.secret,
+    secret_value: v.secret,
   });
 
   const candidates: CandidateModel[] = local

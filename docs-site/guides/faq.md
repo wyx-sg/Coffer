@@ -16,7 +16,7 @@ Not by Coffer's own doing, unless you configure it to. The daemon listens only o
 - **Vault sync.** If you configure a remote, rounds push to and pull from that git repository. Secrets travel only as ciphertext and only if you opt in; the master key never does.
 - **Channels.** A Telegram or SeaTalk channel exchanges messages with that platform.
 
-The endpoints you configure as your own — an HTTP MCP server, a model or transcription endpoint, a sync remote — may be on your own machine or network. A URL Coffer only probes on your behalf while you fill in a form (**Test connection** and model listing in the provider editor) is refused if it resolves to a loopback, private or link-local address, unless the provider is an Ollama server.
+The endpoints you configure as your own — an HTTP MCP server, a model or transcription endpoint, a sync remote — may be on your own machine or network. A URL Coffer only probes on your behalf while you fill in a form (**Test connection** and model listing in the provider editor) is refused if it resolves to a private or link-local address. A loopback address is allowed, which is how a model runtime on your own machine works.
 
 See [Security model](/architecture/security).
 

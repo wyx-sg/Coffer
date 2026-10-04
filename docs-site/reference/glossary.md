@@ -479,7 +479,7 @@ repository to one git remote you own, in repeated [sync rounds](#sync-round). Se
 
 ### Wire
 
-The API protocol a [connection](#connection) speaks: `anthropic`, `openai`, `ollama` or
+The API protocol a [connection](#connection) speaks: `anthropic`, `openai` or
 `unknown`. The wire decides which agents a connection can serve. See
 [Model providers](/guides/providers).
 

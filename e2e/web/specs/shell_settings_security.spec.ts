@@ -117,7 +117,8 @@ test("settings general picks the speech-to-text model from a provider's curated 
   // live endpoint is needed, and the curated list stands in for a probe.
   const created = await api<Provider>("POST", "/providers", {
     name,
-    protocol: "ollama",
+    protocol: "openai",
+    secret_value: "e2e-not-a-real-key",
     base_url: "http://127.0.0.1:9",
     models: [
       { id: "e2e-chat-a", modality: "text" },

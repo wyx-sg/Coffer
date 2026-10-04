@@ -780,16 +780,18 @@ export interface components {
          *     ``anthropic`` / ``openai`` / ``unknown`` connections start UNSCOPED — open
          *     to every agent, including one registered tomorrow — and the user narrows
          *     from there; ``unknown`` means the probe was inconclusive, and the
-         *     conservative answer to that is "ask", not "guess". ``ollama`` is
-         *     internal-only: it starts scoped to NO agent.
+         *     conservative answer to that is "ask", not "guess". ``ollama`` is a
+         *     retired value: it is no longer offered, and a stored one is only read
+         *     (and deleted) — it starts scoped to NO agent and reaches none.
          * @enum {string}
          */
         Protocol: "anthropic" | "openai" | "ollama" | "unknown";
         /**
          * ProviderCreate
          * @description Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
-         *     supply EXACTLY one of ``secret_value`` / ``secret_ref``; an ``ollama``
-         *     connection has no key, so supply neither. WHICH agents the connection
+         *     supply EXACTLY one of ``secret_value`` / ``secret_ref`` (a local runtime may
+         *     supply neither); the ``ollama`` protocol is no longer offered and is refused
+         *     with 422 ``PROVIDER_PROTOCOL_RETIRED``. WHICH agents the connection
          *     projects into is not set here: the new connection starts on the wire's own
          *     default scope and is re-targeted through the framework's scope surface
          *     (``PUT /api/v1/resources/{uid}/scope``), the same one every scoped
@@ -872,11 +874,11 @@ export interface components {
          * ProviderOut
          * @description An LLM connection as returned by the API (no secret).
          *
-         *     ``secret_ref`` is ``None`` for ``ollama`` connections (no key).
+         *     ``secret_ref`` is ``None`` for a stored retired ``ollama`` connection (no key).
          *     ``compatible_agents`` is the CONFIGURED reach — the agent types this
          *     connection's per-agent scope (ADR per-agent-resource-scope) covers among the
-         *     agents Coffer knows, not narrowed by ``enabled``, and empty for a keyless
-         *     (ollama) connection — so the UI can filter agents without re-deriving it.
+         *     agents Coffer knows, not narrowed by ``enabled``, and empty for a stored
+         *     retired ollama connection — so the UI can filter agents without re-deriving it.
          *     It is READ-ONLY: it is reported here, and changed through the scope
          *     surface. ``models`` is the
          *     curated set of models this connection offers to every downstream picker, each
@@ -936,8 +938,8 @@ export interface components {
          *     can be wrong, so it is corrected in place rather than by re-entering the
          *     connection, key and all.
          *
-         *     The wire DOES decide one thing, though: an ``ollama`` connection covers no
-         *     agent whatever its scope says. So the correction is refused with 409
+         *     The wire DOES decide one thing, though: how the connection is projected into
+         *     an agent. So the correction is refused with 409
          *     ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while an agent runs on the
          *     connection — moving the wire under a live projection would leave the native
          *     config already written with nothing that would ever take it off. Revert those

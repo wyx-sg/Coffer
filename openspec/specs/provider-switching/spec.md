@@ -63,11 +63,11 @@ rejecting any other key. The one retired key, `internal_default`, is accepted an
 manually chosen wire format or a `wire_api`: Codex loads only `responses`, so the Codex block writes that
 fixed value and nothing stores it.
 
-`protocol` says what the endpoint speaks: `anthropic`, `openai`, `ollama` or `unknown`, where
-`unknown` means a probe was inconclusive. It drives model introspection and whether a key is
-required; it does not choose the agent a connection is written into, but a keyless (`ollama`)
-connection reaches no agent whatever its scope says — which is why the wire cannot move under a live
-connection (see "Refuse to move the wire of a live connection"). The config carries no flag saying a
+`protocol` says what the endpoint speaks: `anthropic`, `openai` or `unknown`, where
+`unknown` means a probe was inconclusive. A fourth value, `ollama`, is retired: it is never offered and
+a stored one is only read (see "Stop offering the ollama protocol"). The protocol drives model
+introspection and whether a key is required; it does not choose the agent a connection is written into,
+but the wire cannot move under a live connection (see "Refuse to move the wire of a live connection"). The config carries no flag saying a
 connection is switched on: which agent runs on which connection is a field of the agent record (see
 "Keep an agent on at most one connection"). No wire names an agent: each agent
 declares the wire protocols its native config speaks, possibly none (see "Keep projection transforms
@@ -115,7 +115,7 @@ existing vault entry and creates none. For `anthropic` / `openai` / `unknown`, e
 - **THEN** it is persisted pointing at the existing ref, no new vault entry is created, and `ProviderOut` reflects the supplied `secret_ref`.
 #### Scenario: reject a profile that supplies neither a secret nor a secret ref
 - **GIVEN** the daemon is running,
-- **WHEN** the user attempts to create an **anthropic** connection (the neither-rule applies to anthropic / openai / unknown; ollama legitimately supplies neither) without either `secret_value` or `secret_ref`,
+- **WHEN** the user attempts to create an **anthropic** connection (the neither-rule applies to anthropic / openai / unknown; only a local runtime connection may supply neither) without either `secret_value` or `secret_ref`,
 - **THEN** the request is rejected with `422 Unprocessable Entity` and no row and no vault entry are created.
 
 ### Requirement: Rotate a connection's secret in place
@@ -245,8 +245,8 @@ field and its own native config file and nothing else — another agent of the s
 another type, that runs on the previous connection stays on it. One pure function,
 `connection_for_agent(agent, connections)`, answers which connection an agent is on, and projection,
 the proxy's route, the chat model list and the protocol lock all ask it. A
-connection SERVES an agent when the agent's `connection_uid` names it, it exists, is enabled, is not
-`ollama`, and its scope reaches the agent; a pointer that names a missing, switched-off or
+connection SERVES an agent when the agent's `connection_uid` names it, it exists, is enabled, is not a
+stored `ollama` connection, and its scope reaches the agent; a pointer that names a missing, switched-off or
 out-of-scope connection means the agent is treated as on its built-in login, and the reconciler reports
 the keys left in its file rather than silently routing it elsewhere.
 
@@ -262,8 +262,8 @@ connection. The operation:
 
 1. requires the connection to exist, else 404, and the agent of that type to be registered, else 404;
 2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection is switched off or
-   the connection's scope does not name the agent, and with 409 `PROVIDER_INTERNAL_ONLY` for an
-   `ollama` connection;
+   the connection's scope does not name the agent, and with 422 `PROVIDER_PROTOCOL_RETIRED` for a
+   stored `ollama` connection;
 3. projects the connection into that agent's native config file, recording the file's prior content;
 4. sets the agent's `connection_uid` to the connection's uid;
 5. emits `provider_switched`;
@@ -278,7 +278,7 @@ Reach is the framework's per-agent `scope`
 `compatible_agents` field in the config, in `ProviderCreate` or in `ProviderPatch`. A new connection
 is pre-filled from its wire through the kind's `default_scope` hook — unscoped for a credentialed
 wire (including `unknown`, so an inconclusive probe hides nothing and the user decides), which reaches
-every agent including one registered later, and nothing (`scope = []`) for `ollama`. Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`, which the
+every agent including one registered later; a stored `ollama` connection with no reach record reads as nothing (`scope = []`). Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`, which the
 connection's scope control calls). `scope = []` is dormant: the connection reaches no
 agent, so no agent resolves its key. The projection writer MUST be chosen by AGENT type, not by
 protocol: a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape
@@ -382,9 +382,7 @@ A connection's `protocol` MUST be correctable — the probe that guessed the wir
 re-entering the key to fix it is a worse answer than editing it. But the wire is not inert, so
 changing it MUST be refused with 409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while an agent runs on
 the connection, with a message that names the way out (switching each agent that runs on it back to its built-in
-login, `POST /api/v1/providers/use-builtin/{agent_type}`). A keyless (`ollama`) connection covers no agent whatever its
-scope says (see "Keep ollama connections internal-only").
-Moving the wire of a connection an agent runs on would leave the native config Coffer
+login, `POST /api/v1/providers/use-builtin/{agent_type}`). Moving the wire of a connection an agent runs on would leave the native config Coffer
 already wrote standing, with nothing left that would ever take it off. Silently de-projecting instead
 MUST NOT be the answer: the developer asked to change a field, not to take their agents off a
 gateway. Re-sending the wire the connection already has is not a change, so a client that submits a
@@ -463,34 +461,6 @@ Deleting a connection that agents run on MUST put each of those agents back on i
 - **GIVEN** a connection two agents run on
 - **WHEN** a client reads `GET /api/v1/providers/{uid}/delete-preview`
 - **THEN** it lists each agent with its files and the lines the delete would remove, and every file, record and the connection are unchanged afterwards
-
-### Requirement: Keep ollama connections internal-only
-The `ollama` protocol is internal-only: such a connection MUST reach no agent whatever its scope
-says, MUST never be an agent's connection, and switching an agent onto it MUST write no native config: the switch is
-refused with `409 PROVIDER_INTERNAL_ONLY` before anything is touched. It has no key to
-write and is never written into an agent's config. The rule is enforced in
-`application/provider/targets.py::scoped_targets`, which answers `[]` for `ollama` BEFORE the scope
-is read — it is a rule about projection, not about the config's shape, and scope lives outside the
-config.
-
-#### Scenario: activating an ollama connection writes no native config
-- **GIVEN** a registered Claude Code agent and an `ollama` connection whose scope names that agent
-- **WHEN** the user switches the agent onto the connection
-- **THEN** the switch is refused with `409 PROVIDER_INTERNAL_ONLY`, no native config file is written and the agent's `connection_uid` is unchanged
-- **AND** the connection reports no reachable agent
-
-### Requirement: Make the secret optional for ollama and local runtimes
-`secret_ref` MUST be optional — required for `anthropic` / `openai` / `unknown` connections to a
-remote endpoint, absent for `ollama`, and optional for a local runtime connection (see "Configure a
-local model connection"), because LM Studio, vLLM and llama-server may be started with a key or
-without one. On create, supplying neither `secret_value` nor `secret_ref` is valid for `ollama`
-and for a local runtime, and an `ollama` connection MUST supply neither; elsewhere the exactly-one
-rule (see "Store an inline secret under a minted opaque ref") stands.
-
-#### Scenario: create an ollama connection without a secret
-- **GIVEN** no connection named `local-llm` exists,
-- **WHEN** the user creates one with `protocol="ollama"`, a `base_url`, and neither `secret_value` nor `secret_ref`,
-- **THEN** it persists with `secret_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `transcribe_default=false`.
 
 ### Requirement: Introspect an unsaved connection with an inline secret
 The endpoint-introspection routes MUST remain available to callers holding a connection that is not
@@ -1366,8 +1336,8 @@ The web surfaces:
   preset list (an unmatched endpoint gets Coffer's neutral provider glyph); the name is the user's
   own, and the row links to the detail page by `uid`.
 - The add-connection dialog asks for the vendor from a grid of eight equal buttons — Anthropic, OpenAI, Google Gemini, DeepSeek, OpenRouter, Ollama, LM Studio and Custom — which fill in the
-  endpoint and protocol (Custom reveals a manual protocol selector), in two steps, Endpoint and then Models. A local runtime (Ollama, LM Studio) asks for no key and,
-  until a runtime is chosen or an address is filled in, does not let the user go on to Models; the connection's Name
+  endpoint and protocol (Custom reveals a manual protocol selector), in two steps, Endpoint and then Models. A local runtime (Ollama, LM Studio) asks for no key, offers only the wires the detected runtime serves to agents (Anthropic, OpenAI) and,
+  until a runtime is detected, does not let the user go on to Models; the connection's Name
   appears once a runtime is chosen. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
 - The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens), the protocol, the host and, when the endpoint answered, how long it took, and the shared
@@ -1454,3 +1424,37 @@ connections MUST be accepted the same way, because the key means nothing.
 - **GIVEN** two connection files that both carry `internal_default: true`,
 - **WHEN** the vault is read and a sync round checks out a tree holding both,
 - **THEN** neither file is refused and the round does not stop on them.
+
+### Requirement: Stop offering the ollama protocol
+The `ollama` protocol (the Ollama-native API) is retired. Creating a connection with it
+(`POST /api/v1/providers`) and moving a connection onto it (`PATCH /api/v1/providers/{uid}` with
+`protocol="ollama"` for a connection that does not already hold it) MUST be refused with `422
+PROVIDER_PROTOCOL_RETIRED` before anything is stored. The message names the way on: a local Ollama
+runtime is added on its Anthropic or OpenAI wire. A stored connection that already holds `ollama`
+MUST stay readable and listed, MUST reach no agent whatever its scope says, MUST be refused with the
+same code when an agent is switched onto it, and MUST remain deletable; its other fields stay
+editable, and re-sending its stored protocol is not a move. The add-connection dialog MUST NOT offer
+`ollama`: a detected local runtime offers only the wires it serves to agents, and a stored
+`ollama` connection still renders on the list and its detail page. The local Ollama runtime itself is
+unaffected: it is reached over its Anthropic and OpenAI wires.
+
+#### Scenario: refuse to create a connection on the ollama protocol
+- **GIVEN** the daemon is running,
+- **WHEN** the user creates a connection with `protocol="ollama"`,
+- **THEN** the request is refused `422` `PROVIDER_PROTOCOL_RETIRED` and no connection is stored
+
+#### Scenario: refuse to move a connection onto the ollama protocol
+- **GIVEN** a connection on the `anthropic` protocol,
+- **WHEN** the user patches its `protocol` to `ollama`,
+- **THEN** the request is refused `422` `PROVIDER_PROTOCOL_RETIRED` and the stored protocol is unchanged
+
+#### Scenario: a stored ollama connection stays readable and deletable
+- **GIVEN** a stored connection whose protocol is `ollama`,
+- **WHEN** the user lists connections, reads it, re-sends its protocol in a patch and deletes it,
+- **THEN** it is listed with no reachable agent, the patch succeeds, and the delete removes it
+
+#### Scenario: activating an ollama connection writes no native config
+- **GIVEN** a registered Claude Code agent and a stored `ollama` connection whose scope names that agent
+- **WHEN** the user switches the agent onto the connection
+- **THEN** the switch is refused with `422 PROVIDER_PROTOCOL_RETIRED`, no native config file is written and the agent's `connection_uid` is unchanged
+- **AND** the connection reports no reachable agent

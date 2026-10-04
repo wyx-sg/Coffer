@@ -302,7 +302,7 @@ Coffer 按定时器、无需要求就做的机械性工作：记忆的 `aggregat
 
 ### 传输协议（Wire） {#wire}
 
-一个[连接](#connection)所讲的 API 协议：`anthropic`、`openai`、`ollama` 或 `unknown`。传输协议决定一个连接能服务哪些智能体。见[模型提供商](/zh/guides/providers)。
+一个[连接](#connection)所讲的 API 协议：`anthropic`、`openai` 或 `unknown`。传输协议决定一个连接能服务哪些智能体。见[模型提供商](/zh/guides/providers)。
 
 ### 写入者（Writer） {#writer}
 

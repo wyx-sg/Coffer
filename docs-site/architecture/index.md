@@ -52,7 +52,7 @@ What each box is:
 | `vault/` | A git repository under `~/.coffer`, the system of record for configuration and content: one JSON file per resource, state documents, knowledge collections, skill folders and secret ciphertext. Every accepted write is one validated commit naming its writer. Beside it, `local/` holds what is true of this machine only, `content/` media and the chat workspace, and `derived/` what can be rebuilt, such as the memory tree. See [Persistence](/architecture/persistence). |
 | `runs.db` | SQLite, history only: the audit log, MCP invocations, conversations and messages, sync rounds, usage. |
 | Upstream MCP servers | The servers you register — stdio subprocesses or HTTP endpoints — started per client session. |
-| Model providers | Anthropic, OpenAI-compatible and Ollama endpoints Coffer's own passes run on, and the provider profiles it projects into agents. |
+| Model providers | Anthropic and OpenAI-compatible endpoints, including model runtimes on this machine, and the provider profiles it projects into agents. |
 | Telegram and SeaTalk | Messaging platforms a channel binds to. Coffer reaches them only with outbound connections. |
 | Your git remote | An optional repository you own that the vault syncs with. |
 

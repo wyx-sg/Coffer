@@ -47,7 +47,7 @@ export function endpointSchema(t: TFunction) {
       if (!z.string().url().safeParse(url).success) {
         ctx.addIssue({ code: "custom", path: ["baseUrl"], message: t("providers.errors.baseUrl") });
       }
-      if (v.protocol !== "ollama" && v.secret.length === 0) {
+      if (v.secret.length === 0) {
         ctx.addIssue({
           code: "custom",
           path: ["secret"],

@@ -22,7 +22,7 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 **Model providers** is one page with one header — the title, an **Experimental** tag, a line saying what the page is for, and **Add provider** — over two tabs, **Providers** and **Usage**. The header and its **Add provider** button are the same on both tabs. This section is the **Providers** tab, one list beside one provider; the **Usage** tab, `/model-providers?tab=usage`, is described in [Usage](/guides/usage).
 
-- **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer only" for an Ollama-protocol provider), and the marks of the agents running on it. A chip marks the provider that transcribes speech (**Coffer · speech to text**); it is changed in **Settings › General**. Opening the page opens the first provider.
+- **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models" or "All models"), and the marks of the agents running on it. A chip marks the provider that transcribes speech (**Coffer · speech to text**); it is changed in **Settings › General**. Opening the page opens the first provider.
 - **The header** of the open provider shows its health, read from listing the endpoint's models when you open it — **Reachable**, **Key rejected** or **Unreachable** — its protocol, host and, when the endpoint answered, how long it took, the **Reach** control, **Test**, **Edit**, and a **⋯** menu with **Delete provider**.
 - **The detail** is one column, with no tabs: **Used by**, **Endpoint** and **Models**. A problem shows only in the header's pill and in the section it belongs to — an unreachable endpoint or a rejected key in **Endpoint**, a failed listing in **Models** — never again on each **Used by** row. **Used by** lists each agent running on the provider with its model, as a link reading **Codex › Change model** that opens that agent's page with its Change model form already open (see [Change an agent's model](/guides/agents#change-an-agent-s-model)), and **Speech to text** when the provider carries it, which opens **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:38471`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**. **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
 
@@ -37,20 +37,21 @@ Open **Model providers** and click **Add provider**. The dialog has two steps.
 1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex and chat) or **Anthropic-compatible** (Claude Code and chat). Give it a **Name** and paste the **API key**; the key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with the key you typed — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. Missing or malformed fields are named under each field.
 2. **Models.** Tick the models the provider should offer, with search and a type filter. Nothing ticked means every model the endpoint serves is offered. **Add provider** saves it and opens it.
 
-Choosing **Ollama** or **LM Studio** takes the local path instead: no key, and Coffer looks for a runtime on this Mac (see [Local model runtimes](#local-model-runtimes)). The next step stays greyed out until a runtime is chosen or an address is filled in, and the **Name** field appears once a runtime is chosen.
+Choosing **Ollama** or **LM Studio** takes the local path instead: no key, and Coffer looks for a runtime on this Mac (see [Local model runtimes](#local-model-runtimes)). The next step stays greyed out until a runtime is detected, and the **Name** field appears once a runtime is chosen.
 
 | Protocol | Meaning | Key |
 | --- | --- | --- |
 | `anthropic` | Anthropic Messages API | required |
 | `openai` | OpenAI-compatible API (OpenAI, Gemini's OpenAI endpoint, DeepSeek, OpenRouter, most gateways) | required |
-| `ollama` | a local Ollama server; used only by Coffer itself, never projected into an agent | none |
 | `unknown` | the endpoint's protocol could not be determined | required |
+
+A provider saved before the `ollama` protocol was retired keeps that value: it stays in the list and can be deleted, but it reaches no agent, and no provider can be created on it or edited onto it. Add a local Ollama runtime on its Anthropic or OpenAI protocol instead (see [Local model runtimes](#local-model-runtimes)).
 
 The protocol describes the endpoint. It decides how Coffer lists the endpoint's models and whether a key is needed; it does not decide which agent the provider is written into — that is the provider's reach.
 
 ## Choose which agents a provider reaches
 
-A new provider with a key reaches every agent, including agents you register later. An `ollama` provider starts dormant and never reaches an agent.
+A new provider with a key reaches every agent, including agents you register later.
 
 Use the **Reach** control in the provider's header on **Model providers**.
 
@@ -138,7 +139,7 @@ Reverting to the built-in login removes exactly the keys Coffer wrote. A `model`
 
 A provider can be a model runtime on this machine: **Ollama** (≥ 0.14.0 for Claude Code, ≥ 0.13.4 for Codex), **LM Studio** (≥ 0.4.1 / ≥ 0.3.29), **vLLM** (≥ 0.11.1 / ≥ 0.10.0) or llama.cpp's **llama-server** (Codex support is experimental). Coffer talks to each in its own native protocol through the proxy — no translation — so `mlx_lm.server`, which speaks only Chat Completions, is not supported; use LM Studio's MLX engine.
 
-In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible** when the runtime serves it, or **Ollama API** for Coffer's own use only. The next step starts with the models that can call tools ticked, each showing its context window.
+In **Add provider**, choose **Ollama** or **LM Studio**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible**, whichever the runtime serves. The next step starts with the models that can call tools ticked, each showing its context window.
 
 If nothing answers, the dialog says so and offers a prompt for your agent (**Ask an agent**, with **Copy prompt** in its menu) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running.
 
@@ -212,7 +213,7 @@ A choice saves as soon as you make it; there is no Save button. A line under the
 - **Set** — both halves are chosen and have not been tested during this visit.
 - **Answering** or **Failing** — the result of **Test**. A chat request would fail on a speech model, so Test asks the provider which models it serves: it passes when the list names your model and fails when it does not. A provider that answers but lists no models reads **Reachable**, because the model can't be checked. A failure shows the reason on that line and changes nothing: the pair stays as you chose it until you pick another one.
 
-At most one provider carries speech to text; setting it moves the flag from wherever it was. A provider can be switched into agents and carry speech to text at the same time. An `ollama` provider can only ever be used by Coffer itself, never by an agent. When the speech-to-text provider changes, the model is cleared unless the new provider's curated list includes it. The speech-to-text provider has no default: move the flag by choosing another provider.
+At most one provider carries speech to text; setting it moves the flag from wherever it was. A provider can be switched into agents and carry speech to text at the same time. When the speech-to-text provider changes, the model is cleared unless the new provider's curated list includes it. The speech-to-text provider has no default: move the flag by choosing another provider.
 
 The two memory passes that run on a timer, reading agents' memory and turning it into notes, call no model; they are switched from the **Automatic** control in the Memory header. `coffer daemon status` shows the passes running right now.
 
@@ -222,7 +223,7 @@ The two memory passes that run on a timer, reading agents' memory and turning it
 | --- | --- | --- |
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
 | Switch fails with `PROVIDER_DOES_NOT_REACH_AGENT` | The provider is switched off, or the provider's reach does not name the agent | Switch it on or add the agent to its reach, then switch again. |
-| Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use a provider with another protocol for the agent. |
+| Switch fails with `PROVIDER_PROTOCOL_RETIRED` | You tried to switch an agent onto a provider that still holds the retired `ollama` protocol | Add the runtime again on its Anthropic or OpenAI protocol and delete the old provider. |
 | The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key. |
 | The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; **Rotate proxy token** in the agent page's **⋯** menu issues a fresh one. |
 | Nothing answers on `127.0.0.1:38471` | The proxy is not running | The daemon restarts a crashed proxy within a few seconds; `coffer daemon status` shows whether the daemon is up. |

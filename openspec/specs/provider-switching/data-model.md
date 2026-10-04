@@ -16,9 +16,9 @@ model is chosen at the point of use.
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
-| `protocol` | `Protocol` | Required. `"anthropic"`, `"openai"`, `"ollama"` or `"unknown"`. The wire the endpoint speaks: it drives model introspection and whether a key is required, and supplies the scope a new connection STARTS with. It is not a projection gate — that is the resource's scope. Mutable (the probe that guessed it can be wrong). |
+| `protocol` | `Protocol` | Required. `"anthropic"`, `"openai"` or `"unknown"` (a stored `"ollama"` is retired: it is read, never offered; see "Stop offering the ollama protocol"). The wire the endpoint speaks: it drives model introspection and whether a key is required, and supplies the scope a new connection STARTS with. It is not a projection gate — that is the resource's scope. Mutable (the probe that guessed it can be wrong). |
 | `base_url` | `str` | Required, non-blank (trimmed); the upstream endpoint. |
-| `secret_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, minted opaquely as `provider/<uuid4>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown` unless the connection is a local runtime (`local_runtime` set), where it is optional; MUST be absent for `ollama`, which has no key. Immutable once set. |
+| `secret_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, minted opaquely as `provider/<uuid4>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown` unless the connection is a local runtime (`local_runtime` set), where it is optional; A stored retired `ollama` connection has none. Immutable once set. |
 | `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `local_runtime` | `LocalRuntime \| None` | Set when the endpoint is a model runtime on this machine (see "Local runtime" below); absent otherwise. |
@@ -30,7 +30,7 @@ There is no switched-on flag. Which agent runs on which connection is
 `AgentConfig.connection_uid` ([agent-registry](../agent-registry/data-model.md)),
 machine-local like the agent record, so an agent runs on at most one connection
 by construction. A connection SERVES an agent when `connection_uid` names it, it
-exists, is enabled, is not `ollama` and its scope reaches the agent;
+exists, is enabled, is not a stored `ollama` connection and its scope reaches the agent;
 `connection_for_agent(agent, connections)` in `application/provider/targets.py`
 is the one function that decides, used by projection, the proxy state, the chat
 model list, the switch operations and the protocol lock. A
@@ -48,7 +48,7 @@ layer hydrates them at the projection seam
 The scope a new connection starts with comes from the kind's `default_scope`
 hook (`make_provider_kind().default_scope`, `application/provider/kind.py`),
 which reads the wire through `starts_dormant(protocol)`
-(`domain/provider/config.py`): an `ollama` connection starts `scope = []`,
+(`domain/provider/config.py`): a stored `ollama` connection with no reach record reads as `scope = []`,
 dormant, because the framework's unscoped default would advertise a reach a
 keyless connection can never have; every other wire, `unknown` included, starts
 unscoped, which reaches every agent and goes on covering one registered later.
@@ -68,7 +68,7 @@ the resource file.
 class Protocol(StrEnum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
-    OLLAMA = "ollama"
+    OLLAMA = "ollama"  # retired: read from a stored file, never offered
     UNKNOWN = "unknown"
 ```
 
@@ -104,7 +104,7 @@ value object.
 | `ProviderSecretSourceInvalid` | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | both or neither secret source supplied |
 | `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection some agent runs on (see "Refuse to move the wire of a live connection") |
 | `ProviderDoesNotReachAgent` | `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | switching an agent onto a connection it is not reached by: the connection is switched off, or the connection's scope does not name the agent (see "Switch one agent at a time") |
-| `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | switching an agent onto an `ollama` connection (see "Keep ollama connections internal-only") |
+| `ProviderProtocolRetired` | `PROVIDER_PROTOCOL_RETIRED` | 422 | creating or editing a connection onto the `ollama` protocol, or switching an agent onto a stored one (see "Stop offering the ollama protocol") |
 | `ProviderTranscribeDefaultTaken` | `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | a resource write that would flag a second speech-to-text default (see "Keep an independent speech-to-text default") |
 
 ### Projection functions (`domain/provider/projection.py`)
@@ -293,7 +293,7 @@ kind declares no redactor because its config holds no secret).
 
 | Method | Purpose |
 |---|---|
-| `create(...) -> Resource` | Validate the secret source (exactly one, or neither for ollama); store the secret; register the resource with the wire's default scope. |
+| `create(...) -> Resource` | Validate the secret source (exactly one, or neither for a local runtime); refuse the retired `ollama` protocol; store the secret; register the resource with the wire's default scope. |
 | `list()` / `get(uid)` | The connections, as the surfaces read them. |
 | `update(uid, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
 | `delete(uid)` | Guard the owned secret via `find_secret_citations`, remove it when unowned elsewhere, delete the resource. |

@@ -25,33 +25,33 @@ def test_base_url_defaults_are_keyed_by_protocol() -> None:
     assert set(PROTOCOL_BASE_URLS) <= {p.value for p in Protocol}
     intro = ProviderIntrospector()
     assert intro._base_url("anthropic", None) == "https://api.anthropic.com"
-    assert intro._base_url("ollama", None) == "http://localhost:11434/v1"
+    assert intro._base_url("ollama", None) is None  # retired: no default of its own
     assert intro._base_url("openai", None) is None  # the SDK's own default
     # An inconclusive probe has no default: the user's URL is the only truth.
     assert intro._base_url("unknown", None) is None
     # An explicit base URL always wins over the protocol default.
-    assert intro._base_url("ollama", "http://127.0.0.1:9999/v1") == "http://127.0.0.1:9999/v1"
+    assert intro._base_url("openai", "http://127.0.0.1:9999/v1") == "http://127.0.0.1:9999/v1"
 
 
-async def test_loopback_ollama_is_exempt_from_the_ssrf_guard() -> None:
+async def test_a_loopback_runtime_is_exempt_from_the_ssrf_guard() -> None:
     """The regression this file exists for: a local-model connection must work.
 
-    ``ollama``'s base URL is loopback, which the guard blocks outright, so the
+    A local runtime's base URL is loopback, which the guard blocks outright, so the
     guard must not run for it — otherwise every local-model connection fails to
     list models or test.
     """
     intro = ProviderIntrospector()
-    # Both the protocol default and a hand-typed loopback URL pass without raising.
-    await intro._guard("ollama", "http://localhost:11434/v1")
-    await intro._guard("ollama", "http://127.0.0.1:11434/v1")
+    # A hand-typed loopback URL passes without raising.
+    await intro._guard("openai", "http://localhost:11434/v1")
+    await intro._guard("openai", "http://127.0.0.1:11434/v1")
 
 
 async def test_the_exemption_follows_the_url_not_the_declared_protocol() -> None:
     """``provider`` is whatever the caller sent: labelling a metadata or LAN
-    address "ollama" must not switch the guard off."""
+    address as a local runtime must not switch the guard off."""
     intro = ProviderIntrospector()
     for url in ("http://169.254.169.254/latest", "http://10.0.0.5:11434/v1"):
-        for provider in ("ollama", "openai", ""):
+        for provider in ("openai", ""):
             with pytest.raises(ValueError, match="SSRF"):
                 await intro._guard(provider, url)
 
