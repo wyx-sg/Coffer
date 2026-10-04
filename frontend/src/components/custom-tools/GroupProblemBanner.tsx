@@ -1,5 +1,5 @@
-// src/components/custom-tools/GroupProblemBanner.tsx — the banners a group shows for calls that fail (4.2.21: View in
-// Activity · Ask an agent ▾ · ?) and for a group that is off (4.2.22: Turn on).
+// src/components/custom-tools/GroupProblemBanner.tsx — the banners a group shows for calls that fail (4.2.21: View
+// calls, the group's own Invocations tab · Ask an agent ▾ · ?) and for a group that is off (4.2.22: Turn on).
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { CircleAlert, Power } from "lucide-react";
@@ -24,7 +24,9 @@ export function GroupFailingBanner({ group }: { group: CustomToolGroup }) {
       actions={
         <>
           <Button asChild size="sm" variant="outline">
-            <Link to="/activity?tab=mcp">{t("customTools.group.openActivity")}</Link>
+            <Link to={`/custom-tools/${encodeURIComponent(group.name)}/invocations`}>
+              {t("customTools.group.viewCalls")}
+            </Link>
           </Button>
           {group.handoff ? <AgentHandoff prompt={group.handoff.prompt} size="sm" /> : null}
         </>

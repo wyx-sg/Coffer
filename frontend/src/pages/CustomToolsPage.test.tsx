@@ -1,5 +1,5 @@
 // src/pages/CustomToolsPage.test.tsx — the Custom tools page: groups by health, one Add custom tool action,
-// the group page with no tabs, the tool drawer over it, and a hand-made request into an existing or a
+// the group page's Overview · Tools · Invocations tabs, the tool drawer over it, and a hand-made request into an existing or a
 // new group (import and re-import: CustomToolsImport.test.tsx).
 import { beforeEach, describe, expect, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -49,6 +49,28 @@ vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
+vi.mock("@/lib/api/mcpServers", () => ({
+  mcpServersApi: {
+    invocations: vi.fn(async () => ({
+      invocations: [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          session_id: "s1",
+          agent_uid: "ag-cc",
+          resource_uid: "uid-billing",
+          capability_type: "tool",
+          capability_key: "get_invoice",
+          duration_ms: 120,
+          status: "ok",
+          error_message: null,
+        },
+      ],
+      next_cursor: null,
+      total: 1,
+    })),
+  },
+}));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({
     data: [
@@ -149,7 +171,7 @@ describe("CustomToolsPage", () => {
     });
     api.list.mockResolvedValue([invoices]);
     api.get.mockResolvedValue(invoices);
-    renderAt("/custom-tools/billing");
+    renderAt("/custom-tools/billing/tools");
     const tools = await screen.findByRole("region", { name: /Tools/ });
     expect(within(tools).queryByRole("columnheader", { name: "Available to" })).toBeNull();
     expect(within(tools).queryByRole("button", { name: /Available to/ })).toBeNull();
@@ -192,7 +214,7 @@ describe("CustomToolsPage", () => {
     },
   );
 
-  acceptance("web-ui", "a group's page is one page with a tool drawer", async () => {
+  acceptance("web-ui", "a group's page has Overview, Tools and Invocations tabs", async () => {
     api.test.mockResolvedValue({
       ok: true,
       duration_ms: 180,
@@ -206,9 +228,14 @@ describe("CustomToolsPage", () => {
       failure: null,
     });
     renderAt("/custom-tools/billing");
-    const tools = await screen.findByRole("region", { name: "Tools" });
-    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
-    const definition = screen.getByRole("region", { name: "Definition" });
+    // Overview, the bare address: the definition, and no tools table.
+    const definition = await screen.findByRole("region", { name: "Definition" });
+    expect(
+      within(screen.getByRole("tablist"))
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent),
+    ).toEqual(["Overview", "Tools", "Invocations"]);
+    expect(screen.queryByRole("region", { name: "Tools" })).not.toBeInTheDocument();
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
     // The group's header reads `name ← 🔑 secret` (the secret is the whole value, no prefix).
     expect(within(definition).getByText("Authorization")).toBeInTheDocument();
@@ -227,6 +254,11 @@ describe("CustomToolsPage", () => {
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete group…"]);
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     expect(screen.getByText(/58 calls, 2 errors in 24 h/)).toBeInTheDocument();
+
+    // Tools: the table, the tab in the path. Radix tabs switch on mouse-down.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Tools" }));
+    await waitFor(() => expect(location()).toBe("/custom-tools/billing/tools"));
+    const tools = await screen.findByRole("region", { name: "Tools" });
     expect(within(tools).getByText("GET /invoices/{id}")).toBeInTheDocument();
     expect(within(tools).getByText("2 of 2 on")).toBeInTheDocument();
     // A tool has no reach of its own: the group's header carries it.
@@ -247,11 +279,17 @@ describe("CustomToolsPage", () => {
       { id: "7" },
     );
     expect(within(drawer).getByText(/Runs once with billing-token/)).toBeInTheDocument();
-    expect(location()).toBe("/custom-tools/billing");
+    expect(location()).toBe("/custom-tools/billing/tools");
+    fireEvent.click(within(drawer).getByRole("button", { name: "Cancel" }));
+
+    // Invocations: the group's calls, read by its uid.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Invocations" }));
+    await waitFor(() => expect(location()).toBe("/custom-tools/billing/invocations"));
+    expect(await screen.findByText("get_invoice")).toBeInTheDocument();
   });
 
   acceptance("web-ui", "a tool's drawer has no switch, and Delete tool is outlined", async () => {
-    renderAt("/custom-tools/billing");
+    renderAt("/custom-tools/billing/tools");
     const tools = await screen.findByRole("region", { name: /Tools/ });
     fireEvent.click(within(tools).getByText("get_invoice"));
     const drawer = await screen.findByRole("dialog");

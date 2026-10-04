@@ -44,7 +44,7 @@ const banners = (g: CustomToolGroup) =>
 beforeEach(() => vi.clearAllMocks());
 
 describe("group banners", () => {
-  test("failing calls say so, link to Activity and hand off to an agent", () => {
+  test("failing calls say so, link to the group's calls and hand off to an agent", () => {
     banners(
       makeGroup({
         name: "status-page",
@@ -56,7 +56,10 @@ describe("group banners", () => {
     expect(
       screen.getByText("Calls to status-page.internal.example are failing"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View in Activity" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View calls" })).toHaveAttribute(
+      "href",
+      "/custom-tools/status-page/invocations",
+    );
     expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();
   });
 

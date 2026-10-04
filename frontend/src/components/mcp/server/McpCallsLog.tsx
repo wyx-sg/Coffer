@@ -28,6 +28,8 @@ interface Props {
   agents: readonly AgentOut[];
   /** The built-in `coffer` server, whose calls are read from the cross-server list. */
   builtin?: boolean;
+  /** A custom-tool group's calls (its uid is an `mcp_server` resource's). */
+  group?: boolean;
   /** The Errors filter, when the pane owns it. */
   only?: CallsFilter;
   onOnlyChange?: (only: CallsFilter) => void;
@@ -41,6 +43,7 @@ export function McpCallsLog({
   transport,
   agents,
   builtin = false,
+  group = false,
   only: ownedOnly,
   onOnlyChange,
   onViewLog,
@@ -157,6 +160,7 @@ export function McpCallsLog({
         agentName={open ? nameOf(open.agent_uid) : ""}
         serverName={serverName}
         transport={transport}
+        group={group}
         onClose={() => setOpenId(null)}
         onViewLog={() => {
           setOpenId(null);

@@ -634,6 +634,7 @@
         "took": "耗时",
         "tool": "工具",
         "error": "错误",
+        "group": "分组",
         "server": "服务器",
         "started": "开始于",
         "viewServerLog": "查看服务器日志"
@@ -5248,6 +5249,11 @@
   "customTools": {
     "subtitle": "Coffer 替你的智能体发出的 HTTP API 请求，按共用的基础 URL 和密钥分组。",
     "title": "自定义工具",
+    "tabs": {
+      "overview": "概览",
+      "tools": "工具",
+      "invocations": "调用记录"
+    },
     "pendingApprovalSaved": "已保存。密钥需要先在 Coffer 应用里批准，调用才能使用它。",
     "list": {
       "toolCount_other": "{{count}} 个工具",
@@ -5383,7 +5389,7 @@
       "callsLine": "24 小时内 {{calls}}，{{errors}}",
       "calls_other": "{{count}} 次调用",
       "errors_other": "{{count}} 次错误",
-      "openActivity": "在活动中查看",
+      "viewCalls": "查看调用记录",
       "edit": "编辑分组",
       "delete": "删除分组",
       "deleteTitle": "删除 {{name}}？",

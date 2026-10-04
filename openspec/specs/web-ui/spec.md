@@ -2948,16 +2948,19 @@ MUST show only a first-run panel, with Add custom tool in the header and in the
 panel. A group's header MUST carry the same actions whatever its state — **Reach** (whose
 Off turns the group off), **Edit group** and a **⋯** menu that holds only Delete
 group… — and each problem is answered in a banner under it, never in the header:
-failing calls (with a link to Activity and the daemon's hand-off), a group that is
+failing calls (with **View calls**, its Invocations tab, and the daemon's hand-off), a group that is
 off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
 secret waiting for approval (Open approvals, the only button). Re-import is a
 button in the definition of an imported group.
 
-A group's detail page (`/custom-tools/<group>`, and no other route) MUST be one
-page with no tabs: the group's **definition** (base URL, and the auth header with
-the name of the secret it is bound to), its **reach**, a one-line summary of the
-last 24 hours (calls and failures), and the **tools table** — each tool's
-method and path, its switch and its changes-data flag. Above the table one row
+A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
+header — its **reach** and a one-line summary of the last 24 hours (calls and
+failures) — three tabs laid out like every other detail page's: **Overview**
+(the default, at the bare `/custom-tools/<group>`), the group's **definition**
+(base URL, and the auth header with the name of the secret it is bound to);
+**Tools**, the **tools table** — each tool's method and path, its switch and its
+changes-data flag; and **Invocations**, the group's calls of the last 24 hours
+as an MCP server's Invocations tab shows them, a call's details naming the group. Above the table one row
 carries a search, which narrows the rows by tool name, and **Add request**, so
 adding stays in view however many tools the group has; the count of tools that
 are on and **All on** / **All off** keep acting on the whole group. Choosing
@@ -3016,11 +3019,12 @@ the gateway").
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for an existing or new group and offers Import an OpenAPI spec and Add one request by hand, and no Script type
 
-#### Scenario: a group's page is one page with a tool drawer
-- **GIVEN** the `billing` group with three tools
-- **WHEN** the user opens `/custom-tools/billing` and chooses one tool
-- **THEN** the page shows the definition with the bound secret's name, the reach, a one-line 24-hour summary and the tools table, with no tabs
-- **AND** the tool opens in a drawer with its request and Test, and the address stays `/custom-tools/billing`
+#### Scenario: a group's page has Overview, Tools and Invocations tabs
+- **GIVEN** the `billing` group with three tools and a call in the last 24 hours
+- **WHEN** the user opens `/custom-tools/billing`, switches to Tools and chooses one tool, then switches to Invocations
+- **THEN** the page opens on Overview with the definition and the bound secret's name, under a header with the reach and a one-line 24-hour summary
+- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer with its request and Test without changing the address
+- **AND** Invocations, at `/custom-tools/billing/invocations`, lists the group's call
 
 #### Scenario: a tool's drawer has no switch, and Delete tool is outlined
 - **GIVEN** the `billing` group with a tool

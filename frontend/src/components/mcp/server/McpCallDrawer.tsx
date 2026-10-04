@@ -42,6 +42,8 @@ interface Props {
   serverName: string;
   /** "stdio" servers have a log of their own; HTTP ones do not. */
   transport: "stdio" | "http" | "unknown";
+  /** A custom-tool group's call: the row names the group, with no transport. */
+  group?: boolean;
   onClose: () => void;
   onViewLog: () => void;
 }
@@ -51,6 +53,7 @@ export function McpCallDrawer({
   agentName,
   serverName,
   transport,
+  group = false,
   onClose,
   onViewLog,
 }: Props) {
@@ -60,7 +63,9 @@ export function McpCallDrawer({
     ? [
         [t("mcp.page.log.result"), t(`mcp.page.log.status.${call.status}`)],
         [t("mcp.page.log.error"), call.error_message],
-        [t("mcp.page.log.server"), `${serverName} · ${t(`mcp.page.transport.${transport}`)}`],
+        group
+          ? [t("mcp.page.log.group"), serverName]
+          : [t("mcp.page.log.server"), `${serverName} · ${t(`mcp.page.transport.${transport}`)}`],
         [t("mcp.page.calledBy"), agentName],
         [t("mcp.page.log.started"), started(call.timestamp)],
         [t("mcp.page.log.took"), seconds(call.duration_ms)],

@@ -125,7 +125,9 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await expect(page.getByText("Imported from OpenAPI")).toBeVisible();
-    await expect(page.getByRole("tablist")).toHaveCount(0);
+    // Overview, the bare address, holds the definition; the table is on Tools.
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}/tools$`));
     const tools = page.getByRole("region", { name: "Tools", exact: true });
     await expect(tools.getByText("1 of 1 on")).toBeVisible();
     await expect(tools.getByText("GET /items/{id}")).toBeVisible();
@@ -140,7 +142,7 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await expect(drawer.getByTestId("custom-tool-response")).toContainText(
       /"id":\s*"7"/,
     );
-    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
+    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}/tools$`));
   } finally {
     await deleteGroup(name);
   }
@@ -181,7 +183,8 @@ test("a group made over REST is listed on Custom tools and left off MCP servers"
     await page.goto(`/mcp-servers/${name}`);
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
 
-    // A tool's switch saves at once.
+    // A tool's switch, on the Tools tab, saves at once.
+    await page.getByRole("tab", { name: "Tools" }).click();
     await page
       .getByRole("switch", { name: "Turn get_item on or off" })
       .click();
