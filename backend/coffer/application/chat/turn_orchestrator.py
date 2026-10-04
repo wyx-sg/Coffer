@@ -220,7 +220,8 @@ class TurnOrchestrator:
             log.exception("auto-advance turn failed for conversation %s", conversation_id)
             # Re-insert the head and pause so the message is neither lost nor retried in
             # a spin; the owner resumes (send) after fixing the cause (spec chat "Hold
-            # a queued turn that fails to start" — a queued message must not vanish).
+            # a queued turn that fails to start until the chat writes again" — a queued
+            # message must not vanish).
             state.queue.insert(0, message)
             state.paused = True
             error = TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")

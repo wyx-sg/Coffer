@@ -1,5 +1,5 @@
 """The Conversations list's source badge, directory and Running mark (spec chat
-"Show every conversation on the Conversations page").
+"Show channel conversations on the Conversations page").
 
 Driven through the real conversation routes on the channel fixture's real chat
 platform and channel core, with ``ChannelPlaces`` wired as the composition root

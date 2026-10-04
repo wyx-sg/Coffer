@@ -1,5 +1,5 @@
-"""Where in its channel a conversation lives (spec chat "Show every conversation
-on the Conversations page").
+"""Where in its channel a conversation lives (spec chat
+"Show channel conversations on the Conversations page").
 
 Shared by both kinds: the chat kind reads it through its ``ChannelPlacesPort``
 and the channel kind builds it — chat never imports channel code, so the value

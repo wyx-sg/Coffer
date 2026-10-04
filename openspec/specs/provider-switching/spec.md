@@ -657,8 +657,7 @@ Every Coffer surface that chooses a model MUST offer a fixed list with no free-t
 including the current value so it stays selectable; non-chat models are never offered, so a connection
 an agent runs on that curates models, none of them `text`, offers none. The per-conversation picker also
 always carries a **Default** option that clears the conversation's model, so the agent runs its
-projected default ([chat](../chat/spec.md) "Offer models from a fixed dropdown that keeps the
-current value"). A model name MUST be passed to the agent verbatim, with no validation against a list of
+projected default. A model name MUST be passed to the agent verbatim, with no validation against a list of
 Coffer's own (the one narrow exception is the local model proxy, which replaces a requested model its connection
 does not curate with the agent's projected default — [Reach API-key and local connections through the local model proxy](#requirement-reach-api-key-and-local-connections-through-the-local-model-proxy)): the CLI owns that namespace, so a renamed or added model works the day it ships, and one an
 account cannot run fails where every other unusable choice fails. A model name is still raw

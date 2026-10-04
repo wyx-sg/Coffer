@@ -104,8 +104,8 @@ def get_channel_note_reader() -> ChannelNoteResolver | None:
 
 
 def set_channel_places(places: ChannelPlacesPort | None) -> None:
-    """Called by the channel kind's composition (spec chat "Show every
-    conversation on the Conversations page"); ``None`` unwires it."""
+    """Called by the channel kind's composition (spec chat
+    "Show channel conversations on the Conversations page"); ``None`` unwires it."""
     global _channel_places
     _channel_places = places
 

@@ -1838,7 +1838,7 @@ word a user navigates by:
   Conversations is where a person reads and continues every conversation, a
   channel is an IM bot set up once and revisited rarely, and the conversations a
   channel carries are listed on the Conversations page with its badge (spec
-  [chat](../chat/spec.md) "Show every conversation on the Conversations page");
+  [chat](../chat/spec.md) "Show channel conversations on the Conversations page");
   the Channels page holds setup, status and settings only.
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.

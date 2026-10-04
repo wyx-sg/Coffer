@@ -146,7 +146,7 @@ class ModelCatalogPort(Protocol):
 
 class ChannelPlacesPort(Protocol):
     """Where in its channel each conversation of a listing lives (spec chat
-    "Show every conversation on the Conversations page").
+    "Show channel conversations on the Conversations page").
 
     Declared here, by the kind that consumes it; the channel kind satisfies it
     and the composition root wires the two, so chat never imports channel code.

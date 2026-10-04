@@ -3,7 +3,8 @@
 Earlier builds parsed the agents' ``.jsonl`` transcripts and remembered the
 result in ``~/.coffer/derived/cache/agent/.transcript_summaries.json``. Sessions
 are now listed by the agents themselves (spec agent-registry
-"List an agent's native sessions through the agent"), so nothing reads or writes that directory any more. It is
+"List an agent's native sessions through the agent"), so nothing reads or
+writes that directory any more. It is
 derived state, so deleting it loses nothing; this removes the leftover at
 startup. Idempotent, and a failure is only logged: a stale cache file is not a
 reason to stop the daemon.
