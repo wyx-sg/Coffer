@@ -4,9 +4,9 @@
 // Recent changes on top, then a 36px "Collections" header strip with a New
 // collection icon button, then every collection as a node of one tree — its
 // Inbox and its documents under it (spec knowledge "Present a collection as
-// one tree in the web UI"). The open collection is expanded; others open and
-// close on their chevron, and that choice is ephemeral UI state (it does not
-// survive a reload).
+// one tree in the web UI"). The open collection is expanded unless closed on
+// its chevron; others open and close on theirs, and that choice is ephemeral
+// UI state (it does not survive a reload).
 //
 // There is no filter input: the layer has no retrieval, and ⌘K already jumps
 // to a collection by name. The Inbox count in the tree is the only number and
@@ -47,15 +47,39 @@ interface Props {
 
 export function KnowledgeNav(props: Props) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState<Set<string>>(new Set());
-
-  const toggle = (uid: string) =>
-    setOpen((prev) => {
+  // What the person opened and closed on a chevron. The collection on screen
+  // is open unless they closed it; opening one first and then navigating into
+  // it keeps it open rather than flipping it shut.
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  // Arriving in a collection — a document, its Inbox, a link from Recent
+  // changes — opens it again even if it was closed earlier, so what is on
+  // screen is visible in the tree. Adjusted during render, not in an effect,
+  // so the tree never paints closed first.
+  const [arrivedAt, setArrivedAt] = useState(props.currentUid);
+  if (arrivedAt !== props.currentUid) {
+    setArrivedAt(props.currentUid);
+    const uid = props.currentUid;
+    if (uid && closed.has(uid)) {
+      setClosed((prev) => {
+        const next = new Set(prev);
+        next.delete(uid);
+        return next;
+      });
+    }
+  }
+  const isOpen = (uid: string) => !closed.has(uid) && (opened.has(uid) || uid === props.currentUid);
+  const toggle = (uid: string) => {
+    const nowOpen = !isOpen(uid);
+    const flip = (prev: Set<string>, add: boolean) => {
       const next = new Set(prev);
-      if (next.has(uid)) next.delete(uid);
-      else next.add(uid);
+      if (add) next.add(uid);
+      else next.delete(uid);
       return next;
-    });
+    };
+    setOpened((prev) => flip(prev, nowOpen));
+    setClosed((prev) => flip(prev, !nowOpen));
+  };
 
   return (
     <nav aria-label={t("knowledge.nav.label")} className="flex min-h-0 flex-1 flex-col">
@@ -98,9 +122,7 @@ export function KnowledgeNav(props: Props) {
               <KnowledgeCollectionNode
                 key={c.uid}
                 collection={c}
-                // The open collection is always expanded; a click on its
-                // chevron closes it only while it is not the one on screen.
-                expanded={c.uid === props.currentUid ? !open.has(c.uid) : open.has(c.uid)}
+                expanded={isOpen(c.uid)}
                 onToggle={() => toggle(c.uid)}
                 current={c.uid === props.currentUid}
                 tab={props.tab}

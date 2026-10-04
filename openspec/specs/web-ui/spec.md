@@ -2546,7 +2546,7 @@ needs git* (see "Offer the hand-off a knowledge refusal carries beside it").
 ### Requirement: Follow knowledge changes in Recent changes
 The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
 first, of curation passes and of documents people and agents wrote or deleted, with the items still
-waiting and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
+waiting — also newest submitted first — and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
 on a sweep and on demand"). It MUST be filtered with **Collection** and **Author** filter pills and a
 **Clear filters** control, the choice kept in the URL. A delete carries **Restore**. Choosing a pass
 MUST show what it changed — each document it wrote or retired, with a diff — and offer **Undo this
