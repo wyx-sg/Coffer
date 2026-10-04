@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/toast";
 import { getCofferToken } from "@/lib/auth";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { useRotateDaemonToken } from "@/lib/hooks/useSecurity";
+import { cn } from "@/lib/utils";
 
 import { SettingRow } from "@/components/settings/SettingsLayout";
 
@@ -56,8 +57,17 @@ export function AccessTokenRow() {
       label={t("settings.security.token.title")}
       description={t("settings.security.token.description")}
     >
+      {/* Shown, the token stays on one line in the same box but scrolls rather
+          than truncating what the user asked to see: focusable, so the arrow
+          keys move along it. */}
       <code
-        className="flex h-control-md w-48 items-center truncate rounded-md border border-border bg-surface-raised px-2.5 font-mono text-xs text-text"
+        className={cn(
+          "flex h-control-md w-48 items-center rounded-md border border-border bg-surface-raised px-2.5 font-mono text-xs text-text",
+          shown && token !== null
+            ? "overflow-x-auto whitespace-nowrap [scrollbar-width:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            : "truncate",
+        )}
+        tabIndex={shown && token !== null ? 0 : undefined}
         data-testid="daemon-token"
       >
         {token === null ? t("settings.security.token.none") : shown ? token : maskToken(token)}
