@@ -39,10 +39,10 @@ export function textDiff(before: string, after: string): TextDiff {
     let end = i;
     while (end < rows.length && keep[end]) end++;
     const hunk = rows.slice(i, end);
-    const oldStart = hunk.find((r) => r.oldLine !== undefined)?.oldLine ?? 0;
-    const newStart = hunk.find((r) => r.newLine !== undefined)?.newLine ?? 0;
+    const oldStart = hunk.find((r) => r.oldNo !== undefined)?.oldNo ?? 0;
+    const newStart = hunk.find((r) => r.newNo !== undefined)?.newNo ?? 0;
     const oldCount = hunk.filter((r) => r.kind !== "add").length;
-    const newCount = hunk.filter((r) => r.kind !== "del").length;
+    const newCount = hunk.filter((r) => r.kind !== "remove").length;
     lines.push({
       kind: "hunk",
       text: `@@ −${oldStart},${oldCount} +${newStart},${newCount} @@`,
@@ -50,12 +50,12 @@ export function textDiff(before: string, after: string): TextDiff {
     for (const r of hunk) {
       if (r.kind === "add") {
         added++;
-        lines.push({ kind: "add", text: r.text, newNo: r.newLine });
-      } else if (r.kind === "del") {
+        lines.push({ kind: "add", text: r.text, newNo: r.newNo });
+      } else if (r.kind === "remove") {
         removed++;
-        lines.push({ kind: "remove", text: r.text, oldNo: r.oldLine });
+        lines.push({ kind: "remove", text: r.text, oldNo: r.oldNo });
       } else {
-        lines.push({ kind: "context", text: r.text, oldNo: r.oldLine, newNo: r.newLine });
+        lines.push({ kind: "context", text: r.text, oldNo: r.oldNo, newNo: r.newNo });
       }
     }
     i = end;

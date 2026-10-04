@@ -265,3 +265,17 @@ test("the history is one card: versions on the left, the chosen version on the r
   fireEvent.click(within(list).getAllByRole("button")[1]);
   expect(await screen.findByText("new line of skills/hello/run.sh")).toBeInTheDocument();
 });
+
+acceptance("web-ui", "a history list narrows below its starting width", async () => {
+  renderSkillsPage("/skills/hello/history");
+  const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
+  // The page's own list/detail split is also on screen: take the History card's divider.
+  const card = list.closest(".rounded-xl") as HTMLElement;
+  const sep = within(card).getByRole("separator", { name: "Resize the list" });
+  expect(sep).toHaveAttribute("aria-valuenow", "250");
+  // The list may go down to 160px; the page-level 240px floor would stop it at 240.
+  expect(sep).toHaveAttribute("aria-valuemin", "160");
+  sep.focus();
+  for (let i = 0; i < 4; i++) fireEvent.keyDown(sep, { key: "ArrowLeft" });
+  expect(Number(sep.getAttribute("aria-valuenow"))).toBeLessThan(240);
+});

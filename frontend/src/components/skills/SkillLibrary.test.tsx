@@ -83,9 +83,11 @@ describe("SkillLibrary", () => {
     expect(names(group("Off")!).every((n) => !n?.includes("Off"))).toBe(true);
   });
 
-  test("there is no Reach filter or Kind filter; search applies to built-ins too", () => {
+  test("the only filters are search and Reach; search applies to built-ins too", () => {
     renderLibrary();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getAllByRole("combobox").map((c) => c.getAttribute("aria-label"))).toEqual([
+      "Reach",
+    ]);
     expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "zzz" },

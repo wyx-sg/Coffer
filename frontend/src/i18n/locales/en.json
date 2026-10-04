@@ -2596,6 +2596,10 @@
     "title": "Skills",
     "add": "Add skill",
     "searchPlaceholder": "Filter skills",
+    "reachFilter": {
+      "label": "Reach",
+      "all": "All"
+    },
     "group": {
       "attention": "Needs attention",
       "inUse": "In use",
@@ -3223,9 +3227,6 @@
       "needsGitTitle": "History needs git",
       "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
       "checkAgain": "Check again"
-    },
-    "diff": {
-      "none": "No changes to the text."
     },
     "writer": {
       "user": "You",
@@ -5984,6 +5985,9 @@
       "provider": "Provider",
       "findProvider": "Find a provider"
     }
+  },
+  "diff": {
+    "none": "No changes to the text."
   },
   "splitView": {
     "resizeList": "Resize the list"

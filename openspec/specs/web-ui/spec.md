@@ -1429,7 +1429,8 @@ library beside a reading pane. The library MUST group skills under **Needs
 attention**, **In use**, **Off** and **Built-in**, without counts in the group
 titles; a row MUST show, in place of its description, the one thing that needs the
 reader, and an Off row carries no reach word. The library offers a search, which
-applies to the built-in skills too, and no filter by reach or by kind. Rows ticked
+applies to the built-in skills too, and a reach filter — all skills, or the skills
+that reach one chosen agent — but no filter by kind. Rows ticked
 for bulk actions MUST show the selection as a bar above the list ("N of M
 selected", Reach, Delete, ×) and in the reading pane, which names the selected
 skills, says the built-in skill can't be selected and offers only what the bar does
@@ -1451,7 +1452,8 @@ each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
 "Declare the secrets a skill requires"), **Tools** — the MCP servers and
 custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
 the tools a skill requires"), each with its state and a link to its page — and
-**Skills** it needs. **Check again** re-checks the commands. The rows carry no
+**Skills** it needs. A row's name is shown in full, never cut short: a group's
+name column is as wide as its longest name. **Check again** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
 secret that is not set MUST read "secret <name> is not set" and open the Secrets
@@ -1486,10 +1488,10 @@ validates its source inline and MUST carry the Available to reach control.
 - **WHEN** the user ticks the two skills
 - **THEN** the bar above the list reads "2 skills selected", the reading pane names both, says the built-in skill can't be selected and offers Check copies of 2 skills, and the one Delete button deletes both after one confirmation
 
-#### Scenario: the library has no reach filter and groups skills by what they need
-- **GIVEN** a skill that is on, one that is off and one needing attention
-- **WHEN** the user opens the Skills page
-- **THEN** they sit under Needs attention, In use and Off, and the list offers a search and no reach or kind filter
+#### Scenario: the library filters by reach and groups skills by what they need
+- **GIVEN** a skill that is on for every agent, one that is off and one limited to Claude Code
+- **WHEN** the user opens the Skills page and chooses Codex in the Reach filter
+- **THEN** the skills first sit under In use and Off, the list offers a search and a Reach filter but no kind filter, and with Codex chosen only the skill on for every agent is listed and the address carries `?agent=<Codex's uid>`
 
 #### Scenario: a skill file changed on disk refuses the save and keeps the text
 - **GIVEN** a skill file open for editing
@@ -2686,22 +2688,22 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 
 ### Requirement: Show a knowledge document's history on its History tab
 A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**, neither
-with a count. History is **one list** of the document's versions, newest first — who wrote each (the
-user, Coffer's curation naming the agent whose item it curated, or sync), when, and its added and
-removed line counts — with a **See the pass** link on a curation's row. Choosing a row MUST expand it
-in place to its diff, with a switch between **Changes in this version** (against the one before) and
-**Compare with current**, and **Restore this version** on every version but the current one, which
-writes a new version rather than rewriting the past (spec [knowledge](../knowledge/spec.md) "Keep
-every document's history and undo a pass as a whole"); a long line wraps in the diff rather than
-being cut. A history that cannot be read MUST say so in one **Load error** row inside the tab —
-*Couldn't load the history*, the reason, **Retry** and **Open Activity** — leaving the Document tab
-working; without git the row is *History needs git* (see "Offer the hand-off a knowledge refusal
-carries beside it").
+with a count. History is the version-history split of "Show every version history as one split": the
+document's versions on the left, newest first — who wrote each (the user, Coffer's curation naming the
+agent whose item it curated, or sync), when, and its added and removed line counts — and the chosen
+version on the right, the newest chosen when the tab opens. The right side MUST carry a switch between
+**Changes in this version** (against the one before) and **Compare with current**, **Restore this
+version** on every version but the current one, which writes a new version rather than rewriting the
+past (spec [knowledge](../knowledge/spec.md) "Keep every document's history and undo a pass as a
+whole"), a **See the pass** link on a curation's version, and the diff. A history that cannot be read
+MUST say so in one **Load error** row inside the tab — *Couldn't load the history*, the reason,
+**Retry** and **Open Activity** — leaving the Document tab working; without git the row is *History
+needs git* (see "Offer the hand-off a knowledge refusal carries beside it").
 
 #### Scenario: the history tab lists versions with their writers
 - **GIVEN** a document the user created, that curation then changed from a Codex item
 - **WHEN** the user opens its History tab and chooses the older version's row
-- **THEN** the tab lists both versions newest first with their writers, the row expands in place to its diff, and Restore this version is offered on it and not on the current version
+- **THEN** the tab lists both versions newest first with their writers, its diff shows on the right beside the list, and Restore this version is offered on it and not on the current version
 - **AND** restoring it writes it back as a new version
 
 #### Scenario: a history that fails to load leaves the document readable
@@ -2979,6 +2981,23 @@ call is the server's page; it carries no step to read the daemon log.
 - **GIVEN** a call refused by its server, a denied call, and a daemon ERROR that is a refused connection beside one that is Coffer's own
 - **WHEN** each is opened
 - **THEN** the refused call's card and the environment error's button row lead with the hand-off, and the others have none
+
+### Requirement: Show every version history as one split
+Every page that lists the versions of a file or folder with what each changed — a skill's History tab
+and a knowledge document's History tab — MUST lay it out the same way: one bordered card split in two
+by a divider, the versions on the left (newest first, the newest marked **Current**, each with its
+writer and when) and, on the right, the chosen version's diff file by file, each file under its path,
+operation and line counts. The divider MUST move both ways: the list narrows to 160 px and widens to
+half the card, and the width is remembered per page. Every diff in the web UI that shows a file's
+changed lines — these histories, a knowledge change or pass, a stale-save compare, a skill restore,
+copy or update review, and a change preview — MUST be drawn by one renderer: old and new line
+numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped
+at a word boundary with a ↳ on its continuation rows, never cut off.
+
+#### Scenario: a history list narrows below its starting width
+- **GIVEN** a skill with two versions, its History tab open
+- **WHEN** the user moves the divider left
+- **THEN** the version list narrows below the width it opened at, down to 160 px, and the chosen version's diff stays on the right with long lines wrapped
 
 ### Requirement: Match a list's search on names only
 A search box over a list of named things — MCP servers and their tools, resources

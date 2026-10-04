@@ -94,6 +94,7 @@ export function SkillsPage() {
       <SplitView
         storageKey="skills.list"
         defaultListWidth={300}
+        listMinWidth={180}
         label={t("splitView.resizeList")}
         className="min-h-0 flex-1"
         detailClassName="overflow-y-auto"

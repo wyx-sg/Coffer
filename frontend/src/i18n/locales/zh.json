@@ -2596,6 +2596,10 @@
     "title": "技能",
     "add": "添加技能",
     "searchPlaceholder": "筛选技能",
+    "reachFilter": {
+      "label": "生效范围",
+      "all": "全部"
+    },
     "group": {
       "attention": "需要处理",
       "inUse": "使用中",
@@ -3223,9 +3227,6 @@
       "needsGitTitle": "历史需要 git",
       "needsGitBody": "请在这台 Mac 上安装 git 才能查看各版本。文档本身没有问题。",
       "checkAgain": "重新检查"
-    },
-    "diff": {
-      "none": "文字没有变化。"
     },
     "writer": {
       "user": "你",
@@ -5984,6 +5985,9 @@
       "provider": "提供商",
       "findProvider": "查找提供商"
     }
+  },
+  "diff": {
+    "none": "文字没有变化。"
   },
   "splitView": {
     "resizeList": "调整列表宽度"

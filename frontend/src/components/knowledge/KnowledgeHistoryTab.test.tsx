@@ -1,14 +1,14 @@
 // A document's History tab on its own (boards 5.1.05, 5.1.07, 5.1.08): one
-// bordered list whose rows open in place into a diff with Restore this version,
-// the one Load-error row when the history cannot be read, and the neutral
+// card whose left list picks a version and whose right pane shows its diff with
+// Restore this version (the newest, current version chosen to begin with), the one Load-error row when the history cannot be read, and the neutral
 // "History needs git" row carrying the daemon's install prompt.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { KnowledgeHistoryTab } from "@/components/knowledge/KnowledgeHistoryTab";
-import { wrapLine } from "@/lib/knowledge/wrapLine";
+import { wrapLine } from "@/lib/diff/wrapLine";
 import { EDIT, GATEWAY, NAME, PASS } from "@/components/knowledge/knowledgeTestData";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -66,21 +66,24 @@ afterEach(() => {
 });
 
 describe("the version list", () => {
-  test("is one list; a row opens in place into its diff and Restore", async () => {
+  test("is a list beside the diff; choosing a row shows its diff and Restore", async () => {
     api.getHistory.mockResolvedValue({ path: GATEWAY.path, versions });
     api.restoreVersion.mockResolvedValue(GATEWAY);
     renderTab();
 
-    expect(await screen.findAllByRole("listitem")).toHaveLength(2);
-    expect(screen.queryByText("newest first")).toBeNull();
-    expect(screen.queryByText(/\d versions?$/)).toBeNull();
+    const list = await screen.findByRole("list", { name: "Versions" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.getByText("Current")).toBeInTheDocument();
-    expect(api.getVersionDiff).not.toHaveBeenCalled();
+    // The current version is chosen to begin with: no restore onto itself.
+    expect(screen.getByRole("button", { name: /^Curation/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.queryByRole("button", { name: "Restore this version" })).toBeNull();
 
     const row = screen.getByRole("button", { name: /^You/ });
-    expect(row).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(row);
-    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(row).toHaveAttribute("aria-current", "true");
     await waitFor(() => expect(api.getVersionDiff).toHaveBeenCalledWith(GATEWAY.path, "c0ffee01"));
     expect(await screen.findByText("The orchestration layer.")).toBeInTheDocument();
 
@@ -105,18 +108,27 @@ describe("the version list", () => {
     expect(await screen.findByText("The old layer.")).toBeInTheDocument();
   });
 
-  test("the current version offers no restore; a curation row links to the pass", async () => {
+  test("the current version offers no restore; a curation version links to the pass", async () => {
     api.getHistory.mockResolvedValue({ path: GATEWAY.path, versions: [versions[0]] });
     renderTab();
     expect(await screen.findByRole("link", { name: "See the pass" })).toHaveAttribute(
       "href",
       `/knowledge/changes/${PASS.version}`,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Curation/ }));
     expect(
       await screen.findByRole("button", { name: "Changes in this version" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Restore this version" })).toBeNull();
+  });
+
+  test("the divider can be dragged below the width the list opens at", async () => {
+    api.getHistory.mockResolvedValue({ path: GATEWAY.path, versions });
+    renderTab();
+    const sep = await screen.findByRole("separator", { name: "Resize the list" });
+    expect(sep).toHaveAttribute("aria-valuenow", "250");
+    sep.focus();
+    for (let i = 0; i < 4; i++) fireEvent.keyDown(sep, { key: "ArrowLeft" });
+    expect(Number(sep.getAttribute("aria-valuenow"))).toBeLessThan(240);
   });
 });
 

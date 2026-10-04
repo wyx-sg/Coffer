@@ -1,7 +1,8 @@
 // frontend/src/components/skills/SkillLibrary.tsx
 // The left pane of the Skills page: the library of managed skills, laid out
 // like the MCP servers list (canvas 4.3 SkillsList). A filter field (name +
-// description) with Check copies beside it on the same row; then the skills
+// description) with Check copies beside it on the same row, and under them the
+// reach filter (every skill, or those reaching one agent); then the skills
 // grouped Needs attention (a problem — lib/skills/attention.ts), In use
 // (reaches at least one agent), Off (switched off, or limited to nobody) and,
 // last, Built-in (what Coffer ships), no count on the headings; then the
@@ -17,9 +18,9 @@ import { RefreshCw } from "lucide-react";
 
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
-import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
+import { SkillReachFilter } from "@/components/skills/SkillReachFilter";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
@@ -133,11 +134,9 @@ export function SkillLibrary({
                 {checkingCopies ? t("skills.checkingCopies") : t("skills.checkCopies")}
               </Button>
             </div>
-            {agentFilter ? (
-              <div className="flex items-center gap-2">
-                <AgentFilterPill filter={agentFilter} />
-              </div>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <SkillReachFilter filter={agentFilter} />
+            </div>
           </>
         )}
       </div>

@@ -432,7 +432,7 @@ The Skills page is the library of managed skills beside the open skill: a list w
 
 A skill added from a Git repository also shows its source — the repository, the folder, the pinned commit and the update status — with **Check now** and **Change source…** ("Change a Git-imported skill's source").
 
-The list's reach mark and the detail carry one reach button labelled with the answer ("All agents", the chosen agents' badges, "Off") that opens a panel whose choices are Off, All agents and Chosen agents — the last over the scope's list of agents, each switch and tick written at once. The list has no reach filter: each row shows its reach, and the list groups by state.
+The list's reach mark and the detail carry one reach button labelled with the answer ("All agents", the chosen agents' badges, "Off") that opens a panel whose choices are Off, All agents and Chosen agents — the last over the scope's list of agents, each switch and tick written at once. The list has a reach filter beside its search — every skill, or only the skills that reach one chosen agent — which reads and writes the same `agent` query parameter the agent's Skills tab links with; each row shows its reach, and the list groups by state.
 
 #### Scenario: the web UI and REST cover every operation
 - **GIVEN** the daemon is running,
