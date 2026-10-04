@@ -89,7 +89,7 @@ export function AgentsTable({ rows, isLoading }: Props) {
     {
       key: "actions",
       header: <span className="sr-only">{t("agents.list.col.actions")}</span>,
-      className: "w-[128px] text-right",
+      className: "w-[176px] text-right",
       cell: ({ row }) => <ActionsCell row={row} />,
     },
   ];

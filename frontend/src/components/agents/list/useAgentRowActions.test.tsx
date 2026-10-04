@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ActionMenu } from "@/components/ui/menu";
 import { acceptance } from "@/test/acceptance";
 import { fakeApi } from "@/test/fakeApi";
@@ -17,13 +18,14 @@ function use(d: FakeDaemon) {
   return d;
 }
 
-/** What the detail page does with the hook: a primary button, a menu, the dialogs. */
+/** What the list row does with the hook: a primary button, the hand-off, a menu, the dialogs. */
 function Harness({ row }: { row: AgentTypeOut }) {
-  const { state, primary, actions, dialogs } = useAgentRowActions(row);
+  const { state, primary, handoff, actions, dialogs } = useAgentRowActions(row);
   return (
     <div>
       <span data-testid="state">{state}</span>
       {primary ? <button onClick={primary.run}>{primary.label}</button> : null}
+      {handoff ? <AgentHandoff prompt={handoff} size="sm" help={false} /> : null}
       <ActionMenu label="menu" actions={actions} />
       {dialogs}
     </div>
@@ -123,19 +125,20 @@ describe("useAgentRowActions", () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, { clipboard: { writeText } });
       renderWithDaemon(<Harness row={row} />);
-      // No visible button: Copy prompt heads the ⋯ menu, apart from the rest.
-      expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
+      // No managed agent is available, so the hand-off is a visible Copy prompt
+      // button; the ⋯ menu holds only the agent's own actions.
+      const copyButton = await screen.findByRole("button", { name: "Copy prompt" });
+      expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "menu" }));
       const menu = await screen.findByRole("menu");
-      // No managed agent is available, so the menu has no Ask an agent.
       expect(
         within(menu)
           .getAllByRole("menuitem")
           .map((i) => i.textContent),
-      ).toEqual(["Copy prompt", "Use a different config directory…"]);
-      expect(within(menu).getByRole("separator")).toBeInTheDocument();
+      ).toEqual(["Use a different config directory…"]);
+      fireEvent.keyDown(menu, { key: "Escape" });
       // The daemon's prompt, copied as given; no install command anywhere.
-      fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy prompt" }));
+      fireEvent.click(copyButton);
       expect(writeText).toHaveBeenCalledWith("Please install OpenAI Codex on this machine.");
       expect(document.body).not.toHaveTextContent(/npm|install -g/);
     },
@@ -163,11 +166,8 @@ describe("useAgentRowActions", () => {
         }),
       );
       renderWithDaemon(<Harness row={row} />);
-      fireEvent.click(screen.getByRole("button", { name: "menu" }));
-      const ask = await within(await screen.findByRole("menu")).findByRole("menuitem", {
-        name: "Ask an agent",
-      });
-      fireEvent.click(ask);
+      // The split button, beside the ⋯, never inside it.
+      fireEvent.click(await screen.findByRole("button", { name: "Ask an agent" }));
       // Straight to the draft: no dialog, and nothing written.
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(writes(d)).toEqual([]);
@@ -189,9 +189,7 @@ describe("useAgentRowActions", () => {
       }),
     );
     renderWithDaemon(<Harness row={row} />);
-    fireEvent.click(await screen.findByRole("button", { name: "menu" }));
-    const menu = await screen.findByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Copy prompt" })).toBeInTheDocument();
-    expect(within(menu).queryByRole("menuitem", { name: "Ask an agent" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
   });
 });

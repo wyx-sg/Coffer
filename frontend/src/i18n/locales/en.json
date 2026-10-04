@@ -3964,8 +3964,7 @@
       "approvalRefused": {
         "title": "This channel's secret was refused",
         "body": "You refused its secret in the Coffer app, so the channel can't connect to {{platform}}. Open the Secrets page and press Ask again to raise it again — pairing and settings are kept."
-      },
-      "moreHandoff": "More ways to hand this off"
+      }
     },
     "meta": {
       "seatalkApp": "SeaTalk app {{appId}}",

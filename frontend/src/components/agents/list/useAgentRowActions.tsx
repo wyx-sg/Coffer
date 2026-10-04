@@ -4,9 +4,11 @@
 // the Overview's own buttons, through `open`), so a state offers the same
 // action wherever the agent is shown. The visible button is only ever a fix
 // Coffer can make: Connect (not connected, or a newly found agent), or Repair.
-// A healthy row has none, and an agent whose program is not on this
-// Mac has none either: its install prompt (Copy prompt, Ask an agent) heads the
-// ⋯ menu. The menu never repeats the visible button. Connect, Repair and
+// A healthy row has none. An agent whose program is not on this Mac has no fix
+// Coffer can make: it gets `handoff`, the daemon's install prompt, which the list
+// row shows as the shared Ask an agent split button (Foundations 0.7.04) before
+// the ⋯; the detail page shows it in the Overview instead. The menu never
+// repeats a visible action. Connect, Repair and
 // Disconnect all open the Review changes dialog; a connected agent's config
 // directory moves through its own review. There is no Remove: the list always
 // holds both supported agents.
@@ -18,7 +20,6 @@ import {
   AgentConnectionChangeDialog,
   type ConnectionChangeRequest,
 } from "@/components/agents/connect/AgentConnectionChangeDialog";
-import { useAgentHandoff } from "@/components/handoff/useAgentHandoff";
 import type { MenuAction } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 import type { AgentRowState } from "@/lib/agents/rowState";
@@ -38,6 +39,8 @@ export interface AgentRowActions {
   state: AgentRowState;
   actions: MenuAction[];
   primary: AgentPrimaryAction | null;
+  /** The install prompt of an agent whose program is not on this Mac, handed off visibly. */
+  handoff: string | null;
   dialogs: ReactNode;
   /** Long work running on this agent now (connect, disconnect, …), from wherever it started. */
   pending: AgentPending | null;
@@ -61,7 +64,6 @@ export function useAgentRowActions(
   const [configDirOpen, setConfigDirOpen] = useState(false);
   const uid = row.uid ?? null;
   const installPrompt = row.install_handoff?.prompt ?? null;
-  const handoff = useAgentHandoff(installPrompt ?? "");
 
   const copy = (text: string) =>
     void navigator.clipboard
@@ -100,21 +102,9 @@ export function useAgentRowActions(
   }
 
   const dirExists = row.state === "installed_active" || row.state === "config_only";
-  const actions: MenuAction[] = [];
-  // An agent whose program is not on this Mac: the install prompt heads the
-  // menu, a separator keeps it apart from the rest.
   const installRow = state === "not_installed" || state === "config_left_behind";
-  if (installRow && installPrompt) {
-    actions.push({
-      key: "copy-prompt",
-      label: t("handoff.copyPrompt"),
-      onSelect: () => copy(installPrompt),
-    });
-    if (handoff.canAsk) {
-      actions.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
-    }
-  }
-  const lead = actions.length > 0;
+  const handoff = installRow ? installPrompt : null;
+  const actions: MenuAction[] = [];
   // On the page of an agent not found, the card offers the directory change as a button.
   const cardHasIt = state === "not_found" && !opts.inList;
   if (!cardHasIt) {
@@ -123,7 +113,6 @@ export function useAgentRowActions(
       label: t("agents.rowMenu.configDir"),
       onSelect: open.configDir,
       disabled: busy,
-      separated: lead,
     });
   }
   if (dirExists) {
@@ -159,5 +148,5 @@ export function useAgentRowActions(
     </>
   );
 
-  return { state, actions, primary, dialogs, pending, open };
+  return { state, actions, primary, handoff, dialogs, pending, open };
 }
