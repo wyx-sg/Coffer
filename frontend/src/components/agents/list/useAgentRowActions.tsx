@@ -12,7 +12,7 @@
 // Disconnect all open the Review changes dialog; a connected agent's config
 // directory moves through its own review. There is no Remove: the list always
 // holds both supported agents.
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Plug, Wrench, type LucideIcon } from "lucide-react";
 
@@ -28,6 +28,7 @@ import { useFsActions } from "@/lib/fsActions";
 import { useAgentPending, type AgentPending } from "@/lib/hooks/useAgentPending";
 import { AgentConfigDirDialog } from "./AgentConfigDirDialog";
 import { useAgentRowState } from "./useAgentRowState";
+import { useRowDialogState } from "./useRowDialogState";
 
 interface AgentPrimaryAction {
   label: string;
@@ -60,8 +61,11 @@ export function useAgentRowActions(
   const { state = "checking", connection } = useAgentRowState(row);
   const pending = useAgentPending(row);
   const busy = pending !== null;
-  const [change, setChange] = useState<ConnectionChangeRequest | null>(null);
-  const [configDirOpen, setConfigDirOpen] = useState(false);
+  const [change, setChange] = useRowDialogState<ConnectionChangeRequest | null>(
+    `${row.type}:change`,
+    null,
+  );
+  const [configDirOpen, setConfigDirOpen] = useRowDialogState(`${row.type}:configDir`, false);
   const uid = row.uid ?? null;
   const installPrompt = row.install_handoff?.prompt ?? null;
 
