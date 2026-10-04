@@ -85,7 +85,7 @@ def mask_line(raw: str) -> tuple[str, tuple[MaskedValue, ...]]:
     """``raw`` with each plaintext value on it masked, and where each one is
     with its shape. The masked text keeps ``raw``'s length; the value itself
     is not returned."""
-    hits = sorted(_line_hits(raw), key=lambda h: h[2])
+    hits = sorted(line_hits(raw), key=lambda h: h[2])
     out: list[MaskedValue] = []
     text = raw
     for key, value, start, end in hits:
