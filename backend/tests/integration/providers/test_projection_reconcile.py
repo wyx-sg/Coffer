@@ -381,3 +381,21 @@ async def test_a_codex_projection_in_step_is_no_difference(codex: _Env) -> None:
     await codex.switch()
 
     assert (await codex.reconciler.plan(trigger=Trigger.PERIOD)).results == ()
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the Codex auth table carries a timeout so a cold token command is not cut off",
+)
+async def test_a_codex_auth_table_without_a_timeout_is_re_projected(codex: _Env) -> None:
+    await codex.switch()
+    config = codex.agent.path("config")
+    current = config.read_text(encoding="utf-8")
+    assert "timeout_ms = 30000" in current
+    config.write_text(current.replace(", timeout_ms = 30000", ""), encoding="utf-8")
+
+    result = _only(await codex.reconciler.run(trigger=Trigger.PERIOD))
+
+    assert result.outcome is Outcome.APPLIED
+    assert any(p.endswith("auth.timeout_ms") for p in result.change.difference.changed_params)
+    assert config.read_text(encoding="utf-8") == current

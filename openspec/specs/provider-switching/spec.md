@@ -1290,9 +1290,13 @@ with only the managed keys. The `[model_providers.coffer]` table points Codex at
 proxy's Responses route, `base_url = "http://127.0.0.1:<proxy port>/openai/v1"`, with
 `supports_websockets = false` (pointed at another base URL Codex otherwise tries the Responses
 WebSocket transport first and stalls), `requires_openai_auth = false`, and
-`auth = {command = "<absolute path to the coffer CLI>", args = ["proxy", "token", "--agent-uid", "<agent uid>"]}`,
+`auth = {command = "<absolute path to the coffer CLI>", args = ["proxy", "token", "--agent-uid", "<agent uid>"], timeout_ms = 30000}`,
 so Codex fetches its local proxy token itself — a Codex the user starts in their own terminal needs
-nothing exported, and no provider key is in any Codex process's environment. The command-backed
+nothing exported, and no provider key is in any Codex process's environment. `timeout_ms` is
+written because Codex gives the command 5 seconds unless told otherwise, and a cold start (the
+frozen CLI unpacking itself, the daemon still starting, Codex launching its MCP servers at the same
+time) can exceed that, which leaves Codex's first turn hanging; a `config.toml` written without it is
+a difference the reconcile pass repairs. The command-backed
 `auth` table needs Codex 0.155.1 or later. The table MUST name no `env_key`, and the
 projection MUST NOT put a provider key into any environment variable Codex passes to the shell
 commands the agent runs; the user's own `shell_environment_policy` is left as it is.
@@ -1334,6 +1338,12 @@ not used).
 - **WHEN** the agent is switched onto the connection
 - **THEN** the catalogue entry for `gpt-x` carries `context_window` and `max_context_window` 200000, `auto_compact_token_limit` 180000 and an empty `supported_reasoning_levels`
 - **AND** `config.toml` carries no `model_reasoning_effort` written by Coffer
+
+#### Scenario: the Codex auth table carries a timeout so a cold token command is not cut off
+- **GIVEN** a Codex agent switched onto a connection, whose `auth` table Codex would otherwise limit to its 5 second default
+- **WHEN** the projection is written
+- **THEN** the `auth` table carries `timeout_ms = 30000`
+- **AND** a `config.toml` whose `auth` table lacks `timeout_ms` is re-projected on the next reconcile pass
 
 ### Requirement: Offer every connection operation over REST and in the web UI
 Create, switch, revert-to-built-in, rename, edit, enable and disable, scope and delete MUST be

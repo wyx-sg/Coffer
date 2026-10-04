@@ -124,7 +124,7 @@ base_url = "http://127.0.0.1:38471/openai/v1"
 wire_api = "responses"
 supports_websockets = false
 requires_openai_auth = false
-auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"] }
+auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"], timeout_ms = 30000 }
 ```
 
 文件用 `tomlkit` 编辑，所以你的注释和键顺序都会保留。Codex 自己运行 `auth` 命令获取令牌，所以你在自己终端里启动的 Codex 不需要导出任何变量，任何 Codex 进程的环境里都没有 key。基于命令的 `auth` 表需要 **Codex 0.155.1 或更高版本**。`supports_websockets = false` 让 Codex 不去先尝试 Responses WebSocket 传输，因为它在除 OpenAI 之外的任何 base URL 上都会卡住。
