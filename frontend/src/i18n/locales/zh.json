@@ -2158,10 +2158,6 @@
       "title": "来自 Coffer",
       "more": "另有 {{count}} 个"
     },
-    "filterPill": {
-      "agent": "智能体",
-      "remove": "移除 {{name}} 筛选"
-    },
     "kindTab": {
       "loadFailed": "无法读取此列表",
       "moreFor": "{{name}} 的更多操作"
@@ -2590,16 +2586,16 @@
       }
     }
   },
+  "reachFilter": {
+    "label": "生效范围",
+    "all": "全部"
+  },
   "skills": {
     "subtitle": "Coffer 把技能放在一个主文件夹里，以链接或副本的方式交付给你选的智能体。",
     "builtinBadge": "内置",
     "title": "技能",
     "add": "添加技能",
     "searchPlaceholder": "筛选技能",
-    "reachFilter": {
-      "label": "生效范围",
-      "all": "全部"
-    },
     "group": {
       "attention": "需要处理",
       "inUse": "使用中",

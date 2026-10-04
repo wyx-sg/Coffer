@@ -297,10 +297,10 @@ describe("ResourcesPage", () => {
     expect(screen.getByText("linear")).toBeInTheDocument();
   });
 
-  test("the list has no Reach filter, only the search", () => {
+  test("the list has the search and a Reach filter", () => {
     stubQuery({ data: [server("u1", "github")] });
     renderAt();
-    expect(screen.queryByRole("combobox", { name: "Reach" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Reach" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /filter servers/i })).toBeInTheDocument();
   });
 

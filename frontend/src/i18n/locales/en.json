@@ -2158,10 +2158,6 @@
       "title": "From Coffer",
       "more": "+{{count}} more"
     },
-    "filterPill": {
-      "agent": "Agent",
-      "remove": "Remove the {{name}} filter"
-    },
     "kindTab": {
       "loadFailed": "Couldn’t read this list",
       "moreFor": "More for {{name}}"
@@ -2590,16 +2586,16 @@
       }
     }
   },
+  "reachFilter": {
+    "label": "Reach",
+    "all": "All"
+  },
   "skills": {
     "subtitle": "Skills Coffer keeps in one master folder and delivers to the agents you choose, as a link or a copy.",
     "builtinBadge": "Built-in",
     "title": "Skills",
     "add": "Add skill",
     "searchPlaceholder": "Filter skills",
-    "reachFilter": {
-      "label": "Reach",
-      "all": "All"
-    },
     "group": {
       "attention": "Needs attention",
       "inUse": "In use",
