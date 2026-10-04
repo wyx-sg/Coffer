@@ -889,10 +889,8 @@ async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="skill-manager", scenario="a skill's title is edited without touching disk"
-)
-async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
+@pytest.mark.acceptance(spec="skill-manager", scenario="a skill takes no title")
+async def test_a_skill_takes_no_title(tmp_path):
     """A skill carries no title: one submitted is refused and disk is untouched."""
     skill_svc, audit, store, graph, _agent, skill_dir, skill = await _deliver_before(tmp_path)
     disk_before = _disk_state(store, skill_dir, "before")
