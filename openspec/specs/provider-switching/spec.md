@@ -724,6 +724,12 @@ correctable in place; a correction on an already-offered row patches the curated
 while one made on a row not offered yet is held on the surface and travels into the entry when its
 switch is turned on.
 
+The section's toolbar also carries **Turn all on** and **Turn all off**, which switch every row the search and Type filter currently
+match (not only the rows shown before "Show more") in one write, keeping the prices and types of the rows that stay. Turning rows on
+from an unrestricted provider writes the explicit list first, as a single switch does. **Turn all off** MUST NOT write a selection that
+would leave no model on, because an empty selection means "no restriction"; it is disabled, with a tooltip saying at least one model
+must stay on, and it is also disabled when no matched row is on. **Turn all on** is disabled when every matched row is already on.
+
 #### Scenario: the models table lists the endpoint's models when it opens
 - **GIVEN** a connection whose endpoint serves a model list,
 - **WHEN** the connection's detail is opened,
@@ -732,6 +738,11 @@ switch is turned on.
 - **GIVEN** a connection whose endpoint refuses the model-list probe,
 - **WHEN** the connection is opened,
 - **THEN** the Models section's title reads "Listing failed" with Refresh beside it and a box says the endpoint's models could not be listed, with no Retry in the box, and the connection's existing curated selection is left exactly as it was.
+#### Scenario: turn the matched models all on or all off in one write
+- **GIVEN** a connection whose endpoint serves `a-chat`, `b-chat` and `c-embed`, with `a-chat` and `b-chat` offered,
+- **WHEN** Turn all on is pressed, and then, with the search `b-` typed, Turn all off is pressed,
+- **THEN** the first press writes all three models in one PATCH, with each model's type, and the second writes only the rows that did not match the search,
+- **AND** Turn all off is disabled, with a tooltip, whenever it would leave no model on, and nothing is written.
 
 ### Requirement: Store a modality with each curated model
 `ProviderConfig.models` MUST be a list of OBJECTS, not of strings: each entry is a `CuratedModel` of

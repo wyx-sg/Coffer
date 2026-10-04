@@ -154,7 +154,7 @@ A gateway account often serves dozens of models when you use two or three. The p
 
 1. Open **Model providers** and choose the provider.
 2. Scroll to **Models**. Coffer lists the endpoint's models when the provider opens, and says when it last did; **Refresh**, beside the section's title, asks again. If listing fails, the title reads **Listing failed · last listed &lt;date&gt;**, a box says what failed, and **Refresh** is the way to try again; your current selection is left alone and still offered. An endpoint that lists nothing says so: leave it like that and every model the endpoint accepts stays available.
-3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong — it reads as plain text with a chevron and opens a menu: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. A search and a **Type** filter narrow the list; a model Coffer's engine, speech to text or an agent uses carries a tag saying so.
+3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong — it reads as plain text with a chevron and opens a menu: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. A search and a **Type** filter narrow the list; a model Coffer's engine, speech to text or an agent uses carries a tag saying so. **Turn all on** and **Turn all off**, beside the search, switch every model the search and filter match in one step; turning all off is refused while it would leave no model on, because an empty list means every model is offered.
 
 Only switched-on models appear in agent, chat and channel pickers, and chat pickers list text models only. (The section's help tip says so too.)
 
