@@ -139,7 +139,9 @@ export function useSaveCustomTool(group: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ tool, body }: ToolSave) =>
-      tool === null ? customToolsApi.addTool(group, body) : customToolsApi.updateTool(group, tool, body),
+      tool === null
+        ? customToolsApi.addTool(group, body)
+        : customToolsApi.updateTool(group, tool, body),
     onSuccess: (next) => settle(qc, next),
   });
 }

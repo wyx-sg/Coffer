@@ -55,20 +55,42 @@ export function ConversationsIndex({ c, onNew, agentNames }: Props) {
   const { filters } = c;
   const { clear } = sel;
   useEffect(() => clear(), [filters, clear]);
-  // A filter narrows what is loaded: a view it empties, with more to read,
-  // keeps reading rather than saying there is nothing.
+  // Every filter is the server's, so a page holds only matching rows: the list
+  // reads the next page only when the reader scrolls to its end.
   const { listLoading, hasMore, isLoadingMore, loadMore } = c;
   const drained = c.listConversations.length === 0;
-  useEffect(() => {
-    if (!listLoading && drained && hasMore && !isLoadingMore) loadMore();
-  }, [listLoading, drained, hasMore, isLoadingMore, loadMore]);
   const narrowed = isFiltered(filters);
-  const none = !listLoading && c.allConversations.length === 0 && !narrowed && !c.listError;
-  const pillsNarrow = filters.source.length > 0 || filters.agent.length > 0;
-  // The pills narrow what is loaded, so their count is the loaded rows; otherwise the server's.
-  const total = pillsNarrow ? c.listConversations.length : (c.total ?? c.allConversations.length);
+  const none = !listLoading && drained && !narrowed && !c.listError;
+  const total = c.total ?? c.listConversations.length;
 
   const noMatches = !listLoading && drained && !hasMore && !c.listError && narrowed;
+
+  // Select all means every conversation the view holds: the pages not read
+  // yet are read first, then everything is ticked. Ticked again, it clears.
+  const { listConversations, loadAll } = c;
+  const { setMany } = sel;
+  const [selectingAll, setSelectingAll] = useState(false);
+  const shownIds = useMemo(() => listConversations.map(rowKey), [listConversations]);
+  const tickedShown = sel.selectedRows.length;
+  const allTicked = tickedShown > 0 && tickedShown === shownIds.length && !hasMore;
+  const toggleAll = () => {
+    if (allTicked || selectingAll) {
+      setSelectingAll(false);
+      clear();
+      return;
+    }
+    setMany(shownIds, true);
+    if (hasMore) {
+      setSelectingAll(true);
+      void loadAll();
+    }
+  };
+  useEffect(() => {
+    if (!selectingAll || hasMore || isLoadingMore) return;
+    setMany(shownIds, true);
+    setSelectingAll(false);
+  }, [selectingAll, hasMore, isLoadingMore, shownIds, setMany]);
+  useEffect(() => setSelectingAll(false), [filters]);
 
   const newButton = (
     <Button onClick={onNew}>
@@ -118,7 +140,7 @@ export function ConversationsIndex({ c, onNew, agentNames }: Props) {
           clearInList={noMatches}
         />
       )}
-      {c.listError && c.allConversations.length === 0 ? (
+      {c.listError && drained ? (
         <EmptyState
           tone="error"
           title={t("conversations.list.loadFailed")}
@@ -155,17 +177,22 @@ export function ConversationsIndex({ c, onNew, agentNames }: Props) {
             <ConversationsList
               conversations={c.listConversations}
               isLoading={listLoading}
-              loadingMore={isLoadingMore || (drained && hasMore)}
+              loadingMore={isLoadingMore}
               agentNames={agentNames}
               hrefFor={c.pathFor}
               archivedView={filters.archived}
               selection={{ selected: sel.keys, setMany: sel.setMany }}
+              selectAll={{
+                checked: allTicked,
+                indeterminate: !allTicked && (tickedShown > 0 || selectingAll),
+                onToggle: toggleAll,
+              }}
               onArchive={archive}
               onDelete={setDeleting}
             />
           </div>
           <LoadMoreFooter
-            loaded={c.allConversations.length}
+            loaded={c.listConversations.length}
             hasMore={hasMore}
             loading={isLoadingMore}
             onMore={loadMore}

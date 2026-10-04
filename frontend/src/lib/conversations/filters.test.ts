@@ -1,46 +1,7 @@
 // src/lib/conversations/filters.test.ts
 import { describe, expect, it } from "vitest";
 
-import type { Conversation } from "@/lib/api/chat";
-import {
-  clearFilters,
-  filterConversations,
-  filtersSearch,
-  hasLegacyChannel,
-  isFiltered,
-  parseFilters,
-  sourceToken,
-} from "./filters";
-
-function conv(id: string, agent: string, binding?: Partial<Conversation["channel_binding"]>) {
-  return {
-    id,
-    agent_key: agent,
-    title: id,
-    created_at: "2026-09-30T08:00:00Z",
-    updated_at: "2026-09-30T08:00:00Z",
-    archived_at: null,
-    running: false,
-    preview: null,
-    channel_binding: binding
-      ? {
-          channel_uid: "ch1",
-          channel: "Team bot",
-          chat_id: "c1",
-          mirror: null,
-          platform: "seatalk",
-          place: null,
-          ...binding,
-        }
-      : null,
-  } as Conversation;
-}
-
-const web = conv("web", "claude_code");
-const seatalk = conv("st", "claude_code", {});
-const telegram = conv("tg", "codex", { channel_uid: "ch2", platform: "telegram" });
-const orphan = conv("gone", "codex", { channel_uid: "ch3", channel: null, platform: null });
-const all = [web, seatalk, telegram, orphan];
+import { clearFilters, filtersSearch, hasLegacyChannel, isFiltered, parseFilters } from "./filters";
 
 describe("conversation filters", () => {
   it("reads sources, agents, the search and the archived view from the URL", () => {
@@ -71,21 +32,6 @@ describe("conversation filters", () => {
     expect(filtersSearch(f)).toBe("?source=ch1&agent=codex");
     expect(hasLegacyChannel(new URLSearchParams(filtersSearch(f)))).toBe(false);
     expect(parseFilters(new URLSearchParams("source=ch1&channel=ch1")).source).toEqual(["ch1"]);
-  });
-
-  it("filters by source (several at once) and by agent", () => {
-    const by = (q: string) => filterConversations(all, parseFilters(new URLSearchParams(q)));
-    expect(by("source=coffer")).toEqual([web]);
-    expect(by("source=ch1")).toEqual([seatalk]);
-    expect(by("source=coffer,ch2")).toEqual([web, telegram]);
-    expect(by("agent=codex")).toEqual([telegram, orphan]);
-    expect(by("agent=codex&source=ch2,ch3")).toEqual([telegram, orphan]);
-    expect(by("")).toEqual(all);
-  });
-
-  it("names a conversation's source by its channel uid, Coffer when it has none", () => {
-    expect(sourceToken(orphan)).toBe("ch3");
-    expect(sourceToken(web)).toBe("coffer");
   });
 
   it("counts a source, an agent or a search as narrowing, and clears them but not the archived view", () => {

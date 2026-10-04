@@ -1,14 +1,13 @@
 // frontend/src/components/channel/ChannelSettingsTab.tsx
-// A channel's Settings, saved as they change — there is no Save button. A
-// quiet indicator at the top says Saving… / Saved / Couldn't save. The
-// sections: Connection (its name — any display name, kept as the resource's
-// title — SeaTalk's App ID, the secret shown masked and replaced through a
-// dialog, and the machine that runs it), Receiving messages (group rules and
-// batching), Replies and conversations, and Working directories; the one
-// destructive action, Delete, is a row at the bottom, not a section.
+// A channel's Settings, saved as they change — there is no Save button and no
+// Saved line; a failed save is a toast. The sections: Connection (its name —
+// any display name, kept as the resource's title — SeaTalk's App ID, the
+// secret shown masked and replaced through a dialog, and the machine that runs
+// it), Receiving messages (group rules and batching), Replies and
+// conversations, and Working directories; the one destructive action, Delete,
+// is a row at the bottom, not a section.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2 } from "lucide-react";
 
 import { SETTINGS_STACK, SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChannelSettings } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
-import { useChannelAutoSave, CHANNEL_KIND, type AutoSaveState } from "@/lib/hooks/useChannels";
+import { useChannelAutoSave, CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
 import { TITLE_MAX_LENGTH, titlePatchValue } from "@/lib/resourceTitle";
 import { ChannelMachineSelect, MachineBindingHelp } from "./ChannelMachineSelect";
@@ -27,25 +26,6 @@ import {
 } from "./ChannelTurnSettingsFields";
 import { FieldError } from "./FieldError";
 import { useSettingDraft } from "./useSettingDraft";
-
-function SavedIndicator({ state }: { state: AutoSaveState }) {
-  const { t } = useTranslation();
-  if (state === "idle") return null;
-  return (
-    <span
-      role="status"
-      data-testid="channel-save-state"
-      className={state === "error" ? "text-xs text-danger" : "text-xs text-text-muted"}
-    >
-      {state === "saving" ? (
-        <Loader2 className="mr-1 inline size-3.5 animate-spin" aria-hidden />
-      ) : state === "saved" ? (
-        <Check className="mr-1 inline size-3.5" aria-hidden />
-      ) : null}
-      {t(`channels.settings.saveState.${state}`)}
-    </span>
-  );
-}
 
 const nonEmpty = (text: string) => (text.trim() === "" ? null : text.trim());
 
@@ -60,7 +40,7 @@ interface Props {
 export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelete }: Props) {
   const { t } = useTranslation();
   const id = useId();
-  const { save, state } = useChannelAutoSave(channel);
+  const { save } = useChannelAutoSave(channel);
   const setTitle = useSetResourceTitle();
   const config = channel.config;
   const seatalk = config.channel_type === "seatalk";
@@ -83,10 +63,6 @@ export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelet
 
   return (
     <div className={SETTINGS_STACK} data-testid="channel-settings">
-      <div className="flex min-h-5 justify-end">
-        <SavedIndicator state={state} />
-      </div>
-
       <SettingsSection
         title={t("channels.settings.connection.title")}
         description={t("channels.settings.secrets.hint")}

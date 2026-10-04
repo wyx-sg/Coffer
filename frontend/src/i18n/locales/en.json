@@ -3557,9 +3557,6 @@
     },
     "title": "Conversations",
     "thinking": "Thinking…",
-    "message": {
-      "tokens": "{{prompt}} in · {{completion}} out"
-    },
     "history": {
       "rename": "Rename",
       "delete": "Delete…",
@@ -3637,8 +3634,8 @@
       "workspaceFull": "Coffer’s workspace (~/.coffer/content/workspace)",
       "workspacePicker": {
         "label": "Workspace",
-        "choose": "Choose a folder…",
-        "typePath": "Or type a folder path",
+        "choose": "Choose…",
+        "typePath": "Type or paste a folder path",
         "use": "Use"
       }
     },
@@ -3967,14 +3964,9 @@
         "title": "Replies and conversations"
       },
       "directories": {
-        "description": "Where new conversations start, and what /dir may switch to. With none allowed, /dir is off."
+        "description": "/dir may switch to these and the folders under them; new conversations start in the default. With no default they start in Coffer's workspace; with no directories /dir is off."
       },
       "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct the channel's file under `~/.coffer/vault/resources/channel/`, or delete the channel and add it again.",
-      "saveState": {
-        "saving": "Saving…",
-        "saved": "Saved",
-        "error": "Couldn't save"
-      },
       "machine": {
         "runsOn": "Runs on",
         "hint": "Exactly one Mac holds the bot's connection."
@@ -4163,16 +4155,14 @@
       },
       "directories": {
         "title": "Working directories",
-        "default": "Default",
-        "defaultHint": "Where new conversations start.",
-        "defaultPlaceholder": "Coffer workspace (~/.coffer/content/workspace)",
-        "allowed": "Allowed for /dir",
-        "allowedHint": "/dir offers only these and the folders under them.",
+        "list": "Directories",
         "defaultTag": "default",
-        "remove": "Remove",
+        "setDefault": "Set as default",
+        "setDefaultAria": "Set {{path}} as the default",
+        "unsetDefault": "Unset default",
+        "unsetDefaultAria": "Stop starting new conversations in {{path}}",
         "removeAria": "Remove {{path}}",
         "add": "Add directory…",
-        "notAbsolute": "\"{{path}}\" is not an absolute path — start it with /.",
         "tooMany": "At most {{max}} directories."
       }
     },

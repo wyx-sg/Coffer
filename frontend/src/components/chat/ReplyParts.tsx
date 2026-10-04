@@ -78,8 +78,8 @@ export function StoppedLine({ unfinished }: { unfinished: UnfinishedWork | null 
 
 const COPIED_MS = 1500;
 
-/** The end of a finished reply: Copy reply, then the token counts. */
-export function ReplyFooter({ text, tokens }: { text: string; tokens: string | null }) {
+/** The end of a finished reply: Copy reply. */
+export function ReplyFooter({ text }: { text: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -95,7 +95,7 @@ export function ReplyFooter({ text, tokens }: { text: string; tokens: string | n
       // Clipboard unavailable: the text stays selectable by hand.
     }
   };
-  if (!text && !tokens) return null;
+  if (!text) return null;
   return (
     <div className="flex items-center gap-2">
       {text ? (
@@ -116,7 +116,6 @@ export function ReplyFooter({ text, tokens }: { text: string; tokens: string | n
           </Tooltip>
         </TooltipProvider>
       ) : null}
-      {tokens ? <p className="text-2xs text-text-subtle">{tokens}</p> : null}
     </div>
   );
 }

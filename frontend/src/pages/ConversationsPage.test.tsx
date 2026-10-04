@@ -151,6 +151,15 @@ function send(box: HTMLElement, text: string) {
   fireEvent.keyDown(box, { key: "Enter", shiftKey: false });
 }
 
+/** The daemon's listing narrowed by `source` the way the server does it. */
+function serveBySource(all: ReturnType<typeof makeConv>[]) {
+  chatApiMock.listConversations.mockImplementation(async (opts: { source?: string[] }) => ({
+    conversations: opts.source?.length
+      ? all.filter((c) => opts.source!.includes(c.channel_binding?.channel_uid ?? "coffer"))
+      : all,
+  }));
+}
+
 describe("ConversationsPage list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -253,9 +262,7 @@ describe("ConversationsPage list", () => {
   );
 
   test("a channel's link narrows the list to that channel, named in the Source pill", async () => {
-    chatApiMock.listConversations.mockResolvedValue({
-      conversations: [makeConv({ title: "From the web" }), channelConv],
-    });
+    serveBySource([makeConv({ title: "From the web" }), channelConv]);
     renderPage("/conversations?source=ch-1");
     expect(await screen.findByText("Daily Sentry triage")).toBeInTheDocument();
     expect(screen.queryByText("From the web")).not.toBeInTheDocument();
@@ -267,9 +274,7 @@ describe("ConversationsPage list", () => {
   });
 
   test("a legacy ?channel= link is read once as a source", async () => {
-    chatApiMock.listConversations.mockResolvedValue({
-      conversations: [makeConv({ title: "From the web" }), channelConv],
-    });
+    serveBySource([makeConv({ title: "From the web" }), channelConv]);
     renderPage("/conversations?channel=ch-1");
     expect(await screen.findByText("Daily Sentry triage")).toBeInTheDocument();
     expect(screen.queryByText("From the web")).not.toBeInTheDocument();
@@ -279,9 +284,7 @@ describe("ConversationsPage list", () => {
   });
 
   test("with nothing matching the filters, Clear filters brings every conversation back", async () => {
-    chatApiMock.listConversations.mockResolvedValue({
-      conversations: [makeConv({ title: "From the web" })],
-    });
+    serveBySource([makeConv({ title: "From the web" })]);
     renderPage("/conversations?source=ch-9");
     expect(await screen.findByText("No conversations match")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));

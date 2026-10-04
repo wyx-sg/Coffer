@@ -94,6 +94,44 @@ describe("Conversations selection", () => {
     expect(rowBox("Conv d")).not.toBeChecked();
   });
 
+  test("Select all ticks every row; ticked again, it clears", async () => {
+    renderPage();
+    await screen.findByText("Conv a");
+    const all = screen.getByRole("checkbox", { name: "Select all" });
+    fireEvent.click(all);
+    expect(screen.getByText("4 of 4 selected")).toBeInTheDocument();
+    expect(all).toBeChecked();
+    fireEvent.click(all);
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+  });
+
+  acceptance("chat", "Select all ticks every conversation the view holds", async () => {
+    const more = makeConversation({
+      id: "e",
+      title: "Conv e",
+      updated_at: new Date(Date.now() - 10_000).toISOString(),
+    });
+    api.listConversations.mockImplementation(async ({ cursor }: { cursor?: string | null }) =>
+      cursor
+        ? { conversations: [more], next_cursor: null, total: 5 }
+        : { conversations: rows, next_cursor: "c1", total: 5 },
+    );
+    renderPage();
+    await screen.findByText("Conv a");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(await screen.findByText("5 of 5 selected")).toBeInTheDocument();
+    expect(rowBox("Conv e")).toBeChecked();
+  });
+
+  test("one row ticked leaves Select all half-ticked", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select Conv b" }));
+    const all = screen.getByRole("checkbox", { name: "Select all" }) as HTMLInputElement;
+    expect(all.indeterminate).toBe(true);
+    fireEvent.click(all);
+    expect(screen.getByText("4 of 4 selected")).toBeInTheDocument();
+  });
+
   test("changing a filter drops the selection", async () => {
     renderPage();
     await screen.findByRole("link", { name: "Conv a" });

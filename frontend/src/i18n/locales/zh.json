@@ -3557,9 +3557,6 @@
     },
     "title": "对话",
     "thinking": "正在思考…",
-    "message": {
-      "tokens": "输入 {{prompt}} · 输出 {{completion}}"
-    },
     "history": {
       "rename": "重命名",
       "delete": "删除…",
@@ -3637,8 +3634,8 @@
       "workspaceFull": "Coffer 的工作区（~/.coffer/content/workspace）",
       "workspacePicker": {
         "label": "工作区",
-        "choose": "选择文件夹…",
-        "typePath": "或输入文件夹路径",
+        "choose": "选择…",
+        "typePath": "输入或粘贴文件夹路径",
         "use": "使用"
       }
     },
@@ -3964,17 +3961,12 @@
         "description": "机器人如何在群里收听，并把连发的消息合成一个回合。"
       },
       "directories": {
-        "description": "新对话从哪里开始，以及 /dir 可以切换到哪里。一个都没有时 /dir 关闭。"
+        "description": "/dir 可以切换到这些目录及其子目录，新对话从默认目录开始。没有默认时从 Coffer 工作区开始；一个目录都没有时 /dir 关闭。"
       },
       "replying": {
         "title": "回复与会话"
       },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
-      "saveState": {
-        "saving": "正在保存…",
-        "saved": "已保存",
-        "error": "保存失败"
-      },
       "machine": {
         "runsOn": "运行在",
         "hint": "只有一台 Mac 持有机器人的连接。"
@@ -4163,16 +4155,14 @@
       },
       "directories": {
         "title": "工作目录",
-        "default": "默认",
-        "defaultHint": "新对话从哪里开始。",
-        "defaultPlaceholder": "Coffer 工作区（~/.coffer/content/workspace）",
-        "allowed": "/dir 可用的目录",
-        "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
+        "list": "目录",
         "defaultTag": "默认",
-        "remove": "移除",
+        "setDefault": "设为默认",
+        "setDefaultAria": "把 {{path}} 设为默认",
+        "unsetDefault": "取消默认",
+        "unsetDefaultAria": "新对话不再从 {{path}} 开始",
         "removeAria": "移除 {{path}}",
         "add": "添加目录…",
-        "notAbsolute": "“{{path}}”不是绝对路径——请以 / 开头。",
         "tooMany": "最多 {{max}} 个目录。"
       }
     },
