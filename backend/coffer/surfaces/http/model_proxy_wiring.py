@@ -118,15 +118,15 @@ def wire_model_proxy(
     )
     wiring = ModelProxyWiring(tokens=tokens, supervisor=supervisor)
 
-    async def agent_exists(agent_uid: str) -> bool:
-        return any(a.uid == agent_uid for a in await provider_svc._agents.list())
+    async def agent_name(agent_uid: str) -> str | None:
+        return next((a.name for a in await provider_svc._agents.list() if a.uid == agent_uid), None)
 
     set_proxy_facade(
         ProxyFacade(
             tokens=tokens,
             status=_status(supervisor),
             refresh=wiring._refresh,
-            agent_exists=agent_exists,
+            agent_name=agent_name,
             state=state,
         )
     )

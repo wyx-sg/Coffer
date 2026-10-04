@@ -41,7 +41,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer daemon`](/reference/cli/daemon) | Daemon lifecycle |
 | [`coffer config`](/reference/cli/config) | Read and change Coffer's settings (the keys read before the daemon starts) |
 | [`coffer log`](/reference/cli/log) | Read Coffer's records: the audit log, MCP calls and the daemon log |
-| [`coffer path`](/reference/cli/path) | Where Coffer's log files live |
+| [`coffer path`](/reference/cli/path) | Where Coffer's log files and skill working files live |
 | [`coffer mcp`](/reference/cli/mcp) | Check an MCP server |
 | [`coffer secret`](/reference/cli/secret) | Manage encrypted secrets. |
 | [`coffer cli`](/reference/cli/cli) | Read the command-line tools Coffer manages. |

@@ -1098,8 +1098,10 @@ machine only is a setting shown on the tab it belongs to:
   files, a Keep forever switch and a number of days (30 by default) that auto-saves like
   every History row, and shortening it asks first, counting the files the shorter
   window deletes.
-- **History** — the retention of each record kind — changes, MCP calls and
-  conversations — Keep forever or a number of days, cleaned up by the retention
+- **History** — the retention of each record kind — changes, MCP calls,
+  conversations and **Skill working files** (the logs, journals and temporary
+  files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a
+  row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
@@ -1107,7 +1109,7 @@ machine only is a setting shown on the tab it belongs to:
   MUST say how many records the shorter window deletes at the next cleanup and
   how many the table holds now and would hold after, counted by the daemon
   without deleting anything. **Clear expired now** also removes attachments past
-  their window and reports them as files. A refused save MUST say so above the blocks with
+  their window and reports them, and skill working files past theirs, as files. A refused save MUST say so above the blocks with
   **Try again**, name the window still in place, and mark the row "Not saved".
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache,
   both under `~/.coffer/derived/`, which Coffer rebuilds on its own: one **Clear** action,
@@ -1126,13 +1128,19 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, MCP calls, conversations and skill working files with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
 - **WHEN** the user opens `/settings/data`
 - **THEN** Local content has an Attachments row at 30 days and says attachments are deleted automatically after 30 days, and History has no Attachments row
 - **AND** after the user turns Keep forever on, the line reads "Include this folder in your own backups." and the choice is saved
+
+#### Scenario: skill working files are kept for a chosen window
+- **GIVEN** the `skill_data` policy at 30 days
+- **WHEN** the user opens `/settings/data`
+- **THEN** History has a Skill working files row at 30 days, after Conversations
+- **AND** shortening it asks first and the confirmation counts files, not records
 
 #### Scenario: shortening a retention window counts what it deletes
 - **GIVEN** MCP calls kept for 30 days, some of them older than 7 days
@@ -2546,7 +2554,7 @@ needs git* (see "Offer the hand-off a knowledge refusal carries beside it").
 ### Requirement: Follow knowledge changes in Recent changes
 The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
 first, of curation passes and of documents people and agents wrote or deleted, with the items still
-waiting and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
+waiting — also newest submitted first — and a quiet **Curate now** beside them (spec [knowledge](../knowledge/spec.md) "Run curation
 on a sweep and on demand"). It MUST be filtered with **Collection** and **Author** filter pills and a
 **Clear filters** control, the choice kept in the URL. A delete carries **Restore**. Choosing a pass
 MUST show what it changed — each document it wrote or retired, with a diff — and offer **Undo this
@@ -2647,8 +2655,8 @@ returns to its button, and a failed call returns it at once with the error as
 a toast. Every other action — connecting an agent or repairing its config
 (writes into the agent's own files, previewed on their page), adding a secret,
 turning approval on, and every read-only review — keeps opening its page. Every row MUST also
-carry a ⋯ menu — Copy prompt, Ask an agent while a managed agent is available,
-then Ignore — with the daemon's prompt as given (every item carries one, the
+carry the hand-off split button, Ask an agent ▾ with Copy prompt behind it, and a ⋯ menu
+holding Ignore — the daemon's prompt as given (every item carries one, the
 kind's own where it has one); the list scrolls inside a frame of about six
 rows, under its title, which shows how many items it holds. An attention source that failed MUST be named
 above the rows in one muted status line, saying that what it would report is missing. Rows MUST clear
@@ -2706,9 +2714,9 @@ for what agents share follows.
 
 #### Scenario: a needs-you row offers the item's hand-off in its menu
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
-- **WHEN** the user opens the row's ⋯ menu and chooses Copy prompt, then Ask an agent
+- **WHEN** the user opens the split button's menu and chooses Copy prompt, then presses Ask an agent
 - **THEN** the daemon's prompt is copied as given, and Ask an agent opens New conversation and then the draft with the prompt in its composer, unsent
-- **AND** with no managed agent available the menu offers Copy prompt only, and every row's menu ends with Ignore
+- **AND** with no managed agent available the row offers a Copy prompt button only, and every row's ⋯ menu ends with Ignore
 
 #### Scenario: overview shows a calm card when nothing needs the user
 - **GIVEN** an attention list with no items and no failed source, two connected agents, two enabled MCP servers and sync on with nothing held
@@ -2752,7 +2760,7 @@ the one-sentence help beside it. The split button sits after the state's own but
 Retry, View log), appears once per problem, never on a healthy, success or empty state, and never for
 a missing secret or an approval, which only the person can give. Wherever another requirement names
 Copy prompt and Ask an agent together, they are this button's menu item and button. On a Needs you
-row they are items of the ⋯ menu beside Ignore.
+row the same split button sits beside the row's action, and the ⋯ menu holds Ignore.
 
 #### Scenario: the split button hands a prompt over or copies it
 - **GIVEN** a problem with a prompt and a managed agent installed

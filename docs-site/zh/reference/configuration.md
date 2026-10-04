@@ -218,13 +218,14 @@ COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 
 保留策略决定各类行保留多久。保留任务在启动时清理一次，之后每 6 小时一次。策略只属于本机，保存在 `~/.coffer/local/retention.json`。
 
-窗口在**设置 → 数据 → 历史记录**里设置，那里只显示三项策略（**附件**在**本地内容**下）；另外两项保持默认值，只能通过 REST（`/api/v1/retention/policies`）修改。
+窗口在**设置 → 数据 → 历史记录**里设置，那里显示四项策略（**附件**在**本地内容**下）；另外两项保持默认值，只能通过 REST（`/api/v1/retention/policies`）修改。
 
 | 策略 | 键 | 默认值 | 作用 |
 | --- | --- | --- | --- |
 | **改动** | `audit_log` | 365 天 | 删除早于窗口的审计条目。 |
 | **MCP 调用** | `mcp_invocations` | 30 天 | 删除网关调用日志行。 |
 | **对话** | `conversations` | 30 天 | 在归档后这么久删除已归档的对话及其消息。 |
+| **Skill 临时数据** | `skill_data` | 30 天 | 删除 `~/.coffer/skill-data` 下任意位置最后修改时间早于窗口的文件，再删除因此清空的文件夹（`skill-data` 本身不删）。 |
 | **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 和 `~/.coffer/content/chat-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
 | 仅 REST | `sync_runs` | 90 天 | 删除同步轮次的历史。 |
 | 仅 REST | `conversations_archive` | 7 天 | 归档这么久没有新消息的对话。 |

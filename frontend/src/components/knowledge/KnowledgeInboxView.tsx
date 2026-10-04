@@ -29,6 +29,7 @@ import type { CollectionOut } from "@/lib/api/knowledge";
 import { timeAgo } from "@/lib/timeAgo";
 import { agentLabel } from "@/lib/knowledge/changes";
 import { collectionPath } from "@/lib/knowledge/routes";
+import { withoutTitleHeading } from "@/lib/knowledge/titleHeading";
 import { useKnowledgeFile, useKnowledgeTree } from "@/lib/hooks/useKnowledge";
 
 interface Props {
@@ -166,7 +167,9 @@ function InboxItem({ path }: { path: string }) {
       </p>
       <h1 className="shrink-0 text-xl font-bold leading-tight">{item.data.title}</h1>
       <div className="flex min-h-0 flex-1 flex-col">
-        <FindableMarkdown fill>{item.data.body}</FindableMarkdown>
+        <FindableMarkdown fill>
+          {withoutTitleHeading(item.data.body, item.data.title)}
+        </FindableMarkdown>
       </div>
     </article>
   );

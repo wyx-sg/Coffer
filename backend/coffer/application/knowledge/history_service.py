@@ -275,6 +275,9 @@ class KnowledgeHistoryService:
                             submitted_at=found.created_at,
                         )
                     )
+        # Newest submitted first across every collection, like the timeline beside
+        # it; the inbox's own oldest-first order is curation's, not the reader's.
+        out.sort(key=lambda w: w.submitted_instant, reverse=True)
         return out
 
     async def _authors(self, row: Resource) -> dict[str, str]:

@@ -105,3 +105,22 @@ async def test_fallback_timeout_is_truncation_not_silence(
     outcome = await RipgrepSearch(timeout_s=-1.0).grep([root / "shopee"], "登录态")
     assert outcome.truncated is True
     assert outcome.matches == ()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(grep_module.shutil.which("rg") is None, reason="needs ripgrep")
+async def test_rg_skips_an_inbox_a_git_exclude_whitelists(root: pathlib.Path) -> None:
+    """The vault's ``info/exclude`` re-admits ``.inbox`` so git tracks it; ripgrep
+    honours that whitelist over ``--no-hidden``, which once handed curation an
+    inbox item as a candidate document and failed every pass."""
+    vault = root.parent
+    exclude = vault / ".git" / "info" / "exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text("/knowledge/**/.*\n!/knowledge/**/.inbox\n", encoding="utf-8")
+    inbox = root / "shopee" / ".inbox"
+    inbox.mkdir()
+    (inbox / "item.md").write_text("登录态 waiting\n", encoding="utf-8")
+
+    outcome = await RipgrepSearch().grep([root / "shopee"], "登录态")
+
+    assert {m.path for m in outcome.matches} == {"shopee/a.md", "shopee/nested/b.md"}

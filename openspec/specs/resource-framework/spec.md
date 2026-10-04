@@ -396,6 +396,44 @@ sweep.
 - **WHEN** a full retention prune runs
 - **THEN** the file is kept and the prune answers no files removed under `attachments`
 
+### Requirement: Retain skill working files on an adjustable policy
+The logs, operation journals and temporary files a skill's scripts generate MUST have one
+shared place and MUST NOT accumulate without bound: `~/.coffer/skill-data/<skill-name>/`,
+outside the vault so they never sync, named by `coffer path skill-data`. One retention policy
+named `skill_data` covers the whole directory. It is listed by `GET /api/v1/retention/policies`
+and set by `PATCH /api/v1/retention/policies/skill_data` like any other policy (a whole number
+of days, or `forever`; the change is audited), its default is 30 days, and it is seeded at
+daemon start. A file is past the window when its mtime is older than the window, wherever it
+sits under the directory, since skills keep subfolders. On the retention cadence and on a full
+prune, files past the window are deleted, directories left empty are removed (never
+`skill-data` itself), and the prune answers how many files it removed under `skill_data`;
+under `forever` nothing is deleted. A prune naming `skill_data` sweeps only it, a symlink is
+neither followed nor deleted, and a sweep that fails is logged and skipped. `GET
+/api/v1/retention/policies/skill_data/preview?days=<n>` counts the files held now and how many
+are older than `n` days, and deletes nothing.
+
+#### Scenario: skill working files are swept recursively and kept thirty days by default
+- **GIVEN** a fresh daemon and `skill-data/alpha/logs/run.log` 31 days old, `skill-data/alpha/journal.txt` 2 days old and `skill-data/beta/tmp.bin` 40 days old
+- **WHEN** a full retention prune runs
+- **THEN** `GET /api/v1/retention/policies` lists `skill_data` at 30 days
+- **AND** the two old files are deleted, the recent one is kept, and the prune answers two files under `skill_data`
+
+#### Scenario: a sweep removes emptied folders but never the root or a symlink
+- **GIVEN** `skill-data/beta/` holding only a file past the window, `skill-data/gamma` a symlink to a directory outside it, and a file there past the window
+- **WHEN** a prune naming `skill_data` runs
+- **THEN** `skill-data/beta/` is removed, `skill-data` itself and the symlink remain, and the file behind the symlink is untouched
+- **AND** the prune answers only `skill_data`
+
+#### Scenario: skill working files kept forever are never swept
+- **GIVEN** the `skill_data` policy set to `forever` and a file 400 days old under `skill-data`
+- **WHEN** a full retention prune runs
+- **THEN** the file is kept and the prune answers no files removed under `skill_data`
+
+#### Scenario: the skill working files preview counts files and deletes none
+- **GIVEN** the `skill_data` policy at 30 days and four files under `skill-data`, two of them older than 7 days
+- **WHEN** a client asks for the preview for 7 days
+- **THEN** the answer carries 4 now and 2 to delete, and every file is still there
+
 ### Requirement: Report the passes in flight in one cross-kind read
 The system MUST answer, in one cross-kind read, which long model-driven passes this
 daemon is running right now — each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
@@ -447,7 +485,7 @@ across every spec and so has no narrower home.
 #### Scenario: the command tree holds only commands the web UI does not replace
 - **GIVEN** the CLI's live command tree
 - **WHEN** it is read
-- **THEN** every command it holds is one a web UI page does not replace: the recorded list names the memory hook, the proxy key helper, the daemon lifecycle verbs, `path logs`, `config`, `run`, `secret list` and `secret set`, `cli list`, the three `log` commands, `mcp test` and `vault problems`, and no group exists for a kind the web UI manages
+- **THEN** every command it holds is one a web UI page does not replace: the recorded list names the memory hook, the proxy key helper, the daemon lifecycle verbs, `path logs`, `path skill-data`, `config`, `run`, `secret list` and `secret set`, `cli list`, the three `log` commands, `mcp test` and `vault problems`, and no group exists for a kind the web UI manages
 - **AND** a web UI operation with no command line counterpart ships without a reviewer being asked for one
 
 #### Scenario: every command has a recorded reason
@@ -465,7 +503,7 @@ across every spec and so has no narrower home.
 - **GIVEN** a plain file that its owning spec declares directly readable or editable
 - **WHEN** a person or an agent needs it
 - **THEN** it is read and edited with their own tools at the path the web UI, the spec or the hand-off prompt names, and no command is added for it
-- **AND** `coffer path logs` is the one exception, because the log files are what is left to read when the daemon will not start
+- **AND** `coffer path logs` is an exception, because the log files are what is left to read when the daemon will not start, and `coffer path skill-data` is the other, because a skill's script has no other way to learn where its working files go
 
 #### Scenario: a kept command surfaces the daemon's errors
 - **GIVEN** any failure surfaced by the management API,
@@ -564,17 +602,25 @@ namespaced by the setting's owner, and the spec that owns a setting names its ke
 ### Requirement: Locate the log files with coffer path
 The system MUST print the absolute path of the daemon's log directory and of the `daemon.log` in it
 with `coffer path logs`, so that a person or an agent can read the log files when the daemon will not
-start. `logs` MUST be the only target: every other file Coffer keeps as a plain file is named by the
-web UI, by its owning spec or by a hand-off prompt, and is read and edited with the reader's own
-tools. With `--json` the command MUST print the paths as one JSON object keyed by what each path is.
-The command MUST need no daemon, MUST create nothing and change nothing, and a target other than
-`logs` MUST exit non-zero as an unknown target.
+start, and the absolute path of `~/.coffer/skill-data` with `coffer path skill-data`, so that a
+skill's script finds where its working files go (see "Retain skill working files on an adjustable
+policy"). `logs` and `skill-data` MUST be the only targets: every other file Coffer keeps as a plain
+file is named by the web UI, by its owning spec or by a hand-off prompt, and is read and edited with
+the reader's own tools. With `--json` the command MUST print the paths as one JSON object keyed by
+what each path is. The command MUST need no daemon, MUST create nothing and change nothing, and a
+target other than those two MUST exit non-zero as an unknown target.
 
 #### Scenario: path logs names the log files and refuses other targets
 - **GIVEN** a Coffer home with its log directory
 - **WHEN** the user runs `coffer path logs`, `coffer path logs --json`, and `coffer path` with any other target
 - **THEN** the first prints the absolute path of the log directory and of `daemon.log`, and the second prints a JSON object holding both
 - **AND** the third exits non-zero as an unknown target, and nothing on disk was created or changed
+
+#### Scenario: path skill-data names the skill working folder
+- **GIVEN** a Coffer home with no `skill-data` directory yet
+- **WHEN** the user runs `coffer path skill-data` and `coffer path skill-data --json`
+- **THEN** the first prints the absolute path of `~/.coffer/skill-data` and the second a JSON object holding it
+- **AND** the directory was not created
 
 ### Requirement: Converge what Coffer writes outside its database with one reconciler
 Everything Coffer keeps true outside its own files — its MCP entry in each

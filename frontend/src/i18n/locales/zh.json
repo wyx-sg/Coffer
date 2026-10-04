@@ -1154,7 +1154,7 @@
       "pruneAll": "立即清理过期数据",
       "pruning": "正在清理…",
       "pruneConfirmTitle": "立即清理过期数据？",
-      "pruneConfirmBody": "超过各项保留期的记录和附件会被永久删除。",
+      "pruneConfirmBody": "超过各项保留期的记录、附件和 Skill 临时数据会被永久删除。",
       "pruneRow": "已从{{name}}清理 {{rows}} 行",
       "pruneNothing": "没有需要清理的数据",
       "policy": {
@@ -1188,6 +1188,15 @@
           "description": "在对话和消息渠道中发送的文件和图片",
           "shortenTitle": "附件只保留 {{days}} 天？",
           "shortenBody": "下次清理会删除更早的附件。",
+          "pruneRow": "已从{{name}}清理 {{rows}} 个文件",
+          "unit_one": "个文件",
+          "unit_other": "个文件"
+        },
+        "skill_data": {
+          "name": "Skill 临时数据",
+          "description": "skill 写在 ~/.coffer/skill-data 下的日志、操作记录和临时文件",
+          "shortenTitle": "Skill 临时数据只保留 {{days}} 天？",
+          "shortenBody": "下次清理会删除更早的 Skill 临时数据。",
           "pruneRow": "已从{{name}}清理 {{rows}} 个文件",
           "unit_one": "个文件",
           "unit_other": "个文件"
@@ -5775,7 +5784,6 @@
       "copyRef": "复制引用（{{reference}}）",
       "copied": "已复制 {{reference}}",
       "copyFailed": "无法复制到剪贴板",
-      "activity": "在活动中查看",
       "delete": "删除…"
     },
     "add": {
@@ -6195,6 +6203,9 @@
       "noneTitle": "该接入地址没有列出任何模型",
       "noneBody": "它接受的每个模型都可用：智能体会传你输入的名称。等网关管理员添加模型后再刷新。",
       "noMatch": "没有匹配的模型。",
+      "turnAllOn": "全部开启",
+      "turnAllOff": "全部关闭",
+      "keepOne": "至少保留一个模型开启；全部关闭等于不限制",
       "showMore_one": "再显示 {{count}} 个",
       "showMore_other": "再显示 {{count}} 个",
       "agentDefault": "{{agent}} 默认",
@@ -6476,7 +6487,6 @@
   "handoff": {
     "copyPrompt": "复制提示词",
     "copyPromptHint": "用于 Coffer 外部的智能体",
-    "askAgentHint": "在 Coffer 内的对话里处理，点发送后才会执行",
     "moreOptions": "更多选项",
     "askAgent": "交给智能体",
     "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。",

@@ -47,7 +47,6 @@ Coffer 目前还没有发布用 Apple Developer ID 签名的二进制。在此�
 | **替换值…** | 接收一个新值，从不显示旧值。对话框会列出使用该密钥的东西。它立即生效。对于[这台 Mac 上缺失](#missing-on-this-mac)的密钥，该项显示为 **添加值…**。 |
 | **显示值…** | 只在桌面应用中可用——见[查看或复制一个值](#see-or-copy-a-value)。浏览器中它显示为禁用的 **在 Coffer 应用中显示**。 |
 | **复制引用（…）** | 复制文件或配置里要引用的内容，菜单项里会显示出来：独立密钥是 `coffer://secret/<name>`，其他密钥是 ref。 |
-| **在活动中查看** | 打开[活动](/zh/guides/activity)的变更标签页，每一次存入、替换、显示和删除都记录在那里。 |
 | **删除…** | 对没有任何东西在用的密钥，询问一次（并说明上次使用时间），然后删除——在这台 Mac 上删除；如果加密密钥开启了同步，你的其他 Mac 也会在下一轮同步时删除。对仍在使用的密钥，它什么都不删：对话框列出仍在用它的每一项，附带 **打开** 跳过去，该行保留。 |
 
 **添加密钥** 用来新增一个独立密钥：一个名称（字母、数字、`.`、`_` 和 `-`，最多 64 个字符，添加后不能修改）和一个值，值不会再显示出来。名称已存在的话，发送前就会被拦下，并给出一个链接，让你改为替换那个密钥的值。对话框会显示要引用的引用写法。密钥在你添加后立即存入，无需批准。
@@ -182,7 +181,7 @@ send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -
 coffer secret list
 ```
 
-[密钥页面](#the-secrets-page)显示同一份列表，按使用中和未被使用分组。`--json` 还会为每个密钥附带 `locked`（已存储，但这台 Mac 的主密钥打不开它）、`created_at` 和 `last_used_at`。列表包含存储中保存的每个 ref 和每个资源引用的每个 ref，以及各自的使用方——资源、文件中引用了 `coffer://secret/<name>` 的技能、等待审批的去处——没有任何东西在用的密钥标为 `(unreferenced)`。**Readable by local processes** 为 `yes` 表示：以你身份运行的其他程序，能在 Coffer 放置该值的地方读到它——每个独立密钥都是（它会进入 `coffer run` 的子进程），stdio MCP 服务器环境中的每个密钥也是。各列的含义见[密钥存储 → 列出与查看](/zh/guides/secret-store#list-and-inspect)。
+[密钥页面](#the-secrets-page)显示同一份列表，按使用中和未被使用分组。`--json` 还会为每个密钥附带 `locked`（已存储，但这台 Mac 的主密钥打不开它）、`created_at` 和 `last_used_at`。列表包含存储中保存的每个 ref 和每个资源引用的每个 ref，以及各自的使用方——资源、文件中引用了 `coffer://secret/<name>` 的技能、等待审批的去处——没有任何东西在用的密钥标为 `(unreferenced)`。每个托管智能体的模型代理令牌（`proxy-token/<智能体名>`）不在列表里：它由 Coffer 生成、由智能体自己取用，没有需要你填写、替换或引用的东西。**Readable by local processes** 为 `yes` 表示：以你身份运行的其他程序，能在 Coffer 放置该值的地方读到它——每个独立密钥都是（它会进入 `coffer run` 的子进程），stdio MCP 服务器环境中的每个密钥也是。各列的含义见[密钥存储 → 列出与查看](/zh/guides/secret-store#list-and-inspect)。
 
 只要还有资源引用某个独立密钥，或还有技能文件引用它的 URI，删除就会被拒绝；报错会列出它们。
 

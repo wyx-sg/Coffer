@@ -35,6 +35,7 @@ _EXPECTED = {
     "daemon restart",
     "daemon status",
     "path logs",
+    "path skill-data",
     "config list",
     "config get",
     "config set",
@@ -81,10 +82,14 @@ def test_the_command_tree_holds_only_commands_the_web_ui_does_not_replace() -> N
 @pytest.mark.acceptance(
     spec="resource-framework", scenario="a plain file is read with the reader's own tools"
 )
-def test_a_plain_file_has_no_command_and_logs_is_the_one_exception() -> None:
-    # `path` offers exactly `logs`; every other file is named by the web UI, the
+def test_a_plain_file_has_no_command_and_logs_and_skill_data_are_the_exceptions() -> None:
+    # `path` offers `logs` and `skill-data`; every other file is named by the web UI, the
     # owning spec or a hand-off prompt and read with the reader's own tools.
-    assert {" ".join(p) for p, _ in _tree() if p[0] == "path"} == {"path", "path logs"}
+    assert {" ".join(p) for p, _ in _tree() if p[0] == "path"} == {
+        "path",
+        "path logs",
+        "path skill-data",
+    }
     for target in ("knowledge", "memory", "skill", "agent", "vault"):
         assert _runner.invoke(app, ["path", target]).exit_code == 2, target
 

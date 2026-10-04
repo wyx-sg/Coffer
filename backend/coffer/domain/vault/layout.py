@@ -30,7 +30,8 @@ class StorageClass(StrEnum):
     LOCAL = "local"
     #: The user's only copy of media and the chat workspace: not synced yet.
     CONTENT = "content"
-    #: Append-only history in ``runs.db``: never synced, pruned by retention.
+    #: Records of what happened, never synced, pruned by retention: the history in
+    #: ``runs.db``, the logs, and the skills' working files in ``skill-data/``.
     RUNS = "runs"
     #: Rebuilt from other state: deleting it is always safe.
     DERIVED = "derived"

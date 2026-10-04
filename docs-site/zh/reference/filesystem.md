@@ -21,6 +21,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── runs.db                       # history (SQLite, WAL mode)
 ├── runs.db-wal, runs.db-shm      # SQLite write-ahead log and shared memory
 ├── runs.db.pre-<revision>        # copy taken before a schema migration (newest 3 kept)
+├── skill-data/                   # logs, journals and temp files skill scripts write, one folder per skill: never synced, pruned by retention
 ├── derived/                      # rebuilt from the rest: always safe to delete
 ├── master.key                    # secret master key (when stored as a file)
 ├── machine-id                    # fallback machine id (only if the host gives none)
@@ -138,6 +139,12 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `bin/coffer`、`bin/coffer-daemon`、`bin/coffer-mcp-shim` | 指向当前版本目录的相对符号链接，升级时原子切换。智能体的 MCP 条目、登录服务和你的 `PATH` 都使用这些固定名称。 | 安装程序、守护进程 | 否 | 不能：智能体的 MCP 条目指向 `bin/coffer-mcp-shim`。 |
 
 要手动撤销一次升级，把这些符号链接指回上一个版本目录即可。frozen 守护进程启动时会把同级二进制部署到这里；源码安装则使用 `pip` 放到 `PATH` 上的命令行脚本。见[分发与发布](/zh/architecture/distribution)。
+
+### Skill 临时数据 {#skill-working-files}
+
+| 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
+| --- | --- | --- | --- | --- |
+| `skill-data/<skill-name>/` | skill 的脚本存放自己产生的日志、操作记录和临时文件的地方。它在保险库之外，所以都不会同步，`coffer path skill-data` 会打印这个目录。最后修改时间早于 **Skill 临时数据** 保留窗口（默认 30 天）的文件会被删除，清空后的文件夹一并删除。 | skill 的脚本；守护进程负责清理 | 否 | 可以。skill 需要长期保留的东西不该放在这里。 |
 
 ### 日志 {#logs}
 

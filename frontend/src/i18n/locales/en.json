@@ -1154,7 +1154,7 @@
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
       "pruneConfirmTitle": "Clear expired data now?",
-      "pruneConfirmBody": "Records and attachments older than each policy's retention window are deleted permanently.",
+      "pruneConfirmBody": "Records, attachments and skill working files older than each policy's retention window are deleted permanently.",
       "pruneRow": "Removed {{rows}} rows from {{name}}",
       "pruneNothing": "Nothing to clear",
       "policy": {
@@ -1188,6 +1188,15 @@
           "description": "Files and images sent in conversations and channels",
           "shortenTitle": "Keep attachments for {{days}} days?",
           "shortenBody": "The next prune will delete older attachments.",
+          "pruneRow": "Removed {{rows}} files from {{name}}",
+          "unit_one": "file",
+          "unit_other": "files"
+        },
+        "skill_data": {
+          "name": "Skill working files",
+          "description": "Logs, journals and temporary files skills write under ~/.coffer/skill-data",
+          "shortenTitle": "Keep skill working files for {{days}} days?",
+          "shortenBody": "The next prune will delete older skill working files.",
           "pruneRow": "Removed {{rows}} files from {{name}}",
           "unit_one": "file",
           "unit_other": "files"
@@ -5775,7 +5784,6 @@
       "copyRef": "Copy reference ({{reference}})",
       "copied": "Copied {{reference}}",
       "copyFailed": "Couldn't copy to the clipboard",
-      "activity": "View in Activity",
       "delete": "Delete…"
     },
     "add": {
@@ -6195,6 +6203,9 @@
       "noneTitle": "This endpoint listed no models",
       "noneBody": "Every model it accepts stays available: agents pass the name you type. Refresh after the gateway admin adds models.",
       "noMatch": "No models match.",
+      "turnAllOn": "Turn all on",
+      "turnAllOff": "Turn all off",
+      "keepOne": "Keep at least one model on; turning every model off would mean no restriction.",
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more",
       "agentDefault": "{{agent}} default",
@@ -6476,7 +6487,6 @@
   "handoff": {
     "copyPrompt": "Copy prompt",
     "copyPromptHint": "For an agent outside Coffer",
-    "askAgentHint": "Handle it in a Coffer conversation; nothing runs until you press Send",
     "moreOptions": "More options",
     "askAgent": "Ask an agent",
     "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine.",

@@ -20,7 +20,7 @@ shape of an answer read from it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from coffer.domain.vault.history import ADDED, MODIFIED, REMOVED
 from coffer.domain.vault.writers import (
@@ -130,6 +130,15 @@ class WaitingItem:
     #: Who submitted it: an agent's name, or ``user``.
     submitted_by: str
     submitted_at: str
+
+    @property
+    def submitted_instant(self) -> float:
+        """``submitted_at`` as a sortable number; an unreadable stamp sorts oldest."""
+        try:
+            parsed = datetime.fromisoformat(self.submitted_at)
+        except ValueError:
+            return 0.0
+        return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).timestamp()
 
 
 @dataclass(frozen=True)

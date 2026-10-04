@@ -119,7 +119,7 @@ describe("the header", () => {
     expect(screen.getByText(SUBTITLE)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
     expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
-    expect(within(tree()).queryByRole("button", { name: /Inbox/ })).toBeNull();
+    expect(within(tree()).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     fireEvent.click(button);
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
   });
@@ -149,7 +149,7 @@ describe("the tree", () => {
   test("only the Inbox shows a count, never 0; Collections strip holds New collection", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    const inbox = await within(nav).findByRole("button", { name: /Inbox/ });
+    const inbox = await within(nav).findByRole("button", { name: /^Inbox/ });
     expect(inbox).toHaveTextContent("1");
     // The collection rows and Recent changes carry no number.
     const row = within(nav).getByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) });
