@@ -284,9 +284,7 @@ return useMutation({
     **All agents**, **Chosen agents**. `ReachControl` saves on every change
     ("Applying…" → "✓ Saved") — no Save button — and its trigger shows only a
     badge (the agents' marks, "All agents" or "Off"), never "N of M agents".
-    "All agents" is stored as such, so it covers agents added later. An item
-    inside a group (a custom tool in its group) uses `InheritedReachControl`,
-    whose first mode is **Same as the group** (the default). A table row of
+    "All agents" is stored as such, so it covers agents added later. A table row of
     an object that is off leaves its Reach cell empty. Bulk reach on selected
     rows is `BulkReachActions` (a 340-wide popover, old → new counts, a partial
     failure kept inside it).
@@ -540,7 +538,7 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | Run a check again | Check again | 重新检查 | 再检查一次, 再次检查 |
 | Test again | Test again | 重新测试 | 再测一次, 再次测试 |
 | Swap a value for another | Replace | 替换 | 更换, 换成 |
-| Who gets a resource (three modes) | Reach: Off / All agents / Chosen agents; inside a group also Same as the group | 生效范围：关闭 / 所有智能体 / 指定智能体；分组内还有 与分组一致 | Disabled, Every agent, Only selected agents, 已停用, 只限选中的 |
+| Who gets a resource (three modes) | Reach: Off / All agents / Chosen agents | 生效范围：关闭 / 所有智能体 / 指定智能体 | Disabled, Every agent, Only selected agents, 已停用, 只限选中的 |
 | Hand a machine-bound chore to an agent | Ask an agent ▾ (menu: Copy prompt, toast "Prompt copied") | 交给智能体 ▾（菜单：复制提示词，提示“已复制提示词”） | Two separate buttons, 询问智能体 |
 | Pick another source/machine/directory | Change | 更改 | 更换 |
 | A change (noun) | change | 改动 | 变更, 更改 |

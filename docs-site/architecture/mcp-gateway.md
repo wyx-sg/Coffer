@@ -341,7 +341,6 @@ A **custom-tool group** is an `mcp_server` whose transport is `http_api`. Its co
 | Piece | Where | Why there |
 | --- | --- | --- |
 | Definition and tools | The server's config, under its transport | It travels with sync like every server's definition, and the tool switch travels like a capability toggle does. |
-| Reach override | `~/.coffer/local/tool-reach.json` | Reach is machine-local; an override narrows the group's scope for one tool. |
 | The per-tool gate | The gateway, per session | Computes, per session, the switched-off and out-of-reach tools; `tools/list` and `coffer__search_tools` drop them and `tools/call` refuses them as `denied` — the same shape as a disabled capability. |
 | Annotations | Each discovered tool's annotations, copied to its listing entry | A tool that changes data is listed `readOnlyHint: false, destructiveHint: true`, any other `readOnlyHint: true`; every upstream's own annotations are passed through too. |
 | Management | The MCP application package and the custom-tool REST routes | Every write goes through the resource service, so validation, the missing-secret probe, audit and the eviction of live connections come with it. |

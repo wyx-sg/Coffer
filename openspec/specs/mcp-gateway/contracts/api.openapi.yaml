@@ -621,66 +621,6 @@ paths:
       summary: Update Tool
       tags:
       - custom-tools
-  /api/v1/custom-tools/{name}/tools/{tool}/reach:
-    put:
-      operationId: set_tool_reach_api_v1_custom_tools__name__tools__tool__reach_put
-      parameters:
-      - in: path
-        name: name
-        required: true
-        schema:
-          title: Name
-          type: string
-      - in: path
-        name: tool
-        required: true
-        schema:
-          title: Tool
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomToolReachIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomToolGroupOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Set Tool Reach
-      tags:
-      - custom-tools
   /api/v1/mcp/builtin:
     get:
       description: 'The ``coffer`` server: endpoint, tools, reach and the last 24 hours.'
@@ -2035,20 +1975,6 @@ components:
         path:
           title: Path
           type: string
-        reach_mode:
-          enum:
-          - inherit
-          - all
-          - chosen
-          title: Reach Mode
-          type: string
-        reach_override:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-          title: Reach Override
       required:
       - name
       - agent_name
@@ -2062,8 +1988,6 @@ components:
       - changes_data
       - changes_data_set
       - operation
-      - reach_mode
-      - reach_override
       - calls_24h
       - failures_24h
       title: CustomToolOut
@@ -2126,28 +2050,6 @@ components:
           - type: 'null'
           title: Path
       title: CustomToolPatch
-      type: object
-    CustomToolReachIn:
-      description: |-
-        One tool's own reach: ``inherit`` clears the override (same as the group),
-        ``all`` is every agent the group reaches (agents added later too), ``chosen``
-        narrows it to ``agents``.
-      properties:
-        agents:
-          items:
-            type: string
-          title: Agents
-          type: array
-        mode:
-          enum:
-          - inherit
-          - all
-          - chosen
-          title: Mode
-          type: string
-      required:
-      - mode
-      title: CustomToolReachIn
       type: object
     CustomToolReimportChangeOut:
       description: A kept tool whose request the spec changed.

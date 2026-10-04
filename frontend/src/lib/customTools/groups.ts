@@ -19,6 +19,11 @@ export function isCustomToolGroup(resource: { config?: unknown }): boolean {
   return (transport as { type?: unknown }).type === HTTP_API_TRANSPORT;
 }
 
+/** A group's reach as the shared reach fields read it (`null` scope = every agent). */
+export function reachOf(group: Pick<CustomToolGroup, "scope">): { agents: string[] } | null {
+  return group.scope === null ? null : { agents: group.scope };
+}
+
 /** The three sections of the list, in the order they are shown. */
 export type GroupSection = "attention" | "healthy" | "off";
 const GROUP_SECTIONS: readonly GroupSection[] = ["attention", "healthy", "off"];

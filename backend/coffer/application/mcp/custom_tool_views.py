@@ -19,8 +19,6 @@ from coffer.application.mcp.custom_tool_ports import (
     BoundaryCheckPort,
     SecretPresencePort,
     ToolOutcomesPort,
-    ToolReach,
-    ToolReachRepoPort,
 )
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
@@ -30,7 +28,7 @@ from coffer.domain.secrets import standalone_name
 
 GroupHealth = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretState = Literal["none", "present", "missing", "pending_approval"]
-#: The list's order: failing groups first (spec web-ui "Manage custom tools on
+#: The list's order: failing groups first (spec web-ui "Manage custom tool groups on
 #: their own page"), switched-off ones last.
 HEALTH_ORDER: dict[str, int] = {"failing": 0, "attention": 1, "healthy": 2, "idle": 3, "off": 4}
 WINDOW = timedelta(hours=24)
@@ -39,8 +37,6 @@ WINDOW = timedelta(hours=24)
 @dataclass(frozen=True)
 class ToolView:
     tool: HttpApiTool
-    #: ``None`` follows the group; ``"all"`` is every agent; a list is the chosen agents.
-    reach_override: ToolReach | None
     calls: int
     failures: int
 
@@ -72,13 +68,11 @@ class GroupViewer:
     def __init__(
         self,
         *,
-        reach: ToolReachRepoPort,
         outcomes: ToolOutcomesPort | None,
         secrets: SecretPresencePort | None,
         boundary: Callable[[], BoundaryCheckPort | None],
         clock: Callable[[], datetime],
     ) -> None:
-        self._reach = reach
         self._outcomes = outcomes
         self._secrets = secrets
         self._boundary = boundary
@@ -113,7 +107,6 @@ class GroupViewer:
             return []
         uids = [r.uid for r, _ in groups]
         since = self._clock() - WINDOW
-        overrides = await self._reach.overrides_for(uids)
         counts = (
             await self._outcomes.tool_outcomes(resource_uids=uids, since=since)
             if self._outcomes is not None
@@ -132,7 +125,6 @@ class GroupViewer:
             tools = [
                 ToolView(
                     tool=t,
-                    reach_override=overrides.get(resource.uid, {}).get(t.name),
                     calls=per_tool.get(t.name, (0, 0))[0],
                     failures=per_tool.get(t.name, (0, 0))[1],
                 )

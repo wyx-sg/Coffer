@@ -1,10 +1,9 @@
-// src/components/reach/ReachPanel.tsx — the body of a reach popover, shared by the full and the inherited control.
+// src/components/reach/ReachPanel.tsx — the body of a reach popover, shared by the reach controls.
 //
 // Foundations-Reach "Reach popover": a head ("Available to" + the resource name
 // in mono), the radio modes, the agent list and the footer. Which modes it
 // offers and what picking one does belong to the caller — ReachControl offers
-// Off / All agents / Chosen agents, InheritedReachControl swaps Off for "Same
-// as the group" — so this owns no state and fires no request.
+// Off / All agents / Chosen agents — so this owns no state and fires no request.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 

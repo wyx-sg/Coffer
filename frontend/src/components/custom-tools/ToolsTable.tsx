@@ -1,9 +1,13 @@
 // src/components/custom-tools/ToolsTable.tsx — a group's tools (4.2.01): each one's switch, request, changes-data
-// flag, reach (inherited control: Same as the group by default) and last 24 hours; "N of M on · All on · All off"
-// on the title row; the pencil (or the row) opens the drawer.
+// flag and last 24 hours; "N of M on · All on · All off" on the title row, then a toolbar of a name filter and
+// Add request above the table; the pencil (or the row) opens the drawer. A tool has no reach of its own: its
+// group's reach decides who sees it.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
+import { SearchInput } from "@/components/SearchInput";
 import { Section } from "@/components/Section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +16,6 @@ import type { CustomToolGroup } from "@/lib/api/customTools";
 import { agentPrefix, toolsOn } from "@/lib/customTools/groups";
 import { useSetAllCustomTools, useToggleCustomTool } from "@/lib/hooks/useCustomTools";
 import { cn } from "@/lib/utils";
-import { ToolReachCell } from "./ToolReachCell";
 
 interface Props {
   group: CustomToolGroup;
@@ -20,7 +23,7 @@ interface Props {
   onAddRequest: () => void;
 }
 
-const GRID = "grid grid-cols-[40px_minmax(0,1fr)_168px_72px_56px_32px] items-center gap-3 px-2";
+const GRID = "grid grid-cols-[40px_minmax(0,1fr)_72px_56px_32px] items-center gap-3 px-2";
 
 /** A 24-hour count; a tool with no call in 24 hours reads "—" in both columns. */
 function Count({
@@ -43,6 +46,9 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
   const { t } = useTranslation();
   const toggle = useToggleCustomTool(group.name);
   const setAll = useSetAllCustomTools(group.name);
+  const [filter, setFilter] = useState("");
+  const q = filter.trim().toLowerCase();
+  const shown = group.tools.filter((tool) => !q || tool.name.toLowerCase().includes(q));
   const on = toolsOn(group.tools);
   const switchAll = (enabled: boolean) =>
     setAll.mutate({
@@ -85,6 +91,19 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
       <p className="text-xs text-text-muted">
         {t("customTools.tools.description", { prefix: agentPrefix(group.name) })}
       </p>
+      <div className="flex items-center gap-2">
+        <SearchInput
+          value={filter}
+          onChange={setFilter}
+          placeholder={t("customTools.tools.filter")}
+          ariaLabel={t("customTools.tools.filter")}
+          className="max-w-xs flex-1"
+        />
+        <Button variant="outline" size="sm" className="ml-auto" onClick={onAddRequest}>
+          <Plus aria-hidden />
+          {t("customTools.tools.addRequest")}
+        </Button>
+      </div>
       <div role="table" aria-label={t("customTools.tools.heading")}>
         <div
           role="row"
@@ -97,7 +116,6 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
             <span className="sr-only">{t("customTools.tools.switch")}</span>
           </span>
           <span role="columnheader">{t("customTools.tools.colTool")}</span>
-          <span role="columnheader">{t("customTools.fields.availableTo")}</span>
           <span role="columnheader" className="text-right">
             {t("customTools.tools.colCalls")}
           </span>
@@ -108,8 +126,18 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
         </div>
         {group.tools.length === 0 ? (
           <p className="py-4 text-center text-xs text-text-muted">{t("customTools.tools.empty")}</p>
+        ) : shown.length === 0 ? (
+          <EmptyState
+            size="compact"
+            title={t("customTools.tools.noMatch", { query: filter.trim() })}
+            action={
+              <Button size="sm" variant="outline" onClick={() => setFilter("")}>
+                {t("listStates.clearFilter")}
+              </Button>
+            }
+          />
         ) : null}
-        {group.tools.map((tool) => (
+        {shown.map((tool) => (
           <div
             key={tool.name}
             role="row"
@@ -146,10 +174,6 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
                 ) : null}
               </span>
             </span>
-            {/* The control opens its own popover; it never also opens the row. */}
-            <span role="cell" onClick={(e) => e.stopPropagation()} className="inline-flex">
-              <ToolReachCell group={group} tool={tool} />
-            </span>
             <span role="cell" className="text-right">
               <Count value={tool.calls_24h} none={tool.calls_24h === 0} />
             </span>
@@ -171,12 +195,6 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
             </span>
           </div>
         ))}
-      </div>
-      <div className="flex justify-end pt-2">
-        <Button variant="outline" size="sm" onClick={onAddRequest}>
-          <Plus aria-hidden />
-          {t("customTools.tools.addRequest")}
-        </Button>
       </div>
     </Section>
   );

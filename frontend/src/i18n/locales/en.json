@@ -2082,6 +2082,12 @@
         "title_other": "{{count}} servers through Coffer",
         "open": "Open MCP servers"
       },
+      "fromCofferTools": {
+        "description": "{{agent}} reaches these through Coffer’s one MCP entry. Manage them on the Custom tools page.",
+        "title_one": "{{count}} custom tool group through Coffer",
+        "title_other": "{{count}} custom tool groups through Coffer",
+        "open": "Open Custom tools"
+      },
       "own": {
         "title": "{{agent}}’s own MCP servers",
         "description": "Entries in {{agent}}’s own config that bypass Coffer. Adopt one to route it through Coffer.",
@@ -4182,8 +4188,6 @@
     "off": "Off",
     "everywhere": "All agents",
     "restricted": "Chosen agents",
-    "inherited": "Same as the group",
-    "inheritedSub": "Follows the group’s agents",
     "filterAgents": "Filter agents",
     "noMatch": "No agent matches.",
     "applying": "Applying…",
@@ -5136,6 +5140,11 @@
       "toolCount_one": "{{count}} tool",
       "toolCount_other": "{{count}} tools",
       "filter": "Filter groups",
+      "bulkLabel": "Selected custom tool groups",
+      "clearSelection": "Clear selection",
+      "deleteManyTitle_one": "Delete {{count}} group?",
+      "deleteManyTitle_other": "Delete {{count}} groups?",
+      "deleteManyBody": "Agents lose their tools on their next call. The secrets and the call history stay.",
       "section": {
         "attention": "Needs attention",
         "healthy": "Healthy",
@@ -5190,7 +5199,7 @@
       "baseUrl": "Base URL",
       "baseUrlHelp": "Each request's path is added to it.",
       "availableTo": "Available to",
-      "availableToHelp": "The default for every tool in the group; one tool can be given to fewer agents.",
+      "availableToHelp": "Every tool in the group is available to these agents.",
       "headers": "Headers",
       "headersHelp": "Coffer adds these to every call; secret values stay in Coffer's keychain and agents never see them."
     },
@@ -5220,7 +5229,7 @@
       "section": "{{section}} · {{count}} of {{total}}",
       "pickNote": "Each operation you pick becomes one tool. Reads start picked; operations that change data start unpicked.",
       "baseUrlMissing": "The spec names no server; each request's path is added to this URL.",
-      "availableToHelp": "The default for every tool in the group.",
+      "availableToHelp": "Every tool in the group is available to these agents.",
       "try": "Try an operation",
       "tryNone": "Pick an operation first.",
       "tryPick": "Operation to try",
@@ -5321,9 +5330,8 @@
       "addRequest": "Add request",
       "heading": "Tools",
       "description": "Each tool is one request; agents see {{prefix}}.",
-      "groupGives": "{{group}} gives it to {{agents}}",
-      "reachFootnote": "To stop it for every agent, turn its switch off in the table.",
-      "reachOf": "Available to: {{name}}",
+      "filter": "Filter tools",
+      "noMatch": "No tool matches “{{query}}”",
       "edit": "Edit {{name}}"
     },
     "editor": {

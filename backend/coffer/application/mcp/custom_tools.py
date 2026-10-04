@@ -1,16 +1,15 @@
 """Custom-tool groups: create, read, change and delete groups and their tools.
 
-Spec mcp-gateway "Serve an HTTP API as a group of custom tools", "Switch off or
-narrow one custom tool", "Wait for approval before a custom tool sends its
+Spec mcp-gateway "Serve an HTTP API as a group of custom tools", "Switch off one
+custom tool", "Wait for approval before a custom tool sends its
 secret" and "Manage custom tools through REST and the Custom tools page"; design
 add-http-custom-tools §2, §5, §9.
 
 A group is an ``mcp_server`` resource of the ``http_api`` transport, so every
 write goes through :class:`ResourceService` — the kind's validation, the
 missing-secret probe, audit and the eviction of live connections come with
-it. What is not in the resource row is a tool's reach override (machine-local,
-``ToolReachRepoPort``). OpenAPI import and re-import are in
-``custom_tool_import``; the page's read model in ``custom_tool_views``.
+it. OpenAPI import and re-import are in ``custom_tool_import``; the page's
+read model in ``custom_tool_views``.
 """
 
 from __future__ import annotations
@@ -24,15 +23,12 @@ from pydantic import ValidationError
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.custom_tool_ports import (
     CustomToolRunnerPort,
-    ToolReach,
-    ToolReachRepoPort,
     ToolTestOutcome,
 )
 from coffer.application.mcp.custom_tool_views import GroupView, GroupViewer
 from coffer.application.mcp.gateway_tool_gate import http_api_transport
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.resolver import SecretResolver
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.mcp.custom_tool_errors import (
     CustomToolExists,
@@ -96,7 +92,6 @@ class CustomToolService:
         *,
         resources: ResourceService,
         audit: AuditService,
-        reach: ToolReachRepoPort,
         viewer: GroupViewer,
         resolver: Callable[[], SecretResolver],
         runner: CustomToolRunnerPort,
@@ -104,7 +99,6 @@ class CustomToolService:
     ) -> None:
         self._resources = resources
         self._audit = audit
-        self._reach = reach
         self._viewer = viewer
         self._resolver = resolver
         self._runner = runner
@@ -184,7 +178,6 @@ class CustomToolService:
     async def delete_group(self, name: str, *, actor: str) -> None:
         resource, _ = await self.group(name)
         await self._resources.delete(resource.uid, actor=actor)
-        await self._reach.delete_group(resource.uid)
 
     # --- tools -------------------------------------------------------------
 
@@ -210,11 +203,6 @@ class CustomToolService:
             raise CustomToolExists(name, merged.name)
         tools = [merged if t.name == tool_name else t for t in transport.tools]
         await self._write(resource, transport.model_copy(update={"tools": tools}), actor)
-        if merged.name != tool_name:
-            overrides = (await self._reach.overrides_for([resource.uid])).get(resource.uid, {})
-            if tool_name in overrides:
-                await self._reach.set_override(resource.uid, merged.name, overrides[tool_name])
-            await self._reach.delete_tools(resource.uid, [tool_name])
         return await self.view(name)
 
     async def delete_tool(self, name: str, tool_name: str, *, actor: str) -> GroupView:
@@ -223,30 +211,6 @@ class CustomToolService:
             raise CustomToolNotFound(name, tool_name)
         tools = [t for t in transport.tools if t.name != tool_name]
         await self._write(resource, transport.model_copy(update={"tools": tools}), actor)
-        await self._reach.delete_tools(resource.uid, [tool_name])
-        return await self.view(name)
-
-    async def set_tool_reach(
-        self, name: str, tool_name: str, reach: ToolReach | None, *, actor: str
-    ) -> GroupView:
-        """Set one tool's override — a list of agent uids, or ``"all"`` (every
-        agent, later ones too) — or clear it (``None``: same as the group).
-        Machine-local; audited as a scope change naming the tool."""
-        resource, transport = await self.group(name)
-        if transport.tool(tool_name) is None:
-            raise CustomToolNotFound(name, tool_name)
-        if isinstance(reach, list) and any(not isinstance(a, str) or not a for a in reach):
-            raise ConfigValidationError("a reach override lists agent uids")
-        await self._reach.set_override(resource.uid, tool_name, reach)
-        await self._audit.record(
-            AuditEventType.RESOURCE_SCOPE_UPDATED.value,
-            resource=resource,
-            actor=actor,
-            details={
-                "tool": tool_name,
-                "scope": None if reach is None else {"agents": None if reach == "all" else reach},
-            },
-        )
         return await self.view(name)
 
     async def test_tool(
@@ -320,10 +284,6 @@ class CustomToolService:
     ) -> Resource:
         """For ``custom_tool_import``: the same write path."""
         return await self._write(resource, transport, actor)
-
-    @property
-    def reach(self) -> ToolReachRepoPort:
-        return self._reach
 
     def now(self) -> datetime:
         return self._clock()

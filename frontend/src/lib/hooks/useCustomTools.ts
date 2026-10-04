@@ -4,11 +4,12 @@
 // group's cache entry and then refreshed with the list. The writes a form
 // sends (create, edit, a tool's save, the test run, the OpenAPI reading)
 // render their failure inline where the user acted, so they carry no error
-// toast; the one-click writes (a tool's switch, All on / All off, a reach
-// override) toast theirs.
+// toast; the one-click writes (a tool's switch, All on / All off) toast theirs.
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { useToast } from "@/components/ui/toast";
 import {
   customToolsApi,
@@ -124,6 +125,24 @@ export function useDeleteCustomToolGroup(name: string) {
   });
 }
 
+/** Delete every group of a selection (one summary toast); resolves with the names that were deleted. */
+export function useBulkDeleteCustomToolGroups() {
+  const bulk = useBulkMutate({ invalidate: [customToolsKey, resourcesKey] });
+  const { run } = bulk;
+  const removeAll = useCallback(
+    async (groups: readonly CustomToolGroup[]) => {
+      const deleted: string[] = [];
+      await run([...groups], async (g) => {
+        await customToolsApi.remove(g.name);
+        deleted.push(g.name);
+      });
+      return deleted;
+    },
+    [run],
+  );
+  return { run: removeAll, isPending: bulk.isPending };
+}
+
 /** What the drawer's Save sends: a new tool (`tool: null`) or a change to one. */
 interface ToolSave {
   /** The saved tool's current name; `null` adds a new one. */
@@ -133,8 +152,7 @@ interface ToolSave {
   body: CustomToolIn;
 }
 
-/** The drawer's Save, rendered inline there. A tool's reach is its own control in
- *  the table (`useToolReach`), not part of this save. */
+/** The drawer's Save, rendered inline there. */
 export function useSaveCustomTool(group: string) {
   const qc = useQueryClient();
   return useMutation({

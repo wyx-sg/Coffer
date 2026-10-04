@@ -1,8 +1,8 @@
-// src/lib/agents/agentFilter.ts — the `?agent=<uid>` filter of the global Skills and MCP servers pages.
+// src/lib/agents/agentFilter.ts — the `?agent=<uid>` filter of the global Skills, MCP servers and Custom tools pages.
 //
-// An agent's Skills / MCP servers tab links to `/skills?agent=<uid>` and
-// `/mcp-servers?agent=<uid>`: the page then lists only what reaches that agent
-// and shows a removable "Agent: <name>" pill in its filter row.
+// An agent's Skills / MCP servers tab links to `/skills?agent=<uid>`,
+// `/mcp-servers?agent=<uid>` and `/custom-tools?agent=<uid>`: the page then lists only what reaches that agent
+// with that agent chosen in its Reach filter (components/reach/AgentReachFilter).
 import { useCallback, useMemo } from "react";
 
 import { agentTypeLabel } from "@/lib/agents/display";

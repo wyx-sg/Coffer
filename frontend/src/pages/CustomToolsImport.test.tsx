@@ -20,7 +20,6 @@ vi.mock("@/lib/api/customTools", async (orig) => ({
       "addTool",
       "updateTool",
       "removeTool",
-      "setToolReach",
       "test",
       "testUnsaved",
       "readOpenApi",

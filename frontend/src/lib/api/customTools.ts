@@ -25,7 +25,6 @@ export type CustomToolUnsavedTestIn = Schemas["CustomToolUnsavedTestIn"];
 export type OpenApiReadIn = Schemas["OpenApiReadIn"];
 export type OpenApiReading = Schemas["OpenApiReadOut"];
 export type ReimportPreview = Schemas["CustomToolReimportPreviewOut"];
-export type ToolReach = Schemas["CustomToolReachIn"];
 export type HttpMethod = CustomTool["method"];
 export type GroupHealth = CustomToolGroup["health"];
 
@@ -98,19 +97,6 @@ export const customToolsApi = {
     );
     if (error) throwApiError(error, "INTERNAL_ERROR", "delete tool failed");
     return must(data, "delete tool");
-  },
-  /** Set one tool's own reach: `inherit` (same as the group), `all` (every agent, later ones too) or `chosen` + uids. */
-  setToolReach: async (
-    name: string,
-    toolName: string,
-    reach: ToolReach,
-  ): Promise<CustomToolGroup> => {
-    const { data, error } = await getApiClient().PUT("/custom-tools/{name}/tools/{tool}/reach", {
-      ...tool(name, toolName),
-      body: reach,
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "reach failed");
-    return must(data, "reach");
   },
   /** Run a draft tool once against the group's base URL and secret; saves nothing. */
   test: async (
